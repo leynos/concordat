@@ -199,6 +199,9 @@ parameters:
       - "9ed445010fe26a7facb708d7a9ba4d5bd0fa57ca"
       - "203eedc136c14c28041e92c06a929383807b3a3f"
       - "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+      - "c444bcb1180d5a9e7cc01db2c81e108fd50f26f7"
+      - "fc0e10220207b951bf693aba2ce4f9dafc1a0206"
+      - "b2ec32c03a926824d8c716451b4b290a9e102a65"
     producer_repositories:
       - leynos/whitaker
     action_repository: leynos/shared-actions

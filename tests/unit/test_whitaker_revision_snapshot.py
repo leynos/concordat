@@ -114,7 +114,7 @@ def test_snapshot_records_the_complete_reviewed_first_parent_segment(
         ),
         (
             "0eabb6bc07148981de5da395e30cd78d83f5c7c2",
-            "a0519a1476ab769ca7b8badfa794f3751213f1ea",
+            "b2ec32c03a926824d8c716451b4b290a9e102a65",
             "2255888485647779a82692cc5826b89a43d7bc05",
         ),
     ]
