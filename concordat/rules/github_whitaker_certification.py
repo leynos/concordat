@@ -74,6 +74,31 @@ def _unavailable(endpoint: str, error: Exception) -> CertificationUnavailable:
     return CertificationUnavailable(f"{endpoint} could not be read: {error}")
 
 
+def _file_entries(tree: dict[str, typ.Any], treeish: str) -> list[tuple[str, str, str]]:
+    """Return `(path, mode, blob id)` for each non-tree entry of a recursive *tree*.
+
+    Returns
+    -------
+    list[tuple[str, str, str]]
+        The entries, as the digest reads them.
+
+    Raises
+    ------
+    CertificationUnavailable
+        When GitHub truncated the listing or sent no tree: a digest of part
+        of the directory would vouch for content it never saw.
+    """
+    entries = tree.get("tree")
+    if tree.get("truncated") or not isinstance(entries, list):
+        message = f"git/trees/{treeish} was truncated or gave no tree"
+        raise CertificationUnavailable(message)
+    return [
+        (str(entry["path"]), str(entry["mode"]), str(entry["sha"]))
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("type") != _TREE_TYPE
+    ]
+
+
 class ActionLocation(typ.NamedTuple):
     """Where the action lives and how its certification tags are named.
 
@@ -267,11 +292,6 @@ class GithubCertificationSource:
         list[tuple[str, str, str]] | None
             The entries (subtrees are walked, not listed), or None when the
             commit has no such directory.
-
-        Raises
-        ------
-        CertificationUnavailable
-            When the read fails, or GitHub truncates the listing.
         """
         treeish = f"{sha}:{self._directory}"
         try:
@@ -283,15 +303,7 @@ class GithubCertificationSource:
             raise failure from error
         if tree is None:
             return None
-        entries = tree.get("tree")
-        if tree.get("truncated") or not isinstance(entries, list):
-            message = f"git/trees/{treeish} was truncated or gave no tree"
-            raise CertificationUnavailable(message)
-        return [
-            (str(entry["path"]), str(entry["mode"]), str(entry["sha"]))
-            for entry in entries
-            if isinstance(entry, dict) and entry.get("type") != _TREE_TYPE
-        ]
+        return _file_entries(tree, treeish)
 
     def _connected(self) -> GithubClient:
         """Return the client, building it on first use."""

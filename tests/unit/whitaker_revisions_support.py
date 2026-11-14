@@ -83,6 +83,14 @@ class History:
         self.parents = [oid]
         return str(oid)
 
+    def _mode(self, path: str) -> int:
+        """Return the file mode *path* gets: link, executable or plain."""
+        if path in self.symlinks:
+            return pygit2.GIT_FILEMODE_LINK
+        if path in self.executable:
+            return pygit2.GIT_FILEMODE_BLOB_EXECUTABLE
+        return pygit2.GIT_FILEMODE_BLOB
+
     def _tree(self, files: dict[str, str], prefix: str = "") -> pygit2.Oid:
         """Write a nested tree for *files* and return its id."""
         builder = self.repository.TreeBuilder()
@@ -93,13 +101,7 @@ class History:
                 nested.setdefault(head, {})[tail] = text
             else:
                 blob = self.repository.create_blob(text.encode())
-                path = f"{prefix}{name}"
-                mode = pygit2.GIT_FILEMODE_BLOB
-                if path in self.executable:
-                    mode = pygit2.GIT_FILEMODE_BLOB_EXECUTABLE
-                if path in self.symlinks:
-                    mode = pygit2.GIT_FILEMODE_LINK
-                builder.insert(name, blob, mode)
+                builder.insert(name, blob, self._mode(f"{prefix}{name}"))
         for head, children in nested.items():
             builder.insert(
                 head, self._tree(children, f"{prefix}{head}/"), pygit2.GIT_FILEMODE_TREE
