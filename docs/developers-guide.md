@@ -783,44 +783,44 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   The repository slug comes from the `origin` remote through
   `parse_github_slug`, so the policy's producer and exemption parameters can
   match it. The package is registered by identifier and declares the kind. The
-  list of accepted `install-whitaker` revisions is derived by
-  `concordat.rules.whitaker_revisions` (owner: the whitaker-provisioning
-  package; callers: `scripts/whitaker_revisions.py` and its tests only). It
-  walks shared-actions main first-parent and keeps each commit that is an
-  approved root, or descends from one with the action directory's runtime
-  digest (every file except `tests/` and Markdown) equal to that root's. After
-  shared-actions gains commits, run
-  `uv run python scripts/whitaker_revisions.py sync <shared-actions clone>`,
-  then commit the regenerated `rule.yaml` and refresh its digest in the canon
-  manifest. `check <clone>` exits 1 and names each missing or non-derivable
-  revision when the manifest's membership has drifted (use it in review; it
-  compares which revisions are listed, not their order, so a reordered manifest
-  passes with status 0), and `list <clone>` prints what the clone derives; each
-  takes `--tip <ref>` and exits 2 when the clone or manifest cannot be read. To
-  approve a changed action, add the reviewed commit to `install_whitaker_roots`
-  first. Git read failures while walking the history surface as
-  `OperationalRuleError`, never a traceback. The reviewed revision snapshot
-  under `tests/fixtures/whitaker/` is an independent oracle for the complete
-  shipped list. Its commit, first-parent and runtime-record data come directly
-  from a full shared-actions clone, not from the rule manifest or its
-  generator. When refreshing the list, capture the root-to-tip first-parent
-  segment with `git rev-list --first-parent`, record each commit's first parent
-  with `git rev-parse`, and capture the root's runtime records with
-  `git ls-tree -r` (dropping `tests/` and Markdown paths, formatting each as
-  `<mode> <blob> <path>` and sorting bytewise). Eligibility is the runtime
-  digest, the SHA-256 of those records, so verify each commit's digest against
-  the approved root; the action-directory tree id stays as provenance only.
-  Approving a root also needs a human check that its runtime files reach
-  excluded content (tests or Markdown) by no indirect route, such as a glob or
-  a computed path: the automatic scan only refuses literal `tests/` and `.md`
-  mentions. Update the snapshot's frozen tip and the provenance assertions in
-  `tests/unit/test_whitaker_revision_snapshot.py` only after reviewing that
-  history. If action contents change, retain the approved-root review boundary
-  rather than extending this content-identical snapshot. The tests compare the
-  entire ordered list, evaluate every recorded pin through QG-002, and require
-  rejection when manifest entries are removed or altered. The shared batch
-  helper accepts the runner's envelope union so these provisioning envelopes
-  reuse its existing result-to-file completeness checks.
+  certification of `install-whitaker` revisions is by content and lives in
+  shared-actions: a revision is certified when it is on the default branch,
+  equals or descends from the commit of a `certified/install-whitaker/<version>`
+  tag, and has the same runtime digest (every file except `tests/` and
+  Markdown, hashed by mode, blob and path) as that tag's commit. The decision
+  is `concordat.rules.whitaker_certification.certify_revision`, transport-free
+  over a source protocol; `github_whitaker_certification` reads the facts from
+  the GitHub API (`git/matching-refs`, `compare` and a recursive `git/trees`
+  read of `<sha>:<directory>`), caching them for the run only, and maps every
+  failing lookup to `unknown`, which the policy reports as indeterminate. The
+  envelope builder stays a query over the checkout and records an empty
+  `install_certifications`; `provisioning_certification.certifying`, composed
+  by `concordat artefact rule run` beside `resolving_pins`, fills it for each
+  distinct full-SHA pin, so the network stays at the command boundary. Rego
+  reads the fact and never assumes it: a missing or unrecognised answer is
+  indeterminate. The clone form, `concordat.rules.whitaker_revisions` (owner:
+  the whitaker-provisioning package; callers: `scripts/whitaker_revisions.py`
+  and its tests only), computes the same digest with pygit2.
+  `uv run python scripts/whitaker_revisions.py list <clone>` prints the floors
+  and the first-parent commits they certify, and
+  `certify <clone> <commit> --installer-version <v>` checks that a candidate is
+  on `--tip` (default `origin/main`), holds the action and has runtime files
+  that name no `tests/` or Markdown path, then prints the `git tag -a` and
+  `git push` commands; it never tags, since only a maintainer may certify.
+  Both exit 2 when the clone cannot be read. The fixture generator decides each
+  fixture's certification with the production decision over a synthetic action
+  repository (`FixtureHistory`), so the envelopes record real verdicts. The
+  reviewed revision snapshot under `tests/fixtures/whitaker/` is an independent
+  oracle: its chains are the complete history the retired list named, captured
+  with plain Git plumbing, and `test_whitaker_revision_snapshot.py` shows that
+  a tag at each approved root certifies every one of them, that the newest tag
+  alone would not, and that a later commit with unchanged runtime content is
+  certified. Approving a floor also needs a human check that its runtime files
+  reach excluded content (tests or Markdown) by no indirect route, such as a
+  glob or a computed path: the automatic scan only refuses literal `tests/` and
+  `.md` mentions. The shared batch helper accepts the runner's envelope union so
+  these provisioning envelopes reuse its existing result-to-file completeness
+  checks.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded

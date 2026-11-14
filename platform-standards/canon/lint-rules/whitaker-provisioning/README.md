@@ -9,7 +9,7 @@ read-only. It evaluates a `policy-input/whitaker-provisioning` envelope built by
 The estate provisions Whitaker one way:
 
 ```yaml
-- uses: leynos/shared-actions/.github/actions/install-whitaker@<listed revision>
+- uses: leynos/shared-actions/.github/actions/install-whitaker@<certified revision>
 ```
 
 That action carries the install rules. It installs an exact
@@ -18,7 +18,56 @@ rolling release), and always passes `--no-source-fallback`, so a missing
 published lint library or Dylint tool archive fails the run instead of being
 compiled. The action's own contract in shared-actions proves those rules. This
 rule therefore does not re-check installer flags; it proves that the action is
-the only route, and that every use of it names a revision known to carry them.
+the only route, and that every use of it names a certified revision (see
+below).
+
+## Certification
+
+A revision of the action is certified by content, and the approval lives in
+shared-actions, so concordat changes nothing when shared-actions gains commits.
+A maintainer reviews the action at a commit and creates an annotated tag
+`certified/install-whitaker/<whitaker-installer version>` on it. A pinned full
+SHA is certified when **all** of these hold:
+
+1. it is on the action repository's default branch (a commit that exists only
+   in a fork is not);
+2. it equals, or descends from, the commit of a certification tag;
+3. its `install-whitaker` runtime digest equals that tag's.
+
+The digest hashes each runtime file's mode, blob id and path. Runtime files
+are every file in the directory except the `tests/` tree and Markdown files,
+which the action does not execute, so a change confined to those does not move
+the digest. Any other file counts, including one added later, so an unknown
+file fails closed. Descent alone would not do: a later commit could drop
+`--no-source-fallback`. A commit that changes the runtime content (a new
+installer release) therefore stays noncompliant until the maintainer tags it,
+and a commit that leaves it alone needs nothing. Any certified tag certifies,
+not only the newest, so a repository on an older approved release stays
+compliant while its tag exists; deleting a tag retires that release.
+
+The checkout holds no shared-actions history, so the rule-run command asks the
+GitHub API (tags, ancestry, the directory's tree) and records the answer for
+each pinned SHA in the envelope's `install_certifications`; the policy reads
+that fact. See "What the rule reports" below for how each answer is judged.
+
+`scripts/whitaker_revisions.py certify <clone> <commit> --installer-version
+<version>` checks a candidate (on `main`, holds the action, runtime files name
+no `tests/` or Markdown path) and prints the `git tag -a` and `git push`
+commands, which it never runs. `list <clone>` prints each floor and the
+first-parent commits the floors certify.
+
+### What the rule reports
+
+A pin is judged on the recorded answer:
+
+- certified: no finding;
+- not certified (not on `main`, older than or unrelated to every tag, changed
+  runtime content, or a SHA GitHub does not know): noncompliant;
+- unknown (offline, rate limited, refused, a truncated tree) or absent from the
+  envelope: indeterminate, never a pass.
+
+A tag, a branch, a short SHA, a fork or a local copy is noncompliant without
+asking anyone.
 
 ## Checks
 
@@ -43,9 +92,10 @@ message says which of the following it is.
   - another action handed a Whitaker tool as an input, such as
     `taiki-e/install-action` or shared-actions `install-tool` with
     `tool: cargo-dylint`.
-- An `install-whitaker` use pinned to a revision not in
-  `compliant_install_whitaker_refs`, a fork of the action, or a local copy of
-  it. The message says how a revision joins the list.
+- An `install-whitaker` use that is not a certified revision: a tag, branch or
+  short SHA, a fork of the action, a local copy of it, or a full SHA the
+  certification above refuses. The message says why, and how a revision is
+  certified.
 - An indeterminate finding for a surface the policy cannot read: a
   workflow or action that is not valid YAML, a script larger than 1 MiB, or a
   script that is a symlink leaving the checkout. A directory the audit cannot
@@ -74,30 +124,15 @@ rather than a script and is not read.
 
 ## Parameters
 
-- `compliant_install_whitaker_refs` — the shared-actions revisions a pin may
-  name. It is derived, never edited by hand: **every first-parent commit on
-  shared-actions main that is an approved root, or descends from one and leaves
-  the `install-whitaker` directory's runtime digest equal to that root's**. The
-  digest hashes each file's mode, blob id and path, so the action a consumer
-  runs is the approved one whatever else changed in shared-actions. It leaves
-  out the `tests/` tree and Markdown files, which the action does not execute
-  (a reviewer confirms that when approving a root), so a change confined to
-  those does not move the digest. Every other file in the action directory
-  counts as runtime, including a file added later, so an unknown file fails
-  closed. A root whose runtime files mention `tests/` or a Markdown file is
-  refused, since a script could otherwise run or read content the digest
-  ignores. That scan is a guard, not a dependency analysis: it misses an
-  indirect reference such as a glob or a computed path, so approving a root
-  includes checking that its runtime files reach no excluded content. The
-  derivation cannot run at audit time, because the audited checkout does not
-  hold shared-actions' history;
-  `scripts/whitaker_revisions.py sync --clone <shared-actions clone>`
-  regenerates the list, and `check` fails when it has drifted. A commit that
-  changes the action's runtime content is refused until a reviewer adds it to
-  `install_whitaker_roots`.
-- `install_whitaker_roots` — the reviewed shared-actions commits the list is
-  derived from. The first is the merge of shared-actions #522, the change that
-  made the action carry the install rules.
+- `certification_tag_prefix` — the prefix of the certification tags in the
+  action repository, followed by a `whitaker-installer` version. Default:
+  `certified/install-whitaker/`. A tag certifies the commit it points at and
+  its descendants on the default branch that keep the action's runtime content
+  (see Certification). Approving a floor includes checking that its runtime
+  files reach no excluded content (tests or Markdown) by an indirect route such
+  as a glob or a computed path: the `certify` scan only refuses literal
+  `tests/` and `.md` mentions.
+- `action_branch` — the action repository's default branch. Default: `main`.
 - `producer_repositories` — repositories that build and publish Whitaker and
   are not audited. Default: `leynos/whitaker`.
 - `action_repository` and `action_directory` — where the action lives. The
@@ -128,4 +163,7 @@ checkout's `origin` remote. A checkout without a GitHub origin matches none.
 - `fixtures/repos/` — one miniature checkout per behaviour.
 - `fixtures/envelopes/` and `fixtures/data.json` — the envelopes the
   production builder records for each checkout, regenerated with
-  `uv run python fixtures/generate.py` from this directory.
+  `uv run python fixtures/generate.py` from this directory. Each pin's
+  certification is decided by the production decision over a synthetic action
+  repository (one floor, and an unchanged, a changed, an older, an off-branch,
+  an unknown and an unreadable commit), not written by hand.

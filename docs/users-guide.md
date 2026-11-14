@@ -606,8 +606,7 @@ concordat artefact rule run whitaker-provisioning --repo /path/to/checkout
 ```
 
 The estate provisions Whitaker one way: the shared-actions `install-whitaker`
-action, pinned to a revision listed in the rule's
-`compliant_install_whitaker_refs` parameter. The action installs an exact
+action, pinned to a certified revision (below). The action installs an exact
 `whitaker-installer` version, never pins the lint suite, and always passes
 `--no-source-fallback`; its own contract proves those rules, so this package
 does not re-check installer flags. It reports:
@@ -615,30 +614,41 @@ does not re-check installer flags. It reports:
 - an install of `whitaker-installer`, `cargo-dylint` or `dylint-link` by Cargo
   or another action, a download of one, or a direct `whitaker-installer` run,
   in a workflow, a composite action, a Makefile or a script;
-- an `install-whitaker` pin that is not listed, a fork of the action, or a
-  local copy of it.
+- an `install-whitaker` pin that is not a certified revision (a tag, a branch
+  or a short SHA, a fork of the action, a local copy of it, or a SHA that is
+  not certified).
 
-The list holds only first-parent commits on shared-actions `main`: a commit on
-a side branch that was merged in never qualifies, even when its tree matches. A
-first-parent commit qualifies when it is an approved root, or descends from one
-and leaves the `install-whitaker` directory content-identical to it; a commit
-that changes the directory is refused until a reviewer adds it as an approved
-root (`install_whitaker_roots` in the rule's parameters). After shared-actions
-gains commits, regenerate the list from a full (not shallow) clone and verify
-it:
+A pinned full SHA is certified when it is on shared-actions `main`, equals or
+descends from the commit of a `certified/install-whitaker/<installer version>`
+tag, and leaves the `install-whitaker` directory's runtime content (every file
+except `tests/` and Markdown) identical to that tag's. Concordat needs no
+change when shared-actions gains commits: a commit that leaves the content
+alone is certified at once. A commit that changes the content, typically a new
+`whitaker-installer` release, is noncompliant until the user reviews it and
+creates a new annotated tag on it. Every certified tag certifies, so
+repositories on an older approved release stay compliant until that tag is
+deleted.
+
+The audit asks the GitHub API (`--github-api-url`) for the tags, the ancestry
+and the directory's content, using `GITHUB_TOKEN`, the concordat credentials
+file or `gh auth token`. A pin whose certification cannot be read (offline,
+rate limited, refused, or a truncated listing) is indeterminate, not
+noncompliant, and exits 1 like any finding. Answers are not cached on disk.
+
+To certify a new release, check the candidate in a full shared-actions clone
+and run the commands it prints. The helper only prints them:
 
 ```sh
-uv run python scripts/whitaker_revisions.py sync ../shared-actions
-uv run python scripts/whitaker_revisions.py check ../shared-actions
+uv run python scripts/whitaker_revisions.py certify ../shared-actions \
+    <commit> --installer-version 0.2.12
 uv run python scripts/whitaker_revisions.py list ../shared-actions
 ```
 
-`sync` rewrites the rule manifest's list, `check` exits 1 and names each
-missing or non-derivable revision when the manifest's membership has drifted
-(it does not compare order, so a reordered manifest passes), and `list` prints
-what the clone derives, oldest first. Each accepts `--tip <ref>` (default
-`origin/main`). A status of 2 means the clone or manifest could not be read.
-Whitaker itself is exempt as the producer, and a developer-environment script
+`certify` exits 2 when the commit is not on the first-parent history of
+`--tip` (default `origin/main`), lacks the action, names a version that is
+already tagged, or has runtime files that mention `tests/` or a Markdown path;
+`list` prints each floor and the first-parent commits the floors certify,
+oldest first. Whitaker itself is exempt as the producer, and a developer-environment script
 that CI never runs may be exempted by name, repository and reason in the rule's
 parameters. Exemptions match the repository slug read from the `origin` remote.
 See `platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for

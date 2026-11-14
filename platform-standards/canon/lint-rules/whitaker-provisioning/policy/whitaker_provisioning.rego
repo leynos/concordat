@@ -4,8 +4,9 @@
 # lint suite never pinned, --no-source-fallback always passed), and its own
 # contract proves them. This policy therefore does not re-check flags. It
 # proves two things: that the action is the only route by which a checkout
-# provisions Whitaker, and that every use of it is pinned to a revision known
-# to carry those rules.
+# provisions Whitaker, and that every use of it is pinned to a certified
+# revision: one the audit's `install_certifications` records as descending from
+# a certification tag with the runtime content unchanged.
 #
 # Every other route is refused wherever CI could take it: a workflow or
 # composite-action `run:` body, another action's inputs, a Makefile, or a
@@ -20,9 +21,9 @@ import rego.v1
 
 # -- parameters ---------------------------------------------------------------
 
-default compliant_install_whitaker_refs := []
+default certification_tag_pattern := "certified/install-whitaker/<installer version>"
 
-compliant_install_whitaker_refs := data.parameters.compliant_install_whitaker_refs
+certification_tag_pattern := concat("", [data.parameters.certification_tag_prefix, "<installer version>"])
 
 default producer_repositories := ["leynos/whitaker"]
 
@@ -232,7 +233,7 @@ hands_over_a_tool(inputs) if {
 	regex.match(`^(whitaker-installer|cargo-dylint|dylint-link)(@\S*)?$`, token)
 }
 
-# -- QG-002: the action, pinned to a revision known to carry the rules ------------
+# -- QG-002: the action, pinned to a certified revision ---------------------------
 
 remote_prefix := concat("", [action_repository, "/", action_directory, "@"])
 
@@ -240,10 +241,65 @@ names_the_action(uses) if endswith(split(uses, "@")[0], "/install-whitaker")
 
 names_the_action(uses) if endswith(uses, "/install-whitaker")
 
-pin_refusal(path, uses) := sprintf(
-	"%s uses %s, which is not a revision known to carry the Whitaker install rules. Pin %s to a listed revision. compliant_install_whitaker_refs in this rule's parameters lists every first-parent commit on shared-actions `main` at or after an approved root that leaves the install-whitaker directory content-identical; `scripts/whitaker_revisions.py sync --clone <shared-actions clone>` regenerates it",
-	[path, uses, remote_prefix],
+# The owning repository runs the action from its own checkout.
+runs_from_own_checkout(uses) if {
+	is_action_repository
+	uses in {concat("", ["./", action_directory]), concat("", ["$/", action_directory])}
+}
+
+# A full commit SHA of the action repository's action. Whether that revision is
+# certified is not decidable from the checkout, which holds no history of the
+# action repository: the rule-run command asks, and records the answer under
+# `install_certifications` for the revision.
+revision_of(uses) := ref if {
+	startswith(uses, remote_prefix)
+	ref := substring(uses, count(remote_prefix), -1)
+	regex.match(`^[0-9a-f]{40}$`, ref)
+}
+
+default certification_status(_) := ""
+
+certification_status(sha) := status if {
+	cert := object.get(object.get(input, "install_certifications", {}), sha, null)
+	is_object(cert)
+	status := object.get(cert, "status", "")
+}
+
+default certification_reason(_) := ""
+
+certification_reason(sha) := reason if {
+	cert := object.get(object.get(input, "install_certifications", {}), sha, null)
+	is_object(cert)
+	reason := object.get(cert, "reason", "")
+}
+
+not_a_revision_refusal(path, uses) := sprintf(
+	"%s uses %s, which is not a certified revision of the Whitaker install rules. Pin %s to a full commit SHA of a certified revision (a revision on shared-actions `main` that descends from a `%s` tag with the install-whitaker runtime content unchanged since it)",
+	[path, uses, remote_prefix, certification_tag_pattern],
 )
+
+uncertified_refusal(path, uses, reason) := sprintf(
+	"%s uses %s, which is not a certified revision of the Whitaker install rules: %s. A maintainer certifies new install-whitaker content by tagging a reviewed commit `%s`; until then pin a certified revision",
+	[path, uses, reason, certification_tag_pattern],
+)
+
+unresolved_refusal(path, uses, reason) := sprintf(
+	"%s uses %s, which could not be checked for certification (%s), so whether it carries the Whitaker install rules is unknown",
+	[path, uses, reason],
+)
+
+# A fork, a local copy, a tag, a branch or a short SHA is no revision to certify.
+deny contains f if {
+	envelope_ok
+	not is_producer
+	some [path, step] in steps
+	uses := object.get(step, "uses", null)
+	is_string(uses)
+	names_the_action(uses)
+	not runs_from_own_checkout(uses)
+	not revision_of(uses)
+	f := finding("QG-002", "noncompliant", path, not_a_revision_refusal(path, uses))
+}
 
 deny contains f if {
 	envelope_ok
@@ -252,20 +308,29 @@ deny contains f if {
 	uses := object.get(step, "uses", null)
 	is_string(uses)
 	names_the_action(uses)
-	not sanctioned_use(uses)
-	f := finding("QG-002", "noncompliant", path, pin_refusal(path, uses))
+	sha := revision_of(uses)
+	certification_status(sha) == "uncertified"
+	f := finding("QG-002", "noncompliant", path, uncertified_refusal(path, uses, certification_reason(sha)))
 }
 
-sanctioned_use(uses) if {
-	startswith(uses, remote_prefix)
-	substring(uses, count(remote_prefix), -1) in compliant_install_whitaker_refs
+# An answer that is missing or not one of the three the command records means
+# the audit did not establish certification, which is not a pass.
+deny contains f if {
+	envelope_ok
+	not is_producer
+	some [path, step] in steps
+	uses := object.get(step, "uses", null)
+	is_string(uses)
+	names_the_action(uses)
+	sha := revision_of(uses)
+	not certification_status(sha) in {"certified", "uncertified"}
+	reason := unresolved_reason(sha)
+	f := finding("QG-002", "indeterminate", path, unresolved_refusal(path, uses, reason))
 }
 
-# The owning repository runs the action from its own checkout.
-sanctioned_use(uses) if {
-	is_action_repository
-	uses in {concat("", ["./", action_directory]), concat("", ["$/", action_directory])}
-}
+unresolved_reason(sha) := certification_reason(sha) if certification_status(sha) == "unknown"
+
+unresolved_reason(sha) := "the audit did not resolve it" if certification_status(sha) != "unknown"
 
 # -- QG-002: surfaces the policy cannot read --------------------------------------
 

@@ -9,6 +9,9 @@ A fixture checkout has no ``origin`` remote, so the builder records no
 repository name. The names the exemption clauses match on are therefore set
 here, from ``REPOSITORY_NAMES``, as the one field not taken from the builder.
 
+Whether each pinned revision of install-whitaker is certified is decided over
+a synthetic action repository, ``FixtureHistory``, by the production decision.
+
 One synthetic envelope covers what no checkout can: an envelope of an unknown
 schema version.
 
@@ -22,12 +25,20 @@ Run from the rule package directory::
 
 from __future__ import annotations
 
+import functools
 import json
 import typing as typ
 from pathlib import Path
 
+from concordat.rules.whitaker_certification import (
+    CertificationUnavailable,
+    Floor,
+    NoSuchCommit,
+    certify_revision,
+)
 from concordat.rules.whitaker_provisioning_envelope import (
     build_whitaker_provisioning_envelope,
+    with_install_certifications,
 )
 
 FIXTURES_DIR: typ.Final = Path(__file__).resolve().parent
@@ -43,6 +54,74 @@ REPOSITORY_NAMES: typ.Final[dict[str, str]] = {
     "producer": "leynos/whitaker",
 }
 CONSUMER_NAME: typ.Final = "leynos/consumer"
+ACTION: typ.Final = "leynos/shared-actions/.github/actions/install-whitaker"
+
+#: The checkout whose pin the audit leaves unresolved, as an envelope built
+#: without the command step is. The policy must not read that as certified.
+UNRESOLVED_FIXTURE: typ.Final = "unresolved-pin"
+
+FLOOR_TAG: typ.Final = "certified/install-whitaker/0.2.12"
+FLOOR: typ.Final = "f" * 40
+APPROVED_DIGEST: typ.Final = "approved-runtime-digest"
+CHANGED_DIGEST: typ.Final = "changed-runtime-digest"
+
+
+class FixtureHistory:
+    """A synthetic action repository, so each fixture's verdict is decided.
+
+    One floor, and the commits around it. The verdicts in the envelopes are
+    those the production decision gives over this history, not handwritten:
+
+    * ``a``: after the floor, runtime content unchanged (certified);
+    * ``b``: after the floor, runtime content changed (uncertified);
+    * ``c``: on the default branch but before the floor (uncertified);
+    * ``d``: not on the default branch, as a fork-only commit is (uncertified);
+    * ``e``: a commit GitHub does not know (uncertified);
+    * ``9``: a lookup the API refused for its rate limit (unknown).
+    """
+
+    on_branch: typ.ClassVar = frozenset({FLOOR, "a" * 40, "b" * 40, "c" * 40})
+    after_floor: typ.ClassVar = frozenset({FLOOR, "a" * 40, "b" * 40})
+    digests: typ.ClassVar = {
+        FLOOR: APPROVED_DIGEST,
+        "a" * 40: APPROVED_DIGEST,
+        "b" * 40: CHANGED_DIGEST,
+        "c" * 40: APPROVED_DIGEST,
+    }
+
+    def floors(self) -> list[Floor]:
+        """Return the one certification tag."""
+        return [Floor(FLOOR_TAG, FLOOR)]
+
+    def is_on_default_branch(self, sha: str) -> bool:
+        """Report whether *sha* is on the default branch.
+
+        Returns
+        -------
+        bool
+            True for the commits on the default branch.
+
+        Raises
+        ------
+        NoSuchCommit
+            For the commit no repository knows.
+        CertificationUnavailable
+            For the commit whose lookup the API refused.
+        """
+        if sha == "e" * 40:
+            raise NoSuchCommit(sha)
+        if sha == "9" * 40:
+            message = "compare/main...9 was rate limited"
+            raise CertificationUnavailable(message, rate_limited=True)
+        return sha in self.on_branch
+
+    def descends_from(self, floor: str, sha: str) -> bool:
+        """Report whether *sha* equals or follows the *floor*."""
+        return floor == FLOOR and sha in self.after_floor
+
+    def runtime_digest(self, sha: str) -> str | None:
+        """Return the digest of the commit's action directory."""
+        return self.digests.get(sha)
 
 
 def build_envelopes() -> dict[str, dict[str, object]]:
@@ -55,9 +134,12 @@ def build_envelopes() -> dict[str, dict[str, object]]:
     """
     envelopes: dict[str, dict[str, object]] = {}
     for repo in sorted(path for path in REPOS_DIR.iterdir() if path.is_dir()):
-        envelope = typ.cast(
-            "dict[str, object]", dict(build_whitaker_provisioning_envelope(repo))
-        )
+        built = build_whitaker_provisioning_envelope(repo)
+        if repo.name != UNRESOLVED_FIXTURE:
+            built = with_install_certifications(
+                built, functools.partial(certify_revision, FixtureHistory()), ACTION
+            )
+        envelope = typ.cast("dict[str, object]", dict(built))
         envelope["repository"] = {
             "path": repo.name,
             "name": REPOSITORY_NAMES.get(repo.name, CONSUMER_NAME),
@@ -70,6 +152,7 @@ def build_envelopes() -> dict[str, dict[str, object]]:
         "workflows": [],
         "actions": [],
         "scripts": [],
+        "install_certifications": {},
     }
     return envelopes
 

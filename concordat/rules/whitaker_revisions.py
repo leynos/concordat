@@ -1,10 +1,11 @@
-"""Derive the shared-actions revisions QG-002 accepts for `install-whitaker`.
+"""List what the certification tags of `install-whitaker` certify, from a clone.
 
-The audited checkout holds no shared-actions history, so the rule cannot ask
-whether a pinned revision still carries the install rules. It reads a list
-instead, and this module is how the list is made honest. A revision is
-listed when it is an approved root, or when it descends from one on the
-default branch and leaves the action's *runtime content* identical to it.
+QG-002 certifies a shared-actions revision for `install-whitaker` when it
+descends from a certification tag (a *floor*) and leaves the action's *runtime
+content* identical to that floor's. The audit decides that through the GitHub
+API (see `concordat.rules.whitaker_certification`); this module is the local
+form over a clone, which lets a reviewer list what the tags certify and check a
+candidate floor before tagging it.
 
 Runtime content is every file in the action's directory except the `tests/`
 tree and Markdown files. Those are never executed by a consumer's workflow,
@@ -12,8 +13,8 @@ so a change confined to them leaves the action a consumer runs untouched;
 everything else (`action.yml`, the helper scripts, the digest manifests, and
 any file added later) counts as runtime, so an unknown file fails closed. The
 runtime digest hashes each file's mode, blob id and path, so a content, mode,
-rename or addition change moves it. A root whose runtime files point at an
-excluded path would let an unreviewed edit through, so such a root is refused.
+rename or addition change moves it. A floor whose runtime files point at an
+excluded path would let an unreviewed edit through, so such a floor is refused.
 
 Only the history walk needs a clone; the functions here take an open
 repository so tests can build a synthetic one.
@@ -21,7 +22,6 @@ repository so tests can build a synthetic one.
 
 from __future__ import annotations
 
-import hashlib
 import re
 import typing as typ
 
@@ -29,24 +29,16 @@ import pygit2
 
 from concordat.errors import OperationalRuleError
 
+from .whitaker_certification import is_excluded, runtime_digest_of
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 OPERATION_DERIVE_REVISIONS: typ.Final = "derive-whitaker-revisions"
-REFS_KEY: typ.Final = "compliant_install_whitaker_refs"
-_FULL_SHA: typ.Final = re.compile(r"^[0-9a-f]{40}$")
 _EXCLUDED_DIRECTORY: typ.Final = "tests"
-_EXCLUDED_SUFFIX: typ.Final = ".md"
 # A runtime file naming an excluded path (a test helper, a Markdown file) could
 # execute or read content the digest does not cover.
 _EXCLUDED_REFERENCE: typ.Final = re.compile(rb"tests/|\.md\b")
-
-
-def _is_excluded(relative: str) -> bool:
-    """Report whether a path inside the action directory is not runtime content."""
-    return relative.split("/", 1)[0] == _EXCLUDED_DIRECTORY or relative.endswith(
-        _EXCLUDED_SUFFIX
-    )
 
 
 def _runtime_entries(
@@ -69,7 +61,7 @@ def _runtime_entries(
                     typ.cast("pygit2.Tree", repository[entry.id]),
                     f"{relative}/",
                 )
-        elif not _is_excluded(relative):
+        elif not is_excluded(relative):
             yield relative, entry.filemode, entry.id
 
 
@@ -104,11 +96,10 @@ def runtime_digest(
     tree = _action_tree(repository, commit, directory)
     if tree is None:
         return None
-    records = sorted(
-        f"{mode:o} {blob} {path}\n"
+    return runtime_digest_of(
+        (path, f"{mode:o}", str(blob))
         for path, mode, blob in _runtime_entries(repository, tree)
     )
-    return hashlib.sha256("".join(records).encode()).hexdigest()
 
 
 def _refuse_excluded_references(
@@ -135,7 +126,7 @@ def _refuse_excluded_references(
             raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
 
 
-def _root_digest(repository: pygit2.Repository, root: str, directory: str) -> str:
+def floor_digest(repository: pygit2.Repository, root: str, directory: str) -> str:
     """Return the action directory's runtime digest at one approved root.
 
     Returns
@@ -173,10 +164,10 @@ def _root_digests(
     -------
     dict[str, str]
         The runtime digest of the action directory at each root;
-        `_root_digest`'s operational error propagates for a root it cannot
+        `floor_digest`'s operational error propagates for a root it cannot
         read.
     """
-    return {root: _root_digest(repository, root, directory) for root in roots}
+    return {root: floor_digest(repository, root, directory) for root in roots}
 
 
 def _is_root_or_descendant(
@@ -338,47 +329,56 @@ def _walk_first_parent(
     return found
 
 
-def format_refs_block(refs: cabc.Sequence[str], indent: str = "      ") -> list[str]:
-    """Return the YAML lines of a quoted revision list.
+def certified_tags(repository: pygit2.Repository, prefix: str) -> dict[str, str]:
+    """Return the commit each certification tag in *repository* points at.
+
+    A tag is a floor when its name starts with *prefix* (for example
+    `certified/install-whitaker/`). An annotated tag is peeled to its commit.
+
+    Returns
+    -------
+    dict[str, str]
+        Tag name to full commit id, sorted by tag name.
+
+    Raises
+    ------
+    OperationalRuleError
+        When a matching tag does not peel to a commit.
+    """
+    floors: dict[str, str] = {}
+    for reference in repository.references:
+        if not reference.startswith(f"refs/tags/{prefix}"):
+            continue
+        try:
+            target = repository.references[reference].peel(pygit2.Commit)
+        except (pygit2.GitError, KeyError, ValueError) as error:
+            message = f"certification tag {reference} does not name a commit"
+            raise OperationalRuleError(
+                message, operation=OPERATION_DERIVE_REVISIONS
+            ) from error
+        floors[reference.removeprefix("refs/tags/")] = str(target.id)
+    return dict(sorted(floors.items()))
+
+
+def certified_revisions(
+    repository: pygit2.Repository,
+    prefix: str,
+    directory: str,
+    tip: str,
+) -> list[str]:
+    """Return every first-parent commit up to *tip* that some tag certifies.
+
+    This is the local-clone form of the rule's certification: a commit is
+    certified when it is a tagged floor, or descends from one and holds that
+    floor's runtime digest. The audit applies the same test through the GitHub
+    API; this form lets a reviewer list what the tags certify.
 
     Returns
     -------
     list[str]
-        One `- "<sha>"` line per revision, indented for the defaults mapping.
-
-    Raises
-    ------
-    OperationalRuleError
-        When an entry is not a full commit id.
+        Full commit ids, oldest first. Empty when no tag matches.
     """
-    for ref in refs:
-        if not _FULL_SHA.fullmatch(ref):
-            message = f"{ref!r} is not a full lowercase commit id"
-            raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    return [f'{indent}- "{ref}"' for ref in refs]
-
-
-def replace_refs(rule_text: str, refs: cabc.Sequence[str]) -> str:
-    """Return *rule_text* with its default revision list replaced by *refs*.
-
-    Only the block at the `defaults` indentation is rewritten; the schema
-    entry of the same key sits deeper and holds no list.
-
-    Returns
-    -------
-    str
-        The manifest text with the new list.
-
-    Raises
-    ------
-    OperationalRuleError
-        When the manifest has no default revision list to replace.
-    """
-    pattern = re.compile(
-        rf'(^    {REFS_KEY}:\n)((?:      - "[0-9a-f]{{40}}"\n)+)', re.MULTILINE
-    )
-    if not pattern.search(rule_text):
-        message = f"the rule manifest has no defaults.{REFS_KEY} list to replace"
-        raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    block = "\n".join(format_refs_block(refs)) + "\n"
-    return pattern.sub(lambda m: m.group(1) + block, rule_text, count=1)
+    floors = sorted(set(certified_tags(repository, prefix).values()))
+    if not floors:
+        return []
+    return compliant_revisions(repository, floors, directory, tip)

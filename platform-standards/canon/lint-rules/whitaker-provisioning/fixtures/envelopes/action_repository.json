@@ -17,6 +17,7 @@
       "path": ".github/actions/install-whitaker/action.yml"
     }
   ],
+  "install_certifications": {},
   "kind": "policy-input/whitaker-provisioning",
   "repository": {
     "name": "leynos/shared-actions",

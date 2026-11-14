@@ -1,5 +1,12 @@
 {
   "actions": [],
+  "install_certifications": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+      "floor": "certified/install-whitaker/0.2.12",
+      "reason": null,
+      "status": "certified"
+    }
+  },
   "kind": "policy-input/whitaker-provisioning",
   "repository": {
     "name": "leynos/consumer",

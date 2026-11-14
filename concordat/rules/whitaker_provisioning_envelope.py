@@ -32,12 +32,18 @@ import pygit2
 from concordat.errors import OperationalRuleError
 from concordat.platform_standards import parse_github_slug
 
+from .action_pins import FULL_SHA
 from .codescene_coverage_envelope import (
     Repository,
     WorkflowFile,
     _load_workflow,
     _load_workflows,
 )
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+    from .whitaker_certification import Certification, Certifier
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/whitaker-provisioning"
@@ -132,6 +138,11 @@ class ProvisioningEnvelope(typ.TypedDict):
     scripts:
         Every Makefile, and every script under a conventional automation
         directory or at the root, as text or carrying its error.
+    install_certifications:
+        Whether each full-SHA revision of `install-whitaker` the checkout pins
+        is certified, keyed by revision. Empty from the builder, which reads
+        only the checkout; the rule-run command fills it, because answering
+        needs the action repository.
     """
 
     schema_version: int
@@ -140,6 +151,7 @@ class ProvisioningEnvelope(typ.TypedDict):
     workflows: list[WorkflowFile]
     actions: list[WorkflowFile]
     scripts: list[TextFile]
+    install_certifications: dict[str, Certification]
 
 
 def _origin_slug(checkout: pathlib.Path) -> str | None:
@@ -411,4 +423,63 @@ def build_whitaker_provisioning_envelope(
             if _is_makefile(path) or _is_script(checkout, path)
             if (fact := _load_text(checkout, path)) is not None
         ],
+        "install_certifications": {},
+    }
+
+
+def _action_uses(envelope: ProvisioningEnvelope) -> cabc.Iterator[str]:
+    """Yield the `uses:` value of every step of every workflow and action."""
+    documents = [*envelope["workflows"], *envelope["actions"]]
+    for document in documents:
+        parsed = document.get("parsed")
+        if not isinstance(parsed, dict):
+            continue
+        jobs = parsed.get("jobs")
+        job_list = list(jobs.values()) if isinstance(jobs, dict) else []
+        for container in [*job_list, parsed.get("runs")]:
+            steps = container.get("steps") if isinstance(container, dict) else None
+            for step in steps if isinstance(steps, list) else []:
+                uses = step.get("uses") if isinstance(step, dict) else None
+                if isinstance(uses, str):
+                    yield uses
+
+
+def pinned_action_revisions(envelope: ProvisioningEnvelope, action: str) -> list[str]:
+    """Return every distinct full-SHA revision of *action* the envelope uses.
+
+    *action* is `owner/repository/directory`. A tag, a branch or a short SHA is
+    not a revision to certify: the policy refuses it without asking anyone.
+
+    Returns
+    -------
+    list[str]
+        The 40-hex revisions, sorted.
+    """
+    prefix = f"{action}@"
+    return sorted({
+        ref
+        for uses in _action_uses(envelope)
+        if uses.startswith(prefix) and FULL_SHA.fullmatch(ref := uses[len(prefix) :])
+    })
+
+
+def with_install_certifications(
+    envelope: ProvisioningEnvelope, certifier: Certifier, action: str
+) -> ProvisioningEnvelope:
+    """Return *envelope* recording whether each pinned revision is certified.
+
+    This is the command step: *certifier* may reach the network. It is called
+    once per distinct full-SHA revision of *action* found in the envelope, and
+    never for a checkout that pins none.
+
+    Returns
+    -------
+    ProvisioningEnvelope
+        *envelope* with `install_certifications` keyed by revision.
+    """
+    return {
+        **envelope,
+        "install_certifications": {
+            sha: certifier(sha) for sha in pinned_action_revisions(envelope, action)
+        },
     }

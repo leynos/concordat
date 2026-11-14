@@ -1,5 +1,12 @@
 {
   "actions": [],
+  "install_certifications": {
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+      "floor": null,
+      "reason": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb changes the action's runtime content since certified/install-whitaker/0.2.12; a maintainer certifies new content by tagging it",
+      "status": "uncertified"
+    }
+  },
   "kind": "policy-input/whitaker-provisioning",
   "repository": {
     "name": "leynos/consumer",

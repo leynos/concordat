@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import os
 import typing as typ
 
 import pygit2
 import pytest
 
+from concordat import cli
+from concordat.auditor.github import GithubForbiddenError
 from concordat.errors import OperationalRuleError
 from concordat.rules import packages, runner
+from concordat.rules.provisioning_certification import certifying
+from concordat.rules.whitaker_certification import certified, uncertified, unknown
 from concordat.rules.whitaker_provisioning_envelope import (
     ENVELOPE_KIND,
     MAX_SCRIPT_BYTES,
@@ -18,6 +25,8 @@ from concordat.rules.whitaker_provisioning_envelope import (
 
 if typ.TYPE_CHECKING:
     import pathlib
+
+    from concordat.rules.whitaker_certification import Certification
 
 RULE_ID: typ.Final = "whitaker-provisioning"
 
@@ -29,6 +38,22 @@ jobs:
     steps:
       - run: cargo binstall --no-confirm whitaker-installer@0.2.9
 """
+
+
+def _pin_workflow(ref: str) -> str:
+    """Return a workflow whose one step uses install-whitaker at *ref*."""
+    return (
+        "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - uses: leynos/shared-actions/.github/actions/"
+        f"install-whitaker@{ref}\n"
+    )
+
+
+def _certified_as(answer: Certification) -> packages.EnvelopeResolver:
+    """Return a builder whose certifier gives *answer* for every revision."""
+    return certifying(
+        packages.default_envelope_builder, lambda _parameters: lambda _sha: answer
+    )
 
 
 def _write(root: pathlib.Path, relative: str, text: str) -> None:
@@ -297,6 +322,95 @@ class TestRepositoryName:
         assert envelope["repository"]["name"] is None
 
 
+class _ActionRepositoryClient:
+    """A GitHub client for a shared-actions with one floor and an unchanged action."""
+
+    def __init__(self, *, refuse: Exception | None = None) -> None:
+        """Answer every question, or raise *refuse* from the first."""
+        self._refuse = refuse
+
+    def matching_refs(
+        self, _owner: str, _name: str, _namespace: str
+    ) -> list[dict[str, typ.Any]]:
+        """Return one lightweight floor tag, or refuse."""
+        if self._refuse is not None:
+            raise self._refuse
+        return [
+            {
+                "ref": "refs/tags/certified/install-whitaker/0.2.12",
+                "object": {"type": "commit", "sha": "f" * 40},
+            }
+        ]
+
+    def compare_status(self, _owner: str, _name: str, _base: str, _head: str) -> str:
+        """Say every revision is on main and after the floor."""
+        return "ahead"
+
+    def git_tree(
+        self, _owner: str, _name: str, _treeish: str, *, recursive: bool = False
+    ) -> dict[str, typ.Any]:
+        """Return the same action content at every commit."""
+        assert recursive  # the whole subtree is the digest's input.
+        return {
+            "truncated": False,
+            "tree": [
+                {
+                    "path": "action.yml",
+                    "mode": "100644",
+                    "type": "blob",
+                    "sha": "1" * 40,
+                }
+            ],
+        }
+
+
+class TestTheCommand:
+    """Run `concordat artefact rule run` with the GitHub client stood in."""
+
+    def _run(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+        client: _ActionRepositoryClient,
+    ) -> tuple[int, dict[str, typ.Any]]:
+        """Run the command over a checkout pinning one revision; return its JSON."""
+        _write(tmp_path, ".github/workflows/ci.yml", _pin_workflow("a" * 40))
+        monkeypatch.setattr(cli, "_pin_client", lambda _api_url: client)
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer), pytest.raises(SystemExit) as exit_:
+            cli.main([
+                "artefact",
+                "rule",
+                "run",
+                RULE_ID,
+                "--repo",
+                str(tmp_path),
+                "--format",
+                "json",
+            ])
+        return int(typ.cast("int", exit_.value.code)), json.loads(buffer.getvalue())
+
+    def test_a_certified_pin_exits_zero(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The command asks the action repository, and a certified pin is clean."""
+        status, document = self._run(tmp_path, monkeypatch, _ActionRepositoryClient())
+
+        assert status == 0, document
+        assert document["verdict"] == "compliant"
+
+    def test_a_refusing_api_exits_one_indeterminate(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A GitHub that cannot answer fails the audit closed, as indeterminate."""
+        refusing = _ActionRepositoryClient(refuse=GithubForbiddenError("refused: 403"))
+
+        status, document = self._run(tmp_path, monkeypatch, refusing)
+
+        assert status == 1, document
+        assert document["verdict"] == "indeterminate"
+
+
 class TestRuleRun:
     """Run the package through the real runner and Conftest."""
 
@@ -311,23 +425,70 @@ class TestRuleRun:
         assert result.verdict == "noncompliant", result
         assert {finding.rule_id for finding in result.findings} == {"QG-002"}
 
-    def test_the_first_listed_revision_is_compliant(
+    def test_a_certified_revision_is_compliant(self, tmp_path: pathlib.Path) -> None:
+        """The shipped policy accepts a revision the command certified."""
+        _write(tmp_path, ".github/workflows/ci.yml", _pin_workflow("a" * 40))
+
+        result = runner.run_rule(
+            RULE_ID, tmp_path, envelope_builder=_certified_as(certified("tag/0.2.12"))
+        )
+
+        assert result.verdict == "compliant", result
+
+    def test_a_revision_without_a_recorded_answer_is_indeterminate(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """The shipped parameters accept the revision they list first."""
-        parameters = packages.rule_parameters(packages.rule_package_dir(RULE_ID))
-        refs = typ.cast("list[str]", parameters["compliant_install_whitaker_refs"])
-        _write(
-            tmp_path,
-            ".github/workflows/ci.yml",
-            "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
-            "    steps:\n      - uses: leynos/shared-actions/.github/actions/"
-            f"install-whitaker@{refs[0]}\n",
-        )
+        """Without the command step the policy cannot call a pin certified."""
+        _write(tmp_path, ".github/workflows/ci.yml", _pin_workflow("a" * 40))
 
         result = runner.run_rule(RULE_ID, tmp_path)
 
-        assert result.verdict == "compliant", result
+        assert result.verdict == "indeterminate", result
+        assert {finding.rule_id for finding in result.findings} == {"QG-002"}
+
+    @pytest.mark.parametrize(
+        ("answer", "verdict"),
+        [
+            pytest.param(certified("tag/0.2.12"), "compliant", id="certified"),
+            pytest.param(uncertified("older"), "noncompliant", id="uncertified"),
+            pytest.param(unknown("rate limited"), "indeterminate", id="unknown"),
+        ],
+    )
+    def test_the_recorded_answer_sets_the_verdict(
+        self, tmp_path: pathlib.Path, answer: Certification, verdict: str
+    ) -> None:
+        """A pin is compliant exactly when the certifier certified it."""
+        _write(tmp_path, ".github/workflows/ci.yml", _pin_workflow("c" * 40))
+
+        result = runner.run_rule(
+            RULE_ID, tmp_path, envelope_builder=_certified_as(answer)
+        )
+
+        assert result.verdict == verdict, result
+
+    def test_only_a_full_sha_is_asked_about(self, tmp_path: pathlib.Path) -> None:
+        """A tag or a short SHA is refused without asking anyone."""
+        asked: list[str] = []
+
+        def certifier(sha: str) -> Certification:
+            """Record the revision asked about, and certify it."""
+            asked.append(sha)
+            return certified("tag/0.2.12")
+
+        _write(tmp_path, ".github/workflows/ci.yml", _pin_workflow("main"))
+        _write(tmp_path, ".github/workflows/two.yml", _pin_workflow("abc1234"))
+        _write(tmp_path, ".github/workflows/three.yml", _pin_workflow("d" * 40))
+
+        result = runner.run_rule(
+            RULE_ID,
+            tmp_path,
+            envelope_builder=certifying(
+                packages.default_envelope_builder, lambda _parameters: certifier
+            ),
+        )
+
+        assert asked == ["d" * 40]
+        assert result.verdict == "noncompliant", result
 
     @pytest.mark.parametrize(
         ("makefile", "verdict"),
@@ -432,37 +593,6 @@ class TestRuleRun:
         result = runner.run_rule(RULE_ID, tmp_path)
 
         assert {f.path for f in result.findings} == findings, result
-
-    @pytest.mark.parametrize(
-        ("selector", "verdict"),
-        [
-            pytest.param(-1, "compliant", id="newest-listed-revision"),
-            pytest.param("a" * 39 + "5", "noncompliant", id="unlisted-revision"),
-            pytest.param(
-                "a5765019912a8ab6882b12db049c7cde635f3a85",
-                "noncompliant",
-                id="revision-before-the-install-rules",
-            ),
-        ],
-    )
-    def test_only_a_derived_revision_is_accepted(
-        self, tmp_path: pathlib.Path, selector: int | str, verdict: str
-    ) -> None:
-        """A pin is compliant exactly when the derived list names it."""
-        parameters = packages.rule_parameters(packages.rule_package_dir(RULE_ID))
-        refs = typ.cast("list[str]", parameters["compliant_install_whitaker_refs"])
-        ref = refs[selector] if isinstance(selector, int) else selector
-        _write(
-            tmp_path,
-            ".github/workflows/ci.yml",
-            "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
-            "    steps:\n      - uses: leynos/shared-actions/.github/actions/"
-            f"install-whitaker@{ref}\n",
-        )
-
-        result = runner.run_rule(RULE_ID, tmp_path)
-
-        assert result.verdict == verdict, result
 
 
 @pytest.mark.parametrize("surface", ["workflows", "actions", "scripts"])

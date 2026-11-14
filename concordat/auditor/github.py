@@ -218,6 +218,73 @@ class GithubClient:
         except GithubNotFoundError:
             return None
 
+    def matching_refs(
+        self, owner: str, name: str, namespace: str
+    ) -> list[dict[str, typ.Any]]:
+        """Return every ref whose name starts with *namespace* (e.g. ``tags/x/``).
+
+        A bare-list listing, read across every page so a long namespace is not
+        cut short. A namespace that matches nothing is an empty list, not an
+        absence.
+
+        Returns
+        -------
+        list[dict[str, typing.Any]]
+            The ref objects, each with its `ref` name and target `object`.
+        """
+        refs: list[dict[str, typ.Any]] = []
+        next_path: str | None = (
+            f"/repos/{owner}/{name}/git/matching-refs/{namespace}?per_page=100"
+        )
+        while next_path:
+            response = self._request("GET", next_path)
+            refs.extend(response.json())
+            next_url = response.links.get("next", {}).get("url")
+            next_path = next_url.removeprefix(self.api_url) if next_url else None
+        return refs
+
+    def compare_status(self, owner: str, name: str, base: str, head: str) -> str | None:
+        """Return how *head* stands to *base*, or None when either is unknown.
+
+        GitHub reports `ahead`, `behind`, `identical` or `diverged`, from the
+        head's side: `ahead` means *head* descends from *base*. A SHA that
+        names no commit (404, or 422 for an unresolvable one) is None.
+
+        Returns
+        -------
+        str | None
+            The comparison status, or None when a revision does not exist.
+        """
+        try:
+            body = self._get_json(
+                "GET", f"/repos/{owner}/{name}/compare/{base}...{head}?per_page=1"
+            )
+        except GithubNotFoundError:
+            return None
+        status = body.get("status")
+        return status if isinstance(status, str) else None
+
+    def git_tree(
+        self, owner: str, name: str, treeish: str, *, recursive: bool = False
+    ) -> dict[str, typ.Any] | None:
+        """Return a tree, or None when *treeish* names none.
+
+        *treeish* may be `<commit sha>:<path>`, which names the subtree at that
+        path of the commit.
+
+        Returns
+        -------
+        dict[str, typing.Any] | None
+            The tree object (`tree`, `truncated`), or None when it is absent.
+        """
+        suffix = "?recursive=1" if recursive else ""
+        try:
+            return self._get_json(
+                "GET", f"/repos/{owner}/{name}/git/trees/{treeish}{suffix}"
+            )
+        except GithubNotFoundError:
+            return None
+
     def environment_branch_policies(
         self, owner: str, name: str, environment: str
     ) -> tuple[tuple[str, str], ...]:

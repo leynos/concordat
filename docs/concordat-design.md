@@ -1855,7 +1855,7 @@ the dependency-pin actionability checks.
 | YL-005       | Every CI job that runs `make lint` first uses the pinned `install-yaml-lint` action (full commit SHA), some job does, and no step provisions yamllint, actionlint, or shellcheck by hand or lints through a third-party action.                                                                                                                                                                                                                                                                                                                                                                                                     | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
 | SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Security Posture                | Open Source Security Foundation Scorecard                           | warning              | 1                        |
 | LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | File and Content Presence       | Python/Content Check                                                | error                | 4                        |
-| QG-002       | Whitaker is provisioned only through `leynos/shared-actions/.github/actions/install-whitaker`, pinned to a revision listed in the rule as descending from the change that made the action carry the install rules. No workflow, composite action, Makefile or script installs, downloads or runs `whitaker-installer`, `cargo-dylint` or `dylint-link` by another route. Whitaker itself is exempt as the producer.                                                                                                                                                                                                                 | Quality-Gate Integrity          | OPA/Conftest (`whitaker-provisioning`)                              | error                | 4                        |
+| QG-002       | Whitaker is provisioned only through `leynos/shared-actions/.github/actions/install-whitaker`, pinned to a certified revision: one on shared-actions `main` that descends from a `certified/install-whitaker/<version>` tag with the install-whitaker runtime content unchanged since it. No workflow, composite action, Makefile or script installs, downloads or runs `whitaker-installer`, `cargo-dylint` or `dylint-link` by another route. Whitaker itself is exempt as the producer.                                                                                                                                                                                                                 | Quality-Gate Integrity          | OPA/Conftest (`whitaker-provisioning`)                              | error                | 4                        |
 | QG-003       | Superseded by QG-002. The lint suite is a rolling release and is never pinned; `install-whitaker` refuses a suite pin, and its own contract proves it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Quality-Gate Integrity          | Superseded                                                          | n/a                  | n/a                      |
 | QG-004       | Test invocation uses the canonical `TEST_CMD` nextest fallback, test-tool installs pass `--locked`, and doctests are executed by a dedicated target (nextest does not run them).                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | OPA/Conftest + Makefile parse                                       | warning              | 4                        |
 | QG-005       | A test-only lane does not duplicate a coverage lane that runs the same scope, platform, nextest profile, resolved feature set, and test selection on the same trigger.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Quality-Gate Integrity          | OPA/Conftest + workflow envelope                                    | warning              | 4                        |
@@ -1968,28 +1968,51 @@ shared-actions `install-whitaker` action. It installs an exact
 rolling release), and always passes `--no-source-fallback`, so a missing
 published asset fails the run rather than being compiled. The action's own
 contract proves those rules, so QG-002 does not re-check installer flags. It
-refuses every other route, and every pin of the action to a revision not listed
-as carrying the rules. QG-003 is superseded: pinning the suite is now refused
-by the action itself.
+refuses every other route, and every pin of the action to a revision that is
+not certified. QG-003 is superseded: pinning the suite is now refused by the
+action itself.
 
-The listed revisions are derived, not named one by one. A revision qualifies
-when it is a first-parent commit on shared-actions `main` that is an approved
-root, or descends from one and leaves the `install-whitaker` directory's
-runtime digest equal to that root's, so the action a consumer runs is the
-reviewed one whatever else changed in shared-actions. The digest covers every
-file in the directory except the `tests/` tree and Markdown files, which the
-action does not execute; a reviewer confirms that when approving a root. The
-list is generated offline, from a shared-actions clone, and committed in the
-rule's manifest, rather than looked up through the GitHub API at audit time:
-the audited checkout holds no shared-actions history, an offline derivation is
-verifiable in the rule's own tests, and the audit gains no network dependency
-or rate-limit budget. The cost is that the list is regenerated after
-shared-actions gains commits; a change to the action's runtime content stays
-refused until a reviewer adds it as a root. A root whose runtime files mention
+Certification is by content, and the approval lives in shared-actions, not in
+concordat. The user ruled on 2026-11-14 that concordat must not need a commit
+for every shared-actions commit, which a list of approved revisions did (the
+list went stale each time `main` moved). A maintainer certifies a reviewed
+commit of the action by creating an annotated tag
+`certified/install-whitaker/<whitaker-installer version>` on it. A pinned full
+SHA is certified when it is on shared-actions' default branch, equals or
+descends from a certification tag's commit, and leaves the `install-whitaker`
+directory's runtime digest equal to that tag's. Descent alone is not enough: a
+later commit could change `action.yml` and drop `--no-source-fallback`, so a
+change to the action's runtime content stays refused until the maintainer tags
+it, which is the new installer release's single approval. Commits that leave
+the runtime content alone (a Dependabot bump of another action, a test or
+Markdown edit) need no approval and no concordat change. Any certified tag
+certifies, not only the newest, so a repository on an older approved release
+stays compliant while that release's tag exists; deleting the tag retires the
+release.
+
+The digest covers every file in the directory except the `tests/` tree and
+Markdown files, which the action does not execute, hashed by mode, blob and
+path, so a content, mode, rename or addition change moves it and an unknown
+file fails closed. The audited checkout holds no shared-actions history, so the
+question is answered at the command boundary, as action-pin resolution is: the
+rule-run command asks the GitHub API for the tags (`git/matching-refs`), the
+ancestry (`compare`) and the directory's tree, and records the answer for each
+pinned SHA under `install_certifications` in the envelope. The policy only
+reads that fact. A pin that GitHub reports as not on `main`, not descended from
+any tag, changed in content, or unknown (a 404) is noncompliant; a pin whose
+answer could not be read (offline, rate limited, refused, a truncated tree) is
+indeterminate, and an envelope with no recorded answer is indeterminate too,
+never a pass. Commit-on-`main` is checked explicitly because GitHub's compare
+resolves commits that exist only in a fork. A tag, branch or short SHA is
+refused without asking. Certified answers are kept for the run only, not on
+disk, because a new tag changes them. Tags are created by the user: a floor
+needs a review, and `scripts/whitaker_revisions.py certify` checks a candidate
+and prints the `git tag` and `git push` commands without running them, since
+whoever can push such a tag can certify. A candidate whose runtime files mention
 `tests/` or a Markdown path is refused, because a script could otherwise run or
-read content the digest ignores. The scan is a guard, not a dependency
-analysis; it misses an indirect reference such as a glob, so the root review
-also checks that no runtime file reaches excluded content.
+read content the digest ignores; the scan is a guard, not a dependency
+analysis, so the review also checks that no runtime file reaches excluded
+content.
 
 Rule version 0.3.2 refines three of QG-001's textual readings so that they
 match what the shell executes; run against netsuke's Makefile, the older
@@ -2005,10 +2028,10 @@ towards reporting: a shape the reading cannot prove still produces a finding.
   gate-critical targets (the shipped QG-001 sensor); `whitaker-provisioning`
   reads decoded workflows and composite actions, Makefiles and scripts, and
   recognizes an install, download or direct run of a Whitaker tool, and an
-  `install-whitaker` pin that is not listed (the shipped QG-002 sensor).
+  `install-whitaker` pin that is not certified (the shipped QG-002 sensor).
 - **Actuators:** comment-preserving patches replacing soft-skip recipes
   with the canonical mandatory form, and file patches replacing a bespoke
-  install step with the `install-whitaker` step at a listed revision.
+  install step with the `install-whitaker` step at a certified revision.
 
 ##### Test-runner completeness (QG-004)
 
