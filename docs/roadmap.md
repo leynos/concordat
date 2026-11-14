@@ -717,7 +717,10 @@ the Section 2.1.2 format.
   no tests of installation, with exceptions recorded as data in `.concordat`.
   Acceptance: over the estate's main branches it reads the repositories the
   survey script reads as done as compliant, the one with local installers as
-  noncompliant, and the excepted one as compliant.
+  noncompliant, and the excepted one as compliant. PT-006 then added that proof
+  code is run in CI (version 0.2.0), found by parsing Rust sources; over the
+  estate's main branches it reads netsuke's Verus proofs as unrun and every
+  other repository with proof code as run.
 - [x] Ship the duplication gate scope rule (NS-001 to NS-004, DF12-104): the
   `python-duplication-gate` package holds a repository that configures
   `df12-duplication` to an uncapped scan (`top = 0`), no selected test tree and

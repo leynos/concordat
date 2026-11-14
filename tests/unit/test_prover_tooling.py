@@ -186,12 +186,12 @@ def test_a_repository_without_a_prover_is_not_audited(tmp_path: pathlib.Path) ->
     assert ids(tmp_path) == set()
 
 
-def test_a_repository_with_proof_code_and_no_wiring_is_not_audited(
+def test_a_repository_with_proof_code_and_no_wiring_is_audited(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Proof code alone is not use: nothing on main installs or runs a prover."""
+    """Proof code alone is use: it has no pin and nothing runs it (PT-001, PT-006)."""
     put(tmp_path, "src/lib.rs", "#[kani::proof]\nfn h() {}\n")
-    assert ids(tmp_path) == set()
+    assert ids(tmp_path) == {"PT-001", "PT-006"}
 
 
 EXCEPTION = """language:

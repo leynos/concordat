@@ -151,3 +151,35 @@ test_an_unreadable_file_is_indeterminate if {
 test_a_foreign_envelope_is_indeterminate if {
 	ids(data.fixtures.not_an_envelope) == {"EN-001"}
 }
+
+test_proof_code_that_no_step_runs_is_noncompliant_and_named if {
+	ids(data.fixtures.proof_code_unrun) == {"PT-006"}
+	some f in findings(data.fixtures.proof_code_unrun)
+	contains(f.msg, "src/kani.rs")
+	contains(f.msg, "kani-harness")
+	f.path == "src/kani.rs"
+}
+
+test_proof_code_run_by_a_step_is_compliant if {
+	count(findings(data.fixtures.proof_code_run)) == 0
+}
+
+test_proof_code_alone_is_audited_for_the_pin_and_for_running if {
+	ids(data.fixtures.proof_code_alone) == {"PT-001", "PT-006"}
+}
+
+test_a_proof_generator_is_proof_code if {
+	some f in findings(data.fixtures.proof_code_alone)
+	f.rule_id == "PT-006"
+	contains(f.msg, "proof-generator")
+}
+
+test_an_unreadable_workflow_makes_running_unknown_not_missing if {
+	ids(data.fixtures.proof_code_workflow_unreadable) == {"EN-001"}
+	verdicts(data.fixtures.proof_code_workflow_unreadable) == {"indeterminate"}
+}
+
+test_pt_006_cannot_be_waived if {
+	"PT-006" in ids(data.fixtures.proof_code_excepted)
+	"EX-001" in ids(data.fixtures.proof_code_excepted)
+}

@@ -10,6 +10,7 @@ target; the operands of options such as `-j 2` are not goals.
 from __future__ import annotations
 
 import dataclasses
+import re
 import typing as typ
 
 from .makefile_facts import MakefileRefusedError
@@ -150,19 +151,66 @@ def _first_goal(report: MakeutilReport) -> str | None:
     return next((t for t in targets if _is_ordinary(t)), None)
 
 
-def make_rules(report: MakeutilReport) -> MakeRules:
+REFERENCE: typ.Final = re.compile(r"(?<!\$)\$[({](\w+)[)}]")
+EXPANSION_DEPTH: typ.Final = 4
+
+
+def _variable_table(report: MakeutilReport) -> dict[str, str]:
+    """Return each variable the Makefile assigns, by name, as written."""
+    variables = typ.cast("list[dict[str, object]]", report["variables"])
+    return {
+        str(v["name"]): str(v.get("raw_value", "")).strip()
+        for v in variables
+        if v.get("name") and v.get("name") != DEFAULT_GOAL_VARIABLE
+    }
+
+
+def _expand(text: str, table: dict[str, str]) -> str:
+    """Replace `$(NAME)` and `${NAME}` with the variable's written value.
+
+    Only a variable the Makefile itself assigns is replaced, a few levels deep;
+    a built-in (`$(CURDIR)`), a function (`$(shell ...)`) or an automatic
+    variable stays as written and is masked by the shell splitter.
+
+    Returns
+    -------
+    str
+        The text with the Makefile's own variables replaced.
+    """
+    for _ in range(EXPANSION_DEPTH):
+        replaced = REFERENCE.sub(lambda m: table.get(m.group(1), m.group(0)), text)
+        if replaced == text:
+            break
+        text = replaced
+    return text
+
+
+def make_rules(report: MakeutilReport, *, expand: bool = False) -> MakeRules:
     """Flatten a `makeutil` report into prerequisites and recipe commands.
+
+    Parameters
+    ----------
+    report:
+        The `makeutil` report for the root Makefile.
+    expand:
+        Whether to replace the Makefile's own variables in each recipe before it
+        is split, so a recipe that runs `$(VERUS_RUN) --proof-file x.rs` shows
+        the command the variable stands for. PT-006 needs this to see that a
+        target runs proofs; PT-002 reads the recipes as written.
 
     Returns
     -------
     MakeRules
         The rules, with the goal a bare `make` builds.
     """
+    table = _variable_table(report) if expand else {}
     prerequisites: dict[str, list[str]] = {}
     recipes: dict[str, list[Argv]] = {}
     for rule in report["rules"]:
         parsed = [
-            argv for recipe in rule["recipes"] for argv in commands(recipe["text"])
+            argv
+            for recipe in rule["recipes"]
+            for argv in commands(_expand(recipe["text"], table))
         ]
         for target in rule["targets"]:
             prerequisites.setdefault(target, []).extend(rule["prerequisites"])

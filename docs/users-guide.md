@@ -904,7 +904,13 @@ concordat artefact rule run rust-prover-tooling --repo /path/to/checkout
 itself, directly or through a `make` target whose prerequisites install; a step
 that only runs proofs on an installed toolchain passes. **PT-003** requires the
 shared `install-prover-tools` action to be pinned by a full SHA. **PT-004**
-refuses local installer scripts and **PT-005** tests of prover installation. A
+refuses local installer scripts and **PT-005** tests of prover installation.
+**PT-006** requires a repository that holds proof code (`#[kani::proof]`
+harnesses, `verus!` blocks, or a proc-macro crate that generates harnesses,
+read from the Rust sources with a parser) to have a workflow step that runs the
+proofs, directly, through a `make` target or script, or through a prover-named
+`make` target after the shared install. Proof code that nothing runs is a
+comment, and PT-006 cannot be waived: run the proofs or remove the code. A
 repository that stays on another pin on purpose records an exception in
 `.concordat` under `language.rust.prover_tools.exceptions`, naming the clauses
 (PT-001, PT-002, PT-004), the `pin`, a decision `record`, a rationale and a

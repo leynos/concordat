@@ -28,6 +28,7 @@ HEAD = (
 )
 SHARED = f"      - uses: {ACTION}{SHA}\n        with:\n          tools: verus\n"
 RUN = "      - run: make verus\n"
+KANI_MODULE = "#[cfg(kani)]\nmod proofs {\n    #[kani::proof]\n    fn holds() {}\n}\n"
 CHECKOUTS: dict[str, dict[str, str]] = {
     "installs through the shared action": {
         "Makefile": MAKEFILE,
@@ -49,6 +50,16 @@ CHECKOUTS: dict[str, dict[str, str]] = {
         "Makefile": MAKEFILE,
         ".github/workflows/verus.yml": HEAD + SHARED + RUN,
         "scripts/install_verus.sh": "echo hi\n",
+    },
+    "holds Kani proofs that nothing runs": {
+        "Makefile": MAKEFILE + "\nkani:\n\tcargo kani --workspace\n",
+        ".github/workflows/kani.yml": HEAD + SHARED + "      - run: echo installed\n",
+        "src/kani.rs": KANI_MODULE,
+    },
+    "runs its Kani proofs from a make target": {
+        "Makefile": MAKEFILE + "\nkani:\n\tcargo kani --workspace\n",
+        ".github/workflows/kani.yml": HEAD + SHARED + "      - run: make kani\n",
+        "src/kani.rs": KANI_MODULE,
     },
     "uses no prover": {"Makefile": "build:\n\tcargo build\n"},
 }

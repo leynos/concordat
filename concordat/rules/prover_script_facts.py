@@ -14,7 +14,7 @@ import ast
 import dataclasses
 import typing as typ
 
-from .prover_commands import is_installer, is_runner
+from .prover_commands import is_installer, is_runner, runs_proofs
 from .prover_pins import command_pins
 from .shell_commands import commands
 
@@ -49,10 +49,11 @@ RELEASE_PATHS: typ.Final = ("/releases/download/", "/releases/latest/download/")
 
 @dataclasses.dataclass(slots=True)
 class ScriptFacts:
-    """Local installers, whether a script runs a prover, and unreadable files."""
+    """Local installers, prover and proof runs, and unreadable files."""
 
     installers: list[LocalInstaller] = dataclasses.field(default_factory=list)
     runs: bool = False
+    proof_scripts: list[str] = dataclasses.field(default_factory=list)
     unreadable: list[str] = dataclasses.field(default_factory=list)
     pins: list[Pin] = dataclasses.field(default_factory=list)
 
@@ -170,6 +171,60 @@ def _runs_prover(path: pathlib.Path, source: str | None) -> bool:
     return any(is_runner(argv) for argv in commands(source))
 
 
+def _leading_words(node: ast.List) -> list[str]:
+    """Return the string constants a list opens with, up to its first other item."""
+    words: list[str] = []
+    for item in node.elts:
+        if not (isinstance(item, ast.Constant) and isinstance(item.value, str)):
+            break
+        words.append(item.value)
+    return words
+
+
+def _python_runs_proofs(source: str) -> bool:
+    """Return whether Python *source* builds a command that runs proofs.
+
+    A script that drives a prover holds its command as a list literal
+    (`["verus", "run", *flags]`, `["cargo", "kani", "--harness", name]`) or as a
+    string constant (`"cargo kani --workspace"`). The list's leading constants
+    are read as a command, also under the estate runner, since a script that
+    already runs through it names only the noun and the verb.
+
+    Returns
+    -------
+    bool
+        Whether the source builds a command that runs proofs.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        match node:
+            case ast.List():
+                words = _leading_words(node)
+                runs = bool(words) and (
+                    runs_proofs(words) or runs_proofs(["prover-tools", *words])
+                )
+            case ast.Constant(value=str() as text):
+                words = text.split()
+                runs = len(words) > 1 and runs_proofs(words)
+            case _:
+                runs = False
+        if runs:
+            return True
+    return False
+
+
+def _runs_proofs(path: pathlib.Path, source: str | None) -> bool:
+    """Return whether a script runs proofs, as a shell or Python script."""
+    if source is None:
+        return False
+    if path.suffix in SHELL_SUFFIXES:
+        return any(runs_proofs(argv) for argv in commands(source))
+    return path.suffix == ".py" and _python_runs_proofs(source)
+
+
 def _script_pins(path: pathlib.Path, relative: str, source: str | None) -> list[Pin]:
     """Return the revisions a readable shell script's commands name."""
     if source is None or path.suffix not in SHELL_SUFFIXES:
@@ -193,6 +248,8 @@ def scan_scripts(checkout: pathlib.Path) -> ScriptFacts:
         if reason is not None:
             facts.installers.append({"path": relative, "reason": reason})
         facts.runs = facts.runs or _runs_prover(path, source)
+        if _runs_proofs(path, source):
+            facts.proof_scripts.append(relative)
         facts.pins += _script_pins(path, relative, source)
     return facts
 

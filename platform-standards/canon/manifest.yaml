@@ -263,17 +263,18 @@ artifacts:
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-prover-tooling/policy/rust_prover_tooling.rego
     description: >-
-      Sensor for how a repository that uses Kani or Verus obtains them: one
-      rust-prover-tools pin, installation in CI only through the shared action
-      pinned by SHA, no local installers or installation tests, and recorded
+      Sensor for how a repository that uses Kani or Verus obtains them and
+      that CI runs its proofs: one rust-prover-tools pin, installation in CI
+      only through the shared action pinned by SHA, no local installers or
+      installation tests, proof code that a workflow step runs, and recorded
       exceptions.
-    sha256: 2d5fd7a6d0864e3a6afa1f6ebfc0c728e7d8c7ccc02344570f00f779e08463f3
+    sha256: 824ae5bd2573a4d81fd9e96887f6cc18c7d212daadf8ca37d859646bc2aec51d
   - id: lint-rule-rust-prover-tooling-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-prover-tooling/rule.yaml
     description: >-
       Rule package manifest for the rust-prover-tooling audit.
-    sha256: 445d5de93a9f49af9bbdd63362c227e0ca926ce643c8c562e22149301311267e
+    sha256: e2f804e1f57ef8896044d0b34b7b009531914ed59efa04841dbe25f8d346e3f4
   - id: lint-rule-python-duplication-gate
     type: opa-policy
     path: platform-standards/canon/lint-rules/python-duplication-gate/policy/python_duplication_gate.rego

@@ -33,6 +33,8 @@ if typ.TYPE_CHECKING:
 __all__ = [
     "is_installer",
     "is_runner",
+    "is_substantive",
+    "runs_proofs",
     "script_invoked",
     "unwrap",
     "wrapper_changes_directory",
@@ -76,6 +78,13 @@ INTERPRETERS: typ.Final = frozenset({
     ".",
 })
 CARGO_INSTALLS: typ.Final = (["cargo", "install"], ["cargo", "binstall"])
+# Commands that arrange the shell rather than doing work.
+NO_WORK_COMMANDS: typ.Final = frozenset({"cd", "export", "set", "true", ":"})
+KANI_INFO_COMMANDS: typ.Final = frozenset({"setup", "list"})
+KANI_INFO_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
+CARGO_VERUS_RUNS: typ.Final = frozenset({"verify", "focus", "build"})
+# `<tool> <verb>` pairs under the estate runner that verify proofs.
+PROOF_VERBS: typ.Final = (("kani", "exec"), ("verus", "run"))
 
 
 def _is_assignment(word: str) -> bool:
@@ -254,6 +263,98 @@ def is_runner(argv: cabc.Sequence[str]) -> bool:
         or words[:2] == ["cargo", "kani"]
         or _runs_through_runner(unwrapped, words)
     )
+
+
+def _kani_proves(arguments: list[str]) -> bool:
+    """Return whether Kani's arguments, after the program, verify something.
+
+    `setup`, `list` and the version and help flags install, enumerate or
+    report; everything else (`--harness x`, `--workspace`, no argument at all)
+    verifies.
+
+    Returns
+    -------
+    bool
+        Whether the arguments ask Kani to verify.
+    """
+    operands = [a for a in arguments if not a.startswith("-")]
+    if any(a in KANI_INFO_FLAGS for a in arguments):
+        return False
+    return not (operands and operands[0] in KANI_INFO_COMMANDS)
+
+
+def _is_kani_proof_run(words: list[str]) -> bool:
+    """Return whether the command is `cargo kani`, `cargo-kani` or `kani-driver`."""
+    head = _basename(words[0])
+    if words[:2] == ["cargo", "kani"]:
+        return _kani_proves(words[2:])
+    if head in {"cargo-kani", "kani-driver"}:
+        rest = words[1:]
+        return _kani_proves(rest[1:] if rest[:1] == ["kani"] else rest)
+    return False
+
+
+def _is_verus_proof_run(words: list[str]) -> bool:
+    """Return whether the command is Verus on a proof file, or `cargo verus`."""
+    head = _basename(words[0])
+    if head == "verus":
+        return any(word.endswith(".rs") for word in words[1:])
+    if words[:2] == ["cargo", "verus"] or head == "cargo-verus":
+        rest = words[2:] if words[:2] == ["cargo", "verus"] else words[1:]
+        # Cargo runs the plugin as `cargo-verus verus <subcommand>`.
+        rest = rest[1:] if rest[:1] == ["verus"] else rest
+        return bool(rest) and rest[0] in CARGO_VERUS_RUNS
+    return False
+
+
+def runs_proofs(argv: cabc.Sequence[str]) -> bool:
+    """Return whether *argv* runs proofs, not merely installs or checks a prover.
+
+    `is_runner` also counts `check-version`, because a step that checks the
+    prover is evidence the repository uses one; PT-006 asks for more, that the
+    proofs themselves are verified.
+
+    Returns
+    -------
+    bool
+        ``True`` for `cargo kani`, `cargo-kani` or `kani-driver` except their
+        `setup`, `list`, version and help forms; `prover-tools kani exec` and
+        `prover-tools verus run`; `verus` on a Rust proof file; and
+        `cargo verus verify|focus|build`. A command that only prints text, or
+        whose program is an unresolved Make reference, is never one.
+    """
+    unwrapped = unwrap(argv)
+    words = _words(unwrapped)
+    if _prints(words):
+        return False
+    if not unwrapped[0].startswith("$") and (
+        _is_kani_proof_run(words) or _is_verus_proof_run(words)
+    ):
+        return True
+    through = any(_adjacent(words, {tool}, verb) for tool, verb in PROOF_VERBS)
+    return through and _names_prover_tools(unwrapped, words)
+
+
+def is_substantive(argv: cabc.Sequence[str]) -> bool:
+    """Return whether a recipe command does work beyond printing and installing.
+
+    A `make kani*` or `make verus*` target counts as running proofs in a
+    workflow that installs through the shared action when its recipe holds at
+    least one such command: a generator's harnesses are verified inside a test
+    suite, so no recipe names the prover binary. A recipe of `printf` and
+    installs, or one that only checks the version, is not substantive.
+
+    Returns
+    -------
+    bool
+        Whether the command runs something other than a print, an installer or
+        a version check.
+    """
+    unwrapped = unwrap(argv)
+    words = _words(unwrapped)
+    if _prints(words) or is_installer(argv) or words[0] in NO_WORK_COMMANDS:
+        return False
+    return not any(word in {"check-version", "--version"} for word in words)
 
 
 def _first_operand(words: cabc.Sequence[str]) -> str | None:

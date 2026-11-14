@@ -1,12 +1,13 @@
-# PT-001 to PT-005: how a repository that uses a prover obtains it.
+# PT-001 to PT-006: how a repository that uses a prover obtains and runs it.
 #
 # The Python envelope reads the facts with parsers: `makeutil` for Make
-# prerequisites, `shlex` for the commands in `run` scripts and recipes, and the
-# `ast` for Python scripts. This policy decides. A repository is audited only
-# where it uses a prover: a version pin, a `rust-prover-tools` revision, or a
-# command that installs or runs one. A recorded exception waives PT-001,
-# PT-002 and PT-004 while the pin it names is still the pin in the checkout and
-# its decision record exists; PT-003 and PT-005 are never waivable.
+# prerequisites, `shlex` for the commands in `run` scripts and recipes, the
+# `ast` for Python scripts and tree-sitter for Rust proof code. This policy
+# decides. A repository is audited only where it uses a prover: proof code, a
+# version pin, a `rust-prover-tools` revision, or a command that installs or
+# runs one. A recorded exception waives PT-001, PT-002 and PT-004 while the pin
+# it names is still the pin in the checkout and its decision record exists;
+# PT-003, PT-005 and PT-006 are never waivable.
 package canon.lint_rules.rust_prover_tooling
 
 import rego.v1
@@ -54,6 +55,15 @@ uses_prover if {
 uses_prover if {
 	envelope_ok
 	count(input.local_installers) > 0
+}
+
+# A repository that holds proof code uses a prover, whatever else it names: the
+# code is what PT-006 asks CI to run, and PT-001 applies to it from then on.
+proof_code := object.get(input, "proof_code", [])
+
+uses_prover if {
+	envelope_ok
+	count(proof_code) > 0
 }
 
 uses_prover if {
@@ -272,6 +282,58 @@ deny contains finding("PT-004", "noncompliant", installer.path, msg) if {
 	msg := sprintf(
 		"%s is a local prover installer (%s). Remove it and install through the shared install-prover-tools action",
 		[installer.path, installer.reason],
+	)
+}
+
+# PT-006: proof code is run. A workflow step runs proofs when a command
+# verifies them (`cargo kani`, `prover-tools verus run`, Verus on a proof file),
+# a `make` target or script reaches one, or the workflow installs through the
+# shared action and runs a prover-named target that does real work. Installing
+# or version-checking a prover does not count. The clause is not waivable: the
+# remedies are to run the proofs or to remove the code.
+workflow_proof_runs(workflow) := object.get(workflow, "proof_runs", [])
+
+proofs_run if {
+	some workflow in input.workflows
+	workflow.error == null
+	count(workflow_proof_runs(workflow)) > 0
+}
+
+# Whether a workflow runs proofs is knowable only when every workflow was read
+# and each `make` step could be followed into the root Makefile.
+proof_runs_unknowable contains reason if {
+	some workflow in input.workflows
+	workflow.error != null
+	reason := sprintf("%s could not be read", [workflow.path])
+}
+
+proof_runs_unknowable contains "the Makefile could not be parsed" if {
+	input.makefile.state == "refused"
+}
+
+proof_runs_unknowable contains reason if {
+	some workflow in input.workflows
+	some step in workflow.unresolved_make
+	reason := sprintf("step %s of %s runs make against another directory or Makefile", [step.where, workflow.path])
+}
+
+deny contains finding("EN-001", "indeterminate", proof_code[0].path, msg) if {
+	uses_prover
+	count(proof_code) > 0
+	not proofs_run
+	some reason in proof_runs_unknowable
+	msg := sprintf("whether CI runs the proofs is unknown: %s", [reason])
+}
+
+deny contains finding("PT-006", "noncompliant", first.path, msg) if {
+	uses_prover
+	count(proof_code) > 0
+	not proofs_run
+	count(proof_runs_unknowable) == 0
+	first := proof_code[0]
+	msg := sprintf(
+		"%s holds %s proof code, and no workflow step runs the proofs. Proof code that nothing runs is a comment: run it in CI (installing through the shared install-prover-tools action), or remove it",
+		[first.path, first.kind],
 	)
 }
 
