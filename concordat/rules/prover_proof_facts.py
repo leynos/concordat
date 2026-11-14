@@ -21,23 +21,30 @@ Three kinds are reported, at most once per file:
   dependency graph.
 
 Files under `tests`, `test`, `fixtures`, `examples`, `target` and similar
-trees are skipped, the same trees PT-004 skips. A file that cannot be read, or
-that has a syntax error whose text names a prover, is returned as unreadable:
-an unread file is not evidence of absence. A syntax error elsewhere in a file
-(syntax the parser predates) is not reported, because it cannot hide a proof.
+trees are skipped, the same trees PT-004 skips (`prover_rust_files`). A file
+that cannot be read, or that has a syntax error whose text names a prover, is
+returned as unreadable: an unread file is not evidence of absence. A syntax
+error elsewhere in a file (syntax the parser predates) is not reported, because
+it cannot hide a proof.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import os
-import tomllib
 import typing as typ
 
 import tree_sitter
 import tree_sitter_rust
 
-from .prover_rust_use import KANI_PROOF_PATHS, Bindings, bindings_of, node_text, path_of
+from .prover_rust_files import ManifestCache, rust_files
+from .prover_rust_use import (
+    KANI_PROOF_PATHS,
+    Bindings,
+    bindings_of,
+    descendants,
+    node_text,
+    path_of,
+)
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -46,17 +53,6 @@ if typ.TYPE_CHECKING:
 
 __all__ = ["ProofScan", "scan_proof_code"]
 
-SKIPPED_DIRECTORIES: typ.Final = frozenset({
-    "target",
-    "node_modules",
-    ".git",
-    ".venv",
-    "fixtures",
-    "fixture",
-    "tests",
-    "test",
-    "examples",
-})
 # `<module>::<attribute>`: the shape of a path through a Kani module alias.
 KANI_MODULE_PATH: typ.Final = ("module", "attribute")
 VERUS_MACROS: typ.Final = frozenset({"verus", "verus_"})
@@ -95,21 +91,24 @@ def _contains(tokens: list[str], pattern: tuple[str, ...]) -> bool:
     )
 
 
+def _head_path(node: tree_sitter.Node) -> tuple[str, ...]:
+    """Return the path a node's first named child spells, or an empty path."""
+    head = next((c for c in node.children if c.is_named), None)
+    return path_of(head) if head is not None else ()
+
+
 def _attribute_resolves_to_proof(
     attribute: tree_sitter.Node, bindings: Bindings
 ) -> bool:
     """Return whether an attribute names `kani::proof` or an alias of it."""
-    head = next((c for c in attribute.children if c.is_named), None)
-    if head is None:
-        return False
-    path = path_of(head)
+    path = _head_path(attribute)
     if len(path) == 1 and path[0] in bindings.proof_names:
         return True
     if len(path) == len(KANI_MODULE_PATH) and path[0] in bindings.kani_modules:
         return ("kani", path[1]) in KANI_PROOF_PATHS
-    if path == ("cfg_attr",):
-        return _contains(_leaves(attribute), ("kani", "::", "proof"))
-    return False
+    return path == ("cfg_attr",) and _contains(
+        _leaves(attribute), ("kani", "::", "proof")
+    )
 
 
 def _attribute_kind(item: tree_sitter.Node, bindings: Bindings) -> str | None:
@@ -117,74 +116,64 @@ def _attribute_kind(item: tree_sitter.Node, bindings: Bindings) -> str | None:
     attribute = next((c for c in item.children if c.type == "attribute"), None)
     if attribute is None:
         return None
-    head = next((c for c in attribute.children if c.is_named), None)
-    if head is not None and path_of(head)[:1] == ("verifier",):
+    if _head_path(attribute)[:1] == ("verifier",):
         return KIND_VERUS
     return KIND_KANI if _attribute_resolves_to_proof(attribute, bindings) else None
 
 
-def _macro_name(node: tree_sitter.Node) -> str:
-    """Return the last identifier of a macro invocation's name."""
-    head = next((c for c in node.children if c.is_named), None)
-    path = path_of(head) if head is not None else ()
-    return path[-1] if path else ""
+def _is_generator(body: tree_sitter.Node) -> bool:
+    """Return whether a `quote!` body emits a Kani harness or a `verus!` block."""
+    tokens = _leaves(body)
+    return _contains(tokens, KANI_TOKENS) or _contains(tokens, VERUS_TOKENS)
 
 
-def _is_proc_macro_crate(
-    source: pathlib.Path, checkout: pathlib.Path, cache: dict[pathlib.Path, bool]
-) -> bool:
-    """Return whether the nearest Cargo manifest above *source* is a proc-macro."""
-    directory = source.parent
-    while True:
-        manifest = directory / "Cargo.toml"
-        if manifest.is_file():
-            if manifest not in cache:
-                cache[manifest] = _manifest_is_proc_macro(manifest)
-            return cache[manifest]
-        if directory in {checkout, directory.parent}:
-            return False
-        directory = directory.parent
-
-
-def _manifest_is_proc_macro(manifest: pathlib.Path) -> bool:
-    """Return whether a manifest declares `[lib] proc-macro = true`."""
-    try:
-        document = tomllib.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-        return False
-    library = document.get("lib")
-    return isinstance(library, dict) and library.get("proc-macro") is True
-
-
-def _macro_kind(node: tree_sitter.Node, *, proc_macro: bool) -> str | None:
+def _macro_kind(
+    node: tree_sitter.Node, *, proc_macro: typ.Callable[[], bool]
+) -> str | None:
     """Return the proof kind a `macro_invocation` is, or None."""
-    name = _macro_name(node)
+    name = (_head_path(node) or ("",))[-1]
     body = next((c for c in node.children if c.type == "token_tree"), None)
     if body is None:
         return None
     if name in VERUS_MACROS:
         return KIND_VERUS
-    if name in GENERATOR_MACROS and proc_macro:
-        tokens = _leaves(body)
-        if _contains(tokens, KANI_TOKENS) or _contains(tokens, VERUS_TOKENS):
-            return KIND_GENERATOR
-    return None
+    wanted = name in GENERATOR_MACROS and _is_generator(body)
+    return KIND_GENERATOR if wanted and proc_macro() else None
+
+
+def _names_prover(node: tree_sitter.Node) -> bool:
+    """Return whether a syntax-error node's text names a prover."""
+    lowered = node_text(node).lower()
+    return any(word in lowered for word in PROVER_WORDS)
 
 
 def _error_names_prover(root: tree_sitter.Node) -> int | None:
     """Return the line of a syntax error whose text names a prover, if any."""
     if not root.has_error:
         return None
-    stack = [root]
-    while stack:
-        node = stack.pop()
-        if node.type == "ERROR" or node.is_missing:
-            lowered = node_text(node).lower()
-            if any(word in lowered for word in PROVER_WORDS):
-                return node.start_point.row + 1
-        if node.has_error:
-            stack.extend(node.children)
-    return None
+    return next(
+        (
+            node.start_point.row + 1
+            for node in descendants(root)
+            if (node.type == "ERROR" or node.is_missing) and _names_prover(node)
+        ),
+        None,
+    )
+
+
+def _node_kind(
+    node: tree_sitter.Node,
+    bindings: Bindings,
+    proc_macro: typ.Callable[[], bool],
+) -> str | None:
+    """Return the proof kind of one node, or None."""
+    match node.type:
+        case "attribute_item":
+            return _attribute_kind(node, bindings)
+        case "macro_invocation":
+            return _macro_kind(node, proc_macro=proc_macro)
+        case _:
+            return None
 
 
 def _file_proof_code(
@@ -192,47 +181,37 @@ def _file_proof_code(
 ) -> list[tuple[str, int]]:
     """Return the `(kind, line)` of the first proof of each kind in a file."""
     bindings = bindings_of(root)
-    first: dict[str, int] = {}
-    if bindings.uses_vstd:
-        first[KIND_VERUS] = 1
-    stack = [root]
-    while stack:
-        node = stack.pop()
-        match node.type:
-            case "attribute_item":
-                kind = _attribute_kind(node, bindings)
-            case "macro_invocation":
-                kind = _macro_kind(node, proc_macro=proc_macro())
-            case _:
-                kind = None
-        if kind is not None:
-            line = node.start_point.row + 1
-            first[kind] = min(first.get(kind, line), line)
-        stack.extend(node.children)
-    return sorted(first.items())
+    found = [(KIND_VERUS, 1)] if bindings.uses_vstd else []
+    found += [
+        (kind, node.start_point.row + 1)
+        for node in descendants(root)
+        if (kind := _node_kind(node, bindings, proc_macro)) is not None
+    ]
+    kinds = {kind for kind, _ in found}
+    return sorted((k, min(line for kind, line in found if kind == k)) for k in kinds)
 
 
-def _rust_files(checkout: pathlib.Path, scan: ProofScan) -> list[pathlib.Path]:
-    """Return the Rust files outside skipped trees, recording unreadable directories."""
-
-    def refuse(error: OSError) -> None:
-        """Record a directory the walk could not list."""
-        scan.unreadable.append(f"{error.filename}: {error.strerror}")
-
-    found: list[pathlib.Path] = []
-    for directory, names, files in os.walk(checkout, onerror=refuse):
-        here = checkout.joinpath(directory)
-        names[:] = sorted(
-            n
-            for n in names
-            if n not in SKIPPED_DIRECTORIES and not (here / n).is_symlink()
+def _file_facts(
+    source: pathlib.Path,
+    checkout: pathlib.Path,
+    parser: tree_sitter.Parser,
+    manifests: ManifestCache,
+) -> tuple[list[ProofCode], str | None]:
+    """Return one file's proof code, or the reason it could not be judged."""
+    relative = source.relative_to(checkout).as_posix()
+    try:
+        data = source.read_bytes()
+    except OSError as error:
+        return [], f"{relative}: {error}"
+    root = parser.parse(data).root_node
+    line = _error_names_prover(root)
+    if line is not None:
+        return [], (
+            f"{relative}: syntax the parser could not read near line {line} "
+            "names a prover, so whether it is proof code is unknown"
         )
-        found += [
-            here / f
-            for f in sorted(files)
-            if f.endswith(".rs") and not (here / f).is_symlink()
-        ]
-    return found
+    found = _file_proof_code(root, proc_macro=lambda: manifests.is_proc_macro(source))
+    return [{"path": relative, "kind": k, "line": line} for k, line in found], None
 
 
 def scan_proof_code(checkout: pathlib.Path) -> ProofScan:
@@ -246,25 +225,10 @@ def scan_proof_code(checkout: pathlib.Path) -> ProofScan:
     """
     scan = ProofScan()
     parser = tree_sitter.Parser(_LANGUAGE)
-    manifests: dict[pathlib.Path, bool] = {}
-    for source in _rust_files(checkout, scan):
-        relative = source.relative_to(checkout).as_posix()
-        try:
-            data = source.read_bytes()
-        except OSError as error:
-            scan.unreadable.append(f"{relative}: {error}")
-            continue
-        root = parser.parse(data).root_node
-        line = _error_names_prover(root)
-        if line is not None:
-            scan.unreadable.append(
-                f"{relative}: syntax the parser could not read near line {line} "
-                "names a prover, so whether it is proof code is unknown"
-            )
-            continue
-        for kind, found in _file_proof_code(
-            root,
-            proc_macro=lambda s=source: _is_proc_macro_crate(s, checkout, manifests),
-        ):
-            scan.proof_code.append({"path": relative, "kind": kind, "line": found})
+    manifests = ManifestCache(checkout)
+    for source in rust_files(checkout, scan.unreadable):
+        proof_code, problem = _file_facts(source, checkout, parser, manifests)
+        scan.proof_code += proof_code
+        if problem is not None:
+            scan.unreadable.append(problem)
     return scan

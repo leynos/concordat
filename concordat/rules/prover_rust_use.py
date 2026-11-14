@@ -21,6 +21,7 @@ __all__ = [
     "KANI_PROOF_PATHS",
     "Bindings",
     "bindings_of",
+    "descendants",
     "node_text",
     "path_of",
 ]
@@ -152,6 +153,32 @@ class Bindings:
             self.kani_modules.add(bound)
 
 
+def descendants(root: tree_sitter.Node) -> cabc.Iterator[tree_sitter.Node]:
+    """Yield *root* and every node under it, without recursion.
+
+    Yields
+    ------
+    tree_sitter.Node
+        Each node once, parents before the children they hold.
+    """
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        yield node
+        stack.extend(reversed(node.children))
+
+
+def _declared_paths(root: tree_sitter.Node) -> list[UsePath]:
+    """Return every `(path, bound name)` the file's use declarations introduce."""
+    return [
+        found
+        for node in descendants(root)
+        if node.type == "use_declaration"
+        for child in _named(node)
+        for found in use_paths(child)
+    ]
+
+
 def bindings_of(root: tree_sitter.Node) -> Bindings:
     """Collect the proof-relevant bindings of every use declaration in a file.
 
@@ -161,13 +188,6 @@ def bindings_of(root: tree_sitter.Node) -> Bindings:
         What the file's `use` declarations bind.
     """
     found = Bindings()
-    stack = [root]
-    while stack:
-        node = stack.pop()
-        if node.type != "use_declaration":
-            stack.extend(node.children)
-            continue
-        for child in _named(node):
-            for path, bound in use_paths(child):
-                found.add(path, bound)
+    for path, bound in _declared_paths(root):
+        found.add(path, bound)
     return found
