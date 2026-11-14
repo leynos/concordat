@@ -130,3 +130,9 @@ def test_a_script_is_run_only_as_a_command_or_an_interpreter_operand(
     """Naming a script as an argument to another command does not run it."""
     (argv,) = commands(line)
     assert (script_invoked(argv) == "scripts/get.sh") is runs_script
+
+
+def test_a_here_string_is_not_a_here_document() -> None:
+    """`<<<` takes one word of input; the lines after it are still commands."""
+    found = commands("cat <<< text\ncargo kani setup\n")
+    assert [is_installer(argv) for argv in found] == [False, True]

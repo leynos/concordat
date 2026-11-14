@@ -367,22 +367,21 @@ def test_a_wrapped_make_step_is_followed(tmp_path: pathlib.Path) -> None:
     assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"PT-002"}
 
 
-def test_make_in_another_directory_does_not_use_the_root_makefile(
+def test_make_in_another_directory_is_indeterminate(
     tmp_path: pathlib.Path,
 ) -> None:
-    """A step with a working directory runs that directory's own Makefile."""
+    """A step with a working directory runs that directory's own Makefile: unknown."""
     makefile = MAKEFILE.replace("verus:\n", "verus: verus-install\n")
     step = "      - run: make verus\n        working-directory: subproject\n"
-    assert (
-        ids(checkout(tmp_path, makefile=makefile, steps=(INSTALL_STEP, step))) == set()
-    )
+    root = checkout(tmp_path, makefile=makefile, steps=(INSTALL_STEP, step))
+    assert ids(root) == {"EN-001"}
 
 
-def test_make_after_a_cd_does_not_use_the_root_makefile(tmp_path: pathlib.Path) -> None:
-    """`cd sub && make verus` builds the other directory's target."""
+def test_make_after_a_cd_is_indeterminate(tmp_path: pathlib.Path) -> None:
+    """`cd sub && make verus` builds the other directory's target: unknown."""
     makefile = MAKEFILE.replace("verus:\n", "verus: verus-install\n")
     steps = (INSTALL_STEP, run_step("cd subproject && make verus"))
-    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == set()
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"EN-001"}
 
 
 def test_a_script_pin_is_compared(tmp_path: pathlib.Path) -> None:
@@ -408,3 +407,24 @@ def test_an_unlistable_script_directory_is_indeterminate(
         locked.chmod(0o755)
     assert any("scripts/locked" in item for item in envelope["unreadable"])
     assert envelope["workflows"]
+
+
+@pytest.mark.parametrize(
+    "command", ["make -C subproject verus", "make -f other.mk verus"]
+)
+def test_make_with_its_own_directory_or_makefile_is_indeterminate(
+    tmp_path: pathlib.Path, command: str
+) -> None:
+    """`-C` and `-f` choose a Makefile the rule does not read."""
+    makefile = MAKEFILE.replace("verus:\n", "verus: verus-install\n")
+    steps = (INSTALL_STEP, run_step(command))
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"EN-001"}
+
+
+def test_a_here_string_does_not_hide_the_next_command(tmp_path: pathlib.Path) -> None:
+    """`<<<` is a here-string, not a here-document, so the next line is a command."""
+    steps = (
+        INSTALL_STEP,
+        run_step("|\n          cat <<< text\n          cargo install kani-verifier"),
+    )
+    assert ids(checkout(tmp_path, steps=steps)) == {"PT-002"}

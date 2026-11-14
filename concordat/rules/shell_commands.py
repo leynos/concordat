@@ -23,7 +23,7 @@ if typ.TYPE_CHECKING:
 MARKER_PREFIX: typ.Final = "@-+"
 OPERATORS: typ.Final = frozenset(";|&()")
 REDIRECTS: typ.Final = frozenset("<>")
-HEREDOC: typ.Final = re.compile(r"<<-?")
+HEREDOC: typ.Final = re.compile(r"<<(?!<)-?")
 CONTROL_WORDS: typ.Final = frozenset({
     "if",
     "then",

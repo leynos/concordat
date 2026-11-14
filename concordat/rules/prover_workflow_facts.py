@@ -27,6 +27,13 @@ if typ.TYPE_CHECKING:
     )
 
 SHARED_ACTION: typ.Final = "leynos/shared-actions/.github/actions/install-prover-tools"
+MAKEFILE_OPTIONS: typ.Final = frozenset({
+    "-C",
+    "-f",
+    "--directory",
+    "--file",
+    "--makefile",
+})
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -48,6 +55,7 @@ class StepFacts:
     where: str = ""
     at_root: bool = True
     installers: list[InstallerStep] = dataclasses.field(default_factory=list)
+    unresolved: list[InstallerStep] = dataclasses.field(default_factory=list)
     shared: list[SharedUse] = dataclasses.field(default_factory=list)
     calls_make: bool = False
     runs: bool = False
@@ -100,6 +108,27 @@ def _add_make(facts: StepFacts, argv: Argv, context: Context) -> None:
     facts.runs = facts.runs or _make_runs(argv, context)
 
 
+def _route_make(facts: StepFacts, argv: Argv, context: Context) -> None:
+    """Follow a `make` into the root Makefile, or record that it is not that one."""
+    if facts.at_root and not _selects_makefile(argv):
+        _add_make(facts, argv, context)
+        return
+    facts.unresolved.append({"where": facts.where, "command": " ".join(argv)})
+
+
+def _selects_makefile(argv: Argv) -> bool:
+    """Return whether a `make` command picks a directory or Makefile of its own."""
+    return any(_is_makefile_option(word) for word in argv[1:])
+
+
+def _is_makefile_option(word: str) -> bool:
+    """Return whether *word* is `-C`, `-f` or their long forms."""
+    name = word.split("=", maxsplit=1)[0]
+    if name in MAKEFILE_OPTIONS:
+        return True
+    return word.startswith(("-C", "-f")) and not word.startswith("--")
+
+
 def _is_make(argv: Argv) -> bool:
     """Return whether the command, looking through wrappers, is `make`."""
     command = unwrap(argv)
@@ -118,8 +147,8 @@ def _add_command(facts: StepFacts, argv: Argv, context: Context) -> None:
     facts.runs = facts.runs or is_install or is_runner(argv)
     if is_install:
         facts.installers.append({"where": facts.where, "command": " ".join(argv)})
-    if facts.at_root and _is_make(argv):
-        _add_make(facts, unwrap(argv), context)
+    if _is_make(argv):
+        _route_make(facts, unwrap(argv), context)
     facts.at_root = facts.at_root and not _leaves_root(argv)
 
 
@@ -219,6 +248,7 @@ def _empty(workflow: WorkflowFile) -> WorkflowFacts:
         "error": workflow["error"],
         "calls_make": False,
         "installer_steps": [],
+        "unresolved_make": [],
         "shared_uses": [],
     }
 
@@ -243,6 +273,7 @@ def workflow_facts(
     for where, step, at_root in _job_steps(typ.cast("dict[str, object]", document)):
         found = step_facts(where, step, context, at_root=at_root)
         facts["installer_steps"] += found.installers
+        facts["unresolved_make"] += found.unresolved
         facts["shared_uses"] += found.shared
         facts["calls_make"] = facts["calls_make"] or found.calls_make
         runs = runs or found.runs or bool(found.shared)

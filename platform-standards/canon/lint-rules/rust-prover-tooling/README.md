@@ -81,10 +81,10 @@ that hides the tool name inside a variable is not seen.
 - **EN-001** (error, indeterminate): the envelope is not a schema-1
   `policy-input/rust-prover-tooling` document; a workflow could not be decoded;
   the Makefile could not be parsed (its pins are unknown, and so is what a
-  workflow's `make` steps install); or a file the rule reads could not be read.
-  A failed read makes the repository audited for this finding even when nothing
-  else shows it uses a prover, because an unread file is not evidence of
-  absence.
+  workflow's `make` steps install); a `make` step builds a Makefile other than
+  the root one; or a file the rule reads could not be read. A failed read makes
+  the repository audited for this finding even when nothing else shows it uses
+  a prover, because an unread file is not evidence of absence.
 
 ## Exceptions
 

@@ -27,6 +27,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -67,6 +68,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -100,6 +102,7 @@
           "error": null,
           "calls_make": false,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": []
         }
       ],
@@ -150,6 +153,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -194,6 +198,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -234,6 +239,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -279,6 +285,7 @@
               "command": "make verus"
             }
           ],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -319,6 +326,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -359,6 +367,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -399,6 +408,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -444,6 +454,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -491,6 +502,7 @@
               "command": "make verus"
             }
           ],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -543,6 +555,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -595,6 +608,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -647,6 +661,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -699,6 +714,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -751,6 +767,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -808,6 +825,7 @@
           "error": "mapping values are not allowed here",
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -848,6 +866,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -888,6 +907,7 @@
           "error": null,
           "calls_make": false,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -928,6 +948,111 @@
           "error": null,
           "calls_make": false,
           "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-002"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "Kani provenance names 9c4a27a8",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": true
+        }
+      ]
+    },
+    "make_unresolved": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [
+            {
+              "where": "verify/3",
+              "command": "make -C sub verus"
+            }
+          ],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "make_unresolved_but_waived": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [
+            {
+              "where": "verify/3",
+              "command": "make -C sub verus"
+            }
+          ],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -973,6 +1098,7 @@
           "error": "bad yaml",
           "calls_make": false,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": []
         }
       ],
@@ -1030,6 +1156,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -1070,6 +1197,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",
@@ -1110,6 +1238,7 @@
           "error": null,
           "calls_make": true,
           "installer_steps": [],
+          "unresolved_make": [],
           "shared_uses": [
             {
               "where": "verify/2",

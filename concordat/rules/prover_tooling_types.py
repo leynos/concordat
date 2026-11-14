@@ -73,6 +73,9 @@ class WorkflowFacts(typ.TypedDict):
         Whether any `run` script calls `make`.
     installer_steps:
         Steps that install a prover, directly or through a Make prerequisite.
+    unresolved_make:
+        `make` steps whose Makefile is not the root one (another working
+        directory, `-C` or `-f`), so what they install is unknown.
     shared_uses:
         Every use of the shared install action.
     """
@@ -81,6 +84,7 @@ class WorkflowFacts(typ.TypedDict):
     error: str | None
     calls_make: bool
     installer_steps: list[InstallerStep]
+    unresolved_make: list[InstallerStep]
     shared_uses: list[SharedUse]
 
 

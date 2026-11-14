@@ -189,6 +189,21 @@ deny contains finding("EN-001", "indeterminate", "", msg) if {
 	msg := sprintf("a file the rule reads could not be read: %s", [reason])
 }
 
+# A `make` that builds another directory's Makefile (a working directory, `-C`
+# or `-f`) is not the root Makefile the rule reads, so what it installs is
+# unknown.
+deny contains finding("EN-001", "indeterminate", workflow.path, msg) if {
+	audited
+	not waived("PT-002")
+	some workflow in input.workflows
+	workflow.error == null
+	some step in workflow.unresolved_make
+	msg := sprintf(
+		"step %s of %s runs %q from another directory or with another Makefile, which the rule does not read, so whether it installs a prover is unknown",
+		[step.where, workflow.path, step.command],
+	)
+}
+
 deny contains finding("EX-001", "noncompliant", e.record, msg) if {
 	uses_prover
 	some d in defect

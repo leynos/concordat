@@ -130,6 +130,16 @@ test_a_revision_with_a_suffix_is_not_the_pinned_revision if {
 	ids(data.fixtures.suffixed_revision) == {"PT-001"}
 }
 
+test_a_make_outside_the_root_is_indeterminate if {
+	ids(data.fixtures.make_unresolved) == {"EN-001"}
+	some f in findings(data.fixtures.make_unresolved)
+	contains(f.msg, "make -C sub verus")
+}
+
+test_a_make_outside_the_root_is_harmless_where_the_exception_waives_pt_002 if {
+	count(findings(data.fixtures.make_unresolved_but_waived)) == 0
+}
+
 test_an_unreadable_file_is_indeterminate if {
 	ids(data.fixtures.file_unreadable) == {"EN-001"}
 }
