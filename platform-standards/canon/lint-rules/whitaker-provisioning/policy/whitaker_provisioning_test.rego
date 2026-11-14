@@ -2,18 +2,19 @@
 #
 # Fixture envelopes are supplied via `conftest verify --data fixtures/data.json`
 # and appear under `data.fixtures`. Every test runs under the parameters below,
-# which mirror the manifest's defaults with a stand-in listed revision, and
-# pins the exact finding profile a fixture must produce.
+# which mirror the manifest's defaults, and pins the exact finding profile a
+# fixture must produce. Whether a pinned revision is certified is a fact the
+# fixture envelopes record under `install_certifications`; the generator
+# decides it with the production decision over a synthetic action repository.
 package canon.lint_rules.whitaker_provisioning_test
 
 import rego.v1
 
 import data.canon.lint_rules.whitaker_provisioning as policy
 
-listed := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-
 parameters := {
-	"compliant_install_whitaker_refs": [listed],
+	"certification_tag_prefix": "certified/install-whitaker/",
+	"action_branch": "main",
 	"producer_repositories": ["leynos/whitaker"],
 	"action_repository": "leynos/shared-actions",
 	"action_directory": ".github/actions/install-whitaker",
@@ -47,14 +48,19 @@ is_route(fixture) if {
 
 is_pin(fixture) if {
 	some msg in messages(fixture)
-	contains(msg, "is not a revision known to carry")
+	contains(msg, "is not a certified revision")
 }
 
-# -- sufficient: the action at a listed revision is the whole of it --------------
+is_unchecked(fixture) if {
+	some msg in messages(fixture)
+	contains(msg, "could not be checked for certification")
+}
+
+# -- sufficient: the action at a certified revision is the whole of it -----------
 
 # A cache of the installer, comments and echoes naming it, a `test -x` on its
 # path, a lint run and an unrelated download are none of them a route.
-test_the_action_at_a_listed_revision_is_compliant if {
+test_the_action_at_a_certified_revision_is_compliant if {
 	count(findings(data.fixtures.compliant)) == 0
 }
 
@@ -145,13 +151,88 @@ test_an_exemption_does_not_travel if {
 	not is_pin(data.fixtures.exempt_script_elsewhere)
 }
 
-test_an_unlisted_revision_is_refused if {
+# After the floor, but the action's runtime content has changed: a maintainer
+# certifies new content by tagging it, and until then it is refused.
+test_a_revision_with_changed_runtime_content_is_refused if {
 	profile(data.fixtures.unlisted_pin) == {["QG-002", "noncompliant", ".github/workflows/ci.yml"]}
 	is_pin(data.fixtures.unlisted_pin)
 	not is_route(data.fixtures.unlisted_pin)
 	some msg in messages(data.fixtures.unlisted_pin)
-	contains(msg, "compliant_install_whitaker_refs")
-	contains(msg, "scripts/whitaker_revisions.py")
+	contains(msg, "changes the action's runtime content")
+	contains(msg, "certified/install-whitaker/<installer version>")
+}
+
+test_a_revision_older_than_every_floor_is_refused if {
+	profile(data.fixtures.older_pin) == {["QG-002", "noncompliant", ".github/workflows/ci.yml"]}
+	is_pin(data.fixtures.older_pin)
+	some msg in messages(data.fixtures.older_pin)
+	contains(msg, "older than, or unrelated to, every certification tag")
+}
+
+# A fork-only commit is not on the action repository's default branch.
+test_a_revision_off_the_default_branch_is_refused if {
+	profile(data.fixtures.off_branch_pin) == {["QG-002", "noncompliant", ".github/workflows/ci.yml"]}
+	is_pin(data.fixtures.off_branch_pin)
+	some msg in messages(data.fixtures.off_branch_pin)
+	contains(msg, "is not on the default branch")
+}
+
+test_a_revision_no_repository_knows_is_refused if {
+	profile(data.fixtures.unknown_pin) == {["QG-002", "noncompliant", ".github/workflows/ci.yml"]}
+	is_pin(data.fixtures.unknown_pin)
+	some msg in messages(data.fixtures.unknown_pin)
+	contains(msg, "names no commit")
+}
+
+# A tag, a branch or a short SHA names no revision to certify.
+test_a_floating_ref_is_refused if {
+	profile(data.fixtures.floating_ref) == {["QG-002", "noncompliant", ".github/workflows/ci.yml"]}
+	is_pin(data.fixtures.floating_ref)
+	not is_route(data.fixtures.floating_ref)
+}
+
+# An API that could not answer says nothing about the revision: indeterminate,
+# never noncompliant.
+test_a_revision_whose_certification_could_not_be_read_is_indeterminate if {
+	profile(data.fixtures.unreadable_pin) == {["QG-002", "indeterminate", ".github/workflows/ci.yml"]}
+	is_unchecked(data.fixtures.unreadable_pin)
+	not is_pin(data.fixtures.unreadable_pin)
+	some msg in messages(data.fixtures.unreadable_pin)
+	contains(msg, "rate limited")
+}
+
+# An envelope built without the command step carries no answer for its pin,
+# which is not a pass.
+test_a_revision_nobody_checked_is_indeterminate if {
+	profile(data.fixtures.unresolved_pin) == {["QG-002", "indeterminate", ".github/workflows/ci.yml"]}
+	is_unchecked(data.fixtures.unresolved_pin)
+	some msg in messages(data.fixtures.unresolved_pin)
+	contains(msg, "the audit did not resolve it")
+}
+
+# The verdict is read from the envelope, not assumed: the same checkout with
+# its answer removed, or turned to a refusal, changes the finding.
+test_the_recorded_answer_decides if {
+	bare := object.remove(data.fixtures.compliant, ["install_certifications"])
+	removed := object.union(bare, {"install_certifications": {}})
+	{[f.rule_id, f.verdict] | some f in findings(removed)} == {["QG-002", "indeterminate"]}
+	refused := object.union(bare, {"install_certifications": {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+		"status": "uncertified",
+		"floor": null,
+		"reason": "stand-in",
+	}}})
+	{[f.rule_id, f.verdict] | some f in findings(refused)} == {["QG-002", "noncompliant"]}
+}
+
+# A status the command does not record is no answer.
+test_an_unrecognised_status_is_indeterminate if {
+	bare := object.remove(data.fixtures.compliant, ["install_certifications"])
+	odd := object.union(bare, {"install_certifications": {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+		"status": "probably",
+		"floor": null,
+		"reason": null,
+	}}})
+	{[f.rule_id, f.verdict] | some f in findings(odd)} == {["QG-002", "indeterminate"]}
 }
 
 test_a_fork_of_the_action_is_refused if {
@@ -187,13 +268,11 @@ test_an_unknown_envelope_is_indeterminate if {
 
 # -- the parameters are what decide ---------------------------------------------
 
-test_an_empty_list_refuses_every_pin if {
-	fs := policy.deny with input as data.fixtures.compliant
-		with data.parameters as object.union(parameters, {"compliant_install_whitaker_refs": []})
-	{f.rule_id | some f in fs} == {"QG-002"}
-	every f in fs {
-		contains(f.msg, "is not a revision known to carry")
-	}
+test_the_tag_prefix_is_named_in_a_refusal if {
+	fs := policy.deny with input as data.fixtures.unlisted_pin
+		with data.parameters as object.union(parameters, {"certification_tag_prefix": "approved/iw/"})
+	some f in fs
+	contains(f.msg, "approved/iw/<installer version>")
 }
 
 test_without_the_exemption_the_developer_script_is_a_route if {

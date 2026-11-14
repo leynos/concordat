@@ -530,8 +530,9 @@ def _provisioning_envelope(
 ) -> ProvisioningEnvelope:
     """Build the Whitaker provisioning envelope, ignoring the parameters.
 
-    `whitaker-provisioning` reads its listed revisions, producers and
-    exemptions through `data.parameters` in the policy, so the second
+    `whitaker-provisioning` reads its producers and exemptions through
+    `data.parameters` in the policy; whether a pinned revision is certified is
+    recorded afterwards by `certifying`, at the command boundary. The second
     argument exists only to give every builder one callable type.
 
     Returns

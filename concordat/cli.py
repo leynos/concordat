@@ -39,6 +39,9 @@ from .listing import list_namespace_repositories
 from .persistence import PersistenceOptions, persist_estate
 from .platform_standards import PlatformStandardsConfig
 
+if typ.TYPE_CHECKING:
+    from .rules.packages import EnvelopeResolver
+
 _logger = logging.getLogger(__name__)
 
 app = App()
@@ -360,6 +363,9 @@ def rule_run(
 
     The Markdown package asks the GitHub API at *github_api_url* what each
     pinned action SHA names; the client is built only if a pin needs it.
+    The Whitaker provisioning package asks the same API whether each pinned
+    `install-whitaker` revision is certified (see its README); those answers
+    are not cached on disk, because a new certification tag changes them.
     Definite answers are kept on disk, so the next run asks nothing about a
     pin it has seen: in *pin_cache_dir*, else `CONCORDAT_PIN_CACHE_DIR`, else
     the user cache directory. *no_pin_cache* neither reads nor writes it.
@@ -384,11 +390,31 @@ def rule_run(
             PinCache(pin_cache_dir or default_directory(os.environ), github_api_url),
         )
     )
-    builder = resolving_pins(default_envelope_builder, resolver)
+    builder = _certifying(
+        resolving_pins(default_envelope_builder, resolver), github_api_url
+    )
     result = run_rule(rule_id, repo, envelope_builder=builder)
     rendered = render_json(result) if output_format == "json" else render_table(result)
     print(rendered)
     return result.exit_code
+
+
+def _certifying(builder: EnvelopeResolver, api_url: str) -> EnvelopeResolver:
+    """Return *builder* with provisioning pins certified through GitHub at *api_url*.
+
+    Returns
+    -------
+    EnvelopeResolver
+        A resolver that also records whether each pinned `install-whitaker`
+        revision is certified; the client is built only if a pin needs it.
+    """
+    from .rules.github_whitaker_certification import github_certifier
+    from .rules.provisioning_certification import certifying
+
+    return certifying(
+        builder,
+        functools.partial(github_certifier, functools.partial(_pin_client, api_url)),
+    )
 
 
 def _pin_client(api_url: str) -> GithubClient:

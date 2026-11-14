@@ -206,3 +206,66 @@ def test_a_spent_rate_limit_is_named_apart_from_a_refusal(
         client.environment("o", "r", "codescene")
     assert type(raised.value) is error
     assert isinstance(raised.value, GithubForbiddenError)
+
+
+def test_matching_refs_are_read_across_every_page() -> None:
+    """A tag on page two is read, and an empty namespace is an empty list."""
+    first = "/repos/o/r/git/matching-refs/tags/c/?per_page=100"
+    second = f"{first}&page=2"
+    client, session = _client({
+        first: _Response(
+            200,
+            [{"ref": "refs/tags/c/1"}],
+            links={"next": {"url": f"{API}{second}"}},
+        ),
+        second: _Response(200, [{"ref": "refs/tags/c/2"}]),
+        "/repos/o/r/git/matching-refs/tags/none/?per_page=100": _Response(200, []),
+    })
+
+    assert [r["ref"] for r in client.matching_refs("o", "r", "tags/c/")] == [
+        "refs/tags/c/1",
+        "refs/tags/c/2",
+    ]
+    assert session.requested == [first, second]
+    assert client.matching_refs("o", "r", "tags/none/") == []
+
+
+@pytest.mark.parametrize("status", ["ahead", "behind", "identical", "diverged"])
+def test_a_comparison_reports_each_known_status(status: str) -> None:
+    """The four statuses GitHub documents are returned as sent."""
+    path = "/repos/o/r/compare/a...b?per_page=1"
+    client, _ = _client({path: _Response(200, {"status": status})})
+
+    assert client.compare_status("o", "r", "a", "b") == status
+
+
+def test_a_comparison_of_an_unknown_revision_is_absent() -> None:
+    """A 404 is the one definite absence."""
+    client, _ = _client({})
+
+    assert client.compare_status("o", "r", "a", "b") is None
+
+
+@pytest.mark.parametrize("payload", [{}, {"status": None}, {"status": "weird"}])
+def test_a_comparison_without_a_known_status_is_an_error_not_an_absence(
+    payload: dict[str, object],
+) -> None:
+    """An incomplete reply must not read as a missing commit."""
+    path = "/repos/o/r/compare/a...b?per_page=1"
+    client, _ = _client({path: _Response(200, payload)})
+
+    with pytest.raises(GithubError, match="unknown status"):
+        client.compare_status("o", "r", "a", "b")
+
+
+def test_a_tree_is_read_recursively_and_a_404_is_its_absence() -> None:
+    """The subtree of a commit is asked for with `recursive=1` when requested."""
+    path = "/repos/o/r/git/trees/c:dir?recursive=1"
+    client, session = _client({path: _Response(200, {"tree": [], "truncated": False})})
+
+    assert client.git_tree("o", "r", "c:dir", recursive=True) == {
+        "tree": [],
+        "truncated": False,
+    }
+    assert client.git_tree("o", "r", "c:missing") is None
+    assert session.requested == [path, "/repos/o/r/git/trees/c:missing"]

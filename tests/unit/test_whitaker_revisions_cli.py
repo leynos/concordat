@@ -1,159 +1,294 @@
-"""Specify the revision-list command line: statuses, defaults and error paths."""
+"""Specify the certification command line: `list`, `certify`, statuses, errors."""
 
 from __future__ import annotations
 
-import os
 import pathlib
+import shlex
 import sys
 import typing as typ
 
 import pygit2
 import pytest
 
-from concordat.errors import OperationalRuleError
-from concordat.rules import packages
-from concordat.rules.whitaker_revisions import (
-    REFS_KEY,
-    replace_refs,
-)
 from scripts import whitaker_revisions
 from tests.unit.whitaker_revisions_support import (
     ACTION_V1,
+    ACTION_V2,
+    DIRECTORY,
     History,
     action_files,
     run_main,
+    tag,
 )
 
 pytest_plugins = ("tests.unit.whitaker_revisions_fixtures",)
 
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+PREFIX: typ.Final = "certified/install-whitaker/"
 
 
-def test_check_reports_revisions_the_clone_does_not_derive(
+def _clone(history: History) -> pathlib.Path:
+    """Return the path of the history's working directory."""
+    return pathlib.Path(history.repository.workdir)
+
+
+def test_list_prints_each_floor_then_what_it_certifies(
     history: History,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """`check` fails, naming both directions, when the manifest drifts."""
-    root = history.commit(action_files(ACTION_V1), "root")
-    real = packages.rule_parameters
-    monkeypatch.setattr(
-        packages,
-        "rule_parameters",
-        lambda rule_dir: {**real(rule_dir), "install_whitaker_roots": [root]},
-    )
+    """The documented `list` shows the tags and the revisions they certify.
 
-    status = whitaker_revisions.check(pathlib.Path(history.repository.workdir), "main")
-
-    output = capsys.readouterr().out
-    assert status == 1
-    assert f"missing: {root}" in output
-    assert "not derivable:" in output
-
-
-def test_sync_then_check_round_trips_through_the_command(
-    rule_package: tuple[pathlib.Path, str, str],
-    history: History,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """`check` fails while the manifest lags, and `sync` brings it level."""
-    package, root, later = rule_package
-    clone = pathlib.Path(history.repository.workdir)
-
-    assert whitaker_revisions.check(clone, "main") == 1
-    assert f"missing: {later}" in capsys.readouterr().out
-    assert whitaker_revisions.sync(clone, "main") == 0
-    assert whitaker_revisions.check(clone, "main") == 0
-    listed = packages.rule_parameters(package)[REFS_KEY]
-    assert listed == [root, later]
-    assert whitaker_revisions.list_revisions(clone, "main") == 0
-    assert capsys.readouterr().out.endswith(f"{root}\n{later}\n")
-
-
-def test_sync_reports_an_unwritable_manifest_as_an_operational_error(
-    rule_package: tuple[pathlib.Path, str, str], history: History
-) -> None:
-    """A manifest that cannot be written is an error, not a raw OSError."""
-    package, _root, _later = rule_package
-    manifest = package / "rule.yaml"
-    manifest.chmod(0o400)
-    clone = pathlib.Path(history.repository.workdir)
-    try:
-        if os.access(manifest, os.W_OK):
-            pytest.skip("the manifest stays writable for this user")
-        with pytest.raises(OperationalRuleError, match="cannot update"):
-            whitaker_revisions.sync(clone, "main")
-    finally:
-        manifest.chmod(0o600)
-
-
-def test_the_documented_list_command_is_registered(
-    rule_package: tuple[pathlib.Path, str, str],
-    history: History,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """`whitaker_revisions.py list <clone>` runs, as the docstring documents.
-
-    Cyclopts names a command after its function, so `list_revisions` would be
-    `list-revisions` and the documented `list` would be an unknown command. The
-    test goes through `main()` rather than calling the function, which is the
-    only route that exercises the registered name.
+    It goes through `main()` rather than calling the function: cyclopts names a
+    command after its function, so only this route exercises the registered
+    name. The commit that changes the runtime content is not certified.
     """
-    _package, root, later = rule_package
-    clone = str(history.repository.workdir)
-    monkeypatch.setattr(
-        sys, "argv", ["whitaker_revisions", "list", clone, "--tip", "main"]
+    root = history.commit(action_files(ACTION_V1), "root")
+    later = history.commit(action_files(ACTION_V1, "b"), "readme only")
+    history.commit(action_files(ACTION_V2), "changes the action")
+    tag(history, f"{PREFIX}0.2.12", root)
+
+    assert run_main(monkeypatch, _clone(history), "list") == 0
+
+    assert capsys.readouterr().out.splitlines() == [
+        f"floor {PREFIX}0.2.12 {root}",
+        f"certified {root}",
+        f"certified {later}",
+    ]
+
+
+@pytest.mark.parametrize("tag_name", [None, "v1.2.0"], ids=["no-tag", "release-tag"])
+def test_list_prints_nothing_without_a_certification_tag(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tag_name: str | None,
+) -> None:
+    """With no tag, or only a release tag, nothing is certified."""
+    root = history.commit(action_files(ACTION_V1), "root")
+    if tag_name is not None:
+        tag(history, tag_name, root)
+
+    assert run_main(monkeypatch, _clone(history), "list") == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_list_omits_a_descendant_that_adds_a_symlink_under_tests(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`list` agrees with the audit: a link anywhere makes a commit uncertifiable."""
+    root = history.commit(action_files(ACTION_V1), "root")
+    linked = {**action_files(ACTION_V1), f"{DIRECTORY}/tests/hook.sh": "../x\n"}
+    history.commit(
+        linked, "adds a link", symlinks=frozenset({f"{DIRECTORY}/tests/hook.sh"})
+    )
+    tag(history, f"{PREFIX}0.2.12", root)
+
+    assert run_main(monkeypatch, _clone(history), "list") == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"floor {PREFIX}0.2.12 {root}",
+        f"certified {root}",
+    ]
+
+
+def test_list_ignores_a_floor_newer_than_the_tip(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Listing up to an older tip works while a newer tag exists."""
+    first = history.commit(action_files(ACTION_V1), "root")
+    second = history.commit(action_files(ACTION_V2), "new release")
+    tag(history, f"{PREFIX}0.2.11", first)
+    tag(history, f"{PREFIX}0.2.12", second)
+
+    status = run_main(monkeypatch, _clone(history), "list", "--tip", first)
+
+    assert status == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"floor {PREFIX}0.2.11 {first}",
+        f"floor {PREFIX}0.2.12 {second}",
+        f"certified {first}",
+    ]
+
+
+def test_list_reads_a_lightweight_tag(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A tag made without a message still certifies its commit."""
+    root = history.commit(action_files(ACTION_V1), "root")
+    tag(history, f"{PREFIX}0.2.9", root, annotated=False)
+
+    assert run_main(monkeypatch, _clone(history), "list") == 0
+    assert f"certified {root}" in capsys.readouterr().out
+
+
+def test_certify_prints_the_tag_commands_and_creates_nothing(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The maintainer runs the printed commands; the command tags nothing."""
+    root = history.commit(action_files(ACTION_V1), "root")
+
+    status = run_main(
+        monkeypatch, _clone(history), "certify", root, "--installer-version", "0.2.12"
     )
 
-    assert whitaker_revisions.main() == 0
-    assert capsys.readouterr().out.endswith(f"{root}\n{later}\n")
+    lines = capsys.readouterr().out.splitlines()
+    assert status == 0
+    assert lines[0].startswith("runtime digest ")
+    git = f"git -C {shlex.quote(str(_clone(history)))}"
+    assert lines[1:] == [
+        f'{git} tag -a {PREFIX}0.2.12 {root} -m "Certify install-whitaker 0.2.12"',
+        f"{git} push origin {PREFIX}0.2.12",
+    ]
+    assert not [r for r in history.repository.references if "certified" in r]
+
+
+def test_certify_refuses_a_version_that_is_already_tagged(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A tag is never moved: a new version needs a new name."""
+    root = history.commit(action_files(ACTION_V1), "root")
+    later = history.commit(action_files(ACTION_V2), "next")
+    tag(history, f"{PREFIX}0.2.12", root)
+
+    status = run_main(
+        monkeypatch, _clone(history), "certify", later, "--installer-version", "0.2.12"
+    )
+
+    assert status == 2
+    assert "already has the tag" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("version", ["latest", "0.2", "v0.2.12", ""])
+def test_certify_refuses_a_malformed_version(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    version: str,
+) -> None:
+    """The tag name carries an installer version, so it must be one."""
+    root = history.commit(action_files(ACTION_V1), "root")
+
+    status = run_main(
+        monkeypatch, _clone(history), "certify", root, "--installer-version", version
+    )
+
+    assert status == 2
+    assert "is not a whitaker-installer version" in capsys.readouterr().err
+
+
+def test_certify_refuses_a_commit_off_the_first_parent_line(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Only a commit on main can be a floor."""
+    base = history.commit(action_files(ACTION_V1), "base")
+    side = history.branch(action_files(ACTION_V1, "side"), "side branch", base)
+    history.commit(action_files(ACTION_V1, "b"), "next on main")
+
+    status = run_main(
+        monkeypatch, _clone(history), "certify", side, "--installer-version", "0.2.12"
+    )
+
+    assert status == 2
+    assert "first-parent history" in capsys.readouterr().err
+
+
+def test_certify_refuses_a_commit_whose_runtime_names_excluded_content(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A script that runs content the digest ignores could change unseen."""
+    root = history.commit(
+        action_files("name: x\nrun: ./tests/helper.sh\n"), "reaches into tests"
+    )
+
+    status = run_main(
+        monkeypatch, _clone(history), "certify", root, "--installer-version", "0.2.12"
+    )
+
+    assert status == 2
+    assert "excludes" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "link", ["scripts/run.sh", "tests/helper.sh", "README.md"], ids=str
+)
+def test_certify_refuses_a_symlink_anywhere_in_the_action(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    link: str,
+) -> None:
+    """The digest hashes a link's text, not its target, even under `tests/`."""
+    files = {
+        **action_files(ACTION_V1),
+        f"{DIRECTORY}/scripts/run.sh": "echo run\n",
+        f"{DIRECTORY}/tests/helper.sh": "echo helper\n",
+        f"{DIRECTORY}/README.md": "guide\n",
+    }
+    root = history.commit(files, "links", symlinks=frozenset({f"{DIRECTORY}/{link}"}))
+
+    status = run_main(
+        monkeypatch, _clone(history), "certify", root, "--installer-version", "0.2.12"
+    )
+
+    assert status == 2
+    assert f"symlink or submodule at {link}" in capsys.readouterr().err
+
+
+def test_certify_refuses_a_commit_the_clone_does_not_hold(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A commit from another clone is an error, not a traceback."""
+    history.commit(action_files(ACTION_V1), "root")
+
+    status = run_main(
+        monkeypatch,
+        _clone(history),
+        "certify",
+        "0" * 40,
+        "--installer-version",
+        "0.2.12",
+    )
+
+    assert status == 2
+    assert "cannot read" in capsys.readouterr().err
 
 
 def test_main_exits_2_for_a_clone_that_is_not_a_repository(
-    rule_package: tuple[pathlib.Path, str, str],
     tmp_path_factory: pytest.TempPathFactory,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The entry point turns an operational error into status 2."""
     empty = tmp_path_factory.mktemp("not-a-clone")
-    monkeypatch.setattr(sys, "argv", ["whitaker_revisions", "check", str(empty)])
+    monkeypatch.setattr(sys, "argv", ["whitaker_revisions", "list", str(empty)])
 
     assert whitaker_revisions.main() == 2
     assert "is not a Git repository" in capsys.readouterr().err
 
 
-def test_main_runs_check_and_sync_with_their_documented_statuses(
-    rule_package: tuple[pathlib.Path, str, str],
-    history: History,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """`check` reports drift with status 1, `sync` fixes it, `check` then passes.
-
-    The tests above call the functions directly; this one goes through `main()`
-    with the documented argv, so a command that is not dispatched, or a status
-    that is not returned, fails here.
-    """
-    package, root, later = rule_package
-    clone = pathlib.Path(history.repository.workdir)
-
-    assert run_main(monkeypatch, clone, "check") == 1
-    assert run_main(monkeypatch, clone, "sync") == 0
-    assert packages.rule_parameters(package)[REFS_KEY] == [root, later]
-    assert run_main(monkeypatch, clone, "check") == 0
-
-
 def test_a_git_read_failure_is_a_controlled_error_through_the_cli(
-    rule_package: tuple[pathlib.Path, str, str],
     history: History,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """An object Git cannot read while walking history exits 2, not a traceback."""
-    clone = pathlib.Path(history.repository.workdir)
+    root = history.commit(action_files(ACTION_V1), "root")
+    tag(history, f"{PREFIX}0.2.12", root)
 
     def unreadable(*_args: object) -> object:
         """Fail as Git does on a corrupt object."""
@@ -162,111 +297,23 @@ def test_a_git_read_failure_is_a_controlled_error_through_the_cli(
 
     monkeypatch.setattr("concordat.rules.whitaker_revisions.runtime_digest", unreadable)
 
-    assert run_main(monkeypatch, clone, "list") == 2
+    assert run_main(monkeypatch, _clone(history), "list") == 2
     assert "cannot read" in capsys.readouterr().err
 
 
-def test_sync_reports_a_manifest_that_is_not_utf8_as_a_controlled_error(
-    rule_package: tuple[pathlib.Path, str, str],
-    history: History,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Invalid UTF-8 in the manifest exits 2 from `sync`, not with a traceback.
-
-    The manifest's parameters are read, and refused with a controlled error,
-    before `sync` reads the text to rewrite it, so the rewrite never sees the
-    invalid bytes.
-    """
-    package, _root, _later = rule_package
-    manifest = package / "rule.yaml"
-    manifest.write_bytes(manifest.read_bytes() + b"\xff\xfe")
-    clone = pathlib.Path(history.repository.workdir)
-
-    assert run_main(monkeypatch, clone, "sync") == 2
-    assert "cannot read rule manifest" in capsys.readouterr().err
-
-
-def test_sync_reports_a_manifest_that_turns_invalid_between_reads(
-    rule_package: tuple[pathlib.Path, str, str],
-    history: History,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """`sync` reads the manifest text again to rewrite it, and that read can fail.
-
-    The parameters read first succeeds; the text read then meets invalid UTF-8,
-    which exits 2 with an operational diagnostic and leaves the file as it was.
-    """
-    package, root, _later = rule_package
-    manifest = package / "rule.yaml"
-    manifest.write_bytes(manifest.read_bytes() + b"\xff\xfe")
-    before = manifest.read_bytes()
-    monkeypatch.setattr(
-        whitaker_revisions, "_derive", lambda _c, _t: ([root], manifest)
-    )
-    clone = pathlib.Path(history.repository.workdir)
-
-    assert run_main(monkeypatch, clone, "sync") == 2
-    assert "cannot update" in capsys.readouterr().err
-    assert manifest.read_bytes() == before
-
-
-def test_check_accepts_a_reordered_manifest(
-    rule_package: tuple[pathlib.Path, str, str],
-    history: History,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """`check` compares membership, so the same revisions in another order pass."""
-    package, root, later = rule_package
-    clone = pathlib.Path(history.repository.workdir)
-    manifest = package / "rule.yaml"
-    manifest.write_text(
-        replace_refs(manifest.read_text("utf-8"), [later, root]), "utf-8"
-    )
-    assert packages.rule_parameters(package)[REFS_KEY] == [later, root]
-
-    assert whitaker_revisions.check(clone, "main") == 0
-    assert capsys.readouterr().out == ""
-
-
-@pytest.mark.parametrize(
-    "case",
-    [
-        pytest.param(("list", "{root}\n"), id="list"),
-        pytest.param(("check", ""), id="check"),
-        pytest.param(("sync", "{manifest}: 1 revisions\n"), id="sync"),
-    ],
-)
 def test_the_commands_default_to_origin_main(
-    rule_package: tuple[pathlib.Path, str, str],
-    default_tip_cli: cabc.Callable[[str], int],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    case: tuple[str, str],
 ) -> None:
-    """Without `--tip`, every command walks `origin/main`, not the local `main`.
-
-    `origin/main` holds only the root while the local `main` also holds a later
-    commit, so a command that used the local branch would list, report or write
-    two revisions.
-    """
-    command, expected = case
-    package, root, _later = rule_package
-
-    assert default_tip_cli(command) == 0
-    assert capsys.readouterr().out == expected.format(
-        root=root, manifest=package / "rule.yaml"
+    """With no `--tip`, `list` walks `origin/main`, where a clone's main lives."""
+    root = history.commit(action_files(ACTION_V1), "root")
+    history.commit(action_files(ACTION_V1, "b"), "readme only")
+    tag(history, f"{PREFIX}0.2.12", root)
+    history.repository.references.create("refs/remotes/origin/main", root)
+    monkeypatch.setattr(
+        sys, "argv", ["whitaker_revisions", "list", str(_clone(history))]
     )
 
-
-def test_sync_reports_how_many_revisions_it_wrote(
-    rule_package: tuple[pathlib.Path, str, str],
-    history: History,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The count the snapshot redacts is asserted here against the live output."""
-    package, _root, _later = rule_package
-    clone = pathlib.Path(history.repository.workdir)
-
-    assert whitaker_revisions.sync(clone, "main") == 0
-    assert capsys.readouterr().out == f"{package / 'rule.yaml'}: 2 revisions\n"
+    assert whitaker_revisions.main() == 0
+    assert capsys.readouterr().out.splitlines()[-1] == f"certified {root}"

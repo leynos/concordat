@@ -1,0 +1,39 @@
+{
+  "actions": [],
+  "install_certifications": {
+    "dddddddddddddddddddddddddddddddddddddddd": {
+      "floor": null,
+      "reason": "dddddddddddddddddddddddddddddddddddddddd is not on the default branch of the action",
+      "status": "uncertified"
+    }
+  },
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "off-branch-pin"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "leynos/shared-actions/.github/actions/install-whitaker@dddddddddddddddddddddddddddddddddddddddd"
+              }
+            ]
+          }
+        },
+        "name": "CI",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

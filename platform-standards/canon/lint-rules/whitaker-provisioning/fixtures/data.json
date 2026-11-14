@@ -19,6 +19,7 @@
           "path": ".github/actions/install-whitaker/action.yml"
         }
       ],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/shared-actions",
@@ -54,6 +55,7 @@
     },
     "binstall_step": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -90,6 +92,7 @@
     },
     "cargo_install_git": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -123,6 +126,13 @@
     },
     "compliant": {
       "actions": [],
+      "install_certifications": {
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+          "floor": "certified/install-whitaker/0.2.12",
+          "reason": null,
+          "status": "certified"
+        }
+      },
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -196,6 +206,7 @@
           "path": ".github/actions/setup/action.yml"
         }
       ],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -207,6 +218,7 @@
     },
     "curl_download": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -240,6 +252,7 @@
     },
     "direct_invocation": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -273,6 +286,7 @@
     },
     "exempt_developer_script": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/agent-helper-scripts",
@@ -290,6 +304,7 @@
     },
     "exempt_pinned_suite": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/example-pinned-suite",
@@ -351,6 +366,7 @@
     },
     "exempt_pinned_suite_elsewhere": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -387,6 +403,7 @@
     },
     "exempt_script_elsewhere": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -402,8 +419,42 @@
       ],
       "workflows": []
     },
+    "floating_ref": {
+      "actions": [],
+      "install_certifications": {},
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "floating-ref"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/install-whitaker@main"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "fork_action": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -436,6 +487,7 @@
     },
     "install_action_tool": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -488,6 +540,7 @@
           "path": ".github/actions/install-whitaker/action.yml"
         }
       ],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -520,6 +573,7 @@
     },
     "makefile_install": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -537,6 +591,7 @@
     },
     "no_whitaker": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -546,8 +601,87 @@
       "scripts": [],
       "workflows": []
     },
+    "off_branch_pin": {
+      "actions": [],
+      "install_certifications": {
+        "dddddddddddddddddddddddddddddddddddddddd": {
+          "floor": null,
+          "reason": "dddddddddddddddddddddddddddddddddddddddd is not on the default branch of the action",
+          "status": "uncertified"
+        }
+      },
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "off-branch-pin"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/install-whitaker@dddddddddddddddddddddddddddddddddddddddd"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "older_pin": {
+      "actions": [],
+      "install_certifications": {
+        "cccccccccccccccccccccccccccccccccccccccc": {
+          "floor": null,
+          "reason": "cccccccccccccccccccccccccccccccccccccccc is older than, or unrelated to, every certification tag",
+          "status": "uncertified"
+        }
+      },
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "older-pin"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/install-whitaker@cccccccccccccccccccccccccccccccccccccccc"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "producer": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/whitaker",
@@ -587,6 +721,7 @@
     },
     "release_asset_script": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -624,8 +759,48 @@
         }
       ]
     },
+    "unknown_pin": {
+      "actions": [],
+      "install_certifications": {
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": {
+          "floor": null,
+          "reason": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee names no commit of the action repository",
+          "status": "uncertified"
+        }
+      },
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "unknown-pin"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/install-whitaker@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "unknown_schema": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -637,6 +812,13 @@
     },
     "unlisted_pin": {
       "actions": [],
+      "install_certifications": {
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+          "floor": null,
+          "reason": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb changes the action's runtime content since certified/install-whitaker/0.2.12; a maintainer certifies new content by tagging it",
+          "status": "uncertified"
+        }
+      },
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -675,6 +857,7 @@
           "path": ".github/actions/setup/action.yml"
         }
       ],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -684,8 +867,48 @@
       "scripts": [],
       "workflows": []
     },
+    "unreadable_pin": {
+      "actions": [],
+      "install_certifications": {
+        "9999999999999999999999999999999999999999": {
+          "floor": null,
+          "reason": "compare/main...9 was rate limited",
+          "status": "unknown"
+        }
+      },
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "unreadable-pin"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/install-whitaker@9999999999999999999999999999999999999999"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "unreadable_workflow": {
       "actions": [],
+      "install_certifications": {},
       "kind": "policy-input/whitaker-provisioning",
       "repository": {
         "name": "leynos/consumer",
@@ -697,6 +920,39 @@
         {
           "error": "invalid YAML: while parsing a flow sequence\n  in \"<unicode string>\", line 2, column 5:\n    on: [pull_request\n        ^ (line: 2)\nexpected ',' or ']', but got ':'\n  in \"<unicode string>\", line 3, column 5:\n    jobs: {\n        ^ (line: 3)",
           "parsed": null,
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "unresolved_pin": {
+      "actions": [],
+      "install_certifications": {},
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "unresolved-pin"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/install-whitaker@1111111111111111111111111111111111111111"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
           "path": ".github/workflows/ci.yml"
         }
       ]

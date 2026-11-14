@@ -401,16 +401,17 @@ actuators that remediate them. Each check ships as a lint rule package under
   recorded snapshots.
 - [x] Ship the QG-002 audit as `whitaker-provisioning`: Whitaker is
   provisioned only through shared-actions `install-whitaker`, pinned to a
-  listed revision; every other install, download or direct run of a Whitaker
-  tool in workflows, composite actions, Makefiles and scripts is refused.
-  QG-003 is superseded by the user's 2026-09-24 ruling that the lint suite is a
-  rolling release and is never pinned, which the action itself enforces.
-  Acceptance: fixtures for each refused route, including ortho-config #492's
-  release-asset script, raise QG-002, while the action at a listed revision, an
-  installer cache, a lint run, a named developer-environment exemption, the
-  owning repository and the producer stay compliant.
+  certified revision (a descendant of a `certified/install-whitaker/<version>`
+  tag with unchanged runtime content); every other install, download or direct
+  run of a Whitaker tool in workflows, composite actions, Makefiles and scripts
+  is refused. QG-003 is superseded by the user's 2026-09-24 ruling that the
+  lint suite is a rolling release and is never pinned, which the action itself
+  enforces. Acceptance: fixtures for each refused route, including ortho-config
+  #492's release-asset script, raise QG-002, while the action at a certified
+  revision, an installer cache, a lint run, a named developer-environment
+  exemption, the owning repository and the producer stay compliant.
 - [ ] Ship the QG-002 mutation: a file patch replacing a bespoke install step
-  with the `install-whitaker` step at a listed revision. Acceptance: the
+  with the `install-whitaker` step at a certified revision. Acceptance: the
   mutated fixture checkouts evaluate compliant.
 - [ ] Ship the test-runner completeness rule package (QG-004): sensors for
   nextest-only suites lacking a doctest target, unlocked test-tool installs,
