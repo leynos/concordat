@@ -265,3 +265,71 @@ def test_the_envelope_records_the_facts_it_judges(tmp_path: pathlib.Path) -> Non
     assert envelope["version_files"] == ["tools/verus/VERSION"]
     assert [pin["value"] for pin in envelope["pins"]] == [REF]
     assert envelope["runs_prover"] is True
+
+
+def test_a_bare_make_step_follows_the_first_target(tmp_path: pathlib.Path) -> None:
+    """With no target named, `make` builds the Makefile's first ordinary target."""
+    makefile = "all: verus-install verus\n\n" + MAKEFILE
+    steps = (INSTALL_STEP, run_step("make"))
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"PT-002"}
+
+
+def test_a_bare_make_step_follows_the_declared_default_goal(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`.DEFAULT_GOAL` overrides the first target."""
+    makefile = MAKEFILE + ".DEFAULT_GOAL := verus-install\n"
+    steps = (INSTALL_STEP, run_step("make"))
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"PT-002"}
+
+
+def test_a_mutable_ref_file_value_is_noncompliant(tmp_path: pathlib.Path) -> None:
+    """A `ref:` that is a branch name is not the pinned revision."""
+    root = checkout(tmp_path, makefile=MAKEFILE.replace(SOURCE, "git+https://x/y"))
+    put(root, "tools/rust-prover-tools/REF", "ref: main\n")
+    assert ids(root) == {"PT-001"}
+
+
+def test_a_revision_with_a_suffix_is_noncompliant(tmp_path: pathlib.Path) -> None:
+    """`<sha>-patched` is a different reference, not the revision it starts with."""
+    makefile = MAKEFILE.replace(SOURCE, f"{SOURCE}-patched")
+    assert ids(checkout(tmp_path, makefile=makefile)) == {"PT-001"}
+
+
+def test_an_inline_pin_in_a_recipe_is_compared(tmp_path: pathlib.Path) -> None:
+    """A recipe that names its own `rust-prover-tools` revision counts as a pin."""
+    source = f"git+https://github.com/leynos/rust-prover-tools@{OLD}"
+    inline = f"\tuvx --from {source} prover-tools verus run\n"
+    makefile = MAKEFILE + "\nextra:\n" + inline
+    assert ids(checkout(tmp_path, makefile=makefile)) == {"PT-001"}
+
+
+def test_a_step_that_runs_an_installer_script_is_an_installer_step(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Running a local installer script is PT-002 as well as the script's PT-004."""
+    root = checkout(tmp_path, steps=(INSTALL_STEP, run_step("bash scripts/get.sh")))
+    put(root, "scripts/get.sh", "#!/bin/sh\nprover-tools verus install\n")
+    assert ids(root) == {"PT-002", "PT-004"}
+
+
+def test_a_release_page_link_is_not_a_download(tmp_path: pathlib.Path) -> None:
+    """Only a release-download URL makes a Python script an installer."""
+    root = checkout(tmp_path)
+    put(root, "scripts/links.py", "HOME = 'https://github.com/verus-lang/verus'\n")
+    assert ids(root) == set()
+
+
+def test_a_ref_file_that_leaves_the_checkout_stops_the_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A REF symlink to a file outside the checkout is an operational failure."""
+    outside = tmp_path / "outside.txt"
+    outside.write_text(f"ref: {REF}\n", encoding="utf-8")
+    root = tmp_path / "repo"
+    checkout(root)
+    link = root / "tools/rust-prover-tools/REF"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside)
+    with pytest.raises(OperationalRuleError):
+        build_prover_tooling_envelope(root)

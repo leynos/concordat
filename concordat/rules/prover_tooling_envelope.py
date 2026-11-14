@@ -80,6 +80,8 @@ DOWNLOAD_PREFIXES: typ.Final = (
 )
 PIN_MARKER: typ.Final = "rust-prover-tools@"
 REVISION_LENGTH: typ.Final = 40
+REFERENCE_END: typ.Final = frozenset(" \t\"'),;")
+RELEASE_PATHS: typ.Final = ("/releases/download/", "/releases/latest/download/")
 HEX_DIGITS: typ.Final = frozenset("0123456789abcdef")
 
 
@@ -262,6 +264,7 @@ class MakeRules:
 
     prerequisites: dict[str, list[str]]
     recipes: dict[str, list[list[str]]]
+    default_goal: str | None = None
 
     def closure(self, targets: list[str]) -> list[str]:
         """Return *targets* and every prerequisite they reach.
@@ -288,11 +291,48 @@ def _is_revision(text: str) -> bool:
 
 
 def _revision_after_marker(text: str) -> str | None:
-    """Return the revision following `rust-prover-tools@` in *text*, if literal."""
+    """Return the whole reference following `rust-prover-tools@` in *text*.
+
+    The reference is kept as written, not truncated to a revision's length, so
+    `<sha>-patched` or `main` reaches the policy and fails PT-001 rather than
+    being read as the revision it starts with. A reference that is itself a
+    substitution (`$(shell cat REF)`) is not a literal and returns None; the
+    REF file is the pin there.
+
+    Returns
+    -------
+    str | None
+        The literal reference, or None when there is none.
+    """
     if PIN_MARKER not in text:
         return None
-    candidate = text.split(PIN_MARKER, maxsplit=1)[1][:REVISION_LENGTH]
-    return candidate if _is_revision(candidate) else None
+    tail = text.split(PIN_MARKER, maxsplit=1)[1]
+    end = next((i for i, char in enumerate(tail) if char in REFERENCE_END), len(tail))
+    reference = tail[:end]
+    return reference if reference and not reference.startswith("$") else None
+
+
+def _default_goal(report: MakeutilReport) -> str | None:
+    """Return the target a bare `make` builds: `.DEFAULT_GOAL`, else the first.
+
+    Returns
+    -------
+    str | None
+        The goal, or None when the Makefile has no ordinary target.
+    """
+    for variable in typ.cast("list[dict[str, object]]", report["variables"]):
+        if variable.get("name") == ".DEFAULT_GOAL":
+            goal = str(variable.get("raw_value", "")).strip()
+            return goal or None
+    return next(
+        (
+            target
+            for rule in report["rules"]
+            for target in rule["targets"]
+            if not target.startswith(".") and "%" not in target
+        ),
+        None,
+    )
 
 
 def _make_rules(report: MakeutilReport) -> MakeRules:
@@ -306,7 +346,7 @@ def _make_rules(report: MakeutilReport) -> MakeRules:
         for target in rule["targets"]:
             prerequisites.setdefault(target, []).extend(rule["prerequisites"])
             recipes.setdefault(target, []).extend(parsed)
-    return MakeRules(prerequisites, recipes)
+    return MakeRules(prerequisites, recipes, _default_goal(report))
 
 
 def _makefile_pins(report: MakeutilReport) -> list[Pin]:
@@ -327,16 +367,28 @@ def _makefile_pins(report: MakeutilReport) -> list[Pin]:
     return found
 
 
-def _ref_pins(checkout: pathlib.Path) -> list[Pin]:
-    """Return the revisions `tools/rust-prover-tools/REF` names."""
+def _ref_pins(checkout: pathlib.Path, root: pathlib.Path) -> list[Pin]:
+    """Return the revisions `tools/rust-prover-tools/REF` names.
+
+    A `ref:` line names its value as written; a bare line counts only when it
+    is a full revision. A REF file that resolves outside the checkout raises.
+
+    Returns
+    -------
+    list[Pin]
+        The revisions named, each with its source.
+    """
     path = checkout / REF_FILE
-    if not regular_file_exists(path, operation=OPERATION):
+    if not within_checkout(root, path, OPERATION) or not regular_file_exists(
+        path, operation=OPERATION
+    ):
         return []
     found: list[Pin] = []
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        value = line.split(":", maxsplit=1)[-1].strip()
-        if _is_revision(value):
-            found.append({"value": value, "source": REF_FILE})
+        key, separator, value = line.partition(":")
+        literal = value.strip() if separator and key.strip() == "ref" else line.strip()
+        if literal and (key.strip() == "ref" or _is_revision(literal)):
+            found.append({"value": literal, "source": REF_FILE})
     return found
 
 
@@ -354,13 +406,36 @@ def _steps(job: object) -> list[dict[str, object]]:
     )
 
 
-def _make_targets(argv: list[str]) -> list[str]:
-    """Return the targets a `make` command names."""
-    return [word for word in argv[1:] if not word.startswith("-") and "=" not in word]
+def _make_targets(argv: list[str], rules: MakeRules) -> list[str]:
+    """Return the targets a `make` command builds: those named, else the default."""
+    named = [word for word in argv[1:] if not word.startswith("-") and "=" not in word]
+    if named:
+        return named
+    return [rules.default_goal] if rules.default_goal else []
+
+
+def _installs(argv: list[str], installer_scripts: frozenset[str]) -> bool:
+    """Return whether *argv* installs a prover, directly or by running a script.
+
+    A command that runs a local script the rule found to be an installer
+    (`bash scripts/get.sh`) is an installer step, so waiving PT-004 for the
+    script does not clear PT-002 for the step that runs it.
+
+    Returns
+    -------
+    bool
+        Whether the command installs a prover itself.
+    """
+    return is_installer(argv) or any(
+        word.removeprefix("./") in installer_scripts for word in argv
+    )
 
 
 def _step_facts(
-    where: str, step: dict[str, object], rules: MakeRules
+    where: str,
+    step: dict[str, object],
+    rules: MakeRules,
+    installer_scripts: frozenset[str],
 ) -> tuple[list[InstallerStep], list[SharedUse], bool, bool, list[Pin]]:
     """Return one step's installers, shared uses, make use, runs and pins."""
     installers: list[InstallerStep] = []
@@ -379,20 +454,24 @@ def _step_facts(
         )
         if revision is not None:
             pins.append({"value": revision, "source": "workflow"})
-        runs = runs or is_installer(argv) or is_runner(argv)
-        if is_installer(argv):
+        runs = runs or _installs(argv, installer_scripts) or is_runner(argv)
+        if _installs(argv, installer_scripts):
             installers.append({"where": where, "command": " ".join(argv)})
         if argv and argv[0] == "make":
             calls_make = True
-            reached = rules.closure(_make_targets(argv))
-            if any(is_installer(c) for t in reached for c in rules.recipes[t]):
+            reached = rules.closure(_make_targets(argv, rules))
+            if any(
+                _installs(c, installer_scripts)
+                for t in reached
+                for c in rules.recipes[t]
+            ):
                 installers.append({"where": where, "command": " ".join(argv)})
             runs = runs or any(is_runner(c) for t in reached for c in rules.recipes[t])
     return installers, shared, calls_make, runs, pins
 
 
 def _workflow_facts(
-    workflow: WorkflowFile, rules: MakeRules
+    workflow: WorkflowFile, rules: MakeRules, installer_scripts: frozenset[str]
 ) -> tuple[WorkflowFacts, bool, list[Pin]]:
     """Return one workflow's facts, whether it runs a prover, and its pins."""
     facts: WorkflowFacts = {
@@ -410,7 +489,7 @@ def _workflow_facts(
     for job_id, job in jobs.items() if isinstance(jobs, dict) else []:
         for index, step in enumerate(_steps(job)):
             installers, shared, calls_make, step_runs, step_pins = _step_facts(
-                f"{job_id}/{index}", step, rules
+                f"{job_id}/{index}", step, rules, installer_scripts
             )
             facts["installer_steps"] += installers
             facts["shared_uses"] += shared
@@ -451,6 +530,7 @@ def _has_download_constant(source: str) -> bool:
         isinstance(node, ast.Constant)
         and isinstance(node.value, str)
         and node.value.startswith(DOWNLOAD_PREFIXES)
+        and any(path in node.value for path in RELEASE_PATHS)
         for node in ast.walk(tree)
     )
 
@@ -618,7 +698,17 @@ def build_prover_tooling_envelope(
     root = resolved_root(checkout)
     state, report = _read_makefile(checkout, root, inspect)
     rules = _make_rules(report) if report is not None else MakeRules({}, {})
-    pins = _ref_pins(checkout) + (_makefile_pins(report) if report is not None else [])
+    local, scripts_run, unreadable = _scripts(checkout)
+    installer_scripts = frozenset(item["path"] for item in local)
+    pins = _ref_pins(checkout, root) + (
+        _makefile_pins(report) if report is not None else []
+    )
+    pins += [
+        {"value": reference, "source": "Makefile recipe"}
+        for argv in (argv for v in rules.recipes.values() for argv in v)
+        for word in argv
+        if (reference := _revision_after_marker(word)) is not None
+    ]
     runs = any(
         is_runner(argv) or is_installer(argv)
         for v in rules.recipes.values()
@@ -626,11 +716,12 @@ def build_prover_tooling_envelope(
     )
     workflows: list[WorkflowFacts] = []
     for workflow in _load_workflows(checkout):
-        facts, workflow_runs, workflow_pins = _workflow_facts(workflow, rules)
+        facts, workflow_runs, workflow_pins = _workflow_facts(
+            workflow, rules, installer_scripts
+        )
         workflows.append(facts)
         runs = runs or workflow_runs
         pins += workflow_pins
-    local, scripts_run, unreadable = _scripts(checkout)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,

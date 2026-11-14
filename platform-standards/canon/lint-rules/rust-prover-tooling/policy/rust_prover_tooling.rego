@@ -62,6 +62,30 @@ uses_prover if {
 	count(workflow.installer_steps) + count(workflow.shared_uses) > 0
 }
 
+# Evidence the rule could not read is not evidence of absence: a failed read
+# makes the repository audited for the indeterminate finding, so it is reported
+# rather than hidden behind a lack of positive proof of use. The PT checks
+# still apply only where there is positive proof of use.
+audited if {
+	uses_prover
+}
+
+audited if {
+	envelope_ok
+	count(input.unreadable) > 0
+}
+
+audited if {
+	envelope_ok
+	input.makefile.state == "refused"
+}
+
+audited if {
+	envelope_ok
+	some workflow in input.workflows
+	workflow.error != null
+}
+
 # An exception is a reviewed record: it names the pin the repository stays on,
 # the decision record that explains it, why, and what sends it back for review.
 # It holds only while that pin is the pin in the checkout, so moving the pin
@@ -127,14 +151,27 @@ deny contains finding("EN-001", "indeterminate", "", msg) if {
 }
 
 deny contains finding("EN-001", "indeterminate", workflow.path, msg) if {
-	uses_prover
+	audited
 	some workflow in input.workflows
 	workflow.error != null
 	msg := sprintf("the workflow could not be read: %s", [workflow.error])
 }
 
+# A refused Makefile hides the pins its variables name, so PT-001 cannot be
+# judged; and it hides what a workflow's `make` steps install, so PT-002 cannot
+# either. Each clause that is not waived reports it.
+deny contains finding("EN-001", "indeterminate", "Makefile", msg) if {
+	audited
+	not waived("PT-001")
+	input.makefile.state == "refused"
+	msg := sprintf(
+		"the Makefile could not be parsed (%s), so the rust-prover-tools revisions its variables name are unknown",
+		[input.makefile.error],
+	)
+}
+
 deny contains finding("EN-001", "indeterminate", workflow.path, msg) if {
-	uses_prover
+	audited
 	not waived("PT-002")
 	input.makefile.state == "refused"
 	some workflow in input.workflows
@@ -147,7 +184,7 @@ deny contains finding("EN-001", "indeterminate", workflow.path, msg) if {
 }
 
 deny contains finding("EN-001", "indeterminate", "", msg) if {
-	uses_prover
+	audited
 	some reason in input.unreadable
 	msg := sprintf("a file the rule reads could not be read: %s", [reason])
 }

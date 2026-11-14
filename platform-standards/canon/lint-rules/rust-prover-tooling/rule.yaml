@@ -16,8 +16,8 @@ description: >-
   prover, or whose proofs nothing on main installs or runs, is not audited.
   A repository that stays on another revision on purpose records the exception
   as data in `.concordat` under `language.rust.prover_tools.exceptions`; it
-  waives PT-001 to PT-004 only while the pin it names is still the pin in the
-  checkout and its decision record exists.
+  waives PT-001, PT-002 and PT-004 only while the pin it names is still the
+  pin in the checkout and its decision record exists.
   Audit-only: this rule declares no mutations.
 version: 0.1.0
 sensor:

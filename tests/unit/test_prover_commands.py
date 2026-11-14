@@ -32,6 +32,10 @@ from concordat.rules.prover_commands import commands, is_installer, is_runner
         ("echo prover-tools verus install", False, False),
         ("cargo test --workspace", False, False),
         ("make verus", False, False),
+        ("env -u RUSTUP_TOOLCHAIN cargo kani --harness h", False, True),
+        ("env FOO=1 $(PROVER_TOOLS) z3 install", True, False),
+        ("git commit -m verus install", False, False),
+        ("git log verus install", False, False),
     ],
 )
 def test_classification(*, line: str, installs: bool, runs: bool) -> None:
@@ -59,3 +63,34 @@ def test_separators_split_simple_commands() -> None:
 def test_an_untokenizable_line_is_skipped() -> None:
     """An unbalanced quote does not raise."""
     assert commands("echo 'unterminated") == []
+
+
+def test_a_hash_inside_a_word_is_not_a_comment() -> None:
+    """A URL fragment does not hide the installer that follows it."""
+    found = commands("echo https://x/#frag && prover-tools verus install")
+    assert [is_installer(argv) for argv in found] == [False, True]
+
+
+def test_a_hash_at_the_start_of_a_word_begins_a_comment() -> None:
+    """A real shell comment hides the rest of the line."""
+    assert commands("make lint # prover-tools verus install") == [["make", "lint"]]
+
+
+def test_a_quoted_operator_does_not_split_a_command() -> None:
+    """Operator text inside quotes stays an argument."""
+    (argv,) = commands("echo 'a && prover-tools verus install'")
+    assert argv == ["echo", "a && prover-tools verus install"]
+
+
+def test_a_here_document_body_is_not_a_command() -> None:
+    """Installer text passed to `cat` through a here-document runs nothing."""
+    text = "cat <<'EOF'\nprover-tools verus install\nEOF\nmake lint\n"
+    found = commands(text)
+    assert not any(is_installer(argv) for argv in found)
+    assert found[-1] == ["make", "lint"]
+
+
+def test_a_redirect_ampersand_does_not_split_a_command() -> None:
+    """`>&2` is a redirection, not a background operator."""
+    (argv,) = commands("prover-tools verus install >&2")
+    assert is_installer(argv)

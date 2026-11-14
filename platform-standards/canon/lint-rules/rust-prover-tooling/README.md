@@ -34,33 +34,44 @@ classified:
 - a **runner** is the `verus` binary, `cargo kani`, or
   `prover-tools <tool> run|exec|check-version`.
 
+A command is read as the estate runner only when it names `prover-tools` or
+starts with a Make variable standing for it, so `git commit -m 'verus install'`
+is not an installer. Leading `env`, `command`, `exec` and similar wrappers are
+looked through. A `#` begins a comment only at the start of a word, an operator
+inside quotes does not split a command, and the body of a here-document is not
+a command.
+
 A step that only runs proofs on an installed toolchain is therefore compliant,
 and `printf 'prover-tools verus install'` is not an installer. A workflow step
-that runs `make X` is an installer when `X`, or any prerequisite of `X` in the
-pinned `makeutil` report, runs an installer: that is how `make verus` depending
-on `verus-install` reads, and how a run-only `make verus` does not. A Make
-variable reference is not expanded, so a recipe that hides the tool name inside
-a variable is not seen.
+that runs `make X` (or a bare `make`, which builds `.DEFAULT_GOAL` or the first
+target) is an installer when `X`, or any prerequisite of `X` in the pinned
+`makeutil` report, runs an installer or a local installer script: that is how
+`make verus` depending on `verus-install` reads, and how a run-only
+`make verus` does not. A Make variable reference is not expanded, so a recipe
+that hides the tool name inside a variable is not seen.
 
 ## Checks
 
 - **PT-001** (error): every `rust-prover-tools` revision the checkout names
-  (`tools/rust-prover-tools/REF`, a literal `rust-prover-tools@<sha>` in a
-  Makefile variable or a workflow command) is the same commit, and equals the
-  `prover_tools_ref` parameter. No revision at all is also noncompliant.
-  Bumping the estate's pin is a change to the parameter's default.
+  (`tools/rust-prover-tools/REF`, a literal `rust-prover-tools@<ref>` in a
+  Makefile variable or recipe or a workflow command) is the same commit, and
+  equals the `prover_tools_ref` parameter. The reference is read whole, so a
+  branch name or `<sha>-patched` fails; a `$(shell ...)` reference is not a
+  literal, and the REF file is the pin there. No revision at all is also
+  noncompliant. Bumping the estate's pin is a change to the parameter's default.
 - **PT-002** (error): no workflow step installs a prover itself: neither a `run`
-  command nor a `make` target whose prerequisites install. Install through the
-  shared action.
+  command, a `make` target whose prerequisites install, nor a step that runs a
+  local installer script (so waiving PT-004 for the script does not clear the
+  step). Install through the shared action.
 - **PT-003** (error): every use of `install-prover-tools` is pinned by a full
   40-digit commit SHA. Not waivable.
 - **PT-004** (error): no local installer script. A file under `scripts/`,
   `.github/scripts/` or `tools/` whose name pairs `install`, `setup` or
   `bootstrap` with `kani`, `verus` or `z3`; a shell script containing an
   installer command; or a Python script holding a string constant that begins
-  with the Kani or Verus release URL (read from the `ast`, so a comment does
-  not count). Scripts under `tests/`, `test/` and `fixtures/` directories are
-  not read.
+  with a Kani or Verus release-download URL (read from the `ast`, so a comment
+  does not count, and a homepage or issue link does not either). Scripts under
+  `tests/`, `test/` and `fixtures/` directories are not read.
 - **PT-005** (error): no integration tests of prover installation, found by
   file name only: a file under `tests/` whose name pairs `install` with `kani`,
   `verus`, `z3` or `prover`. The installer is owned and tested in
@@ -68,8 +79,11 @@ a variable is not seen.
 - **EX-001** (error): a recorded exception is not in force (see below).
 - **EN-001** (error, indeterminate): the envelope is not a schema-1
   `policy-input/rust-prover-tooling` document; a workflow could not be decoded;
-  a workflow runs `make` and the Makefile could not be parsed; or a file the
-  rule reads could not be read.
+  the Makefile could not be parsed (its pins are unknown, and so is what a
+  workflow's `make` steps install); or a file the rule reads could not be read.
+  A failed read makes the repository audited for this finding even when nothing
+  else shows it uses a prover, because an unread file is not evidence of
+  absence.
 
 ## Exceptions
 

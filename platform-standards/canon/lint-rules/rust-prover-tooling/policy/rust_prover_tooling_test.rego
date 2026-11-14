@@ -104,8 +104,30 @@ test_a_refused_makefile_is_indeterminate_where_a_workflow_runs_make if {
 	ids(data.fixtures.makefile_refused) == {"EN-001"}
 }
 
-test_a_refused_makefile_is_harmless_where_no_workflow_runs_make if {
-	count(findings(data.fixtures.makefile_refused_no_make_step)) == 0
+test_a_refused_makefile_still_hides_the_pin_where_no_workflow_runs_make if {
+	ids(data.fixtures.makefile_refused_no_make_step) == {"EN-001"}
+	some f in findings(data.fixtures.makefile_refused_no_make_step)
+	contains(f.msg, "revisions its variables name")
+}
+
+test_a_refused_makefile_is_harmless_where_the_exception_waives_the_clauses if {
+	count(findings(data.fixtures.makefile_refused_but_waived)) == 0
+}
+
+test_an_unreadable_workflow_makes_a_repository_audited if {
+	ids(data.fixtures.unreadable_workflow_without_other_evidence) == {"EN-001"}
+}
+
+test_an_unreadable_file_makes_a_repository_audited if {
+	ids(data.fixtures.unreadable_file_without_other_evidence) == {"EN-001"}
+}
+
+test_a_mutable_reference_is_not_the_pinned_revision if {
+	ids(data.fixtures.mutable_reference) == {"PT-001"}
+}
+
+test_a_revision_with_a_suffix_is_not_the_pinned_revision if {
+	ids(data.fixtures.suffixed_revision) == {"PT-001"}
 }
 
 test_an_unreadable_file_is_indeterminate if {
