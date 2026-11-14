@@ -1217,6 +1217,34 @@ An `include`, a recovered Makefile parse, an unresolvable variable, or a file
 that cannot be decoded makes the affected check indeterminate rather than
 passing it, even when the checkout shows no other sign of using uv.
 
+### Auditing the duplication gate scope
+
+The `python-duplication-gate` package audits the scope a repository gives the
+shared `df12-duplication` gate in its `[tool.nose]` table:
+
+```shell
+concordat artefact rule run python-duplication-gate --repo /path/to/checkout
+```
+
+It applies when `pyproject.toml` has a `[tool.nose]` table, and reports:
+
+- **NS-001**: `top` is `0`. An unset or positive `top` caps the report, so
+  lower-ranked duplication passes unadjudicated.
+- **NS-002**: no Python file in a test tree is scanned. A test tree is a
+  directory named in the `test_directory_names` parameter (`tests`, `test`,
+  `unittests`, `testing` by default) below a scan root, or the root itself. Add
+  an `exclude` pattern; patterns are gitignore-style and relative to each scan
+  root, so `tests/**` or `**/tests/**` excludes `pkg/tests` for the root `pkg`,
+  and `pkg/tests/**` does not.
+- **NS-003**: every scan root exists and selects at least one Python file
+  after `exclude`.
+- **NS-004** (indeterminate): `pyproject.toml` or `[tool.nose]` could not be
+  read or has the wrong shape.
+
+No clause can be waived. The rule reads `[tool.nose].exclude` only; a test tree
+hidden by a `.gitignore` inside a root is still reported. See the
+[rule reference](../platform-standards/canon/lint-rules/python-duplication-gate/README.md).
+
 ### Auditing documentation presence (Python and Rust)
 
 The `documentation-presence` package audits the interrogate gate that keeps

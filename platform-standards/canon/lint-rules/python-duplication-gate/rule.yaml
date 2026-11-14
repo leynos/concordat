@@ -1,0 +1,48 @@
+schema_version: 1
+id: python-duplication-gate
+name: Python duplication gate scope
+description: >-
+  Audits the scope a Python repository gives the shared `df12-duplication`
+  gate in its `[tool.nose]` table (NS-001 to NS-004). The scan is not capped:
+  `top` is 0, so every duplicate family is reported and adjudicated (NS-001);
+  no Python file in a test tree is scanned, because test scaffolding repeats on
+  purpose (NS-002); and every scan root exists and selects at least one Python
+  file, so a mistyped root cannot report a clean scan that proves nothing
+  (NS-003). The settings are read from `pyproject.toml` with a TOML parser and
+  `exclude` is matched as gitignore patterns relative to each scan root, as
+  the detector does; no clause is judged from searched text. A table or file
+  that cannot be read is reported as indeterminate (NS-004). A repository with
+  no `[tool.nose]` table does not use the gate and is not audited. No clause
+  is waivable: an uncapped, test-free, non-empty scan is what the gate means.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/python-duplication-gate
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      test_directory_names:
+        type: array
+        items:
+          type: string
+        description: >-
+          Directory names that hold test scaffolding (NS-002). A Python file
+          below a directory with one of these names, under a scan root or
+          reached through one, must be excluded from the scan.
+  defaults:
+    # `behaviour` is left out on purpose: in some repositories it is a tree of
+    # BDD step definitions that the gate should scan. Add it here when the
+    # estate decides otherwise.
+    test_directory_names:
+      - tests
+      - test
+      - unittests
+      - testing
