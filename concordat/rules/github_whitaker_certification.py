@@ -18,6 +18,7 @@ directory digest are asked once per run, however many pins share them.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import re
 import typing as typ
@@ -54,6 +55,7 @@ _LOOKUP_FAILURES: typ.Final = (GithubError, requests.RequestException, ValueErro
 _ON_BRANCH: typ.Final = frozenset({"ahead", "identical"})
 _DESCENDS: typ.Final = frozenset({"ahead", "identical"})
 _TREE_TYPE: typ.Final = "tree"
+_NON_EMPTY: typ.Final = re.compile(r".+", re.DOTALL)
 _MODE: typ.Final = re.compile(r"^[0-7]{6}$")
 _OBJECT_ID: typ.Final = re.compile(r"^[0-9a-f]{40}$")
 _COMMIT_TYPE: typ.Final = "commit"
@@ -108,6 +110,11 @@ def _is_subtree(entry: object) -> bool:
     return isinstance(entry, dict) and entry.get("type") == _TREE_TYPE
 
 
+def _is_valid(pattern: re.Pattern[str], value: object) -> bool:
+    """Report whether *value* is a string that *pattern* matches whole."""
+    return isinstance(value, str) and pattern.fullmatch(value) is not None
+
+
 def _record(entry: dict[str, typ.Any]) -> tuple[str, str, str]:
     """Return `(path, mode, blob id)`; a record without them raises KeyError.
 
@@ -122,14 +129,8 @@ def _record(entry: dict[str, typ.Any]) -> tuple[str, str, str]:
         When a field is not a valid path, six-digit octal mode or object id.
     """
     path, mode, blob = entry["path"], entry["mode"], entry["sha"]
-    if not (
-        isinstance(path, str)
-        and path
-        and isinstance(mode, str)
-        and _MODE.fullmatch(mode)
-        and isinstance(blob, str)
-        and _OBJECT_ID.fullmatch(blob)
-    ):
+    checks = (_NON_EMPTY, path), (_MODE, mode), (_OBJECT_ID, blob)
+    if not all(itertools.starmap(_is_valid, checks)):
         message = "a tree record's path, mode or sha is not a valid value"
         raise ValueError(message)
     return path, mode, blob

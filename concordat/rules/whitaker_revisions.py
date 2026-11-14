@@ -273,14 +273,11 @@ def compliant_revisions(
     roots: cabc.Sequence[str],
     directory: str,
     tip: str,
-    *,
-    require_roots: bool = True,
 ) -> list[str]:
     """Return every first-parent commit up to *tip* that carries an approved action.
 
-    With *require_roots* (the default) every root must be on the first-parent
-    history of *tip*, which catches a clone that is not the roots' own; without
-    it a root off that line still certifies the commits that follow it.
+    Every root must be on the first-parent history of *tip*, which catches a
+    clone that is not the roots' own.
 
     A commit qualifies when it is a root, or descends from a root and holds the
     action directory with that root's runtime digest. The list is oldest first, so an
@@ -294,24 +291,43 @@ def compliant_revisions(
     Returns
     -------
     list[str]
+        Full commit ids, oldest first. A shallow clone, a root or *tip* the
+        clone cannot resolve, a root off the first-parent history of *tip*, or
+        an object Git cannot read is an `OperationalRuleError`.
+    """
+    found = _revisions_from(repository, roots, directory, tip)
+    _require_every_root(found, roots, tip)
+    return found
+
+
+def _revisions_from(
+    repository: pygit2.Repository,
+    roots: cabc.Sequence[str],
+    directory: str,
+    tip: str,
+) -> list[str]:
+    """Walk *tip*'s first-parent line for commits that follow a root unchanged.
+
+    A root off that line (a merged side branch's commit) still certifies the
+    commits that follow it. A shallow clone is refused, as its walk would end
+    early and silently omit older qualifying commits.
+
+    Returns
+    -------
+    list[str]
         Full commit ids, oldest first.
 
     Raises
     ------
     OperationalRuleError
-        When the clone is shallow, a root or *tip* cannot be resolved in it,
-        an approved root is not on the first-parent history of *tip*, or Git
-        cannot read an object while walking the history.
+        When the clone is shallow, or Git cannot read what the walk needs.
     """
     if repository.is_shallow:
         message = "the shared-actions clone is shallow; run git fetch --unshallow"
         raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
     digests = _root_digests(repository, roots, directory)
     tip_id = _resolve_tip(repository, tip)
-    found = _walk_or_refuse(repository, tip_id, directory, digests)
-    if require_roots:
-        _require_every_root(found, roots, tip)
-    return found
+    return _walk_or_refuse(repository, tip_id, directory, digests)
 
 
 def _walk_or_refuse(
@@ -448,4 +464,4 @@ def certified_revisions(
     # A floor on a merged side branch is an ancestor of the tip yet not on its
     # first-parent line: it still certifies the first-parent commits that follow
     # it, without appearing in the list itself.
-    return compliant_revisions(repository, floors, directory, tip, require_roots=False)
+    return _revisions_from(repository, floors, directory, tip)
