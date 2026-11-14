@@ -17,6 +17,7 @@
       "path": ".github/actions/setup/action.yml"
     }
   ],
+  "install_certifications": {},
   "kind": "policy-input/whitaker-provisioning",
   "repository": {
     "name": "leynos/consumer",

@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import re
 import sys
 import typing as typ
 
 import pygit2
-import pytest
 
-from concordat.rules import packages
-from concordat.rules.whitaker_revisions import replace_refs
 from scripts import whitaker_revisions
 
 if typ.TYPE_CHECKING:
     import pathlib
+
+    import pytest
 
 DIRECTORY: typ.Final = ".github/actions/install-whitaker"
 ACTION_V1: typ.Final = "name: install-whitaker\nversion: 1\n"
@@ -32,16 +30,19 @@ class History:
         self.repository = pygit2.init_repository(str(path), initial_head="main")
         self.parents: list[pygit2.Oid] = []
         self.executable: frozenset[str] = frozenset()
+        self.symlinks: frozenset[str] = frozenset()
 
     def commit(
         self,
         files: dict[str, str],
         message: str,
         executable: frozenset[str] = frozenset(),
+        symlinks: frozenset[str] = frozenset(),
     ) -> str:
         """Commit *files* as the whole tree and return the new commit id.
 
-        Paths in *executable* get the executable file mode.
+        Paths in *executable* get the executable file mode, and paths in
+        *symlinks* are symbolic links whose text is the file's content.
 
         Returns
         -------
@@ -49,6 +50,7 @@ class History:
             The id of the new commit.
         """
         self.executable = executable
+        self.symlinks = symlinks
         tree = self._tree(files)
         oid = self.repository.create_commit(
             "refs/heads/main", SIGNATURE, SIGNATURE, message, tree, self.parents
@@ -81,6 +83,14 @@ class History:
         self.parents = [oid]
         return str(oid)
 
+    def _mode(self, path: str) -> int:
+        """Return the file mode *path* gets: link, executable or plain."""
+        if path in self.symlinks:
+            return pygit2.GIT_FILEMODE_LINK
+        if path in self.executable:
+            return pygit2.GIT_FILEMODE_BLOB_EXECUTABLE
+        return pygit2.GIT_FILEMODE_BLOB
+
     def _tree(self, files: dict[str, str], prefix: str = "") -> pygit2.Oid:
         """Write a nested tree for *files* and return its id."""
         builder = self.repository.TreeBuilder()
@@ -91,12 +101,7 @@ class History:
                 nested.setdefault(head, {})[tail] = text
             else:
                 blob = self.repository.create_blob(text.encode())
-                mode = (
-                    pygit2.GIT_FILEMODE_BLOB_EXECUTABLE
-                    if f"{prefix}{name}" in self.executable
-                    else pygit2.GIT_FILEMODE_BLOB
-                )
-                builder.insert(name, blob, mode)
+                builder.insert(name, blob, self._mode(f"{prefix}{name}"))
         for head, children in nested.items():
             builder.insert(
                 head, self._tree(children, f"{prefix}{head}/"), pygit2.GIT_FILEMODE_TREE
@@ -109,47 +114,35 @@ def action_files(action: str, other: str = "a") -> dict[str, str]:
     return {f"{DIRECTORY}/action.yml": action, "README.md": other}
 
 
-def rule_copy(tmp_path: pathlib.Path, root: str) -> pathlib.Path:
-    """Copy the shipped rule manifest with *root* as its only approved root."""
-    real = packages.rule_package_dir("whitaker-provisioning")
-    package = tmp_path / "package"
-    package.mkdir()
-    text = (real / "rule.yaml").read_text("utf-8")
-    text = re.sub(
-        r'(install_whitaker_roots:\n)((?:      - "[0-9a-f]{40}"\n)+)',
-        lambda m: m.group(1) + f'      - "{root}"\n',
-        text,
-        count=1,
-    )
-    text = replace_refs(text, [root])
-    (package / "rule.yaml").write_text(text, "utf-8")
-    return package
+def tag(history: History, name: str, commit: str, *, annotated: bool = True) -> None:
+    """Tag *commit* as *name*, annotated by default as a maintainer would."""
+    repository = history.repository
+    oid = pygit2.Oid(hex=commit)
+    if annotated:
+        repository.create_tag(
+            name, oid, pygit2.enums.ObjectType.COMMIT, SIGNATURE, f"Certify {name}"
+        )
+    else:
+        repository.references.create(f"refs/tags/{name}", oid)
 
 
 def run_main(
-    monkeypatch: pytest.MonkeyPatch, clone: pathlib.Path | str, command: str
+    monkeypatch: pytest.MonkeyPatch,
+    clone: pathlib.Path | str,
+    command: str,
+    *options: str,
 ) -> int:
-    """Run the real entry point as `whitaker_revisions.py <command> <clone>`."""
+    """Run the real entry point as `whitaker_revisions.py <command> <clone>`.
+
+    The tip is `main` unless *options* name one.
+
+    Returns
+    -------
+    int
+        The command's exit status.
+    """
+    tip = [] if "--tip" in options else ["--tip", "main"]
     monkeypatch.setattr(
-        sys, "argv", ["whitaker_revisions", command, str(clone), "--tip", "main"]
+        sys, "argv", ["whitaker_revisions", command, str(clone), *options, *tip]
     )
     return whitaker_revisions.main()
-
-
-def set_default(manifest: pathlib.Path, key: str, replacement: str) -> None:
-    """Replace a default parameter, with any list items, by *replacement* lines."""
-    text = manifest.read_text("utf-8")
-    changed = re.sub(
-        rf"^    {key}:.*\n(?:      - .*\n)*",
-        replacement,
-        text,
-        flags=re.MULTILINE,
-    )
-    if changed == text:
-        pytest.fail(f"{key} is not a default parameter of the manifest")
-    manifest.write_text(changed, "utf-8")
-
-
-def without_key(manifest: pathlib.Path, key: str) -> None:
-    """Remove a default parameter, with any list items, from the manifest."""
-    set_default(manifest, key, "")

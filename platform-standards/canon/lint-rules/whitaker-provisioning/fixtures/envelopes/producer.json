@@ -1,5 +1,6 @@
 {
   "actions": [],
+  "install_certifications": {},
   "kind": "policy-input/whitaker-provisioning",
   "repository": {
     "name": "leynos/whitaker",

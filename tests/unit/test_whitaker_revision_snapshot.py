@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import itertools
 import json
@@ -11,15 +12,32 @@ import typing as typ
 
 import pytest
 
-from concordat.rules import packages, runner
+from concordat.rules import runner
+from concordat.rules.whitaker_certification import (
+    STATUS_CERTIFIED,
+    STATUS_UNCERTIFIED,
+    Floor,
+    NoSuchCommit,
+    certify_revision,
+)
 from concordat.rules.whitaker_provisioning_envelope import (
     ProvisioningEnvelope,
     build_whitaker_provisioning_envelope,
+    with_install_certifications,
 )
-from concordat.rules.whitaker_revisions import REFS_KEY
 from tests.unit.conftest_batch_support import invoke_conftest_batch
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 _RULE_ID: typ.Final = "whitaker-provisioning"
+_ACTION: typ.Final = "leynos/shared-actions/.github/actions/install-whitaker"
+_TAG_PREFIX: typ.Final = "certified/install-whitaker/"
+# 38905b4b sits between chains e and f and is not approved: it ships the 0.2.12
+# default without the version-keyed digests, so its runtime content is its own.
+_GAP: typ.Final = "38905b4b2caec5b049438e6dc3f3f6b36c04d2df"
+# A later commit on main that leaves chain f's runtime content alone.
+_BUMP: typ.Final = "b" * 40
 _FIXTURES: typ.Final = pathlib.Path(__file__).parents[1] / "fixtures/whitaker"
 _SNAPSHOTS: typ.Final = (
     _FIXTURES / "approved-revisions-2aed718.json",
@@ -50,6 +68,81 @@ class _Snapshot(typ.TypedDict):
     runtime_digest: str
     runtime_records: list[str]
     commits: list[_Commit]
+
+
+def _tag(chain: int) -> str:
+    """Return the certification tag a maintainer would create at *chain*'s root."""
+    return f"{_TAG_PREFIX}chain-{'abcdef'[chain]}"
+
+
+class _SnapshotHistory:
+    """The reviewed first-parent history as a certification source.
+
+    The commits are the chains in order, with the unapproved gap between chains
+    e and f and, optionally, later commits. A commit descends from an earlier
+    one in that order; its runtime digest is its chain's. Only the chains named
+    in *floor_chains* carry a certification tag, at their root.
+    """
+
+    def __init__(
+        self,
+        snapshots: list[_Snapshot],
+        floor_chains: cabc.Iterable[int],
+        extra: cabc.Sequence[str],
+    ) -> None:
+        """Index the commits of *snapshots* and record which roots are tagged."""
+        self._order: list[str] = []
+        self._digests: dict[str, str] = {_GAP: "unapproved-content"}
+        for number, snapshot in enumerate(snapshots):
+            if number == len(snapshots) - 1:
+                self._order.append(_GAP)
+            for commit in snapshot["commits"]:
+                self._order.append(commit["revision"])
+                self._digests[commit["revision"]] = snapshot["runtime_digest"]
+        for sha in extra:
+            self._order.append(sha)
+            self._digests[sha] = snapshots[-1]["runtime_digest"]
+        self._floors = [
+            Floor(_tag(number), snapshots[number]["root"]) for number in floor_chains
+        ]
+
+    def floors(self) -> list[Floor]:
+        """Return the tagged roots."""
+        return sorted(self._floors)
+
+    def is_on_default_branch(self, sha: str) -> bool:
+        """Report whether *sha* is in the indexed history.
+
+        Returns
+        -------
+        bool
+            Always True for an indexed commit.
+
+        Raises
+        ------
+        NoSuchCommit
+            For a commit outside it, as the API's 404 does.
+        """
+        if sha not in self._order:
+            raise NoSuchCommit(sha)
+        return True
+
+    def descends_from(self, floor: str, sha: str) -> bool:
+        """Report whether *sha* is at or after *floor* in the history."""
+        return self._order.index(sha) >= self._order.index(floor)
+
+    def runtime_digest(self, sha: str) -> str | None:
+        """Return the commit's runtime digest."""
+        return self._digests.get(sha)
+
+
+def _history(
+    snapshots: list[_Snapshot],
+    floor_chains: cabc.Iterable[int],
+    extra: cabc.Sequence[str] = (),
+) -> _SnapshotHistory:
+    """Return the reviewed history with a tag at each chain in *floor_chains*."""
+    return _SnapshotHistory(snapshots, floor_chains, extra)
 
 
 @pytest.fixture
@@ -215,42 +308,108 @@ def test_runtime_digests_recompute_from_their_recorded_preimage(
         assert hashlib.sha256(preimage).hexdigest() == snapshot["runtime_digest"]
 
 
-def test_shipped_defaults_equal_the_independent_complete_history(
+def test_floor_tags_at_the_approved_roots_certify_every_reviewed_revision(
     snapshots: list[_Snapshot],
 ) -> None:
-    """Omitting, mistyping or adding a pin changes the reviewed expected set."""
-    parameters = packages.rule_parameters(packages.rule_package_dir(_RULE_ID))
-    assert parameters[REFS_KEY] == [
-        commit["revision"] for snapshot in snapshots for commit in snapshot["commits"]
-    ]
+    """Parity with the retired list: every revision it named is certified.
+
+    The reviewed chains are the complete list QG-002 used to ship, captured
+    independently with Git plumbing. A certification tag at each approved root
+    certifies every one of those revisions, and nothing else on the way.
+    """
+    source = _history(snapshots, floor_chains=range(len(snapshots)))
+    for snapshot in snapshots:
+        for commit in snapshot["commits"]:
+            verdict = certify_revision(source, commit["revision"])
+            assert verdict["status"] == STATUS_CERTIFIED, (commit, verdict)
+    assert certify_revision(source, _GAP)["status"] == STATUS_UNCERTIFIED
+
+
+def test_one_floor_per_installer_release_is_needed(
+    snapshots: list[_Snapshot],
+) -> None:
+    """Only the newest floor leaves the older approved releases uncertified.
+
+    Chains a, b and c-e run different action content from chain f (installer
+    0.2.12), so "newer than the newest floor" alone would turn the estate's
+    older, approved pins noncompliant: certification is per tagged release.
+    """
+    source = _history(snapshots, floor_chains=[5])
+    older = [c["revision"] for s in snapshots[:5] for c in s["commits"]]
+    assert all(
+        certify_revision(source, revision)["status"] == STATUS_UNCERTIFIED
+        for revision in older
+    )
+    newest = [c["revision"] for c in snapshots[5]["commits"]]
+    assert all(
+        certify_revision(source, revision)["status"] == STATUS_CERTIFIED
+        for revision in newest
+    )
+
+
+def test_a_later_bump_after_the_newest_floor_is_certified_unchanged(
+    snapshots: list[_Snapshot],
+) -> None:
+    """A commit after the floor that leaves the digest alone needs no new tag.
+
+    This is the shared-actions Dependabot bump that left QG-002 red on its
+    own list: its install-whitaker content equals the floor's.
+    """
+    source = _history(snapshots, floor_chains=range(len(snapshots)), extra=[_BUMP])
+    verdict = certify_revision(source, _BUMP)
+    assert verdict["status"] == STATUS_CERTIFIED
+    assert verdict["floor"] == _tag(5)
 
 
 def test_qg002_accepts_every_reviewed_revision(
+    snapshots: list[_Snapshot],
     revision_envelopes: list[ProvisioningEnvelope],
 ) -> None:
-    """Every expected pin reaches the real policy with shipped parameters."""
-    results = invoke_conftest_batch(_RULE_ID, revision_envelopes)
-    assert len(results) == len(revision_envelopes)
-    for envelope, result in zip(revision_envelopes, results, strict=True):
+    """Every expected pin reaches the real policy, certified, with no finding."""
+    source = _history(snapshots, floor_chains=range(len(snapshots)))
+    certified_envelopes = [
+        with_install_certifications(
+            envelope,
+            functools.partial(certify_revision, source),
+            _ACTION,
+        )
+        for envelope in revision_envelopes
+    ]
+    results = invoke_conftest_batch(_RULE_ID, certified_envelopes)
+    assert len(results) == len(certified_envelopes)
+    for envelope, result in zip(certified_envelopes, results, strict=True):
         findings = runner._findings_from_results(result)
         assert not findings, (envelope["repository"], findings)
 
 
-@pytest.mark.parametrize("mutation", ["omitted", "altered"])
-def test_qg002_refuses_expected_pins_without_their_manifest_entries(
+def test_qg002_cannot_accept_a_reviewed_pin_without_its_certification(
     revision_envelopes: list[ProvisioningEnvelope],
-    monkeypatch: pytest.MonkeyPatch,
-    mutation: str,
 ) -> None:
-    """The policy cannot accept a known pin independently of its manifest entry."""
-    parameters = packages.rule_parameters(packages.rule_package_dir(_RULE_ID))
-    parameters[REFS_KEY] = [] if mutation == "omitted" else ["f" * 40]
-    monkeypatch.setattr(runner, "_rule_parameters", lambda _directory: parameters)
+    """The policy accepts a known pin only on a recorded certification.
+
+    An envelope built without the command step records none, and the policy
+    reads that as an unchecked pin, never as a pass.
+    """
     results = invoke_conftest_batch(_RULE_ID, revision_envelopes)
     assert len(results) == len(revision_envelopes)
     for result in results:
         findings = runner._findings_from_results(result)
         assert any(
-            finding.rule_id == "QG-002" and finding.verdict == "noncompliant"
+            finding.rule_id == "QG-002" and finding.verdict == "indeterminate"
             for finding in findings
         ), findings
+
+
+def test_qg002_refuses_an_uncertified_reviewed_pin(
+    snapshots: list[_Snapshot],
+    revision_envelopes: list[ProvisioningEnvelope],
+) -> None:
+    """With only the newest floor, an older reviewed pin is noncompliant."""
+    source = _history(snapshots, floor_chains=[5])
+    older = revision_envelopes[0]
+    recorded = with_install_certifications(
+        older, functools.partial(certify_revision, source), _ACTION
+    )
+    (result,) = invoke_conftest_batch(_RULE_ID, [recorded])
+    findings = runner._findings_from_results(result)
+    assert [(f.rule_id, f.verdict) for f in findings] == [("QG-002", "noncompliant")]

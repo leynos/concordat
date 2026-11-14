@@ -1,10 +1,11 @@
-"""Derive the shared-actions revisions QG-002 accepts for `install-whitaker`.
+"""List what the certification tags of `install-whitaker` certify, from a clone.
 
-The audited checkout holds no shared-actions history, so the rule cannot ask
-whether a pinned revision still carries the install rules. It reads a list
-instead, and this module is how the list is made honest. A revision is
-listed when it is an approved root, or when it descends from one on the
-default branch and leaves the action's *runtime content* identical to it.
+QG-002 certifies a shared-actions revision for `install-whitaker` when it
+descends from a certification tag (a *floor*) and leaves the action's *runtime
+content* identical to that floor's. The audit decides that through the GitHub
+API (see `concordat.rules.whitaker_certification`); this module is the local
+form over a clone, which lets a reviewer list what the tags certify and check a
+candidate floor before tagging it.
 
 Runtime content is every file in the action's directory except the `tests/`
 tree and Markdown files. Those are never executed by a consumer's workflow,
@@ -12,8 +13,8 @@ so a change confined to them leaves the action a consumer runs untouched;
 everything else (`action.yml`, the helper scripts, the digest manifests, and
 any file added later) counts as runtime, so an unknown file fails closed. The
 runtime digest hashes each file's mode, blob id and path, so a content, mode,
-rename or addition change moves it. A root whose runtime files point at an
-excluded path would let an unreviewed edit through, so such a root is refused.
+rename or addition change moves it. A floor whose runtime files point at an
+excluded path would let an unreviewed edit through, so such a floor is refused.
 
 Only the history walk needs a clone; the functions here take an open
 repository so tests can build a synthetic one.
@@ -21,7 +22,6 @@ repository so tests can build a synthetic one.
 
 from __future__ import annotations
 
-import hashlib
 import re
 import typing as typ
 
@@ -29,24 +29,16 @@ import pygit2
 
 from concordat.errors import OperationalRuleError
 
+from .whitaker_certification import is_excluded, runtime_digest_of, unsafe_entry
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 OPERATION_DERIVE_REVISIONS: typ.Final = "derive-whitaker-revisions"
-REFS_KEY: typ.Final = "compliant_install_whitaker_refs"
-_FULL_SHA: typ.Final = re.compile(r"^[0-9a-f]{40}$")
 _EXCLUDED_DIRECTORY: typ.Final = "tests"
-_EXCLUDED_SUFFIX: typ.Final = ".md"
 # A runtime file naming an excluded path (a test helper, a Markdown file) could
 # execute or read content the digest does not cover.
 _EXCLUDED_REFERENCE: typ.Final = re.compile(rb"tests/|\.md\b")
-
-
-def _is_excluded(relative: str) -> bool:
-    """Report whether a path inside the action directory is not runtime content."""
-    return relative.split("/", 1)[0] == _EXCLUDED_DIRECTORY or relative.endswith(
-        _EXCLUDED_SUFFIX
-    )
 
 
 def _runtime_entries(
@@ -69,7 +61,7 @@ def _runtime_entries(
                     typ.cast("pygit2.Tree", repository[entry.id]),
                     f"{relative}/",
                 )
-        elif not _is_excluded(relative):
+        elif not is_excluded(relative):
             yield relative, entry.filemode, entry.id
 
 
@@ -99,16 +91,17 @@ def runtime_digest(
     Returns
     -------
     str | None
-        A hex digest, or None when the commit has no such directory.
+        A hex digest, or None when the commit has no such directory or its
+        directory holds a symlink or submodule (which the audit never certifies,
+        so the listing must not either).
     """
     tree = _action_tree(repository, commit, directory)
-    if tree is None:
+    if tree is None or unsafe_entry(_all_entries(repository, tree)) is not None:
         return None
-    records = sorted(
-        f"{mode:o} {blob} {path}\n"
+    return runtime_digest_of(
+        (path, f"{mode:o}", str(blob))
         for path, mode, blob in _runtime_entries(repository, tree)
     )
-    return hashlib.sha256("".join(records).encode()).hexdigest()
 
 
 def _refuse_excluded_references(
@@ -135,7 +128,50 @@ def _refuse_excluded_references(
             raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
 
 
-def _root_digest(repository: pygit2.Repository, root: str, directory: str) -> str:
+def _all_entries(
+    repository: pygit2.Repository, tree: pygit2.Tree, prefix: str = ""
+) -> cabc.Iterator[tuple[str, str, str]]:
+    """Yield `(path, octal mode, id)` for every non-tree entry, excluded ones too.
+
+    Yields
+    ------
+    tuple[str, str, str]
+        A path relative to the action directory, its mode and its object id.
+    """
+    for entry in tree:
+        relative = f"{prefix}{entry.name}"
+        if entry.filemode == pygit2.GIT_FILEMODE_TREE:
+            subtree = typ.cast("pygit2.Tree", repository[entry.id])
+            yield from _all_entries(repository, subtree, f"{relative}/")
+        else:
+            yield relative, f"{entry.filemode:o}", str(entry.id)
+
+
+def _refuse_links(
+    repository: pygit2.Repository, commit: pygit2.Commit, directory: str, root: str
+) -> None:
+    """Refuse a root with a symlink or a submodule anywhere in the directory.
+
+    The digest hashes a link's text or a gitlink's commit, not what they lead
+    to, and ignores `tests/` and Markdown wholesale, so a link could change what
+    the action runs without moving the digest.
+
+    Raises
+    ------
+    OperationalRuleError
+        When the directory holds a symlink or a submodule.
+    """
+    tree = _action_tree(repository, commit, directory)
+    link = None if tree is None else unsafe_entry(_all_entries(repository, tree))
+    if link is not None:
+        message = (
+            f"approved root {root} has a symlink or submodule at {link} in "
+            f"{directory}, whose target the runtime digest does not cover"
+        )
+        raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
+
+
+def floor_digest(repository: pygit2.Repository, root: str, directory: str) -> str:
     """Return the action directory's runtime digest at one approved root.
 
     Returns
@@ -147,12 +183,14 @@ def _root_digest(repository: pygit2.Repository, root: str, directory: str) -> st
     ------
     OperationalRuleError
         When *root* is not a readable commit in the clone, lacks the
-        directory, or has a runtime file that names an excluded path.
+        directory, has a runtime file that names an excluded path, or holds a
+        symlink or a submodule.
     """
     try:
         commit = typ.cast("pygit2.Commit", repository[root])
         digest = runtime_digest(repository, commit, directory)
         _refuse_excluded_references(repository, commit, directory, root)
+        _refuse_links(repository, commit, directory, root)
     except (pygit2.GitError, KeyError, ValueError) as error:
         message = f"cannot read approved root {root} from the shared-actions clone"
         raise OperationalRuleError(
@@ -173,10 +211,10 @@ def _root_digests(
     -------
     dict[str, str]
         The runtime digest of the action directory at each root;
-        `_root_digest`'s operational error propagates for a root it cannot
+        `floor_digest`'s operational error propagates for a root it cannot
         read.
     """
-    return {root: _root_digest(repository, root, directory) for root in roots}
+    return {root: floor_digest(repository, root, directory) for root in roots}
 
 
 def _is_root_or_descendant(
@@ -238,6 +276,9 @@ def compliant_revisions(
 ) -> list[str]:
     """Return every first-parent commit up to *tip* that carries an approved action.
 
+    Every root must be on the first-parent history of *tip*, which catches a
+    clone that is not the roots' own.
+
     A commit qualifies when it is a root, or descends from a root and holds the
     action directory with that root's runtime digest. The list is oldest first, so an
     approved root leads it. A commit that changed the directory drops out until
@@ -250,23 +291,50 @@ def compliant_revisions(
     Returns
     -------
     list[str]
-        Full commit ids, oldest first.
+        Full commit ids, oldest first. A shallow clone, a root or *tip* the
+        clone cannot resolve, a root off the first-parent history of *tip*, or
+        an object Git cannot read is an `OperationalRuleError`.
+    """
+    found = _revisions_from(repository, roots, directory, tip)
+    _require_every_root(found, roots, tip)
+    return found
+
+
+def _revisions_from(
+    repository: pygit2.Repository,
+    roots: cabc.Sequence[str],
+    directory: str,
+    tip: str,
+) -> list[str]:
+    """Walk *tip*'s first-parent line for commits that follow a root unchanged.
+
+    A root off that line (a merged side branch's commit) still certifies the
+    commits that follow it. A shallow clone is refused, as its walk would end
+    early and silently omit older qualifying commits.
+
+    Returns
+    -------
+    list[str]
+        Full commit ids, oldest first. A shallow clone, or an object Git
+        cannot read, is an `OperationalRuleError`.
+    """
+    _refuse_shallow(repository)
+    digests = _root_digests(repository, roots, directory)
+    tip_id = _resolve_tip(repository, tip)
+    return _walk_or_refuse(repository, tip_id, directory, digests)
+
+
+def _refuse_shallow(repository: pygit2.Repository) -> None:
+    """Refuse a shallow clone, whose walk would end early and omit commits.
 
     Raises
     ------
     OperationalRuleError
-        When the clone is shallow, a root or *tip* cannot be resolved in it,
-        an approved root is not on the first-parent history of *tip*, or Git
-        cannot read an object while walking the history.
+        When *repository* is shallow.
     """
     if repository.is_shallow:
         message = "the shared-actions clone is shallow; run git fetch --unshallow"
         raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    digests = _root_digests(repository, roots, directory)
-    tip_id = _resolve_tip(repository, tip)
-    found = _walk_or_refuse(repository, tip_id, directory, digests)
-    _require_every_root(found, roots, tip)
-    return found
 
 
 def _walk_or_refuse(
@@ -338,47 +406,107 @@ def _walk_first_parent(
     return found
 
 
-def format_refs_block(refs: cabc.Sequence[str], indent: str = "      ") -> list[str]:
-    """Return the YAML lines of a quoted revision list.
+def certified_tags(repository: pygit2.Repository, prefix: str) -> dict[str, str]:
+    """Return the commit each certification tag in *repository* points at.
+
+    A tag is a floor when its name starts with *prefix* (for example
+    `certified/install-whitaker/`). An annotated tag is peeled to its commit.
+
+    Returns
+    -------
+    dict[str, str]
+        Tag name to full commit id, sorted by tag name.
+
+    Raises
+    ------
+    OperationalRuleError
+        When a matching tag does not peel to a commit.
+    """
+    floors: dict[str, str] = {}
+    for reference in repository.references:
+        if not reference.startswith(f"refs/tags/{prefix}"):
+            continue
+        try:
+            target = repository.references[reference].peel(pygit2.Commit)
+        except (pygit2.GitError, KeyError, ValueError) as error:
+            message = f"certification tag {reference} does not name a commit"
+            raise OperationalRuleError(
+                message, operation=OPERATION_DERIVE_REVISIONS
+            ) from error
+        floors[reference.removeprefix("refs/tags/")] = str(target.id)
+    return dict(sorted(floors.items()))
+
+
+def certified_revisions(
+    repository: pygit2.Repository,
+    prefix: str,
+    directory: str,
+    tip: str,
+) -> list[str]:
+    """Return every first-parent commit up to *tip* that some tag certifies.
+
+    This is the local-clone form of the rule's certification: a commit is
+    certified when it is a tagged floor, or descends from one and holds that
+    floor's runtime digest. The audit applies the same test through the GitHub
+    API; this form lets a reviewer list what the tags certify.
 
     Returns
     -------
     list[str]
-        One `- "<sha>"` line per revision, indented for the defaults mapping.
-
-    Raises
-    ------
-    OperationalRuleError
-        When an entry is not a full commit id.
+        Full commit ids, oldest first. Empty when no tag matches.
     """
-    for ref in refs:
-        if not _FULL_SHA.fullmatch(ref):
-            message = f"{ref!r} is not a full lowercase commit id"
-            raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    return [f'{indent}- "{ref}"' for ref in refs]
+    tags = certified_tags(repository, prefix)
+    if not tags:
+        return []
+    tip_id = _resolve_tip(repository, tip)
+    _refuse_shallow(repository)
+    # A floor newer than the requested tip certifies nothing up to it, and
+    # would otherwise be reported as a root missing from the tip's history.
+    floors = sorted({
+        commit
+        for commit in tags.values()
+        if commit == str(tip_id) or repository.descendant_of(tip_id, commit)
+    })
+    # A floor on a merged side branch is an ancestor of the tip yet not on its
+    # first-parent line: it still certifies the first-parent commits that follow
+    # it, without appearing in the list itself. A floor the audit would skip
+    # (no action directory, or a symlink or submodule in it) is skipped here too.
+    digests = _usable_digests(repository, floors, directory)
+    if not digests:
+        return []
+    return _walk_or_refuse(repository, tip_id, directory, digests)
 
 
-def replace_refs(rule_text: str, refs: cabc.Sequence[str]) -> str:
-    """Return *rule_text* with its default revision list replaced by *refs*.
+def _usable_digests(
+    repository: pygit2.Repository, floors: cabc.Sequence[str], directory: str
+) -> dict[str, str]:
+    """Return each floor's runtime digest, leaving out floors that cannot certify.
 
-    Only the block at the `defaults` indentation is rewritten; the schema
-    entry of the same key sits deeper and holds no list.
+    Unlike `floor_digest` this does not refuse an unsafe floor: the audit skips
+    one and carries on, and so must the listing. An object Git cannot read is
+    still an operational error.
 
     Returns
     -------
-    str
-        The manifest text with the new list.
+    dict[str, str]
+        The digest of each floor that holds a safe action directory.
 
     Raises
     ------
     OperationalRuleError
-        When the manifest has no default revision list to replace.
+        When Git cannot read a floor.
     """
-    pattern = re.compile(
-        rf'(^    {REFS_KEY}:\n)((?:      - "[0-9a-f]{{40}}"\n)+)', re.MULTILINE
-    )
-    if not pattern.search(rule_text):
-        message = f"the rule manifest has no defaults.{REFS_KEY} list to replace"
-        raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    block = "\n".join(format_refs_block(refs)) + "\n"
-    return pattern.sub(lambda m: m.group(1) + block, rule_text, count=1)
+    digests: dict[str, str] = {}
+    for floor in floors:
+        try:
+            digest = runtime_digest(
+                repository, typ.cast("pygit2.Commit", repository[floor]), directory
+            )
+        except (pygit2.GitError, KeyError, ValueError) as error:
+            message = f"cannot read approved root {floor} from the shared-actions clone"
+            raise OperationalRuleError(
+                message, operation=OPERATION_DERIVE_REVISIONS
+            ) from error
+        if digest is not None:
+            digests[floor] = digest
+    return digests
