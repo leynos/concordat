@@ -1,0 +1,17 @@
+# Cranelift opt-in with a per-package LLVM override: zmij (serde_json's float
+# formatter) needs an intrinsic Cranelift lacks, rustc_codegen_cranelift#171.
+[unstable]
+codegen-backend = true
+
+[profile.dev]
+codegen-backend = "cranelift"
+
+[profile.dev.package.zmij]
+codegen-backend = "llvm"
+
+[build]
+rustflags = ["-Zthreads=8"]
+
+# The linker ships for Linux only, so the flag is gated behind a cfg.
+[target.'cfg(target_os = "linux")']
+rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]

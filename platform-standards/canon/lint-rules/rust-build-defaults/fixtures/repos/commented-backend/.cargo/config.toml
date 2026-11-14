@@ -1,0 +1,16 @@
+# Cargo selects a single rustflags source rather than merging them, so
+# every flag that must survive is repeated in each source.
+#
+# Cranelift is disabled here, not removed: see ADR-0004. Review on 14 May 2027.
+# [unstable]
+# codegen-backend = true
+#
+# [profile.dev]
+# codegen-backend = "cranelift"
+
+[build]
+rustflags = ["-Zthreads=8"]
+
+# The linker ships for Linux only, so the flag is gated behind a cfg.
+[target.'cfg(target_os = "linux")']
+rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]

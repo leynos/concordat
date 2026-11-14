@@ -105,6 +105,7 @@ test_coverage_make_rustflags_route if {
 # LLVM on the development profile itself is not the coverage profile: BD-005 still refuses it.
 test_llvm_dev_profile if {
 	findings := policy.deny with input as data.fixtures.llvm_dev_profile
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {
 		["BD-004", "noncompliant", 0, "the \"cranelift\" backend is neither the development-profile default nor refused by a recorded exception"],
 		["BD-005", "noncompliant", 0, "profile.dev selects the \"llvm\" backend; the estate backend is \"cranelift\""],

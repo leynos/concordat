@@ -950,11 +950,18 @@ workflows whose builds replace them, so it needs `conftest` and `makeutil` on
   another instead of combining them. Backend flags in a target-specific source
   remain local to that target, whereas a backend named by `[build].rustflags`
   is a build-wide default and must survive each target source that replaces it;
-- the Cranelift codegen backend is the development-profile default, or the
-  repository records an exception.
+- the codegen backend follows the `cranelift_policy` parameter. LLVM is the
+  standard and Cranelift an allowed, unrecommended opt-in (ADR-0004, review on
+  14 May 2027), so by default (`optional`) the rule asks for neither the
+  backend nor an exception and does not flag a Cranelift selection. Disable
+  Cranelift by commenting out its selection, not by deleting it: a commented
+  line is no selection. A repository that still configures Cranelift is held to
+  BD-005, BD-007 and BD-008. The value `forbidden` makes any Cranelift
+  selection a BD-004 finding (use it to find selectors), and `required`
+  restores the earlier clause described next.
 
-The backend clause accepts two states. Configure the backend where the
-repository's own suite passes under it:
+Under `required` the backend clause accepts two states. Configure the backend
+where the repository's own suite passes under it:
 
 ```toml
 [unstable]

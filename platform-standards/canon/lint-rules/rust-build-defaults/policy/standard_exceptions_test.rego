@@ -13,6 +13,7 @@ messages(findings, rule_id) := {f.msg | some f in findings; f.rule_id == rule_id
 # that never adopted the standard.
 test_without_an_exception_the_standard_is_unmet if {
 	findings := policy.deny with input as data.fixtures.exception_undeclared
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-002", "noncompliant"], ["BD-004", "noncompliant"], ["BD-008", "noncompliant"]}
 }
 
@@ -26,6 +27,7 @@ test_a_substantiated_exception_waives_its_clauses if {
 # The fast path itself must still meet the standard.
 test_a_route_without_the_linker_waives_nothing if {
 	findings := policy.deny with input as data.fixtures.exception_route_without_linker
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {
 		["BD-002", "noncompliant"], ["BD-004", "noncompliant"], ["BD-008", "noncompliant"],
 		["BD-010", "noncompliant"],
@@ -41,6 +43,7 @@ test_a_route_without_the_frontend_waives_nothing if {
 
 test_an_absent_route_waives_nothing if {
 	findings := policy.deny with input as data.fixtures.exception_route_absent
+		with data.parameters as {"cranelift_policy": "required"}
 	messages(findings, "BD-010") == {"the recorded exception for BD-002, BD-004, BD-008 is not substantiated: the route tools/dev-fast/config.toml does not exist"}
 	["BD-004", "noncompliant"] in profile(findings)
 }

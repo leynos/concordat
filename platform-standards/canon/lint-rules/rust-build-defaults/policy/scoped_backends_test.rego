@@ -65,6 +65,7 @@ test_removing_all_scoped_backends_still_requires_an_exception if {
 		"backends": [],
 	})
 	findings := policy.deny with input as object.union(scoped_fixture, {"cargo_config": config})
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-004", "noncompliant"]}
 }
 
@@ -116,5 +117,6 @@ test_a_linux_replacement_cannot_replace_the_build_backend_with_llvm if {
 	),
 	})
 	findings := policy.deny with input as object.union(fixture, {"cargo_config": config})
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-003", "noncompliant"], ["BD-005", "noncompliant"]}
 }

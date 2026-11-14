@@ -2,11 +2,33 @@
 
 Audits a Rust checkout against the estate's build standard: the parallel
 `rustc` frontend and the `mold` linker as **defaults**, the `rustflags` sources
-held equal so neither silently replaces the other, and the Cranelift codegen
-backend either configured for the development profile or refused by a recorded,
-current exception. It also audits the builds that replace those defaults: a
-coverage run or dev-profile release build selects LLVM where Cranelift is the
-default, and a gate build that assigns `RUSTFLAGS` restates the fast flags.
+held equal so neither silently replaces the other, and the codegen backend.
+LLVM is the standard backend; Cranelift is an allowed, unrecommended opt-in
+until the review on 14 May 2027 (see
+[ADR-0004](../../../../docs/adrs/adr-0004-cranelift-is-not-part-of-the-rust-build-standard.md)).
+It also audits the builds that replace those defaults: where Cranelift is
+configured, a coverage run or dev-profile release build selects LLVM, and a
+gate build that assigns `RUSTFLAGS` restates the fast flags.
+
+## The Cranelift policy
+
+The `cranelift_policy` parameter holds the estate's stance as one value, so a
+later review flips it rather than rewriting the rule:
+
+| Value                | BD-004                                       | BD-006 | BD-005, BD-007, BD-008           |
+| -------------------- | -------------------------------------------- | ------ | -------------------------------- |
+| `optional` (default) | off: nothing is required, nothing is flagged | off    | active wherever Cranelift is set |
+| `required`           | the backend or a recorded exception          | on     | active                           |
+| `forbidden`          | any Cranelift selection is noncompliant      | off    | active                           |
+
+Cranelift is disabled by commenting out its selection, not by deleting it. The
+policy reads parsed TOML, so a commented-out `codegen-backend` is not a
+selection. A per-package `codegen-backend = "llvm"` override beneath a
+Cranelift opt-in is accepted under every value: it is support for a crate
+Cranelift cannot compile (zmij needs `llvm.x86.sse2.pmulhu.w`,
+rustc_codegen_cranelift#171). Under `optional` and `forbidden`, LLVM on the
+`dev` profile is the standard too; only `required` still reports it, as before.
+Clauses BD-004 and BD-006 below describe the `required` behaviour.
 
 The sensor is a Conftest/Rego policy evaluated over a
 `policy-input/rust-build-defaults` envelope built by
@@ -59,30 +81,35 @@ makes only those clauses indeterminate; the others still run. See
   check, composing the package's normalized source facts. It does not infer
   which targets must adopt a backend; BD-004's declared-route gap remains
   separate.
-- **BD-004** (error): the backend is the development-profile default, or the
-  repository records an exception. Both states are accepted; a repository with
-  neither is noncompliant. A package override beneath a profile is not the
-  profile's default: Cargo applies it to the named package alone, leaving every
-  other development build on the backend it had. An exception document the
-  filesystem refused to read decides nothing, and is `indeterminate`.
+- **BD-004** (error): under `cranelift_policy = required`, the backend is the
+  development-profile default, or the repository records an exception. Under
+  `forbidden` it instead reports any Cranelift selection; under `optional` it
+  reports nothing. Both states are accepted; a repository with neither is
+  noncompliant. A package override beneath a profile is not the profile's
+  default: Cargo applies it to the named package alone, leaving every other
+  development build on the backend it had. An exception document the filesystem
+  refused to read decides nothing, and is `indeterminate`.
 - **BD-005** (error): a backend selection that Cargo cannot honour, or that the
   estate has not adopted, is noncompliant. A profile key without
   `[unstable] codegen-backend = true` is refused by Cargo; an `[unstable]` key
   under a non-nightly pin stops the file loading for every consumer. LLVM on a
   profile other than `dev` is not a third backend: it is the dedicated coverage
-  profile BD-007 accepts, and is not reported. LLVM on `dev` still is.
-- **BD-006** (error): the recorded exception is current. It is current while
-  it names the pinned toolchain channel, or names a dated measurement
-  (`nightly-YYYY-MM-DD` or `beta-YYYY-MM-DD`) taken within the last 90 days
-  (`exception_window_days`), on any pin. Dependabot moves the pin daily, so an
-  exception that had to name today's pin would go stale overnight; the window
-  asks instead that a measurement is not old. The age is read against the date
-  the audit ran (`evaluated_on` in the envelope), and a measurement dated after
-  it does not count. Past the window, a line in the exception section saying
-  what the pin is now, whether a measurement was taken on it, and the date any
-  deferral runs to is a true statement of the recorded state and satisfies the
-  clause. With no channel pinned and no recent measurement the finding is
-  `indeterminate`.
+  profile BD-007 accepts, and is not reported. A per-package LLVM override is
+  support for a crate Cranelift cannot compile and is never reported. LLVM on
+  `dev` is reported only under `required`, where Cranelift is the estate
+  backend; under `optional` and `forbidden` LLVM is the standard.
+- **BD-006** (error): under `cranelift_policy = required`, the recorded
+  exception is current. It is current while it names the pinned toolchain
+  channel, or names a dated measurement (`nightly-YYYY-MM-DD` or
+  `beta-YYYY-MM-DD`) taken within the last 90 days (`exception_window_days`),
+  on any pin. Dependabot moves the pin daily, so an exception that had to name
+  today's pin would go stale overnight; the window asks instead that a
+  measurement is not old. The age is read against the date the audit ran
+  (`evaluated_on` in the envelope), and a measurement dated after it does not
+  count. Past the window, a line in the exception section saying what the pin
+  is now, whether a measurement was taken on it, and the date any deferral runs
+  to is a true statement of the recorded state and satisfies the clause. With
+  no channel pinned and no recent measurement the finding is `indeterminate`.
 - **BD-007** (error): where Cranelift is the development default (selected by
   the `dev` profile or by `rustflags`), every coverage path and every
   dev-profile release build selects LLVM. A coverage path is any Makefile
