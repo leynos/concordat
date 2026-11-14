@@ -58,6 +58,11 @@ def _is_assignment(word: str) -> bool:
     return "=" in word.split("/", maxsplit=1)[0]
 
 
+def _is_option_or_assignment(word: str) -> bool:
+    """Return whether *word* is an option or an environment assignment."""
+    return word.startswith("-") or _is_assignment(word)
+
+
 def _takes_argument(wrapper: str, option: str, rest: list[str]) -> bool:
     """Return whether *option* of *wrapper* consumes the next word."""
     if wrapper != "env":
@@ -67,7 +72,7 @@ def _takes_argument(wrapper: str, option: str, rest: list[str]) -> bool:
 
 def _drop_options(rest: list[str], wrapper: str) -> None:
     """Remove a wrapper's options, assignments and option arguments from *rest*."""
-    while rest and (rest[0].startswith("-") or _is_assignment(rest[0])):
+    while rest and _is_option_or_assignment(rest[0]):
         option = rest.pop(0)
         if _takes_argument(wrapper, option, rest):
             rest.pop(0)
