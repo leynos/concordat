@@ -307,6 +307,28 @@ def _is_verus_proof_run(words: list[str]) -> bool:
     return False
 
 
+def _runs_binary(unwrapped: list[str], words: list[str]) -> bool:
+    """Return whether a prover binary is the command and verifies proofs.
+
+    A leading Make reference is the estate runner (or an unresolved variable),
+    never a binary named in the recipe, so it is not read here.
+
+    Returns
+    -------
+    bool
+        Whether the command is a prover binary run on proofs.
+    """
+    if unwrapped[0].startswith("$"):
+        return False
+    return _is_kani_proof_run(words) or _is_verus_proof_run(words)
+
+
+def _runs_through_estate_runner(unwrapped: list[str], words: list[str]) -> bool:
+    """Return whether `prover-tools kani exec` or `verus run` is asked to verify."""
+    through = any(_adjacent(words, {tool}, verb) for tool, verb in PROOF_VERBS)
+    return through and _names_prover_tools(unwrapped, words)
+
+
 def runs_proofs(argv: cabc.Sequence[str]) -> bool:
     """Return whether *argv* runs proofs, not merely installs or checks a prover.
 
@@ -327,12 +349,14 @@ def runs_proofs(argv: cabc.Sequence[str]) -> bool:
     words = _words(unwrapped)
     if _prints(words):
         return False
-    if not unwrapped[0].startswith("$") and (
-        _is_kani_proof_run(words) or _is_verus_proof_run(words)
-    ):
-        return True
-    through = any(_adjacent(words, {tool}, verb) for tool, verb in PROOF_VERBS)
-    return through and _names_prover_tools(unwrapped, words)
+    return _runs_binary(unwrapped, words) or _runs_through_estate_runner(
+        unwrapped, words
+    )
+
+
+def _checks_version(words: list[str]) -> bool:
+    """Return whether the command asks a tool for its version."""
+    return any(word in {"check-version", "--version"} for word in words)
 
 
 def is_substantive(argv: cabc.Sequence[str]) -> bool:
@@ -350,11 +374,10 @@ def is_substantive(argv: cabc.Sequence[str]) -> bool:
         Whether the command runs something other than a print, an installer or
         a version check.
     """
-    unwrapped = unwrap(argv)
-    words = _words(unwrapped)
-    if _prints(words) or is_installer(argv) or words[0] in NO_WORK_COMMANDS:
+    words = _words(unwrap(argv))
+    if _prints(words) or words[0] in NO_WORK_COMMANDS:
         return False
-    return not any(word in {"check-version", "--version"} for word in words)
+    return not (is_installer(argv) or _checks_version(words))
 
 
 def _first_operand(words: cabc.Sequence[str]) -> str | None:

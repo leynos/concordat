@@ -37,6 +37,8 @@ import typing as typ
 import tree_sitter
 import tree_sitter_rust
 
+from .prover_rust_use import KANI_PROOF_PATHS, Bindings, bindings_of, node_text, path_of
+
 if typ.TYPE_CHECKING:
     import pathlib
 
@@ -55,11 +57,6 @@ SKIPPED_DIRECTORIES: typ.Final = frozenset({
     "test",
     "examples",
 })
-KANI_PROOF_PATHS: typ.Final = frozenset({
-    ("kani", "proof"),
-    ("kani", "proof_for_contract"),
-})
-KANI_PROOF_NAMES: typ.Final = frozenset({"proof", "proof_for_contract"})
 # `<module>::<attribute>`: the shape of a path through a Kani module alias.
 KANI_MODULE_PATH: typ.Final = ("module", "attribute")
 VERUS_MACROS: typ.Final = frozenset({"verus", "verus_"})
@@ -82,103 +79,10 @@ class ProofScan:
     unreadable: list[str] = dataclasses.field(default_factory=list)
 
 
-def _text(node: tree_sitter.Node) -> str:
-    """Return a node's source text."""
-    return (node.text or b"").decode("utf-8", errors="replace")
-
-
-def _path(node: tree_sitter.Node) -> tuple[str, ...]:
-    """Return the identifiers of a (scoped) path node, in order.
-
-    Returns
-    -------
-    tuple[str, ...]
-        The identifiers: `kani::proof` is `("kani", "proof")` and a bare `p` is
-        `("p",)`. A node that is not a path gives an empty tuple.
-    """
-    if node.type == "scoped_identifier":
-        return tuple(part for child in node.children for part in _path(child))
-    if node.type in {"identifier", "crate", "self", "super"}:
-        return (_text(node),)
-    return ()
-
-
-def _use_paths(
-    node: tree_sitter.Node, prefix: tuple[str, ...] = ()
-) -> list[tuple[tuple[str, ...], str | None]]:
-    """Return each `(path, bound name)` a use tree introduces.
-
-    A wildcard is reported with `*` as its bound name, and a rename with its new
-    name. `use kani::{any, proof}` yields two entries.
-
-    Returns
-    -------
-    list[tuple[tuple[str, ...], str | None]]
-        Each path with the name it binds, or None when it binds none.
-    """
-    kind = node.type
-    if kind in {"identifier", "scoped_identifier"}:
-        path = prefix + _path(node)
-        return [(path, path[-1] if path else None)]
-    if kind == "use_as_clause":
-        inner, alias = node.children[0], node.children[-1]
-        return [(prefix + _path(inner), _text(alias))]
-    if kind == "use_wildcard":
-        scope = next((c for c in node.children if c.is_named), None)
-        base = prefix + (_path(scope) if scope is not None else ())
-        return [(base, "*")]
-    if kind == "scoped_use_list":
-        named = [c for c in node.children if c.is_named]
-        base = prefix + _path(named[0])
-        return [found for child in named[1:] for found in _use_paths(child, base)]
-    if kind == "use_list":
-        return [f for c in node.children if c.is_named for f in _use_paths(c, prefix)]
-    return []
-
-
-@dataclasses.dataclass(slots=True)
-class _Bindings:
-    """Names a file's `use` declarations bind that matter to proof detection."""
-
-    proof_names: set[str] = dataclasses.field(default_factory=set)
-    kani_modules: set[str] = dataclasses.field(default_factory=lambda: {"kani"})
-    uses_vstd: bool = False
-
-    def add(self, path: tuple[str, ...], bound: str | None) -> None:
-        """Record what one use path binds."""
-        if not path:
-            return
-        self.uses_vstd = self.uses_vstd or path[0] == "vstd"
-        if bound is None:
-            return
-        if bound == "*" and path == ("kani",):
-            self.proof_names |= KANI_PROOF_NAMES
-        elif path in KANI_PROOF_PATHS:
-            self.proof_names.add(bound)
-        elif path == ("kani",) and bound != "*":
-            self.kani_modules.add(bound)
-
-
-def _bindings(root: tree_sitter.Node) -> _Bindings:
-    """Collect the proof-relevant bindings of every use declaration in a file."""
-    found = _Bindings()
-    stack = [root]
-    while stack:
-        node = stack.pop()
-        if node.type == "use_declaration":
-            for child in node.children:
-                if child.is_named:
-                    for path, bound in _use_paths(child):
-                        found.add(path, bound)
-            continue
-        stack.extend(node.children)
-    return found
-
-
 def _leaves(node: tree_sitter.Node) -> list[str]:
     """Return the source text of every leaf under *node*, in order."""
     if node.child_count == 0:
-        return [_text(node)]
+        return [node_text(node)]
     return [leaf for child in node.children for leaf in _leaves(child)]
 
 
@@ -192,13 +96,13 @@ def _contains(tokens: list[str], pattern: tuple[str, ...]) -> bool:
 
 
 def _attribute_resolves_to_proof(
-    attribute: tree_sitter.Node, bindings: _Bindings
+    attribute: tree_sitter.Node, bindings: Bindings
 ) -> bool:
     """Return whether an attribute names `kani::proof` or an alias of it."""
     head = next((c for c in attribute.children if c.is_named), None)
     if head is None:
         return False
-    path = _path(head)
+    path = path_of(head)
     if len(path) == 1 and path[0] in bindings.proof_names:
         return True
     if len(path) == len(KANI_MODULE_PATH) and path[0] in bindings.kani_modules:
@@ -208,13 +112,13 @@ def _attribute_resolves_to_proof(
     return False
 
 
-def _attribute_kind(item: tree_sitter.Node, bindings: _Bindings) -> str | None:
+def _attribute_kind(item: tree_sitter.Node, bindings: Bindings) -> str | None:
     """Return the proof kind an `attribute_item` is, or None."""
     attribute = next((c for c in item.children if c.type == "attribute"), None)
     if attribute is None:
         return None
     head = next((c for c in attribute.children if c.is_named), None)
-    if head is not None and _path(head)[:1] == ("verifier",):
+    if head is not None and path_of(head)[:1] == ("verifier",):
         return KIND_VERUS
     return KIND_KANI if _attribute_resolves_to_proof(attribute, bindings) else None
 
@@ -222,7 +126,7 @@ def _attribute_kind(item: tree_sitter.Node, bindings: _Bindings) -> str | None:
 def _macro_name(node: tree_sitter.Node) -> str:
     """Return the last identifier of a macro invocation's name."""
     head = next((c for c in node.children if c.is_named), None)
-    path = _path(head) if head is not None else ()
+    path = path_of(head) if head is not None else ()
     return path[-1] if path else ""
 
 
@@ -275,7 +179,7 @@ def _error_names_prover(root: tree_sitter.Node) -> int | None:
     while stack:
         node = stack.pop()
         if node.type == "ERROR" or node.is_missing:
-            lowered = _text(node).lower()
+            lowered = node_text(node).lower()
             if any(word in lowered for word in PROVER_WORDS):
                 return node.start_point.row + 1
         if node.has_error:
@@ -287,7 +191,7 @@ def _file_proof_code(
     root: tree_sitter.Node, *, proc_macro: typ.Callable[[], bool]
 ) -> list[tuple[str, int]]:
     """Return the `(kind, line)` of the first proof of each kind in a file."""
-    bindings = _bindings(root)
+    bindings = bindings_of(root)
     first: dict[str, int] = {}
     if bindings.uses_vstd:
         first[KIND_VERUS] = 1
