@@ -85,18 +85,26 @@ def _file_entries(tree: dict[str, typ.Any], treeish: str) -> list[tuple[str, str
     Raises
     ------
     CertificationUnavailable
-        When GitHub truncated the listing or sent no tree: a digest of part
-        of the directory would vouch for content it never saw.
+        When GitHub truncated the listing, sent no tree, or sent a record
+        that is not an object with a path, mode and sha: a digest of part of
+        the directory would vouch for content it never saw.
     """
     entries = tree.get("tree")
     if tree.get("truncated") or not isinstance(entries, list):
         message = f"git/trees/{treeish} was truncated or gave no tree"
         raise CertificationUnavailable(message)
-    return [
-        (str(entry["path"]), str(entry["mode"]), str(entry["sha"]))
+    files = [
+        entry
         for entry in entries
-        if isinstance(entry, dict) and entry.get("type") != _TREE_TYPE
+        if not isinstance(entry, dict) or entry.get("type") != _TREE_TYPE
     ]
+    if not all(
+        isinstance(entry, dict) and {"path", "mode", "sha"} <= entry.keys()
+        for entry in files
+    ):
+        message = f"git/trees/{treeish} has a malformed record"
+        raise CertificationUnavailable(message)
+    return [(str(e["path"]), str(e["mode"]), str(e["sha"])) for e in files]
 
 
 class ActionLocation(typ.NamedTuple):

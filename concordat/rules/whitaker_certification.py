@@ -226,6 +226,23 @@ def _decide(source: CertificationSource, sha: str) -> Certification:
     return _match_content(source, sha, descended)
 
 
+def _floor_digest(source: CertificationSource, floor: Floor) -> str | None:
+    """Return a floor's runtime digest, or None for a floor that is unsafe.
+
+    An unsafe floor certifies nothing, but it must not end the comparison: a
+    later, safe floor may still match the candidate.
+
+    Returns
+    -------
+    str | None
+        The digest, or None when the floor has no directory or an unsafe one.
+    """
+    try:
+        return source.runtime_digest(floor.commit)
+    except UnsafeContent:
+        return None
+
+
 def _match_content(
     source: CertificationSource, sha: str, descended: cabc.Sequence[Floor]
 ) -> Certification:
@@ -241,7 +258,7 @@ def _match_content(
     if digest is None:
         return uncertified(f"{sha} has no install-whitaker directory")
     for floor in descended:
-        if source.runtime_digest(floor.commit) == digest:
+        if _floor_digest(source, floor) == digest:
             return certified(floor.tag)
     names = ", ".join(floor.tag for floor in descended)
     return uncertified(

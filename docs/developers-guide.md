@@ -793,7 +793,11 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   over a source protocol; `github_whitaker_certification` reads the facts from
   the GitHub API (`git/matching-refs`, `compare` and a recursive `git/trees`
   read of `<sha>:<directory>`), caching them for the run only, and maps every
-  failing lookup to `unknown`, which the policy reports as indeterminate. The
+  failing lookup (including a reply with no recognized status or a malformed
+  tree record) to `unknown`, which the policy reports as indeterminate. A
+  commit GitHub reports as absent is different: `NoSuchCommit` yields
+  `uncertified`, reported as noncompliant, and so does a symlink or submodule
+  (`UnsafeContent`). A floor that is itself unsafe is skipped, not fatal. The
   envelope builder stays a query over the checkout and records an empty
   `install_certifications`; `provisioning_certification.certifying`, composed by
   `concordat artefact rule run` beside `resolving_pins`, fills it for each

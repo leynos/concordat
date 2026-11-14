@@ -19,6 +19,9 @@ from .models import (
 
 DEFAULT_API_URL = "https://api.github.com"
 
+#: The statuses the compare endpoint reports; anything else is not an answer.
+_COMPARE_STATUSES = frozenset({"ahead", "behind", "identical", "diverged"})
+
 
 class GithubError(RuntimeError):
     """Raised when the GitHub API returns a non-successful response."""
@@ -254,6 +257,12 @@ class GithubClient:
         -------
         str | None
             The comparison status, or None when a revision does not exist.
+
+        Raises
+        ------
+        GithubError
+            When the reply carries no recognized status: that is an unusable
+            answer, not an absence.
         """
         try:
             body = self._get_json(
@@ -262,7 +271,10 @@ class GithubClient:
         except GithubNotFoundError:
             return None
         status = body.get("status")
-        return status if isinstance(status, str) else None
+        if status not in _COMPARE_STATUSES:
+            message = f"compare/{base}...{head} reported an unknown status {status!r}"
+            raise GithubError(message)
+        return typ.cast("str", status)
 
     def git_tree(
         self, owner: str, name: str, treeish: str, *, recursive: bool = False

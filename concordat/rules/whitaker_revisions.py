@@ -425,7 +425,17 @@ def certified_revisions(
     list[str]
         Full commit ids, oldest first. Empty when no tag matches.
     """
-    floors = sorted(set(certified_tags(repository, prefix).values()))
+    tags = certified_tags(repository, prefix)
+    if not tags:
+        return []
+    tip_id = _resolve_tip(repository, tip)
+    # A floor newer than the requested tip certifies nothing up to it, and
+    # would otherwise be reported as a root missing from the tip's history.
+    floors = sorted({
+        commit
+        for commit in tags.values()
+        if commit == str(tip_id) or repository.descendant_of(tip_id, commit)
+    })
     if not floors:
         return []
     return compliant_revisions(repository, floors, directory, tip)

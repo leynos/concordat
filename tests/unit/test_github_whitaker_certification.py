@@ -298,6 +298,53 @@ def test_a_truncated_tree_is_unknown() -> None:
     assert "truncated" in verdict["reason"]
 
 
+@pytest.mark.parametrize(
+    "record",
+    [
+        "a string",
+        {"path": "action.yml", "mode": "100644", "type": "blob"},
+        {"mode": "100644", "type": "blob", "sha": "1" * 40},
+    ],
+    ids=["not-an-object", "no-sha", "no-path"],
+)
+def test_a_malformed_tree_record_is_unknown_not_dropped(record: object) -> None:
+    """A record that cannot be read must not shrink the digest's input."""
+    client = FakeClient()
+    client.trees[f"{PIN}:{DIRECTORY}"] = {
+        "tree": [*ACTION_TREE, record],
+        "truncated": False,
+    }
+
+    verdict = _verdict(client)
+
+    assert verdict["status"] == STATUS_UNKNOWN
+    assert "malformed record" in verdict["reason"]
+
+
+def test_an_unsafe_floor_does_not_stop_a_later_matching_floor() -> None:
+    """A floor with a link certifies nothing, but the next floor is still tried."""
+    client = FakeClient()
+    other = "e" * 40
+    client.refs = [
+        {
+            "ref": "refs/tags/certified/install-whitaker/0.1",
+            "object": {"type": "commit", "sha": other},
+        },
+        {"ref": f"refs/tags/{TAG}", "object": {"type": "commit", "sha": FLOOR}},
+    ]
+    client.comparisons[other, PIN] = "ahead"
+    linked = [
+        *ACTION_TREE,
+        {"path": "l", "mode": "120000", "type": "blob", "sha": "6" * 40},
+    ]
+    client.trees[f"{other}:{DIRECTORY}"] = {"tree": linked, "truncated": False}
+
+    verdict = _verdict(client)
+
+    assert verdict["status"] == STATUS_CERTIFIED
+    assert verdict["floor"] == TAG
+
+
 def test_a_tag_that_does_not_lead_to_a_commit_is_unknown() -> None:
     """A tag on a tree or blob cannot be a floor, and the audit says so."""
     client = FakeClient()

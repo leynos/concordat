@@ -92,6 +92,27 @@ def test_list_omits_a_descendant_that_adds_a_symlink_under_tests(
     ]
 
 
+def test_list_ignores_a_floor_newer_than_the_tip(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Listing up to an older tip works while a newer tag exists."""
+    first = history.commit(action_files(ACTION_V1), "root")
+    second = history.commit(action_files(ACTION_V2), "new release")
+    tag(history, f"{PREFIX}0.2.11", first)
+    tag(history, f"{PREFIX}0.2.12", second)
+
+    status = run_main(monkeypatch, _clone(history), "list", "--tip", first)
+
+    assert status == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"floor {PREFIX}0.2.11 {first}",
+        f"floor {PREFIX}0.2.12 {second}",
+        f"certified {first}",
+    ]
+
+
 def test_list_reads_a_lightweight_tag(
     history: History,
     monkeypatch: pytest.MonkeyPatch,
