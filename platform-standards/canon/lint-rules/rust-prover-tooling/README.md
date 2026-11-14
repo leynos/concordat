@@ -111,6 +111,11 @@ Moving the pin therefore reopens the question rather than leaving a stale
 waiver. An exception that is not in force waives nothing and is reported as
 EX-001.
 
+A script is matched against the local installers from the directory its step
+runs in (a `working-directory` or a `cd`), and a leading `NAME=value` is not
+the command. A command a wrapper moves (`env -C dir ...`) runs from a directory
+the rule cannot resolve.
+
 A `make` step uses the root Makefile only when it runs from the repository
 root: a step with a `working-directory` (its own, or from `defaults.run`), or a
 `make` after a `cd` in the same script, builds another directory's Makefile,
