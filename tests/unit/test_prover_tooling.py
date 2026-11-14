@@ -428,3 +428,15 @@ def test_a_here_string_does_not_hide_the_next_command(tmp_path: pathlib.Path) ->
         run_step("|\n          cat <<< text\n          cargo install kani-verifier"),
     )
     assert ids(checkout(tmp_path, steps=steps)) == {"PT-002"}
+
+
+def test_a_make_outside_the_root_audits_a_repository_with_no_other_evidence(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`make -C sub verify` may install a prover; with nothing else to go on, say so."""
+    put(tmp_path, "Makefile", "build:\n\tcargo build\n")
+    put(tmp_path, ".github/workflows/ci.yml", workflow(run_step("make -C sub verify")))
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert {(f.rule_id, f.verdict) for f in result.findings} == {
+        ("EN-001", "indeterminate")
+    }

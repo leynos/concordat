@@ -86,6 +86,12 @@ audited if {
 	workflow.error != null
 }
 
+audited if {
+	envelope_ok
+	some workflow in input.workflows
+	count(workflow.unresolved_make) > 0
+}
+
 # An exception is a reviewed record: it names the pin the repository stays on,
 # the decision record that explains it, why, and what sends it back for review.
 # It holds only while that pin is the pin in the checkout, so moving the pin

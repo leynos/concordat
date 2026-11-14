@@ -136,6 +136,10 @@ test_a_make_outside_the_root_is_indeterminate if {
 	contains(f.msg, "make -C sub verus")
 }
 
+test_a_make_outside_the_root_audits_a_repository_with_no_other_evidence if {
+	ids(data.fixtures.make_unresolved_alone) == {"EN-001"}
+}
+
 test_a_make_outside_the_root_is_harmless_where_the_exception_waives_pt_002 if {
 	count(findings(data.fixtures.make_unresolved_but_waived)) == 0
 }

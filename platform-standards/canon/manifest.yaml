@@ -267,7 +267,7 @@ artifacts:
       rust-prover-tools pin, installation in CI only through the shared action
       pinned by SHA, no local installers or installation tests, and recorded
       exceptions.
-    sha256: 94b6fb1fa0150a6da1d93b9a382724b347dcdbcc77994fc67043c8fda1ac8144
+    sha256: 2d5fd7a6d0864e3a6afa1f6ebfc0c728e7d8c7ccc02344570f00f779e08463f3
   - id: lint-rule-rust-prover-tooling-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-prover-tooling/rule.yaml
