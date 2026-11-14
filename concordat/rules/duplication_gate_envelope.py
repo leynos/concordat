@@ -176,6 +176,23 @@ def _top_fact(table: dict[str, object]) -> tuple[bool, int | None, list[str]]:
     return True, None, [f"[tool.nose].top must be an integer, not {value!r}"]
 
 
+def _roots_fact(table: dict[str, object]) -> tuple[list[str], list[str]]:
+    """Return the scan roots, and the problems that make them unusable."""
+    roots = _string_list(table.get("roots"))
+    if not roots:
+        return [], ["[tool.nose].roots must be a non-empty list of strings"]
+    return roots, [problem for root in roots if (problem := _root_problem(root))]
+
+
+def _exclude_fact(table: dict[str, object]) -> tuple[list[str], list[str]]:
+    """Return the exclude patterns, and the problems that make them unusable."""
+    exclude = _string_list(table.get("exclude", []))
+    if exclude is None:
+        return [], ["[tool.nose].exclude must be a list of strings"]
+    problem = _exclude_problem(exclude)
+    return exclude, [problem] if problem else []
+
+
 def _nose_fact(table: object) -> NoseFact:
     """Read the `[tool.nose]` settings, recording each shape problem.
 
@@ -196,20 +213,9 @@ def _nose_fact(table: object) -> NoseFact:
         return fact
     settings = {str(key): value for key, value in table.items()}
     fact["top_present"], fact["top"], top_problems = _top_fact(settings)
-    fact["problems"].extend(top_problems)
-    roots = _string_list(settings.get("roots"))
-    if not roots:
-        fact["problems"].append("[tool.nose].roots must be a non-empty list of strings")
-    else:
-        fact["roots"] = roots
-        fact["problems"].extend(p for r in roots if (p := _root_problem(r)))
-    exclude = _string_list(settings.get("exclude", []))
-    if exclude is None:
-        fact["problems"].append("[tool.nose].exclude must be a list of strings")
-    else:
-        fact["exclude"] = exclude
-        if problem := _exclude_problem(exclude):
-            fact["problems"].append(problem)
+    fact["roots"], root_problems = _roots_fact(settings)
+    fact["exclude"], exclude_problems = _exclude_fact(settings)
+    fact["problems"] = [*top_problems, *root_problems, *exclude_problems]
     return fact
 
 
