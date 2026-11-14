@@ -222,7 +222,6 @@ class TestSelection:
             ("pkg/tests", {"pkg/tests/t.py": CODE}),
             ("tests/helpers", {"tests/helpers/h.py": CODE}),
             ("pkg", {"pkg/unittests/t.py": CODE}),
-            ("pkg", {"pkg/testing/t.py": CODE}),
             ("pkg", {"pkg/test/t.py": CODE}),
         ],
     )
@@ -233,12 +232,13 @@ class TestSelection:
         roots = self._roots(tmp_path, files, roots=json.dumps([root]))
         assert roots[0]["test_file_count"] == 1
 
-    def test_behaviour_is_not_a_test_tree_by_default(
-        self, tmp_path: pathlib.Path
+    @pytest.mark.parametrize("name", ["behaviour", "testing"])
+    def test_product_trees_are_not_test_trees_by_default(
+        self, tmp_path: pathlib.Path, name: str
     ) -> None:
-        """BDD step trees stay scanned until the estate decides otherwise."""
-        assert "behaviour" not in DEFAULT_TEST_DIRECTORY_NAMES
-        roots = self._roots(tmp_path, {"pkg/behaviour/steps.py": CODE})
+        """BDD steps and shipped `testing` helpers stay scanned by default."""
+        assert name not in DEFAULT_TEST_DIRECTORY_NAMES
+        roots = self._roots(tmp_path, {f"pkg/{name}/steps.py": CODE})
         assert roots[0]["test_file_count"] == 0
 
     def test_the_manifest_parameter_replaces_the_names(
@@ -368,6 +368,6 @@ class TestFixtureGenerator:
         assert recorded == expected
 
     def test_the_manifest_defaults_name_the_estate_test_directories(self) -> None:
-        """The rule's default names are the ruled four, in the ruled order."""
+        """The rule's default names are the ruled three, in the ruled order."""
         parameters = _load_generator().manifest_parameters()
         assert parameters["test_directory_names"] == list(DEFAULT_TEST_DIRECTORY_NAMES)

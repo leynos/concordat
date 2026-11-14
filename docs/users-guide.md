@@ -1232,8 +1232,8 @@ It applies when `pyproject.toml` has a `[tool.nose]` table, and reports:
   lower-ranked duplication passes unadjudicated.
 - **NS-002**: no Python file in a test tree is scanned. A test tree is a
   directory named in the `test_directory_names` parameter (`tests`, `test`,
-  `unittests`, `testing` by default) below a scan root, or the root itself. Add
-  an `exclude` pattern; patterns are gitignore-style and relative to each scan
+  `unittests` by default) below a scan root, or the root itself. Add an
+  `exclude` pattern; patterns are gitignore-style and relative to each scan
   root, so `tests/**` or `**/tests/**` excludes `pkg/tests` for the root `pkg`,
   and `pkg/tests/**` does not.
 - **NS-003**: every scan root exists and selects at least one Python file

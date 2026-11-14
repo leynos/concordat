@@ -15,7 +15,7 @@ description: >-
   no `[tool.nose]` table does not use the gate and is not audited. No clause
   is waivable: an uncapped, test-free, non-empty scan is what the gate means.
   Audit-only: this rule declares no mutations.
-version: 0.1.0
+version: 0.1.1
 sensor:
   type: conftest
   input: policy-input/python-duplication-gate
@@ -38,11 +38,12 @@ parameters:
           below a directory with one of these names, under a scan root or
           reached through one, must be excluded from the scan.
   defaults:
-    # `behaviour` is left out on purpose: in some repositories it is a tree of
-    # BDD step definitions that the gate should scan. Add it here when the
-    # estate decides otherwise.
+    # `behaviour` and `testing` are left out on purpose. In some repositories
+    # `behaviour` is a tree of BDD step definitions that the gate should scan,
+    # and a `testing` package is usually shipped helper code that production
+    # imports (lading.testing, falcon_pachinko.testing), so it is product, not
+    # scaffolding. Add either here when the estate decides otherwise.
     test_directory_names:
       - tests
       - test
       - unittests
-      - testing

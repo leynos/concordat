@@ -52,7 +52,7 @@ ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/python-duplication-gate"
 PYPROJECT_FILENAME: typ.Final = "pyproject.toml"
 PYTHON_SUFFIXES: typ.Final = (".py", ".pyi")
-DEFAULT_TEST_DIRECTORY_NAMES: typ.Final = ("tests", "test", "unittests", "testing")
+DEFAULT_TEST_DIRECTORY_NAMES: typ.Final = ("tests", "test", "unittests")
 # A repository with a thousand selected test files needs one finding, not a
 # thousand lines of evidence; the count carries the rest.
 MAX_LISTED_TEST_FILES: typ.Final = 10
