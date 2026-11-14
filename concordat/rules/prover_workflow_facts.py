@@ -1,0 +1,180 @@
+"""Read what each workflow step installs or runs, for `rust-prover-tooling`.
+
+A step installs a prover itself when a `run` command is an installer, runs a
+local installer script, or runs `make X` where `X` or a prerequisite does. A
+step that uses the shared `install-prover-tools` action is recorded with its
+ref, so PT-003 can require a full SHA. A step that only runs proofs is neither.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import typing as typ
+
+from .prover_commands import is_installer, is_runner
+from .prover_make_facts import commands_reached, goals
+from .prover_pins import command_pins
+from .shell_commands import Argv, commands
+
+if typ.TYPE_CHECKING:
+    from .codescene_coverage_envelope import WorkflowFile
+    from .prover_make_facts import MakeRules
+    from .prover_tooling_types import (
+        InstallerStep,
+        Pin,
+        SharedUse,
+        WorkflowFacts,
+    )
+
+SHARED_ACTION: typ.Final = "leynos/shared-actions/.github/actions/install-prover-tools"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Context:
+    """What a step's commands are read against."""
+
+    rules: MakeRules
+    installer_scripts: frozenset[str]
+
+
+@dataclasses.dataclass(slots=True)
+class StepFacts:
+    """One step's installers, shared uses, make use, whether it runs, and pins."""
+
+    installers: list[InstallerStep] = dataclasses.field(default_factory=list)
+    shared: list[SharedUse] = dataclasses.field(default_factory=list)
+    calls_make: bool = False
+    runs: bool = False
+    pins: list[Pin] = dataclasses.field(default_factory=list)
+
+
+def installs(argv: Argv, installer_scripts: frozenset[str]) -> bool:
+    """Return whether *argv* installs a prover, directly or by running a script.
+
+    A command that runs a local script the rule found to be an installer
+    (`bash scripts/get.sh`) is an installer step, so waiving PT-004 for the
+    script does not clear PT-002 for the step that runs it.
+
+    Returns
+    -------
+    bool
+        Whether the command installs a prover itself.
+    """
+    if is_installer(argv):
+        return True
+    return any(word.removeprefix("./") in installer_scripts for word in argv)
+
+
+def _shared_use(where: str, step: dict[str, object]) -> list[SharedUse]:
+    """Return the shared-action use a step makes, if it makes one."""
+    uses = step.get("uses")
+    if not isinstance(uses, str) or not uses.startswith(f"{SHARED_ACTION}@"):
+        return []
+    return [{"where": where, "ref": uses.split("@", maxsplit=1)[1]}]
+
+
+def _make_installs(argv: Argv, context: Context) -> bool:
+    """Return whether a `make` command reaches an installer."""
+    reached = commands_reached(context.rules, goals(context.rules, argv))
+    return any(installs(command, context.installer_scripts) for command in reached)
+
+
+def _make_runs(argv: Argv, context: Context) -> bool:
+    """Return whether a `make` command reaches a prover runner."""
+    reached = commands_reached(context.rules, goals(context.rules, argv))
+    return any(is_runner(command) for command in reached)
+
+
+def _add_make(facts: StepFacts, where: str, argv: Argv, context: Context) -> None:
+    """Record a `make` command's reach into the Makefile."""
+    facts.calls_make = True
+    if _make_installs(argv, context):
+        facts.installers.append({"where": where, "command": " ".join(argv)})
+    facts.runs = facts.runs or _make_runs(argv, context)
+
+
+def _add_command(facts: StepFacts, where: str, argv: Argv, context: Context) -> None:
+    """Record one `run` command's installs, runs and revision pins."""
+    facts.pins += command_pins([argv], "workflow")
+    is_install = installs(argv, context.installer_scripts)
+    facts.runs = facts.runs or is_install or is_runner(argv)
+    if is_install:
+        facts.installers.append({"where": where, "command": " ".join(argv)})
+    if argv[0] == "make":
+        _add_make(facts, where, argv, context)
+
+
+def step_facts(where: str, step: dict[str, object], context: Context) -> StepFacts:
+    """Return one step's prover facts.
+
+    Returns
+    -------
+    StepFacts
+        Installers, shared uses, whether it calls make or runs a prover, pins.
+    """
+    facts = StepFacts(shared=_shared_use(where, step))
+    run = step.get("run")
+    for argv in commands(run) if isinstance(run, str) else []:
+        _add_command(facts, where, argv, context)
+    return facts
+
+
+def _steps(job: object) -> list[dict[str, object]]:
+    """Return a job's step mappings."""
+    steps = job.get("steps") if isinstance(job, dict) else None
+    if not isinstance(steps, list):
+        return []
+    return [typ.cast("dict[str, object]", s) for s in steps if isinstance(s, dict)]
+
+
+def _jobs(document: dict[str, object]) -> dict[str, object]:
+    """Return a workflow document's jobs mapping."""
+    jobs = document.get("jobs")
+    return typ.cast("dict[str, object]", jobs) if isinstance(jobs, dict) else {}
+
+
+def _job_steps(document: dict[str, object]) -> list[tuple[str, dict[str, object]]]:
+    """Return every step of every job, with its `<job>/<index>` place."""
+    return [
+        (f"{job_id}/{index}", step)
+        for job_id, job in _jobs(document).items()
+        for index, step in enumerate(_steps(job))
+    ]
+
+
+def _empty(workflow: WorkflowFile) -> WorkflowFacts:
+    """Return a workflow's facts before any step is read."""
+    return {
+        "path": workflow["path"],
+        "error": workflow["error"],
+        "calls_make": False,
+        "installer_steps": [],
+        "shared_uses": [],
+    }
+
+
+def workflow_facts(
+    workflow: WorkflowFile, context: Context
+) -> tuple[WorkflowFacts, bool, list[Pin]]:
+    """Return one workflow's facts, whether it runs a prover, and its pins.
+
+    Returns
+    -------
+    tuple[WorkflowFacts, bool, list[Pin]]
+        The facts, whether any step installs, runs or uses a prover action, and
+        the revisions its commands name.
+    """
+    facts = _empty(workflow)
+    document = workflow["parsed"]
+    if workflow["error"] is not None or not isinstance(document, dict):
+        return facts, False, []
+    runs = False
+    pins: list[Pin] = []
+    for where, step in _job_steps(typ.cast("dict[str, object]", document)):
+        found = step_facts(where, step, context)
+        facts["installer_steps"] += found.installers
+        facts["shared_uses"] += found.shared
+        facts["calls_make"] = facts["calls_make"] or found.calls_make
+        runs = runs or found.runs or bool(found.shared)
+        pins += found.pins
+    return facts, runs, pins

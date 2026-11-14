@@ -74,9 +74,9 @@ from .prover_tooling_envelope import (
     ENVELOPE_KIND as PROVER_TOOLING_ENVELOPE_KIND,
 )
 from .prover_tooling_envelope import (
-    ProverToolingEnvelope,
     build_prover_tooling_envelope,
 )
+from .prover_tooling_types import ProverToolingEnvelope
 from .rust_sources import has_rust_sources
 from .spelling_envelope import (
     DEFAULT_VENDORED_PATTERNS,

@@ -5,29 +5,32 @@ only runs proofs on a tool that is already there. A step that runs
 `make verus` on an installed verifier is compliant; one whose Make target
 depends on `verus-install` is not. A text search cannot make that distinction
 (`printf 'prover-tools verus install'` mentions the installer without running
-it), so the classification reads parsed command lines: each shell line is
-split into simple commands with `shlex`, and each command's argument vector is
-inspected.
+it), so the classification reads parsed command lines, split by
+`shell_commands`, and inspects each command's argument vector.
 
 The installer forms recognised are the estate's own runner
 (`prover-tools <tool> install`, whatever wraps it), `cargo install` or
 `cargo binstall` of `kani-verifier`, and `cargo kani setup`. A runner is
-`verus`, `cargo kani`, or `prover-tools <tool> run|exec|check-version`.
+`verus`, `cargo kani`, or `prover-tools <tool> run|exec|check-version`. The
+estate runner counts only when it is named (`prover-tools`) or a Make variable
+stands for it (`$(PROVER_TOOLS)`), so `git commit -m 'verus install'` is not an
+installer. Leading `env`, `command`, `exec` and similar wrappers are looked
+through.
 
-Make variable references (`$(PROVER_TOOLS)`) are not expanded: they are
-masked and skipped, so a recipe that hides the tool noun inside a variable is not seen.
-That is a documented limit of the rule, not a verdict.
+Make variable references are not expanded: they are masked and skipped, so a
+recipe that hides the tool noun inside a variable is not seen. That is a
+documented limit of the rule, not a verdict.
 """
 
 from __future__ import annotations
 
 import itertools
-import re
-import shlex
 import typing as typ
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+__all__ = ["is_installer", "is_runner"]
 
 TOOLS: typ.Final = frozenset({"kani", "verus", "z3"})
 RUN_VERBS: typ.Final = frozenset({"run", "exec", "check-version"})
@@ -47,149 +50,27 @@ WRAPPERS: typ.Final = frozenset({
 ENV_OPTIONS_WITH_ARGUMENT: typ.Final = frozenset({"-u", "-C", "-S", "--unset"})
 RUNNER_BINARIES: typ.Final = frozenset({"verus", "cargo-kani", "kani-verifier"})
 PROVER_TOOLS: typ.Final = "prover-tools"
-MARKER_PREFIX: typ.Final = "@-+"
-OPERATORS: typ.Final = frozenset(";|&()")
-REDIRECTS: typ.Final = frozenset("<>")
-HEREDOC: typ.Final = re.compile(r"<<-?")
-
-type Argv = list[str]
+CARGO_INSTALLS: typ.Final = (["cargo", "install"], ["cargo", "binstall"])
 
 
-def _mask_make_references(line: str) -> str:
-    """Replace each `$(...)` Make reference or command substitution with `$X`.
-
-    The scanner treats parentheses as operators, which would split
-    `$(PROVER_TOOLS)` into pieces; masking the balanced reference keeps it one
-    word that `_words` then drops.
-
-    Returns
-    -------
-    str
-        *line* with each balanced `$(...)` replaced by `$X`.
-    """
-    out: list[str] = []
-    depth = 0
-    index = 0
-    while index < len(line):
-        if depth == 0 and line.startswith("$(", index):
-            depth = 1
-            out.append("$X")
-            index += 2
-            continue
-        char = line[index]
-        if depth:
-            depth += {"(": 1, ")": -1}.get(char, 0)
-        else:
-            out.append(char)
-        index += 1
-    return "".join(out)
+def _is_assignment(word: str) -> bool:
+    """Return whether *word* is a `NAME=value` environment assignment."""
+    return "=" in word.split("/", maxsplit=1)[0]
 
 
-def _is_redirect_ampersand(line: str, index: int) -> bool:
-    """Return whether the `&` at *index* is part of `>&2` or `&>`."""
-    before = line[index - 1] if index else ""
-    after = line[index + 1] if index + 1 < len(line) else ""
-    return before in REDIRECTS or after == ">"
+def _takes_argument(wrapper: str, option: str, rest: list[str]) -> bool:
+    """Return whether *option* of *wrapper* consumes the next word."""
+    if wrapper != "env":
+        return False
+    return option in ENV_OPTIONS_WITH_ARGUMENT and bool(rest)
 
 
-def _is_comment_start(line: str, index: int) -> bool:
-    """Return whether the unquoted `#` at *index* begins a shell comment."""
-    return index == 0 or line[index - 1].isspace()
-
-
-def _split_operators(line: str) -> list[str]:
-    """Split *line* at operators outside quotes, ending it at a comment.
-
-    Returns
-    -------
-    list[str]
-        The non-empty segments, each still carrying its own quoting.
-    """
-    segments: list[str] = []
-    current: list[str] = []
-    quote: str | None = None
-    index = 0
-    while index < len(line):
-        char = line[index]
-        if quote:
-            current.append(char)
-            if char == "\\" and quote == '"':
-                current.append(line[index + 1 : index + 2])
-                index += 1
-            elif char == quote:
-                quote = None
-        elif char == "\\":
-            current.append(line[index : index + 2])
-            index += 1
-        elif char in {"'", '"'}:
-            quote = char
-            current.append(char)
-        elif char == "#" and _is_comment_start(line, index):
-            break
-        elif char in OPERATORS and not (
-            char == "&" and _is_redirect_ampersand(line, index)
-        ):
-            segments.append("".join(current))
-            current = []
-        else:
-            current.append(char)
-        index += 1
-    segments.append("".join(current))
-    return [segment.strip() for segment in segments if segment.strip()]
-
-
-def _words_of(segment: str) -> Argv:
-    """Return one segment's words, or none when it does not tokenize."""
-    try:
-        return shlex.split(segment, comments=False, posix=True)
-    except ValueError:
-        return []
-
-
-def _heredoc_delimiter(argv: Argv) -> str | None:
-    """Return the delimiter of a here-document the command opens, if any."""
-    for position, word in enumerate(argv):
-        match = HEREDOC.match(word)
-        if match is None:
-            continue
-        delimiter = word[match.end() :] or (
-            argv[position + 1] if position + 1 < len(argv) else ""
-        )
-        return delimiter.strip("'\"") or None
-    return None
-
-
-def commands(text: str) -> list[Argv]:
-    """Split shell or recipe text into one argument vector per simple command.
-
-    Parameters
-    ----------
-    text:
-        A `run` script or a Makefile recipe. Backslash continuations are
-        joined, a leading Make recipe marker (`@`, `-`, `+`) is dropped, a
-        `#` at the start of a word begins a comment, the body of a
-        here-document is not a command, and a line that does not tokenize is
-        skipped.
-
-    Returns
-    -------
-    list[Argv]
-        The commands, split on `&&`, `||`, `;`, `|` and `&` outside quotes.
-    """
-    found: list[Argv] = []
-    delimiter: str | None = None
-    for raw in text.replace("\\\n", " ").splitlines():
-        if delimiter is not None:
-            if raw.strip() == delimiter:
-                delimiter = None
-            continue
-        line = raw.strip().lstrip(MARKER_PREFIX)
-        for segment in _split_operators(_mask_make_references(line)):
-            argv = _words_of(segment)
-            if argv:
-                found.append(argv)
-            delimiter = delimiter or _heredoc_delimiter(argv)
-    return found
+def _drop_options(rest: list[str], wrapper: str) -> None:
+    """Remove a wrapper's options, assignments and option arguments from *rest*."""
+    while rest and (rest[0].startswith("-") or _is_assignment(rest[0])):
+        option = rest.pop(0)
+        if _takes_argument(wrapper, option, rest):
+            rest.pop(0)
 
 
 def _unwrap(argv: cabc.Sequence[str]) -> list[str]:
@@ -197,19 +78,14 @@ def _unwrap(argv: cabc.Sequence[str]) -> list[str]:
     rest = list(argv)
     while rest and rest[0] in WRAPPERS:
         wrapper = rest.pop(0)
-        while rest and (rest[0].startswith("-") or "=" in rest[0].split("/")[0]):
-            option = rest.pop(0)
-            if wrapper == "env" and option in ENV_OPTIONS_WITH_ARGUMENT and rest:
-                rest.pop(0)
+        _drop_options(rest, wrapper)
     return rest
 
 
 def _words(argv: cabc.Sequence[str]) -> list[str]:
     """Return *argv* without Make variable references and assignments."""
     return [
-        word
-        for word in argv
-        if not word.startswith("$") and "=" not in word.split("/", maxsplit=1)[0]
+        word for word in argv if not word.startswith("$") and not _is_assignment(word)
     ]
 
 
@@ -221,8 +97,8 @@ def _adjacent(words: list[str], first: cabc.Container[str], second: str) -> bool
 def _names_prover_tools(argv: cabc.Sequence[str]) -> bool:
     """Return whether *argv* is the estate runner, or wraps it in a Make variable.
 
-    A leading `$(PROVER_TOOLS)` stands for the runner, so a masked reference
-    before the command's arguments counts as naming it.
+    A masked reference among the words stands for the runner, as does a
+    `prover-tools` word.
 
     Returns
     -------
@@ -233,6 +109,23 @@ def _names_prover_tools(argv: cabc.Sequence[str]) -> bool:
         word.startswith("$") or word.rsplit("/", maxsplit=1)[-1] == PROVER_TOOLS
         for word in argv
     )
+
+
+def _prints(words: list[str]) -> bool:
+    """Return whether the command is empty or only prints its arguments."""
+    return not words or words[0] in PRINTING_COMMANDS
+
+
+def _runner_installs(words: list[str], unwrapped: list[str]) -> bool:
+    """Return whether the estate runner is asked to install a tool."""
+    return _adjacent(words, TOOLS, "install") and _names_prover_tools(unwrapped)
+
+
+def _cargo_installs(words: list[str]) -> bool:
+    """Return whether Cargo installs or sets up Kani."""
+    if words[:2] in CARGO_INSTALLS:
+        return "kani-verifier" in words
+    return words[:3] == ["cargo", "kani", "setup"]
 
 
 def is_installer(argv: cabc.Sequence[str]) -> bool:
@@ -248,13 +141,31 @@ def is_installer(argv: cabc.Sequence[str]) -> bool:
     """
     unwrapped = _unwrap(argv)
     words = _words(unwrapped)
-    if not words or words[0] in PRINTING_COMMANDS:
+    if _prints(words):
         return False
-    if _adjacent(words, TOOLS, "install") and _names_prover_tools(unwrapped):
-        return True
-    if words[:2] in (["cargo", "install"], ["cargo", "binstall"]):
-        return "kani-verifier" in words
-    return words[:3] == ["cargo", "kani", "setup"]
+    return _runner_installs(words, unwrapped) or _cargo_installs(words)
+
+
+def _is_binary(unwrapped: list[str], words: list[str]) -> bool:
+    """Return whether the command is a prover binary, not an argument to one.
+
+    A leading Make reference (`$(PROVER_TOOLS) verus install`) is a wrapper, so
+    the word after it is an argument, not the Verus binary.
+
+    Returns
+    -------
+    bool
+        Whether the first word is a prover binary.
+    """
+    if unwrapped[0].startswith("$"):
+        return False
+    return words[0] in RUNNER_BINARIES
+
+
+def _runs_through_runner(unwrapped: list[str], words: list[str]) -> bool:
+    """Return whether the estate runner is asked to run, exec or check a tool."""
+    runs = any(_adjacent(words, TOOLS, verb) for verb in RUN_VERBS)
+    return runs and _names_prover_tools(unwrapped)
 
 
 def is_runner(argv: cabc.Sequence[str]) -> bool:
@@ -268,16 +179,10 @@ def is_runner(argv: cabc.Sequence[str]) -> bool:
     """
     unwrapped = _unwrap(argv)
     words = _words(unwrapped)
-    if not words or words[0] in PRINTING_COMMANDS:
+    if _prints(words):
         return False
-    # A leading Make reference (`$(PROVER_TOOLS) verus install`) is a wrapper,
-    # so the word after it is an argument, not the Verus binary.
-    is_wrapped = bool(unwrapped) and unwrapped[0].startswith("$")
-    if (words[0] in RUNNER_BINARIES and not is_wrapped) or words[:2] == [
-        "cargo",
-        "kani",
-    ]:
-        return True
-    return _names_prover_tools(unwrapped) and any(
-        _adjacent(words, TOOLS, verb) for verb in RUN_VERBS
+    return (
+        _is_binary(unwrapped, words)
+        or words[:2] == ["cargo", "kani"]
+        or _runs_through_runner(unwrapped, words)
     )

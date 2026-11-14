@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from concordat.rules.prover_commands import commands, is_installer, is_runner
+from concordat.rules.prover_commands import is_installer, is_runner
+from concordat.rules.shell_commands import commands
 
 
 @pytest.mark.parametrize(
