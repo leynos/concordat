@@ -93,18 +93,27 @@ def _file_entries(tree: dict[str, typ.Any], treeish: str) -> list[tuple[str, str
     if tree.get("truncated") or not isinstance(entries, list):
         message = f"git/trees/{treeish} was truncated or gave no tree"
         raise CertificationUnavailable(message)
-    files = [
-        entry
-        for entry in entries
-        if not isinstance(entry, dict) or entry.get("type") != _TREE_TYPE
-    ]
-    if not all(
-        isinstance(entry, dict) and {"path", "mode", "sha"} <= entry.keys()
-        for entry in files
-    ):
+    try:
+        return [_record(entry) for entry in entries if not _is_subtree(entry)]
+    except (KeyError, TypeError) as error:
         message = f"git/trees/{treeish} has a malformed record"
-        raise CertificationUnavailable(message)
-    return [(str(e["path"]), str(e["mode"]), str(e["sha"])) for e in files]
+        raise CertificationUnavailable(message) from error
+
+
+def _is_subtree(entry: object) -> bool:
+    """Report whether a tree record is a directory, which the digest skips."""
+    return isinstance(entry, dict) and entry.get("type") == _TREE_TYPE
+
+
+def _record(entry: dict[str, typ.Any]) -> tuple[str, str, str]:
+    """Return `(path, mode, blob id)`; a record without them raises KeyError.
+
+    Returns
+    -------
+    tuple[str, str, str]
+        The record as the digest reads it.
+    """
+    return str(entry["path"]), str(entry["mode"]), str(entry["sha"])
 
 
 class ActionLocation(typ.NamedTuple):

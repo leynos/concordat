@@ -353,3 +353,5 @@ packages = [
 "template_path" = "Called by compare_manifest_to_published for each artifact."
 _unavailable = "called in except handlers at four lookup sites in GithubCertificationSource; verified by test_a_failing_api_is_unknown_not_a_refusal, which fails if the call is removed"
 _file_entries = "called from GithubCertificationSource._read_entries; verified by test_a_truncated_tree_is_unknown, which fails if the call is removed"
+_is_subtree = "called from _file_entries via GithubCertificationSource._read_entries, reached through the CertificationSource protocol; verified by test_a_malformed_tree_record_is_unknown_not_dropped"
+_record = "called from _file_entries via GithubCertificationSource._read_entries, reached through the CertificationSource protocol; verified by test_a_malformed_tree_record_is_unknown_not_dropped"
