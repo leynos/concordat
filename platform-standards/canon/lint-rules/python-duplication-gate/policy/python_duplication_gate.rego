@@ -96,7 +96,7 @@ deny contains finding("NS-002", "noncompliant", root.root, msg) if {
 	root.test_file_count > 0
 	msg := sprintf(
 		"scan root %q selects %d Python file(s) in a test tree (%s), such as %s; add an exclude pattern, because test scaffolding repeats on purpose",
-		[root.root, root.test_file_count, concat("/, ", input.test_directory_names), root.test_files[0]],
+		[root.root, root.test_file_count, concat(", ", input.test_directory_names), root.test_files[0]],
 	)
 }
 

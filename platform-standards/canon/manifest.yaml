@@ -282,13 +282,13 @@ artifacts:
       `[tool.nose]` scope to an uncapped scan (top = 0), no test tree selected,
       and every scan root selecting Python files, with unreadable settings
       indeterminate and no waiver.
-    sha256: dcee602963eb9f94836dd4de5d6d951eda3a2bf7521b3f04476837df99c98e45
+    sha256: 9bb62d3b264278dea038ef4d42ed557bf9bb01445f8111be8500dcb7d8ae93ab
   - id: lint-rule-python-duplication-gate-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/python-duplication-gate/rule.yaml
     description: >-
       Rule package manifest for the python-duplication-gate audit.
-    sha256: f20a0568823a936d4e1a151ecb465cdff39877e401f267fbc4b13fc2001951df
+    sha256: ac779a6c0f598680f16b71c0a9e8cd2c9540adc0c0e1dae86252110fc405c0d3
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

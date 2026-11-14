@@ -59,15 +59,18 @@ gitignored files, so this matters only for a dirty working tree.
   lower-ranked duplication passes unadjudicated.
 - **NS-002** (error): no Python file in a test tree is selected by the scan. A
   test tree is a directory whose name is in the `test_directory_names`
-  parameter (default `tests`, `test`, `unittests`, `testing`), found below a
-  scan root, as the root itself, or among the root's own path components (a root
+  parameter (default `tests`, `test`, `unittests`), found below a scan root, as
+  the root itself, or among the root's own path components (a root
   `tests/helpers`). The judgement is per file, however the exclusion was
   written, and a test tree with no Python file has nothing to cover. The
   finding is per root: it gives the count of selected test files and one
   example, not a complete list, so rerun the audit after each fix. A root that
   is itself a test tree is reported here while it is selected, and under NS-003
-  if the excludes empty it. `behaviour` is left out of the default names: in
-  some repositories it is a tree of BDD step definitions the gate should scan.
+  if the excludes empty it. `behaviour` and `testing` are left out of the
+  default names: `behaviour` is in some repositories a tree of BDD step
+  definitions the gate should scan, and a `testing` package is usually shipped
+  helper code that production imports (lading.testing,
+  falcon_pachinko.testing), so it is product, not scaffolding.
 - **NS-003** (error): every scan root exists and selects at least one Python
   file (`.py` or `.pyi`) after `exclude`. The detector refuses a scan that
   selects nothing overall; this holds each root to it.
