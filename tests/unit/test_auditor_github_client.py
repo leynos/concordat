@@ -246,7 +246,10 @@ def test_a_comparison_of_an_unknown_revision_is_absent() -> None:
     assert client.compare_status("o", "r", "a", "b") is None
 
 
-@pytest.mark.parametrize("payload", [{}, {"status": None}, {"status": "weird"}])
+@pytest.mark.parametrize(
+    "payload",
+    [{}, {"status": None}, {"status": "weird"}, {"status": ["ahead"]}, {"status": {}}],
+)
 def test_a_comparison_without_a_known_status_is_an_error_not_an_absence(
     payload: dict[str, object],
 ) -> None:

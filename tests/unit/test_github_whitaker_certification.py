@@ -304,8 +304,22 @@ def test_a_truncated_tree_is_unknown() -> None:
         "a string",
         {"path": "action.yml", "mode": "100644", "type": "blob"},
         {"mode": "100644", "type": "blob", "sha": "1" * 40},
+        {"path": "a", "mode": None, "type": "blob", "sha": "1" * 40},
+        {"path": "a", "mode": "100644", "type": "blob", "sha": None},
+        {"path": "a", "mode": "100644", "type": "blob", "sha": "xyz"},
+        {"path": "", "mode": "100644", "type": "blob", "sha": "1" * 40},
+        {"path": "a", "mode": 100644, "type": "blob", "sha": "1" * 40},
     ],
-    ids=["not-an-object", "no-sha", "no-path"],
+    ids=[
+        "not-an-object",
+        "no-sha",
+        "no-path",
+        "null-mode",
+        "null-sha",
+        "short-sha",
+        "empty-path",
+        "numeric-mode",
+    ],
 )
 def test_a_malformed_tree_record_is_unknown_not_dropped(record: object) -> None:
     """A record that cannot be read must not shrink the digest's input."""

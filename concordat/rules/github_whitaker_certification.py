@@ -19,6 +19,7 @@ directory digest are asked once per run, however many pins share them.
 from __future__ import annotations
 
 import logging
+import re
 import typing as typ
 
 import requests
@@ -53,6 +54,8 @@ _LOOKUP_FAILURES: typ.Final = (GithubError, requests.RequestException, ValueErro
 _ON_BRANCH: typ.Final = frozenset({"ahead", "identical"})
 _DESCENDS: typ.Final = frozenset({"ahead", "identical"})
 _TREE_TYPE: typ.Final = "tree"
+_MODE: typ.Final = re.compile(r"^[0-7]{6}$")
+_OBJECT_ID: typ.Final = re.compile(r"^[0-9a-f]{40}$")
 _COMMIT_TYPE: typ.Final = "commit"
 
 
@@ -95,7 +98,7 @@ def _file_entries(tree: dict[str, typ.Any], treeish: str) -> list[tuple[str, str
         raise CertificationUnavailable(message)
     try:
         return [_record(entry) for entry in entries if not _is_subtree(entry)]
-    except (KeyError, TypeError) as error:
+    except (KeyError, TypeError, ValueError) as error:
         message = f"git/trees/{treeish} has a malformed record"
         raise CertificationUnavailable(message) from error
 
@@ -112,8 +115,24 @@ def _record(entry: dict[str, typ.Any]) -> tuple[str, str, str]:
     -------
     tuple[str, str, str]
         The record as the digest reads it.
+
+    Raises
+    ------
+    ValueError
+        When a field is not a valid path, six-digit octal mode or object id.
     """
-    return str(entry["path"]), str(entry["mode"]), str(entry["sha"])
+    path, mode, blob = entry["path"], entry["mode"], entry["sha"]
+    if not (
+        isinstance(path, str)
+        and path
+        and isinstance(mode, str)
+        and _MODE.fullmatch(mode)
+        and isinstance(blob, str)
+        and _OBJECT_ID.fullmatch(blob)
+    ):
+        message = "a tree record's path, mode or sha is not a valid value"
+        raise ValueError(message)
+    return path, mode, blob
 
 
 class ActionLocation(typ.NamedTuple):

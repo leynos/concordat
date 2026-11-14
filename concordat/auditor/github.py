@@ -271,7 +271,7 @@ class GithubClient:
         except GithubNotFoundError:
             return None
         status = body.get("status")
-        if status not in _COMPARE_STATUSES:
+        if not isinstance(status, str) or status not in _COMPARE_STATUSES:
             message = f"compare/{base}...{head} reported an unknown status {status!r}"
             raise GithubError(message)
         return typ.cast("str", status)

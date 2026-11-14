@@ -273,8 +273,14 @@ def compliant_revisions(
     roots: cabc.Sequence[str],
     directory: str,
     tip: str,
+    *,
+    require_roots: bool = True,
 ) -> list[str]:
     """Return every first-parent commit up to *tip* that carries an approved action.
+
+    With *require_roots* (the default) every root must be on the first-parent
+    history of *tip*, which catches a clone that is not the roots' own; without
+    it a root off that line still certifies the commits that follow it.
 
     A commit qualifies when it is a root, or descends from a root and holds the
     action directory with that root's runtime digest. The list is oldest first, so an
@@ -303,7 +309,8 @@ def compliant_revisions(
     digests = _root_digests(repository, roots, directory)
     tip_id = _resolve_tip(repository, tip)
     found = _walk_or_refuse(repository, tip_id, directory, digests)
-    _require_every_root(found, roots, tip)
+    if require_roots:
+        _require_every_root(found, roots, tip)
     return found
 
 
@@ -438,4 +445,7 @@ def certified_revisions(
     })
     if not floors:
         return []
-    return compliant_revisions(repository, floors, directory, tip)
+    # A floor on a merged side branch is an ancestor of the tip yet not on its
+    # first-parent line: it still certifies the first-parent commits that follow
+    # it, without appearing in the list itself.
+    return compliant_revisions(repository, floors, directory, tip, require_roots=False)

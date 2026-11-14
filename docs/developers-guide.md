@@ -793,13 +793,14 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   over a source protocol; `github_whitaker_certification` reads the facts from
   the GitHub API (`git/matching-refs`, `compare` and a recursive `git/trees`
   read of `<sha>:<directory>`), caching them for the run only, and maps every
-  failing lookup (including a reply with no recognized status or a malformed
-  tree record) to `unknown`, which the policy reports as indeterminate. A
-  commit GitHub reports as absent is different: `NoSuchCommit` yields
-  `uncertified`, reported as noncompliant, and so does a symlink or submodule
-  (`UnsafeContent`). A floor that is itself unsafe is skipped, not fatal. The
-  envelope builder stays a query over the checkout and records an empty
-  `install_certifications`; `provisioning_certification.certifying`, composed by
+  failing lookup (including a reply whose status is not one of the four
+  documented, or a tree record whose path, mode or sha is missing or invalid) to
+  `unknown`, which the policy reports as indeterminate. A commit GitHub
+  reports as absent is different: `NoSuchCommit` yields `uncertified`, reported
+  as noncompliant, and so does a symlink or submodule (`UnsafeContent`). A
+  floor that is itself unsafe is skipped, not fatal. The envelope builder stays
+  a query over the checkout and records an empty `install_certifications`;
+  `provisioning_certification.certifying`, composed by
   `concordat artefact rule run` beside `resolving_pins`, fills it for each
   distinct full-SHA pin, so the network stays at the command boundary. Rego
   reads the fact and never assumes it: a missing or unrecognized answer is

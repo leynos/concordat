@@ -113,6 +113,27 @@ def test_list_ignores_a_floor_newer_than_the_tip(
     ]
 
 
+def test_a_floor_on_a_merged_side_branch_still_certifies_the_line_after_it(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The floor is an ancestor of the tip but not on its first-parent line.
+
+    It certifies the commits that follow the merge, and is not itself listed.
+    """
+    base = history.commit(action_files(ACTION_V1), "base")
+    side = history.branch(action_files(ACTION_V1, "side"), "side", base)
+    merged = history.merge(action_files(ACTION_V1, "m"), "merge side", side)
+    tag(history, f"{PREFIX}0.2.12", side)
+
+    assert run_main(monkeypatch, _clone(history), "list") == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"floor {PREFIX}0.2.12 {side}",
+        f"certified {merged}",
+    ]
+
+
 def test_list_reads_a_lightweight_tag(
     history: History,
     monkeypatch: pytest.MonkeyPatch,
