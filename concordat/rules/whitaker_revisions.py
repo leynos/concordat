@@ -315,19 +315,26 @@ def _revisions_from(
     Returns
     -------
     list[str]
-        Full commit ids, oldest first.
+        Full commit ids, oldest first. A shallow clone, or an object Git
+        cannot read, is an `OperationalRuleError`.
+    """
+    _refuse_shallow(repository)
+    digests = _root_digests(repository, roots, directory)
+    tip_id = _resolve_tip(repository, tip)
+    return _walk_or_refuse(repository, tip_id, directory, digests)
+
+
+def _refuse_shallow(repository: pygit2.Repository) -> None:
+    """Refuse a shallow clone, whose walk would end early and omit commits.
 
     Raises
     ------
     OperationalRuleError
-        When the clone is shallow, or Git cannot read what the walk needs.
+        When *repository* is shallow.
     """
     if repository.is_shallow:
         message = "the shared-actions clone is shallow; run git fetch --unshallow"
         raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    digests = _root_digests(repository, roots, directory)
-    tip_id = _resolve_tip(repository, tip)
-    return _walk_or_refuse(repository, tip_id, directory, digests)
 
 
 def _walk_or_refuse(
@@ -452,6 +459,7 @@ def certified_revisions(
     if not tags:
         return []
     tip_id = _resolve_tip(repository, tip)
+    _refuse_shallow(repository)
     # A floor newer than the requested tip certifies nothing up to it, and
     # would otherwise be reported as a root missing from the tip's history.
     floors = sorted({
@@ -459,9 +467,46 @@ def certified_revisions(
         for commit in tags.values()
         if commit == str(tip_id) or repository.descendant_of(tip_id, commit)
     })
-    if not floors:
-        return []
     # A floor on a merged side branch is an ancestor of the tip yet not on its
     # first-parent line: it still certifies the first-parent commits that follow
-    # it, without appearing in the list itself.
-    return _revisions_from(repository, floors, directory, tip)
+    # it, without appearing in the list itself. A floor the audit would skip
+    # (no action directory, or a symlink or submodule in it) is skipped here too.
+    digests = _usable_digests(repository, floors, directory)
+    if not digests:
+        return []
+    return _walk_or_refuse(repository, tip_id, directory, digests)
+
+
+def _usable_digests(
+    repository: pygit2.Repository, floors: cabc.Sequence[str], directory: str
+) -> dict[str, str]:
+    """Return each floor's runtime digest, leaving out floors that cannot certify.
+
+    Unlike `floor_digest` this does not refuse an unsafe floor: the audit skips
+    one and carries on, and so must the listing. An object Git cannot read is
+    still an operational error.
+
+    Returns
+    -------
+    dict[str, str]
+        The digest of each floor that holds a safe action directory.
+
+    Raises
+    ------
+    OperationalRuleError
+        When Git cannot read a floor.
+    """
+    digests: dict[str, str] = {}
+    for floor in floors:
+        try:
+            digest = runtime_digest(
+                repository, typ.cast("pygit2.Commit", repository[floor]), directory
+            )
+        except (pygit2.GitError, KeyError, ValueError) as error:
+            message = f"cannot read approved root {floor} from the shared-actions clone"
+            raise OperationalRuleError(
+                message, operation=OPERATION_DERIVE_REVISIONS
+            ) from error
+        if digest is not None:
+            digests[floor] = digest
+    return digests

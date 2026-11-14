@@ -134,6 +134,48 @@ def test_a_floor_on_a_merged_side_branch_still_certifies_the_line_after_it(
     ]
 
 
+def test_list_skips_an_unsafe_floor_and_keeps_the_later_safe_one(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The audit skips a floor with a link and carries on; so does `list`."""
+    link = f"{DIRECTORY}/tests/hook.sh"
+    unsafe = history.commit(
+        {**action_files(ACTION_V1), link: "../x\n"},
+        "has a link",
+        symlinks=frozenset({link}),
+    )
+    safe = history.commit(action_files(ACTION_V2), "clean release")
+    later = history.commit(action_files(ACTION_V2, "b"), "readme only")
+    tag(history, f"{PREFIX}0.2.9", unsafe)
+    tag(history, f"{PREFIX}0.2.10", safe)
+
+    assert run_main(monkeypatch, _clone(history), "list") == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"floor {PREFIX}0.2.10 {safe}",
+        f"floor {PREFIX}0.2.9 {unsafe}",
+        f"certified {safe}",
+        f"certified {later}",
+    ]
+
+
+def test_list_refuses_a_shallow_clone_before_filtering_floors(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A shallow clone could drop a floor from the ancestry filter unnoticed."""
+    root = history.commit(action_files(ACTION_V1), "root")
+    tag(history, f"{PREFIX}0.2.12", root)
+    monkeypatch.setattr(
+        type(history.repository), "is_shallow", property(lambda _self: True)
+    )
+
+    assert run_main(monkeypatch, _clone(history), "list") == 2
+    assert "shallow" in capsys.readouterr().err
+
+
 def test_list_reads_a_lightweight_tag(
     history: History,
     monkeypatch: pytest.MonkeyPatch,

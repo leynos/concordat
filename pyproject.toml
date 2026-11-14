@@ -356,3 +356,4 @@ _file_entries = "called from GithubCertificationSource._read_entries; verified b
 _is_subtree = "called from _file_entries via GithubCertificationSource._read_entries, reached through the CertificationSource protocol; verified by test_a_malformed_tree_record_is_unknown_not_dropped"
 _record = "called from _file_entries via GithubCertificationSource._read_entries, reached through the CertificationSource protocol; verified by test_a_malformed_tree_record_is_unknown_not_dropped"
 _is_valid = "passed by reference to itertools.starmap in _record, reached through the CertificationSource protocol; verified by test_a_malformed_tree_record_is_unknown_not_dropped"
+_parse_records = "called from _file_entries via GithubCertificationSource._read_entries, reached through the CertificationSource protocol; verified by test_a_malformed_tree_record_is_unknown_not_dropped"

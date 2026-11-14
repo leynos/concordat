@@ -99,9 +99,29 @@ def _file_entries(tree: dict[str, typ.Any], treeish: str) -> list[tuple[str, str
     if tree.get("truncated") or not isinstance(entries, list):
         message = f"git/trees/{treeish} was truncated or gave no tree"
         raise CertificationUnavailable(message)
+    parsed = _parse_records(entries, treeish)
+    return [record for record, is_tree in parsed if not is_tree]
+
+
+def _parse_records(
+    entries: list[typ.Any], treeish: str
+) -> list[tuple[tuple[str, str, str], bool]]:
+    """Validate every record, subtrees included, and say which are subtrees.
+
+    A record skipped unread could be the sign of a response that is not what
+    it claims, so none is.
+
+    Returns
+    -------
+    list[tuple[tuple[str, str, str], bool]]
+        Each record as `(path, mode, id)` with whether it is a subtree.
+
+    Raises
+    ------
+    CertificationUnavailable
+        When a record is malformed, or its mode and type disagree.
+    """
     try:
-        # Every record is validated, subtrees included: one that is skipped
-        # unread could be the sign of a response that is not what it claims.
         parsed = [(_record(entry), _is_subtree(entry)) for entry in entries]
     except (KeyError, TypeError, ValueError) as error:
         message = f"git/trees/{treeish} has a malformed record"
@@ -111,7 +131,7 @@ def _file_entries(tree: dict[str, typ.Any], treeish: str) -> list[tuple[str, str
             f"git/trees/{treeish} has a malformed record: its mode and type disagree"
         )
         raise CertificationUnavailable(message)
-    return [record for record, is_tree in parsed if not is_tree]
+    return parsed
 
 
 def _is_subtree(entry: object) -> bool:
