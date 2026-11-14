@@ -368,6 +368,6 @@ class TestFixtureGenerator:
         assert recorded == expected
 
     def test_the_manifest_defaults_name_the_estate_test_directories(self) -> None:
-        """The rule's default names are the ruled four, in the ruled order."""
+        """The rule's default names are the ruled three, in the ruled order."""
         parameters = _load_generator().manifest_parameters()
         assert parameters["test_directory_names"] == list(DEFAULT_TEST_DIRECTORY_NAMES)
