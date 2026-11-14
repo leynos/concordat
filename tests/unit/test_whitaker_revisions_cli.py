@@ -72,6 +72,26 @@ def test_list_prints_nothing_without_a_certification_tag(
     assert capsys.readouterr().out == ""
 
 
+def test_list_omits_a_descendant_that_adds_a_symlink_under_tests(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`list` agrees with the audit: a link anywhere makes a commit uncertifiable."""
+    root = history.commit(action_files(ACTION_V1), "root")
+    linked = {**action_files(ACTION_V1), f"{DIRECTORY}/tests/hook.sh": "../x\n"}
+    history.commit(
+        linked, "adds a link", symlinks=frozenset({f"{DIRECTORY}/tests/hook.sh"})
+    )
+    tag(history, f"{PREFIX}0.2.12", root)
+
+    assert run_main(monkeypatch, _clone(history), "list") == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"floor {PREFIX}0.2.12 {root}",
+        f"certified {root}",
+    ]
+
+
 def test_list_reads_a_lightweight_tag(
     history: History,
     monkeypatch: pytest.MonkeyPatch,

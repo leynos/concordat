@@ -91,10 +91,12 @@ def runtime_digest(
     Returns
     -------
     str | None
-        A hex digest, or None when the commit has no such directory.
+        A hex digest, or None when the commit has no such directory or its
+        directory holds a symlink or submodule (which the audit never certifies,
+        so the listing must not either).
     """
     tree = _action_tree(repository, commit, directory)
-    if tree is None:
+    if tree is None or unsafe_entry(_all_entries(repository, tree)) is not None:
         return None
     return runtime_digest_of(
         (path, f"{mode:o}", str(blob))
