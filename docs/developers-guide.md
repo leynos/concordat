@@ -1262,6 +1262,11 @@ behind an opt-in Make target has no such file and fails on that alone. BD-007
 to BD-009 read the rest, because an assigned `RUSTFLAGS` replaces that default
 and a coverage build cannot use a Cranelift one. ADR-003 records the change.
 
+The `cranelift_policy` parameter (`optional` by default) switches BD-004 and
+BD-006 off, or on (`required`), or turns BD-004 into a refusal of any Cranelift
+selection (`forbidden`). The clause code stays so a review flips one value;
+ADR-0004 records the decision and the 14 May 2027 review.
+
 ### The shared checkout readers in `markdown_envelope`
 
 The Markdown, spelling, uv gate, YAML lint and build-defaults envelope builders

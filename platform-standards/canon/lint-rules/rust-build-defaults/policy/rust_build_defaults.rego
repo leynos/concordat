@@ -26,6 +26,25 @@ default codegen_backend := "cranelift"
 
 codegen_backend := data.parameters.codegen_backend
 
+# How the estate treats Cranelift. `optional` (the default) makes LLVM the
+# documented standard and Cranelift an allowed, unrecommended opt-in: neither
+# the backend nor a recorded exception is demanded (BD-004 and BD-006 are
+# switched off), while BD-005, BD-007 and BD-008 still govern any repository
+# that configures it. `required` is the earlier standard (the backend or a
+# current recorded exception). `forbidden` makes any Cranelift selection a
+# BD-004 finding. A review flips this one value.
+default cranelift_policy := "optional"
+
+cranelift_policy := data.parameters.cranelift_policy
+
+cranelift_required if cranelift_policy == "required"
+
+cranelift_forbidden if cranelift_policy == "forbidden"
+
+estate_backend := codegen_backend if cranelift_required
+
+estate_backend := "llvm" if not cranelift_required
+
 default config_path := ".cargo/config.toml"
 
 config_path := input.cargo_config.path
@@ -40,7 +59,20 @@ finding(rule_id, verdict, path, msg) := {
 	"path": path,
 	"line": 0,
 	"msg": msg,
-} if not clause_waived(rule_id)
+} if not waiver_honoured(rule_id)
+
+# Under `forbidden`, BD-004 refuses the backend outright: an exception waives
+# the clauses that ask for defaults, not a refusal, so it cannot hide a
+# selection from it. Under `required`, BD-004 is waivable as before.
+waiver_honoured(rule_id) if {
+	clause_waived(rule_id)
+	not forbidden_refusal(rule_id)
+}
+
+forbidden_refusal(rule_id) if {
+	cranelift_forbidden
+	rule_id == "BD-004"
+}
 
 # -- envelope and applicability --------------------------------------------
 
@@ -366,6 +398,7 @@ exception_recorded if count(exception_sections) > 0
 
 deny contains f if {
 	applicable
+	cranelift_required
 	some scan in object.get(input, "exceptions", [])
 	scan.read_error != null
 	f := finding(
@@ -390,6 +423,7 @@ exception_read_error if {
 
 deny contains f if {
 	backend_clause_applies
+	cranelift_required
 	not backend_configured
 	not exception_recorded
 	not exception_read_error
@@ -397,6 +431,37 @@ deny contains f if {
 		"BD-004", "noncompliant", config_path,
 		sprintf(
 			"the %q backend is neither the development-profile default nor refused by a recorded exception",
+			[codegen_backend],
+		),
+	)
+}
+
+# Under `forbidden`, any Cranelift selection is noncompliant. A commented-out
+# selection is no selection: the TOML parse never reports it.
+deny contains f if {
+	cranelift_forbidden
+	applicable
+	config_readable
+	some backend in backends
+	backend.backend == codegen_backend
+	f := finding(
+		"BD-004", "noncompliant", config_path,
+		sprintf(
+			"%s selects the %q backend, which the estate does not allow",
+			[backend.source, codegen_backend],
+		),
+	)
+}
+
+deny contains f if {
+	cranelift_forbidden
+	applicable
+	some backend in manifest_backends
+	backend.backend == codegen_backend
+	f := finding(
+		"BD-004", "noncompliant", "Cargo.toml",
+		sprintf(
+			"the root Cargo.toml selects the %q backend, which the estate does not allow",
 			[codegen_backend],
 		),
 	)
@@ -413,17 +478,34 @@ coverage_profile_selection(backend) if {
 	backend.backend == "llvm"
 }
 
+# Which backends the estate has adopted. Under `required` that is the one
+# backend. Otherwise LLVM is the standard and the configured backend is an
+# allowed opt-in. A per-package LLVM override is never a third backend: it is
+# support infrastructure for a crate Cranelift cannot compile (zmij needs an
+# intrinsic Cranelift lacks), so it is accepted under every policy.
+backend_adopted(backend) if backend.backend == codegen_backend
+
+backend_adopted(backend) if {
+	not cranelift_required
+	backend.backend == "llvm"
+}
+
+backend_adopted(backend) if {
+	backend.scope == "package-override"
+	backend.backend == "llvm"
+}
+
 deny contains f if {
 	applicable
 	config_readable
 	some backend in backends
-	backend.backend != codegen_backend
+	not backend_adopted(backend)
 	not coverage_profile_selection(backend)
 	f := finding(
 		"BD-005", "noncompliant", config_path,
 		sprintf(
 			"%s selects the %q backend; the estate backend is %q",
-			[backend.source, backend.backend, codegen_backend],
+			[backend.source, backend.backend, estate_backend],
 		),
 	)
 }
@@ -505,6 +587,7 @@ exception_is_current if exception_names_recent_measurement
 
 deny contains f if {
 	backend_clause_applies
+	cranelift_required
 	not backend_configured
 	exception_recorded
 	input.toolchain != null
@@ -521,6 +604,7 @@ deny contains f if {
 
 deny contains f if {
 	backend_clause_applies
+	cranelift_required
 	not backend_configured
 	exception_recorded
 	not pinned_channel_known

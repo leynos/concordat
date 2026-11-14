@@ -2745,6 +2745,12 @@ surveying the estate for it:
   so a stable pin makes RT-017 inapplicable rather than noncompliant; a checker
   proved only against violations refuses a legitimate repository.
 
+The 2026-09-21 ruling below was superseded on 2026-11-14 by ADR-0004: LLVM is
+the standard, Cranelift an allowed opt-in, and the `cranelift_policy` parameter
+(`optional` by default, `required` for the ruling below, `forbidden` to refuse
+any selection) switches the clause. The clause code is kept so a review on
+14 May 2027 flips one value.
+
 The codegen-backend clause encodes the 2026-09-21 ruling directly. Cranelift is
 the development-profile default in every repository whose own suite passes
 under it; a repository whose suite fails records the failing tests as an

@@ -58,6 +58,7 @@ test_a_stable_pin_is_not_asked_for_the_parallel_frontend if {
 
 test_no_configuration_at_all_fails_the_defaults if {
 	findings := policy.deny with input as data.fixtures.no_config
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {
 		["BD-001", "noncompliant"],
 		["BD-002", "noncompliant"],
@@ -125,6 +126,7 @@ test_the_linker_flag_is_not_counted_as_drift if {
 
 test_neither_backend_nor_exception_is_noncompliant if {
 	findings := policy.deny with input as data.fixtures.no_backend_no_exception
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-004", "noncompliant"]}
 }
 
@@ -137,6 +139,7 @@ test_a_profile_key_without_the_unstable_gate_is_refused if {
 
 test_an_unadopted_backend_is_refused if {
 	findings := policy.deny with input as data.fixtures.other_backend
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {
 		["BD-004", "noncompliant"],
 		["BD-005", "noncompliant"],
@@ -154,6 +157,7 @@ test_an_unstable_key_under_a_stable_pin_is_refused if {
 # past that channel is what obliges the repository to measure again.
 test_an_exception_measured_on_an_older_toolchain_is_stale if {
 	findings := policy.deny with input as data.fixtures.stale_exception
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-006", "noncompliant"]}
 	some f in findings
 	contains(f.msg, "nightly-2026-08-23")
@@ -173,6 +177,7 @@ test_a_measurement_past_the_window_is_stale if {
 		data.fixtures.exception_recent_measurement,
 		{"evaluated_on": "2026-12-21"},
 	)
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-006", "noncompliant"]}
 }
 
@@ -189,6 +194,7 @@ test_a_missing_clock_leaves_a_measurement_unproved if {
 		data.fixtures.exception_recent_measurement,
 		["evaluated_on"],
 	)
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-006", "noncompliant"]}
 }
 
@@ -197,17 +203,19 @@ test_a_measurement_dated_in_the_future_is_not_recent if {
 		data.fixtures.exception_recent_measurement,
 		{"evaluated_on": "2026-09-01"},
 	)
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-006", "noncompliant"]}
 }
 
 test_the_window_is_a_parameter if {
 	findings := policy.deny with input as data.fixtures.exception_recent_measurement
-		with data.parameters as {"exception_window_days": 10}
+		with data.parameters as {"exception_window_days": 10, "cranelift_policy": "required"}
 	profile(findings) == {["BD-006", "noncompliant"]}
 }
 
 test_an_exception_with_no_pin_to_measure_against_is_indeterminate if {
 	findings := policy.deny with input as data.fixtures.exception_without_pin
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-006", "indeterminate"]}
 }
 
@@ -282,12 +290,14 @@ test_an_unplaceable_sole_target_does_not_prove_the_linker_absent if {
 # development build keeps the backend it had. That is not the profile default.
 test_a_package_override_is_not_the_profile_default if {
 	findings := policy.deny with input as data.fixtures.package_override_backend
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-004", "noncompliant"]}
 }
 
 # An unreadable document may hold the exception, so neither state is proved.
 test_an_unreadable_exception_document_proves_neither_state if {
 	findings := policy.deny with input as data.fixtures.exception_unreadable
+		with data.parameters as {"cranelift_policy": "required"}
 	profile(findings) == {["BD-004", "indeterminate"]}
 	count(findings) == 1
 }
@@ -349,7 +359,7 @@ test_a_populated_linker_platform_list_keeps_the_clause if {
 # whose backend is not the default.
 test_the_backend_parameter_is_read if {
 	findings := policy.deny with input as data.fixtures.compliant_cranelift
-		with data.parameters as {"codegen_backend": "experimental"}
+		with data.parameters as {"codegen_backend": "experimental", "cranelift_policy": "required"}
 	profile(findings) == {["BD-004", "noncompliant"], ["BD-005", "noncompliant"]}
 }
 
@@ -370,6 +380,101 @@ test_a_checkout_with_no_rust_sources_is_not_applicable if {
 		}},
 	)
 	findings := policy.deny with input as input_without_sources
+	count(findings) == 0
+}
+
+# -- cranelift_policy: LLVM is the standard, Cranelift an allowed opt-in ----
+#
+# ADR-0004. The default is `optional`: no backend and no exception is demanded,
+# and Cranelift is not flagged where it is configured. `required` is the earlier
+# standard and `forbidden` the strict one; a review flips the one value.
+
+test_an_llvm_default_repository_needs_no_backend_or_exception if {
+	findings := policy.deny with input as data.fixtures.no_backend_no_exception
+	count(findings) == 0
+}
+
+test_no_configuration_needs_no_backend_under_the_default_policy if {
+	findings := policy.deny with input as data.fixtures.no_config
+	profile(findings) == {["BD-001", "noncompliant"], ["BD-002", "noncompliant"]}
+}
+
+# Disabled, not removed: a commented-out selection is no selection.
+test_a_commented_out_backend_is_no_selection if {
+	findings := policy.deny with input as data.fixtures.commented_backend
+	count(findings) == 0
+	forbidden := policy.deny with input as data.fixtures.commented_backend
+		with data.parameters as {"cranelift_policy": "forbidden"}
+	count(forbidden) == 0
+}
+
+test_a_commented_out_backend_does_not_satisfy_the_required_policy if {
+	findings := policy.deny with input as data.fixtures.commented_backend
+		with data.parameters as {"cranelift_policy": "required"}
+	profile(findings) == {["BD-004", "noncompliant"]}
+}
+
+# An opt-in is allowed under the default policy, and so is the exact shape the
+# estate used to require.
+test_a_cranelift_opt_in_is_not_flagged_by_default if {
+	findings := policy.deny with input as data.fixtures.compliant_cranelift
+	count(findings) == 0
+}
+
+# A per-package LLVM override beneath a Cranelift opt-in is support
+# infrastructure (zmij needs an intrinsic Cranelift lacks), so it is accepted
+# under every policy.
+test_a_package_llvm_override_is_accepted if {
+	some policy_value in {"optional", "required"}
+	findings := policy.deny with input as data.fixtures.package_llvm_override
+		with data.parameters as {"cranelift_policy": policy_value}
+	count(findings) == 0
+}
+
+# An opt-in is still held to BD-005: a backend selection a stable pin cannot
+# honour breaks the build whoever chose it.
+test_a_cranelift_opt_in_is_still_held_to_bd_005 if {
+	findings := policy.deny with input as data.fixtures.backend_on_stable
+	some f in findings
+	f.rule_id == "BD-005"
+}
+
+# LLVM on the development profile is the standard under the default policy.
+test_llvm_on_the_dev_profile_is_not_flagged_by_default if {
+	findings := policy.deny with input as data.fixtures.llvm_dev_profile
+	not "BD-005" in {f.rule_id | some f in findings}
+}
+
+test_the_forbidden_policy_flags_any_cranelift_selection if {
+	findings := policy.deny with input as data.fixtures.compliant_cranelift
+		with data.parameters as {"cranelift_policy": "forbidden"}
+	profile(findings) == {["BD-004", "noncompliant"]}
+}
+
+# `forbidden` refuses the backend the `codegen_backend` parameter names, not a
+# hard-coded one.
+test_the_forbidden_policy_refuses_the_configured_backend if {
+	findings := policy.deny with input as data.fixtures.other_backend
+		with data.parameters as {"cranelift_policy": "forbidden", "codegen_backend": "experimental"}
+	profile(findings) == {["BD-004", "noncompliant"]}
+}
+
+# A substantiated exception waives clauses that ask for defaults; it cannot
+# hide a selection from the `forbidden` refusal. Under `required` the same
+# exception still waives BD-004.
+test_an_exception_cannot_hide_a_selection_from_the_forbidden_policy if {
+	selecting := object.union(data.fixtures.exception_dev_fast, {"cargo_config": data.fixtures.compliant_cranelift.cargo_config})
+	forbidden := policy.deny with input as selecting
+		with data.parameters as {"cranelift_policy": "forbidden"}
+	["BD-004", "noncompliant"] in profile(forbidden)
+	required := policy.deny with input as selecting
+		with data.parameters as {"cranelift_policy": "required"}
+	not "BD-004" in {f.rule_id | some f in required}
+}
+
+test_the_forbidden_policy_accepts_an_llvm_repository if {
+	findings := policy.deny with input as data.fixtures.no_backend_no_exception
+		with data.parameters as {"cranelift_policy": "forbidden"}
 	count(findings) == 0
 }
 

@@ -65,11 +65,14 @@ def checkout(name: str) -> pathlib.Path:
         pytest.param(
             "no-config",
             VERDICT_NONCOMPLIANT,
-            {"BD-001", "BD-002", "BD-004"},
+            {"BD-001", "BD-002"},
             id="no-configuration",
         ),
+        # `cranelift_policy` defaults to `optional`, so BD-006 is inert.
+        pytest.param("stale-exception", VERDICT_COMPLIANT, set(), id="stale-exception"),
+        pytest.param("commented-backend", VERDICT_COMPLIANT, set(), id="commented"),
         pytest.param(
-            "stale-exception", VERDICT_NONCOMPLIANT, {"BD-006"}, id="stale-exception"
+            "package-llvm-override", VERDICT_COMPLIANT, set(), id="package-llvm"
         ),
         pytest.param(
             "unclassified-only", VERDICT_INDETERMINATE, {"BD-002"}, id="indeterminate"
@@ -87,6 +90,36 @@ def test_the_rule_runs_against_a_real_checkout(
     reported = {finding.rule_id for finding in result.findings}
     assert reported == expected, (
         f"{fixture} should report {expected or 'no findings'}, got {reported}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("policy", "fixture", "expected"),
+    [
+        pytest.param(
+            "required", "no-config", {"BD-001", "BD-002", "BD-004"}, id="required"
+        ),
+        pytest.param("required", "stale-exception", {"BD-006"}, id="stale"),
+        pytest.param("forbidden", "compliant-cranelift", {"BD-004"}, id="forbidden"),
+        pytest.param("forbidden", "commented-backend", set(), id="forbidden-commented"),
+    ],
+)
+def test_the_cranelift_policy_parameter_reaches_the_policy(
+    monkeypatch: pytest.MonkeyPatch, policy: str, fixture: str, expected: set[str]
+) -> None:
+    """Flipping `cranelift_policy` switches the backend clauses on or to refusal."""
+    original = runner._rule_parameters
+
+    def with_policy(rule_dir: pathlib.Path) -> dict[str, object]:
+        """Return the manifest defaults with the policy value replaced."""
+        return {**original(rule_dir), "cranelift_policy": policy}
+
+    monkeypatch.setattr(runner, "_rule_parameters", with_policy)
+    result = run_rule(RULE_ID, checkout(fixture))
+    reported = {finding.rule_id for finding in result.findings}
+    assert reported == expected, (
+        f"{fixture} under {policy} should report "
+        f"{expected or 'no findings'}, got {reported}"
     )
 
 

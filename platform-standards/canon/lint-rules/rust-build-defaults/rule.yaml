@@ -6,11 +6,12 @@ description: >-
   against the estate build standard: the parallel `rustc` frontend and the
   mold linker as defaults (RT-017, RT-008), shared frontend flags retained
   across `rustflags` replacements while target backends stay scoped (RT-018),
-  and the Cranelift
-  codegen backend either configured for the development profile or refused
-  by a recorded, current exception (RT-009). It also audits the builds that
-  replace those defaults: every coverage path and dev-profile release build
-  selects LLVM where Cranelift is the default (RT-019), and every Makefile
+  and the codegen backend (RT-009). LLVM is the standard and Cranelift an
+  allowed, unrecommended opt-in (ADR-0004); `cranelift_policy` switches the
+  earlier requirement of the backend or a recorded, current exception back on
+  (`required`) or refuses any Cranelift selection (`forbidden`). It also audits
+  the builds that replace those defaults: every coverage path and dev-profile
+  release build selects LLVM where Cranelift is the default (RT-019), and every Makefile
   repository-toolchain gate recipe (RT-020) and direct cargo workflow step
   (RT-021) that assigns
   `RUSTFLAGS` restates the fast flags. Direct installer-managed Whitaker
@@ -22,7 +23,7 @@ description: >-
   `.concordat`; the exception waives clauses only while its route still carries
   the standard's flags and its decision record exists (BD-010).
   Audit-only: this rule declares no mutations.
-version: 0.3.0
+version: 0.4.0
 sensor:
   type: conftest
   input: policy-input/rust-build-defaults
@@ -50,9 +51,21 @@ parameters:
           Platforms the linker flag is required on. An empty list makes the
           linker clause inapplicable, for a repository that does not build
           for any platform the linker ships on.
+      cranelift_policy:
+        type: string
+        enum: [required, optional, forbidden]
+        description: >-
+          How the estate treats Cranelift. `optional` (the default): LLVM is
+          the standard, Cranelift is an allowed opt-in, and BD-004 and BD-006
+          are off. `required`: the backend or a current recorded exception
+          (BD-004, BD-006). `forbidden`: any Cranelift selection is BD-004.
+          BD-005, BD-007 and BD-008 govern any configured Cranelift under
+          every value.
       codegen_backend:
         type: string
-        description: The codegen backend the development profile should select.
+        description: >-
+          The codegen backend `cranelift_policy` is about: the one `required`
+          asks for, and the one `forbidden` refuses.
       exception_documents:
         type: array
         items:
@@ -98,6 +111,7 @@ parameters:
     linker_flag: -Clink-arg=-fuse-ld=mold
     linker_platforms:
       - linux
+    cranelift_policy: optional
     codegen_backend: cranelift
     exception_documents:
       - docs/developers-guide.md
