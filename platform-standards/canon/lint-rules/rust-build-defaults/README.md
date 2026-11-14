@@ -83,12 +83,13 @@ makes only those clauses indeterminate; the others still run. See
   separate.
 - **BD-004** (error): under `cranelift_policy = required`, the backend is the
   development-profile default, or the repository records an exception. Under
-  `forbidden` it instead reports any Cranelift selection; under `optional` it
-  reports nothing. Both states are accepted; a repository with neither is
-  noncompliant. A package override beneath a profile is not the profile's
-  default: Cargo applies it to the named package alone, leaving every other
-  development build on the backend it had. An exception document the filesystem
-  refused to read decides nothing, and is `indeterminate`.
+  `forbidden` it instead reports any selection of the `codegen_backend`
+  parameter's backend, and no recorded exception can waive that refusal; under
+  `optional` it reports nothing. Both states are accepted; a repository with
+  neither is noncompliant. A package override beneath a profile is not the
+  profile's default: Cargo applies it to the named package alone, leaving every
+  other development build on the backend it had. An exception document the
+  filesystem refused to read decides nothing, and is `indeterminate`.
 - **BD-005** (error): a backend selection that Cargo cannot honour, or that the
   estate has not adopted, is noncompliant. A profile key without
   `[unstable] codegen-backend = true` is refused by Cargo; an `[unstable]` key

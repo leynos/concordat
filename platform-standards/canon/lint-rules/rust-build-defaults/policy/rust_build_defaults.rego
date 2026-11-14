@@ -59,7 +59,20 @@ finding(rule_id, verdict, path, msg) := {
 	"path": path,
 	"line": 0,
 	"msg": msg,
-} if not clause_waived(rule_id)
+} if not waiver_honoured(rule_id)
+
+# Under `forbidden`, BD-004 refuses the backend outright: an exception waives
+# the clauses that ask for defaults, not a refusal, so it cannot hide a
+# selection from it. Under `required`, BD-004 is waivable as before.
+waiver_honoured(rule_id) if {
+	clause_waived(rule_id)
+	not forbidden_refusal(rule_id)
+}
+
+forbidden_refusal(rule_id) if {
+	cranelift_forbidden
+	rule_id == "BD-004"
+}
 
 # -- envelope and applicability --------------------------------------------
 
@@ -430,10 +443,13 @@ deny contains f if {
 	applicable
 	config_readable
 	some backend in backends
-	backend.backend == "cranelift"
+	backend.backend == codegen_backend
 	f := finding(
 		"BD-004", "noncompliant", config_path,
-		sprintf("%s selects the cranelift backend, which the estate does not allow", [backend.source]),
+		sprintf(
+			"%s selects the %q backend, which the estate does not allow",
+			[backend.source, codegen_backend],
+		),
 	)
 }
 
@@ -441,10 +457,13 @@ deny contains f if {
 	cranelift_forbidden
 	applicable
 	some backend in manifest_backends
-	backend.backend == "cranelift"
+	backend.backend == codegen_backend
 	f := finding(
 		"BD-004", "noncompliant", "Cargo.toml",
-		"the root Cargo.toml selects the cranelift backend, which the estate does not allow",
+		sprintf(
+			"the root Cargo.toml selects the %q backend, which the estate does not allow",
+			[codegen_backend],
+		),
 	)
 }
 

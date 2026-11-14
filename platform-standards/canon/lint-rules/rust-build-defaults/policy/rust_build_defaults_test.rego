@@ -451,6 +451,27 @@ test_the_forbidden_policy_flags_any_cranelift_selection if {
 	profile(findings) == {["BD-004", "noncompliant"]}
 }
 
+# `forbidden` refuses the backend the `codegen_backend` parameter names, not a
+# hard-coded one.
+test_the_forbidden_policy_refuses_the_configured_backend if {
+	findings := policy.deny with input as data.fixtures.other_backend
+		with data.parameters as {"cranelift_policy": "forbidden", "codegen_backend": "experimental"}
+	profile(findings) == {["BD-004", "noncompliant"]}
+}
+
+# A substantiated exception waives clauses that ask for defaults; it cannot
+# hide a selection from the `forbidden` refusal. Under `required` the same
+# exception still waives BD-004.
+test_an_exception_cannot_hide_a_selection_from_the_forbidden_policy if {
+	selecting := object.union(data.fixtures.exception_dev_fast, {"cargo_config": data.fixtures.compliant_cranelift.cargo_config})
+	forbidden := policy.deny with input as selecting
+		with data.parameters as {"cranelift_policy": "forbidden"}
+	["BD-004", "noncompliant"] in profile(forbidden)
+	required := policy.deny with input as selecting
+		with data.parameters as {"cranelift_policy": "required"}
+	not "BD-004" in {f.rule_id | some f in required}
+}
+
 test_the_forbidden_policy_accepts_an_llvm_repository if {
 	findings := policy.deny with input as data.fixtures.no_backend_no_exception
 		with data.parameters as {"cranelift_policy": "forbidden"}
