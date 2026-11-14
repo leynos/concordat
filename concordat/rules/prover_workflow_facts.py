@@ -71,6 +71,13 @@ class StepFacts:
     pins: list[Pin] = dataclasses.field(default_factory=list)
 
 
+def _is_plain(path: str) -> bool:
+    """Return whether *path* is a relative path with no substitution."""
+    if "$" in path:
+        return False
+    return not path.startswith(("/", "~"))
+
+
 def resolve(directory: str | None, path: str) -> str | None:
     """Return *path* as a checkout-relative path from *directory*, or None.
 
@@ -80,7 +87,9 @@ def resolve(directory: str | None, path: str) -> str | None:
         The normalised path, or None when the directory is unknown, the path
         is absolute or a substitution, or it leaves the checkout.
     """
-    if directory is None or path.startswith(("/", "~")) or "$" in path:
+    if directory is None:
+        return None
+    if not _is_plain(path):
         return None
     resolved = posixpath.normpath(posixpath.join(directory, path))
     return None if resolved.startswith("..") else resolved
