@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from concordat.rules.prover_commands import is_installer, is_runner, script_invoked
+from concordat.rules.prover_commands import (
+    is_installer,
+    is_runner,
+    script_invoked,
+    wrapper_changes_directory,
+)
 from concordat.rules.shell_commands import commands
 
 
@@ -136,3 +141,17 @@ def test_a_here_string_is_not_a_here_document() -> None:
     """`<<<` takes one word of input; the lines after it are still commands."""
     found = commands("cat <<< text\ncargo kani setup\n")
     assert [is_installer(argv) for argv in found] == [False, True]
+
+
+def test_a_leading_assignment_is_not_the_command() -> None:
+    """`CI=1 prover-tools verus install` installs; the assignment is not a word."""
+    (argv,) = commands("CI=1 prover-tools verus install")
+    assert is_installer(argv)
+
+
+def test_env_chdir_is_reported() -> None:
+    """A wrapper that moves the command to another directory says so."""
+    (moved,) = commands("env -C sub make verus")
+    (stayed,) = commands("env FOO=1 make verus")
+    assert wrapper_changes_directory(moved)
+    assert not wrapper_changes_directory(stayed)

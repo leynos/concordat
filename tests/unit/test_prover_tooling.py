@@ -440,3 +440,43 @@ def test_a_make_outside_the_root_audits_a_repository_with_no_other_evidence(
     assert {(f.rule_id, f.verdict) for f in result.findings} == {
         ("EN-001", "indeterminate")
     }
+
+
+def test_make_output_sync_does_not_swallow_the_goal(tmp_path: pathlib.Path) -> None:
+    """`-O` takes an attached type, so `make -O install-provers` still builds it."""
+    makefile = "all:\n\ttrue\n\n" + MAKEFILE.replace(
+        "verus-install:", "install-provers verus-install:"
+    )
+    steps = (INSTALL_STEP, run_step("make -O install-provers"))
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"PT-002"}
+
+
+def test_a_leading_assignment_does_not_hide_make(tmp_path: pathlib.Path) -> None:
+    """`CI=1 make verus` is still `make verus`."""
+    makefile = MAKEFILE.replace("verus:\n", "verus: verus-install\n")
+    steps = (INSTALL_STEP, run_step("CI=1 make verus"))
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"PT-002"}
+
+
+def test_env_chdir_makes_a_make_unresolved(tmp_path: pathlib.Path) -> None:
+    """`env -C sub make verus` builds sub's Makefile, which the rule does not read."""
+    steps = (INSTALL_STEP, run_step("env -C sub make verus"))
+    assert ids(checkout(tmp_path, steps=steps)) == {"EN-001"}
+
+
+def test_a_script_is_resolved_from_the_working_directory(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A relative script run from a working directory is the checkout's script."""
+    step = "      - run: bash get.sh\n        working-directory: scripts\n"
+    root = checkout(tmp_path, steps=(INSTALL_STEP, step))
+    put(root, "scripts/get.sh", "#!/bin/sh\nprover-tools verus install\n")
+    assert ids(root) == {"PT-002", "PT-004"}
+
+
+def test_a_script_is_resolved_after_a_cd(tmp_path: pathlib.Path) -> None:
+    """`cd scripts && bash get.sh` runs scripts/get.sh."""
+    steps = (INSTALL_STEP, run_step("cd scripts && bash get.sh"))
+    root = checkout(tmp_path, steps=steps)
+    put(root, "scripts/get.sh", "#!/bin/sh\nprover-tools verus install\n")
+    assert ids(root) == {"PT-002", "PT-004"}

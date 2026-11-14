@@ -31,8 +31,6 @@ OPTIONS_WITH_ARGUMENT: typ.Final = frozenset({
     "-I",
     "-o",
     "-W",
-    "-l",
-    "-O",
     "--file",
     "--makefile",
     "--directory",
@@ -42,11 +40,15 @@ OPTIONS_WITH_ARGUMENT: typ.Final = frozenset({
     "--new-file",
     "--assume-old",
     "--assume-new",
+})
+# Options whose operand is optional: it is theirs only when it is a number.
+JOB_OPTIONS: typ.Final = frozenset({
+    "-j",
+    "--jobs",
+    "-l",
     "--load-average",
     "--max-load",
-    "--output-sync",
 })
-JOB_OPTIONS: typ.Final = frozenset({"-j", "--jobs"})
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

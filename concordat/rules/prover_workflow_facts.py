@@ -9,9 +9,16 @@ ref, so PT-003 can require a full SHA. A step that only runs proofs is neither.
 from __future__ import annotations
 
 import dataclasses
+import posixpath
 import typing as typ
 
-from .prover_commands import is_installer, is_runner, script_invoked, unwrap
+from .prover_commands import (
+    is_installer,
+    is_runner,
+    script_invoked,
+    unwrap,
+    wrapper_changes_directory,
+)
 from .prover_make_facts import commands_reached, goals
 from .prover_pins import command_pins
 from .shell_commands import Argv, commands
@@ -27,6 +34,7 @@ if typ.TYPE_CHECKING:
     )
 
 SHARED_ACTION: typ.Final = "leynos/shared-actions/.github/actions/install-prover-tools"
+ROOT: typ.Final = "."
 MAKEFILE_OPTIONS: typ.Final = frozenset({
     "-C",
     "-f",
@@ -48,12 +56,13 @@ class Context:
 class StepFacts:
     """One step's installers, shared uses, make use, whether it runs, and pins.
 
-    `where` is the step's `<job>/<index>` place, and `at_root` whether the next
-    command still runs in the repository root (a `cd` clears it).
+    `where` is the step's `<job>/<index>` place, and `directory` the directory the
+    next command runs in, relative to the repository root (None when unknown).
+    A `cd` moves it.
     """
 
     where: str = ""
-    at_root: bool = True
+    directory: str | None = ROOT
     installers: list[InstallerStep] = dataclasses.field(default_factory=list)
     unresolved: list[InstallerStep] = dataclasses.field(default_factory=list)
     shared: list[SharedUse] = dataclasses.field(default_factory=list)
@@ -62,7 +71,24 @@ class StepFacts:
     pins: list[Pin] = dataclasses.field(default_factory=list)
 
 
-def installs(argv: Argv, installer_scripts: frozenset[str]) -> bool:
+def resolve(directory: str | None, path: str) -> str | None:
+    """Return *path* as a checkout-relative path from *directory*, or None.
+
+    Returns
+    -------
+    str | None
+        The normalised path, or None when the directory is unknown, the path
+        is absolute or a substitution, or it leaves the checkout.
+    """
+    if directory is None or path.startswith(("/", "~")) or "$" in path:
+        return None
+    resolved = posixpath.normpath(posixpath.join(directory, path))
+    return None if resolved.startswith("..") else resolved
+
+
+def installs(
+    argv: Argv, installer_scripts: frozenset[str], directory: str | None = ROOT
+) -> bool:
     """Return whether *argv* installs a prover, directly or by running a script.
 
     A command that runs a local script the rule found to be an installer
@@ -77,7 +103,10 @@ def installs(argv: Argv, installer_scripts: frozenset[str]) -> bool:
     if is_installer(argv):
         return True
     script = script_invoked(argv)
-    return script is not None and script in installer_scripts
+    if script is None:
+        return False
+    resolved = resolve(directory, script)
+    return resolved is not None and resolved in installer_scripts
 
 
 def _shared_use(where: str, step: dict[str, object]) -> list[SharedUse]:
@@ -108,9 +137,11 @@ def _add_make(facts: StepFacts, argv: Argv, context: Context) -> None:
     facts.runs = facts.runs or _make_runs(argv, context)
 
 
-def _route_make(facts: StepFacts, argv: Argv, context: Context) -> None:
+def _route_make(
+    facts: StepFacts, argv: Argv, context: Context, directory: str | None
+) -> None:
     """Follow a `make` into the root Makefile, or record that it is not that one."""
-    if facts.at_root and not _selects_makefile(argv):
+    if directory == ROOT and not _selects_makefile(argv):
         _add_make(facts, argv, context)
         return
     facts.unresolved.append({"where": facts.where, "command": " ".join(argv)})
@@ -140,33 +171,36 @@ def _add_command(facts: StepFacts, argv: Argv, context: Context) -> None:
 
     The root Makefile's rules apply only to a `make` that runs from the
     repository root; one that runs from another directory builds that
-    directory's Makefile, which the rule does not read.
+    directory's Makefile, which the rule does not read. A command a wrapper
+    moves (`env -C dir ...`) runs from a directory the rule cannot resolve.
     """
+    moved = wrapper_changes_directory(argv)
+    directory = None if moved else facts.directory
     facts.pins += command_pins([argv], "workflow")
-    is_install = installs(argv, context.installer_scripts)
+    is_install = installs(argv, context.installer_scripts, directory)
     facts.runs = facts.runs or is_install or is_runner(argv)
     if is_install:
         facts.installers.append({"where": facts.where, "command": " ".join(argv)})
     if _is_make(argv):
-        _route_make(facts, unwrap(argv), context)
-    facts.at_root = facts.at_root and not _leaves_root(argv)
+        _route_make(facts, unwrap(argv), context, directory)
+    facts.directory = _next_directory(facts.directory, argv)
 
 
-def _leaves_root(argv: Argv) -> bool:
-    """Return whether the command is a `cd` to somewhere other than the root."""
+def _next_directory(directory: str | None, argv: Argv) -> str | None:
+    """Return the directory after *argv* runs: a `cd` moves it, anything else not."""
     command = unwrap(argv)
     if not command or command[0] != "cd":
-        return False
-    return not _is_root(next((w for w in command[1:] if not w.startswith("-")), None))
-
-
-def _is_root(directory: object) -> bool:
-    """Return whether a working directory is the repository root."""
-    return directory in {None, "", ".", "./"}
+        return directory
+    operand = next((w for w in command[1:] if not w.startswith("-")), None)
+    return None if operand is None else resolve(directory, operand)
 
 
 def step_facts(
-    where: str, step: dict[str, object], context: Context, *, at_root: bool = True
+    where: str,
+    step: dict[str, object],
+    context: Context,
+    *,
+    directory: str | None = ROOT,
 ) -> StepFacts:
     """Return one step's prover facts.
 
@@ -178,16 +212,16 @@ def step_facts(
         The step mapping.
     context:
         What commands are read against.
-    at_root:
-        Whether the step starts in the repository root; a `cd` in its script
-        leaves it.
+    directory:
+        The directory the step starts in, relative to the repository root, or
+        None when it cannot be resolved; a `cd` in its script moves it.
 
     Returns
     -------
     StepFacts
         Installers, shared uses, whether it calls make or runs a prover, pins.
     """
-    facts = StepFacts(where=where, at_root=at_root, shared=_shared_use(where, step))
+    facts = StepFacts(where=where, directory=directory, shared=_shared_use(where, step))
     run = step.get("run")
     for argv in commands(run) if isinstance(run, str) else []:
         _add_command(facts, argv, context)
@@ -226,15 +260,29 @@ def _step_directory(
     )
 
 
+def _initial_directory(directory: object) -> str | None:
+    """Return a configured working directory relative to the root, or None.
+
+    Returns
+    -------
+    str | None
+        The root when none is set, the normalised path when it is a plain
+        relative one, and None when it is not a string or cannot be resolved.
+    """
+    if not directory:
+        return ROOT
+    return resolve(ROOT, directory) if isinstance(directory, str) else None
+
+
 def _job_steps(
     document: dict[str, object],
-) -> list[tuple[str, dict[str, object], bool]]:
-    """Return every step: its place, its mapping and whether it starts at the root."""
+) -> list[tuple[str, dict[str, object], str | None]]:
+    """Return every step: its place, its mapping and the directory it starts in."""
     return [
         (
             f"{job_id}/{index}",
             step,
-            _is_root(_step_directory(step, job, document)),
+            _initial_directory(_step_directory(step, job, document)),
         )
         for job_id, job in _jobs(document).items()
         for index, step in enumerate(_steps(job))
@@ -270,8 +318,8 @@ def workflow_facts(
         return facts, False, []
     runs = False
     pins: list[Pin] = []
-    for where, step, at_root in _job_steps(typ.cast("dict[str, object]", document)):
-        found = step_facts(where, step, context, at_root=at_root)
+    for where, step, directory in _job_steps(typ.cast("dict[str, object]", document)):
+        found = step_facts(where, step, context, directory=directory)
         facts["installer_steps"] += found.installers
         facts["unresolved_make"] += found.unresolved
         facts["shared_uses"] += found.shared

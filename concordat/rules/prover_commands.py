@@ -30,7 +30,13 @@ import typing as typ
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-__all__ = ["is_installer", "is_runner", "script_invoked", "unwrap"]
+__all__ = [
+    "is_installer",
+    "is_runner",
+    "script_invoked",
+    "unwrap",
+    "wrapper_changes_directory",
+]
 
 TOOLS: typ.Final = frozenset({"kani", "verus", "z3"})
 RUN_VERBS: typ.Final = frozenset({"run", "exec", "check-version"})
@@ -58,6 +64,7 @@ RUNNER_BINARIES: typ.Final = frozenset({"verus", "cargo-kani", "kani-verifier"})
 PROVER_TOOLS: typ.Final = "prover-tools"
 # Launchers that run the named tool as an argument (`uvx ... prover-tools`).
 LAUNCHERS: typ.Final = frozenset({"uvx", "uv", "pipx"})
+DIRECTORY_OPTIONS: typ.Final = frozenset({"-C", "--chdir"})
 INTERPRETERS: typ.Final = frozenset({
     "sh",
     "bash",
@@ -73,7 +80,8 @@ CARGO_INSTALLS: typ.Final = (["cargo", "install"], ["cargo", "binstall"])
 
 def _is_assignment(word: str) -> bool:
     """Return whether *word* is a `NAME=value` environment assignment."""
-    return "=" in word.split("/", maxsplit=1)[0]
+    name, separator, _ = word.partition("=")
+    return bool(separator) and name.isidentifier()
 
 
 def _is_option_or_assignment(word: str) -> bool:
@@ -87,21 +95,50 @@ def _takes_argument(wrapper: str, option: str, rest: list[str]) -> bool:
     return option in options and bool(rest)
 
 
-def _drop_options(rest: list[str], wrapper: str) -> None:
-    """Remove a wrapper's options, assignments and option arguments from *rest*."""
+def _is_directory_option(wrapper: str, option: str) -> bool:
+    """Return whether *option* of *wrapper* changes the command's directory."""
+    if wrapper != "env":
+        return False
+    return option in DIRECTORY_OPTIONS or option.startswith("--chdir=")
+
+
+def _drop_options(rest: list[str], wrapper: str) -> bool:
+    """Remove a wrapper's options, assignments and option arguments from *rest*.
+
+    Returns
+    -------
+    bool
+        Whether an option moved the wrapped command to another directory.
+    """
+    moved = False
     while rest and _is_option_or_assignment(rest[0]):
         option = rest.pop(0)
+        moved = moved or _is_directory_option(wrapper, option)
         if _takes_argument(wrapper, option, rest):
             rest.pop(0)
+    return moved
+
+
+def _unwrap(argv: cabc.Sequence[str]) -> tuple[list[str], bool]:
+    """Return *argv* without leading assignments and wrappers, and whether it moved."""
+    rest = list(argv)
+    while rest and _is_assignment(rest[0]):
+        rest.pop(0)
+    moved = False
+    while rest and rest[0] in WRAPPERS:
+        wrapper = rest.pop(0)
+        moved = _drop_options(rest, wrapper) or moved
+    return rest, moved
 
 
 def unwrap(argv: cabc.Sequence[str]) -> list[str]:
-    """Return *argv* without leading wrapper commands and their options."""
-    rest = list(argv)
-    while rest and rest[0] in WRAPPERS:
-        wrapper = rest.pop(0)
-        _drop_options(rest, wrapper)
-    return rest
+    """Return *argv* without leading assignments, wrapper commands and options."""
+    return _unwrap(argv)[0]
+
+
+def wrapper_changes_directory(argv: cabc.Sequence[str]) -> bool:
+    """Return whether a wrapper (`env -C dir`) runs the command in another directory."""
+    return _unwrap(argv)[1]
 
 
 def _words(argv: cabc.Sequence[str]) -> list[str]:
