@@ -18,8 +18,7 @@ rolling release), and always passes `--no-source-fallback`, so a missing
 published lint library or Dylint tool archive fails the run instead of being
 compiled. The action's own contract in shared-actions proves those rules. This
 rule therefore does not re-check installer flags; it proves that the action is
-the only route, and that every use of it names a certified revision (see
-below).
+the only route, and that every use of it names a certified revision (see below).
 
 ## Certification
 
@@ -34,11 +33,11 @@ SHA is certified when **all** of these hold:
 2. it equals, or descends from, the commit of a certification tag;
 3. its `install-whitaker` runtime digest equals that tag's.
 
-The digest hashes each runtime file's mode, blob id and path. Runtime files
-are every file in the directory except the `tests/` tree and Markdown files,
-which the action does not execute, so a change confined to those does not move
-the digest. Any other file counts, including one added later, so an unknown
-file fails closed. Descent alone would not do: a later commit could drop
+The digest hashes each runtime file's mode, blob id and path. Runtime files are
+every file in the directory except the `tests/` tree and Markdown files, which
+the action does not execute, so a change confined to those does not move the
+digest. Any other file counts, including one added later, so an unknown file
+fails closed. Descent alone would not do: a later commit could drop
 `--no-source-fallback`. A commit that changes the runtime content (a new
 installer release) therefore stays noncompliant until the maintainer tags it,
 and a commit that leaves it alone needs nothing. Any certified tag certifies,
@@ -51,10 +50,11 @@ each pinned SHA in the envelope's `install_certifications`; the policy reads
 that fact. See "What the rule reports" below for how each answer is judged.
 
 `scripts/whitaker_revisions.py certify <clone> <commit> --installer-version
-<version>` checks a candidate (on `main`, holds the action, runtime files name
-no `tests/` or Markdown path) and prints the `git tag -a` and `git push`
-commands, which it never runs. `list <clone>` prints each floor and the
-first-parent commits the floors certify.
+<version>`
+checks a candidate (on `main`, holds the action, runtime files name no
+`tests/` or Markdown path) and prints the `git tag -a` and `git push` commands,
+which it never runs. `list <clone>` prints each floor and the first-parent
+commits the floors certify.
 
 ### What the rule reports
 

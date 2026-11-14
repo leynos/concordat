@@ -785,19 +785,20 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   match it. The package is registered by identifier and declares the kind. The
   certification of `install-whitaker` revisions is by content and lives in
   shared-actions: a revision is certified when it is on the default branch,
-  equals or descends from the commit of a `certified/install-whitaker/<version>`
-  tag, and has the same runtime digest (every file except `tests/` and
-  Markdown, hashed by mode, blob and path) as that tag's commit. The decision
-  is `concordat.rules.whitaker_certification.certify_revision`, transport-free
+  equals or descends from the commit of a
+  `certified/install-whitaker/<version>` tag, and has the same runtime digest
+  (every file except `tests/` and Markdown, hashed by mode, blob and path) as
+  that tag's commit. The decision is
+  `concordat.rules.whitaker_certification.certify_revision`, transport-free
   over a source protocol; `github_whitaker_certification` reads the facts from
   the GitHub API (`git/matching-refs`, `compare` and a recursive `git/trees`
   read of `<sha>:<directory>`), caching them for the run only, and maps every
   failing lookup to `unknown`, which the policy reports as indeterminate. The
   envelope builder stays a query over the checkout and records an empty
-  `install_certifications`; `provisioning_certification.certifying`, composed
-  by `concordat artefact rule run` beside `resolving_pins`, fills it for each
+  `install_certifications`; `provisioning_certification.certifying`, composed by
+  `concordat artefact rule run` beside `resolving_pins`, fills it for each
   distinct full-SHA pin, so the network stays at the command boundary. Rego
-  reads the fact and never assumes it: a missing or unrecognised answer is
+  reads the fact and never assumes it: a missing or unrecognized answer is
   indeterminate. The clone form, `concordat.rules.whitaker_revisions` (owner:
   the whitaker-provisioning package; callers: `scripts/whitaker_revisions.py`
   and its tests only), computes the same digest with pygit2.
@@ -806,8 +807,8 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `certify <clone> <commit> --installer-version <v>` checks that a candidate is
   on `--tip` (default `origin/main`), holds the action and has runtime files
   that name no `tests/` or Markdown path, then prints the `git tag -a` and
-  `git push` commands; it never tags, since only a maintainer may certify.
-  Both exit 2 when the clone cannot be read. The fixture generator decides each
+  `git push` commands; it never tags, since only a maintainer may certify. Both
+  exit 2 when the clone cannot be read. The fixture generator decides each
   fixture's certification with the production decision over a synthetic action
   repository (`FixtureHistory`), so the envelopes record real verdicts. The
   reviewed revision snapshot under `tests/fixtures/whitaker/` is an independent
@@ -818,9 +819,9 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   certified. Approving a floor also needs a human check that its runtime files
   reach excluded content (tests or Markdown) by no indirect route, such as a
   glob or a computed path: the automatic scan only refuses literal `tests/` and
-  `.md` mentions. The shared batch helper accepts the runner's envelope union so
-  these provisioning envelopes reuse its existing result-to-file completeness
-  checks.
+  `.md` mentions. The shared batch helper accepts the runner's envelope union
+  so these provisioning envelopes reuse its existing result-to-file
+  completeness checks.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded

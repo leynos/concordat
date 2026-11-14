@@ -181,7 +181,8 @@ class GithubCertificationSource:
         try:
             return self._connected().compare_status(self._owner, self._name, base, head)
         except _LOOKUP_FAILURES as error:
-            raise _unavailable(endpoint, error) from error
+            failure = _unavailable(endpoint, error)
+            raise failure from error
 
     def _read_floors(self) -> list[Floor]:
         """Read and peel every certification tag."""
@@ -190,7 +191,8 @@ class GithubCertificationSource:
         try:
             refs = client.matching_refs(self._owner, self._name, namespace)
         except _LOOKUP_FAILURES as error:
-            raise _unavailable(f"git/matching-refs/{namespace}", error) from error
+            failure = _unavailable(f"git/matching-refs/{namespace}", error)
+            raise failure from error
         floors = [self._floor(client, ref) for ref in refs]
         return sorted(floors)
 
@@ -224,7 +226,8 @@ class GithubCertificationSource:
         try:
             tag = client.git_tag(self._owner, self._name, sha)
         except _LOOKUP_FAILURES as error:
-            raise _unavailable(f"git/tags/{sha}", error) from error
+            failure = _unavailable(f"git/tags/{sha}", error)
+            raise failure from error
         inner = tag.get("object") if isinstance(tag, dict) else None
         return inner if isinstance(inner, dict) else {}
 
@@ -236,7 +239,8 @@ class GithubCertificationSource:
                 self._owner, self._name, treeish, recursive=True
             )
         except _LOOKUP_FAILURES as error:
-            raise _unavailable(f"git/trees/{treeish}", error) from error
+            failure = _unavailable(f"git/trees/{treeish}", error)
+            raise failure from error
         if tree is None:
             return None
         if tree.get("truncated"):

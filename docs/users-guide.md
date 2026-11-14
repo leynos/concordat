@@ -644,15 +644,16 @@ uv run python scripts/whitaker_revisions.py certify ../shared-actions \
 uv run python scripts/whitaker_revisions.py list ../shared-actions
 ```
 
-`certify` exits 2 when the commit is not on the first-parent history of
-`--tip` (default `origin/main`), lacks the action, names a version that is
-already tagged, or has runtime files that mention `tests/` or a Markdown path;
-`list` prints each floor and the first-parent commits the floors certify,
-oldest first. Whitaker itself is exempt as the producer, and a developer-environment script
-that CI never runs may be exempted by name, repository and reason in the rule's
-parameters. Exemptions match the repository slug read from the `origin` remote.
-See `platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for
-what the policy recognizes and what it declines to judge.
+`certify` exits 2 when the commit is not on the first-parent history of `--tip`
+(default `origin/main`), lacks the action, names a version that is already
+tagged, or has runtime files that mention `tests/` or a Markdown path; `list`
+prints each floor and the first-parent commits the floors certify, oldest
+first. Whitaker itself is exempt as the producer, and a developer-environment
+script that CI never runs may be exempted by name, repository and reason in the
+rule's parameters. Exemptions match the repository slug read from the `origin`
+remote. See
+`platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for what
+the policy recognizes and what it declines to judge.
 
 ### Auditing nested cargo fixture lockfiles
 
