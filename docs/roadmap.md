@@ -709,6 +709,14 @@ the Section 2.1.2 format.
   within a 56-day window, requires a Dependabot `rust-toolchain` entry, and
   requires a declared MSRV to be exercised by CI. RT-006 stays until RT-023 is
   live estate-wide, then a separate change retires it.
+- [x] Ship the prover tooling rule (PT-001 to PT-005, DF12-102): the
+  `rust-prover-tooling` package holds a repository that uses Kani or Verus to
+  one `rust-prover-tools` pin, installation in CI only through the shared
+  `install-prover-tools` action pinned by SHA, no local installer scripts and
+  no tests of installation, with exceptions recorded as data in `.concordat`.
+  Acceptance: over the estate's main branches it reads the repositories the
+  survey script reads as done as compliant, the one with local installers as
+  noncompliant, and the excepted one as compliant.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and

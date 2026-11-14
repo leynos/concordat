@@ -769,6 +769,20 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   and per job whether a `setup-rust` step opts out of the wrapper export and
   whether `RUSTC_WRAPPER` is named anywhere in the workflow or job. The Rego
   policy classifies the values against the `temporary_patterns` parameter.
+- `policy-input/rust-prover-tooling` —
+  `prover_tooling_envelope.build_prover_tooling_envelope`, assembling the facts
+  of `prover_make_facts`, `prover_workflow_facts`, `prover_script_facts`,
+  `prover_pins` and `prover_exceptions`. It reads the root Makefile through
+  `makeutil` (rules, for following a CI `make` step through its prerequisites,
+  and the literal `rust-prover-tools` revisions of its variables), reuses the
+  shared workflow reader, and classifies each `run` command and recipe line with
+  `prover_commands` (`shlex` argument vectors: installer or runner). It also
+  records `tools/rust-prover-tools/REF` and the prover version files, local
+  installer scripts (by name, shell commands and Python string constants from
+  the `ast`), test file names, and the exceptions declared under
+  `language.rust.prover_tools` in `.concordat`, with whether each decision
+  record exists. A Makefile `makeutil` refuses is a fact (`makefile.state`),
+  not a raise.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every

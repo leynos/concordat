@@ -70,6 +70,13 @@ from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
 from .nested_cargo_registry import BY_KIND as NESTED_CARGO_BY_KIND
 from .nested_cargo_registry import BY_PACKAGE as NESTED_CARGO_BY_PACKAGE
 from .nested_cargo_registry import NestedCargoEnvelope
+from .prover_tooling_envelope import (
+    ENVELOPE_KIND as PROVER_TOOLING_ENVELOPE_KIND,
+)
+from .prover_tooling_envelope import (
+    build_prover_tooling_envelope,
+)
+from .prover_tooling_types import ProverToolingEnvelope
 from .rust_sources import has_rust_sources
 from .spelling_envelope import (
     DEFAULT_VENDORED_PATTERNS,
@@ -119,6 +126,7 @@ type RuleEnvelope = (
     | DocumentationEnvelope
     | ToolchainPolicyEnvelope
     | YamlLintEnvelope
+    | ProverToolingEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -582,6 +590,7 @@ def _observed[E](
 _uv_gate_envelope = _observed(build_uv_gate_envelope)
 _documentation_envelope = _observed(build_documentation_envelope)
 _yaml_lint_envelope = _observed(build_yaml_lint_envelope)
+_prover_tooling_envelope = _observed(build_prover_tooling_envelope)
 
 
 # Every rule package's envelope builder, keyed by package identifier. The
@@ -607,6 +616,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "documentation-presence": _documentation_envelope,
     "whitaker-provisioning": _provisioning_envelope,
     "yaml-lint-baseline": _yaml_lint_envelope,
+    "rust-prover-tooling": _prover_tooling_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -627,6 +637,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     DOCUMENTATION_ENVELOPE_KIND: _documentation_envelope,
     PROVISIONING_ENVELOPE_KIND: _provisioning_envelope,
     YAML_LINT_ENVELOPE_KIND: _yaml_lint_envelope,
+    PROVER_TOOLING_ENVELOPE_KIND: _prover_tooling_envelope,
 })
 
 

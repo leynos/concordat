@@ -259,6 +259,21 @@ artifacts:
     description: >-
       Rule package manifest for the nested cargo CI wiring audit.
     sha256: 7da6b7ff13fee41088a0e66db62a94cc24b0d21673dbb5fc05734172d64d3349
+  - id: lint-rule-rust-prover-tooling
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/rust-prover-tooling/policy/rust_prover_tooling.rego
+    description: >-
+      Sensor for how a repository that uses Kani or Verus obtains them: one
+      rust-prover-tools pin, installation in CI only through the shared action
+      pinned by SHA, no local installers or installation tests, and recorded
+      exceptions.
+    sha256: 2d5fd7a6d0864e3a6afa1f6ebfc0c728e7d8c7ccc02344570f00f779e08463f3
+  - id: lint-rule-rust-prover-tooling-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-prover-tooling/rule.yaml
+    description: >-
+      Rule package manifest for the rust-prover-tooling audit.
+    sha256: 445d5de93a9f49af9bbdd63362c227e0ca926ce643c8c562e22149301311267e
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

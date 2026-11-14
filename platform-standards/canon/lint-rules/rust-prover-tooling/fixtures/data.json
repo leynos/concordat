@@ -1,0 +1,1296 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "compliant_run_only": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "not_applicable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [],
+      "pins": [],
+      "runs_prover": false,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": false,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": []
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "not_applicable_no_workflows": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [],
+      "pins": [],
+      "runs_prover": false,
+      "workflows": [],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "no_pin": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "second_pin": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "Makefile"
+        },
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "workflow"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "wrong_pin": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "ci_installer": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [
+            {
+              "where": "verify/3",
+              "command": "make verus"
+            }
+          ],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "shared_floating_tag": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "main"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "shared_short_sha": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "local_installer": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [
+        {
+          "path": "scripts/install_kani.py",
+          "reason": "name"
+        }
+      ],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "install_test": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [
+        "tests/verus_install_test.rs"
+      ],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "excepted": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [
+            {
+              "where": "verify/3",
+              "command": "make verus"
+            }
+          ],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-002"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "Kani provenance names 9c4a27a8",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": true
+        }
+      ]
+    },
+    "excepted_pin_moved": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-002"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "Kani provenance names 9c4a27a8",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": true
+        }
+      ]
+    },
+    "excepted_record_absent": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-002"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "Kani provenance names 9c4a27a8",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": false
+        }
+      ]
+    },
+    "excepted_unwaivable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "v1"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-003"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "Kani provenance names 9c4a27a8",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": true
+        }
+      ]
+    },
+    "excepted_blank_rationale": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-002"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "  ",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": true
+        }
+      ]
+    },
+    "excepted_does_not_waive_other_clauses": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [
+        {
+          "path": "scripts/install_kani.py",
+          "reason": "name"
+        }
+      ],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-002"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "Kani provenance names 9c4a27a8",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": true
+        }
+      ]
+    },
+    "workflow_unreadable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": "mapping values are not allowed here",
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "makefile_refused": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "refused",
+        "error": "makeutil refused the Makefile"
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "makefile_refused_no_make_step": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "refused",
+        "error": "refused"
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": false,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "makefile_refused_but_waived": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "refused",
+        "error": "refused"
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": false,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-002"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "Kani provenance names 9c4a27a8",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": true
+        }
+      ]
+    },
+    "make_unresolved": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [
+            {
+              "where": "verify/3",
+              "command": "make -C sub verus"
+            }
+          ],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "make_unresolved_alone": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [],
+      "pins": [],
+      "runs_prover": false,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [
+            {
+              "where": "verify/3",
+              "command": "make -C sub verify"
+            }
+          ],
+          "shared_uses": []
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "make_unresolved_but_waived": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "9c4a27a86c678ceac1155404f45d95ee4a14a172",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [
+            {
+              "where": "verify/3",
+              "command": "make -C sub verus"
+            }
+          ],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": [
+        {
+          "clauses": [
+            "PT-001",
+            "PT-002"
+          ],
+          "pin": "9c4a27a8",
+          "record": "docs/adrs/adr-0011.md",
+          "rationale": "Kani provenance names 9c4a27a8",
+          "review_trigger": "Kani evidence recapture",
+          "record_present": true
+        }
+      ]
+    },
+    "unreadable_workflow_without_other_evidence": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [],
+      "pins": [],
+      "runs_prover": false,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": "bad yaml",
+          "calls_make": false,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": []
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "unreadable_file_without_other_evidence": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [],
+      "pins": [],
+      "runs_prover": false,
+      "workflows": [],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [
+        "scripts/x.sh: denied"
+      ],
+      "exceptions": []
+    },
+    "mutable_reference": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "main",
+          "source": "Makefile"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "suffixed_revision": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029-patched",
+          "source": "Makefile recipe"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "file_unreadable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/verus/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "workflows": [
+        {
+          "path": ".github/workflows/verus.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [
+        "scripts/install.sh: permission denied"
+      ],
+      "exceptions": []
+    },
+    "not_an_envelope": {
+      "schema_version": 2,
+      "kind": "other"
+    }
+  }
+}

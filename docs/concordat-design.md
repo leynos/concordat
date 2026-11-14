@@ -3047,6 +3047,23 @@ Temporary-path patterns and exemptions are rule parameters. No estate workflow
 trips the rule today, so its proof is synthetic; the corpus holds no real bad
 instance.
 
+##### Prover tooling
+
+`rust-prover-tooling` (PT-001 to PT-005) holds a repository that uses Kani or
+Verus to the estate's one way of obtaining them: one `rust-prover-tools` pin,
+installation in CI only through the shared `install-prover-tools` action pinned
+by SHA, no local installer scripts, and no tests of installation. The design
+question is telling an installer from a runner. A text search cannot: a recipe
+that prints `prover-tools verus install` mentions the installer, and a CI step
+that runs `make verus` is an installer only if `verus` depends on
+`verus-install`. The envelope therefore classifies parsed command lines, and
+follows the Makefile's prerequisites through the pinned `makeutil` report, so
+the policy is given facts about steps rather than text. The estate pin is a
+rule parameter, so bumping it is one change. Named exceptions are data in
+`.concordat`, as BD-010's are, and hold only while the pin they name is still
+the pin in the checkout and their decision record exists. The rule replaced a
+survey script whose verdicts it reproduces over the estate.
+
 #### 3.1.4 Verifying the reconciliation invariants
 
 Several checks reduce to a pure comparator over a small structured input, where

@@ -876,6 +876,27 @@ should use it (`RUSTC_WRAPPER="$SCCACHE_PATH" cargo test`) and the job passes.
 The `temporary_patterns` and `exemptions` parameters tune the check; an
 exemption names the repository, workflow and reason.
 
+### Auditing prover tooling
+
+The `rust-prover-tooling` rule holds a repository that uses Kani or Verus to
+the estate's one way of getting them:
+
+```shell
+concordat artefact rule run rust-prover-tooling --repo /path/to/checkout
+```
+
+**PT-001** requires one `rust-prover-tools` pin, equal to the estate's
+(`prover_tools_ref`). **PT-002** refuses a workflow step that installs a prover
+itself, directly or through a `make` target whose prerequisites install; a step
+that only runs proofs on an installed toolchain passes. **PT-003** requires the
+shared `install-prover-tools` action to be pinned by a full SHA. **PT-004**
+refuses local installer scripts and **PT-005** tests of prover installation. A
+repository that stays on another pin on purpose records an exception in
+`.concordat` under `language.rust.prover_tools.exceptions`, naming the clauses
+(PT-001, PT-002, PT-004), the `pin`, a decision `record`, a rationale and a
+review trigger; it holds while that pin is the pin in the checkout. See the
+[rule reference](../platform-standards/canon/lint-rules/rust-prover-tooling/README.md).
+
 ### Auditing Rust development build storage
 
 The `rust-dev-build-footprint` rule keeps default development builds small:
