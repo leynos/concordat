@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
-from .prover_commands import is_installer, is_runner
+from .prover_commands import is_installer, is_runner, script_invoked
 from .prover_make_facts import commands_reached, goals
 from .prover_pins import command_pins
 from .shell_commands import Argv, commands
@@ -62,7 +62,8 @@ def installs(argv: Argv, installer_scripts: frozenset[str]) -> bool:
     """
     if is_installer(argv):
         return True
-    return any(word.removeprefix("./") in installer_scripts for word in argv)
+    script = script_invoked(argv)
+    return script is not None and script in installer_scripts
 
 
 def _shared_use(where: str, step: dict[str, object]) -> list[SharedUse]:

@@ -333,3 +333,20 @@ def test_a_ref_file_that_leaves_the_checkout_stops_the_run(
     link.symlink_to(outside)
     with pytest.raises(OperationalRuleError):
         build_prover_tooling_envelope(root)
+
+
+def test_a_script_named_by_echo_is_not_an_installer_step(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Printing a local installer's path runs nothing, so only PT-004 applies."""
+    root = checkout(tmp_path, steps=(INSTALL_STEP, run_step("echo scripts/get.sh")))
+    put(root, "scripts/get.sh", "#!/bin/sh\nprover-tools verus install\n")
+    assert ids(root) == {"PT-004"}
+
+
+def test_an_installer_behind_a_shell_conditional_is_noncompliant(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`if ...; then cargo kani setup; fi` installs Kani."""
+    steps = (run_step("if true; then cargo kani setup; fi"),)
+    assert ids(checkout(tmp_path, steps=steps)) == {"PT-002"}

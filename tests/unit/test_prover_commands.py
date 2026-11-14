@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from concordat.rules.prover_commands import is_installer, is_runner
+from concordat.rules.prover_commands import is_installer, is_runner, script_invoked
 from concordat.rules.shell_commands import commands
 
 
@@ -95,3 +95,36 @@ def test_a_redirect_ampersand_does_not_split_a_command() -> None:
     """`>&2` is a redirection, not a background operator."""
     (argv,) = commands("prover-tools verus install >&2")
     assert is_installer(argv)
+
+
+def test_a_conditional_installer_is_seen_through_shell_keywords() -> None:
+    """`then` and `fi` are keywords, not commands, so the installer behind one shows."""
+    found = commands("if true; then cargo kani setup; fi")
+    assert [is_installer(argv) for argv in found] == [False, True]
+
+
+def test_an_argument_named_prover_tools_is_not_the_runner() -> None:
+    """`prover-tools` is the executable, not any word in a command line."""
+    (argv,) = commands("git diff -- prover-tools verus install")
+    assert not is_installer(argv)
+
+
+@pytest.mark.parametrize(
+    ("line", "runs_script"),
+    [
+        ("./scripts/get.sh", True),
+        ("scripts/get.sh --flag", True),
+        ("bash -x scripts/get.sh", True),
+        ("sh scripts/get.sh", True),
+        ("$(PYTHON) scripts/get.sh", True),
+        ("echo scripts/get.sh", False),
+        ("cat scripts/get.sh", False),
+        ("git add scripts/get.sh", False),
+    ],
+)
+def test_a_script_is_run_only_as_a_command_or_an_interpreter_operand(
+    line: str, *, runs_script: bool
+) -> None:
+    """Naming a script as an argument to another command does not run it."""
+    (argv,) = commands(line)
+    assert (script_invoked(argv) == "scripts/get.sh") is runs_script

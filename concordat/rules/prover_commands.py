@@ -30,7 +30,7 @@ import typing as typ
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-__all__ = ["is_installer", "is_runner"]
+__all__ = ["is_installer", "is_runner", "script_invoked"]
 
 TOOLS: typ.Final = frozenset({"kani", "verus", "z3"})
 RUN_VERBS: typ.Final = frozenset({"run", "exec", "check-version"})
@@ -50,6 +50,18 @@ WRAPPERS: typ.Final = frozenset({
 ENV_OPTIONS_WITH_ARGUMENT: typ.Final = frozenset({"-u", "-C", "-S", "--unset"})
 RUNNER_BINARIES: typ.Final = frozenset({"verus", "cargo-kani", "kani-verifier"})
 PROVER_TOOLS: typ.Final = "prover-tools"
+# Launchers that run the named tool as an argument (`uvx ... prover-tools`).
+LAUNCHERS: typ.Final = frozenset({"uvx", "uv", "pipx"})
+INTERPRETERS: typ.Final = frozenset({
+    "sh",
+    "bash",
+    "dash",
+    "zsh",
+    "python",
+    "python3",
+    "source",
+    ".",
+})
 CARGO_INSTALLS: typ.Final = (["cargo", "install"], ["cargo", "binstall"])
 
 
@@ -99,21 +111,30 @@ def _adjacent(words: list[str], first: cabc.Container[str], second: str) -> bool
     return any(a in first and b == second for a, b in itertools.pairwise(words))
 
 
-def _names_prover_tools(argv: cabc.Sequence[str]) -> bool:
-    """Return whether *argv* is the estate runner, or wraps it in a Make variable.
+def _basename(word: str) -> str:
+    """Return the last path component of *word*."""
+    return word.rsplit("/", maxsplit=1)[-1]
 
-    A masked reference among the words stands for the runner, as does a
-    `prover-tools` word.
+
+def _names_prover_tools(unwrapped: cabc.Sequence[str], words: list[str]) -> bool:
+    """Return whether the command is the estate runner, or a variable standing for it.
+
+    The runner has to be the executable: a leading Make reference stands for it,
+    `prover-tools` is the command word, or a launcher such as `uvx` runs it. A
+    `prover-tools` argument to another command (`git diff -- prover-tools`) is
+    not the runner.
 
     Returns
     -------
     bool
-        Whether a Make reference or a `prover-tools` word is present.
+        Whether the command is the runner.
     """
-    return any(
-        word.startswith("$") or word.rsplit("/", maxsplit=1)[-1] == PROVER_TOOLS
-        for word in argv
-    )
+    if unwrapped[0].startswith("$"):
+        return True
+    head = _basename(words[0])
+    if head == PROVER_TOOLS:
+        return True
+    return head in LAUNCHERS and any(_basename(w) == PROVER_TOOLS for w in words)
 
 
 def _prints(words: list[str]) -> bool:
@@ -123,7 +144,7 @@ def _prints(words: list[str]) -> bool:
 
 def _runner_installs(words: list[str], unwrapped: list[str]) -> bool:
     """Return whether the estate runner is asked to install a tool."""
-    return _adjacent(words, TOOLS, "install") and _names_prover_tools(unwrapped)
+    return _adjacent(words, TOOLS, "install") and _names_prover_tools(unwrapped, words)
 
 
 def _cargo_installs(words: list[str]) -> bool:
@@ -170,7 +191,7 @@ def _is_binary(unwrapped: list[str], words: list[str]) -> bool:
 def _runs_through_runner(unwrapped: list[str], words: list[str]) -> bool:
     """Return whether the estate runner is asked to run, exec or check a tool."""
     runs = any(_adjacent(words, TOOLS, verb) for verb in RUN_VERBS)
-    return runs and _names_prover_tools(unwrapped)
+    return runs and _names_prover_tools(unwrapped, words)
 
 
 def is_runner(argv: cabc.Sequence[str]) -> bool:
@@ -191,3 +212,30 @@ def is_runner(argv: cabc.Sequence[str]) -> bool:
         or words[:2] == ["cargo", "kani"]
         or _runs_through_runner(unwrapped, words)
     )
+
+
+def _first_operand(words: cabc.Sequence[str]) -> str | None:
+    """Return the first word that is not an option."""
+    return next((w for w in words if not w.startswith("-")), None)
+
+
+def script_invoked(argv: cabc.Sequence[str]) -> str | None:
+    """Return the script a command runs, as a path without a leading `./`.
+
+    A script is run when it is the command (`./scripts/get.sh`), or the first
+    operand of an interpreter (`bash -x scripts/get.sh`) or of a Make variable
+    standing for one (`$(PYTHON) scripts/get.py`). A script merely named as an
+    argument to another command (`echo scripts/get.sh`) is not run.
+
+    Returns
+    -------
+    str | None
+        The script path, or None when the command runs none.
+    """
+    unwrapped = _unwrap(argv)
+    if not unwrapped:
+        return None
+    head = unwrapped[0]
+    is_interpreter = head.startswith("$") or _basename(head) in INTERPRETERS
+    operand = _first_operand(unwrapped[1:]) if is_interpreter else head
+    return None if operand is None else operand.removeprefix("./")

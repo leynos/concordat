@@ -24,6 +24,20 @@ MARKER_PREFIX: typ.Final = "@-+"
 OPERATORS: typ.Final = frozenset(";|&()")
 REDIRECTS: typ.Final = frozenset("<>")
 HEREDOC: typ.Final = re.compile(r"<<-?")
+CONTROL_WORDS: typ.Final = frozenset({
+    "if",
+    "then",
+    "else",
+    "elif",
+    "fi",
+    "do",
+    "done",
+    "while",
+    "until",
+    "!",
+    "{",
+    "}",
+})
 MASK: typ.Final = "$X"
 QUOTES: typ.Final = frozenset({"'", '"'})
 PAREN_DEPTH: typ.Final = {"(": 1, ")": -1}
@@ -130,12 +144,21 @@ def _non_empty(segments: cabc.Iterable[str]) -> list[str]:
     return [stripped for segment in segments if (stripped := segment.strip())]
 
 
+def _without_control_words(words: Argv) -> Argv:
+    """Return *words* without the leading shell keywords (`then`, `do`, `!`)."""
+    start = 0
+    while start < len(words) and words[start] in CONTROL_WORDS:
+        start += 1
+    return words[start:]
+
+
 def _words_of(segment: str) -> Argv:
     """Return one segment's words, or none when it does not tokenize."""
     try:
-        return shlex.split(segment, comments=False, posix=True)
+        words = shlex.split(segment, comments=False, posix=True)
     except ValueError:
         return []
+    return _without_control_words(words)
 
 
 def _heredoc_delimiter(argv: Argv) -> str | None:
