@@ -39,8 +39,14 @@ class Context:
 
 @dataclasses.dataclass(slots=True)
 class StepFacts:
-    """One step's installers, shared uses, make use, whether it runs, and pins."""
+    """One step's installers, shared uses, make use, whether it runs, and pins.
 
+    `where` is the step's `<job>/<index>` place, and `at_root` whether the next
+    command still runs in the repository root (a `cd` clears it).
+    """
+
+    where: str = ""
+    at_root: bool = True
     installers: list[InstallerStep] = dataclasses.field(default_factory=list)
     shared: list[SharedUse] = dataclasses.field(default_factory=list)
     calls_make: bool = False
@@ -86,11 +92,11 @@ def _make_runs(argv: Argv, context: Context) -> bool:
     return any(is_runner(command) for command in reached)
 
 
-def _add_make(facts: StepFacts, where: str, argv: Argv, context: Context) -> None:
+def _add_make(facts: StepFacts, argv: Argv, context: Context) -> None:
     """Record a `make` command's reach into the Makefile."""
     facts.calls_make = True
     if _make_installs(argv, context):
-        facts.installers.append({"where": where, "command": " ".join(argv)})
+        facts.installers.append({"where": facts.where, "command": " ".join(argv)})
     facts.runs = facts.runs or _make_runs(argv, context)
 
 
@@ -100,9 +106,7 @@ def _is_make(argv: Argv) -> bool:
     return bool(command) and command[0] == "make"
 
 
-def _add_command(
-    facts: StepFacts, where: str, argv: Argv, context: Context, *, at_root: bool
-) -> None:
+def _add_command(facts: StepFacts, argv: Argv, context: Context) -> None:
     """Record one `run` command's installs, runs and revision pins.
 
     The root Makefile's rules apply only to a `make` that runs from the
@@ -113,9 +117,10 @@ def _add_command(
     is_install = installs(argv, context.installer_scripts)
     facts.runs = facts.runs or is_install or is_runner(argv)
     if is_install:
-        facts.installers.append({"where": where, "command": " ".join(argv)})
-    if at_root and _is_make(argv):
-        _add_make(facts, where, unwrap(argv), context)
+        facts.installers.append({"where": facts.where, "command": " ".join(argv)})
+    if facts.at_root and _is_make(argv):
+        _add_make(facts, unwrap(argv), context)
+    facts.at_root = facts.at_root and not _leaves_root(argv)
 
 
 def _leaves_root(argv: Argv) -> bool:
@@ -153,11 +158,10 @@ def step_facts(
     StepFacts
         Installers, shared uses, whether it calls make or runs a prover, pins.
     """
-    facts = StepFacts(shared=_shared_use(where, step))
+    facts = StepFacts(where=where, at_root=at_root, shared=_shared_use(where, step))
     run = step.get("run")
     for argv in commands(run) if isinstance(run, str) else []:
-        _add_command(facts, where, argv, context, at_root=at_root)
-        at_root = at_root and not _leaves_root(argv)
+        _add_command(facts, argv, context)
     return facts
 
 
