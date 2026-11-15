@@ -210,6 +210,22 @@ SCENARIOS: typ.Final[dict[str, dict[str, str | None]]] = {
         **crate("a"),
         **crate("b"),
     },
+    "wrapper_members_needing_different_paths": {
+        "Cargo.toml": workspace("crates/a", "crates/b"),
+        "src/lib.rs": None,
+        "tests/it.rs": None,
+        "crates/a/Cargo.toml": (
+            '[package]\nname = "a"\nversion = "0.1.0"\n'
+            '[dev-dependencies]\ntemp-env = "0.3"\n'
+        ),
+        "crates/a/src/lib.rs": "pub fn run() {}\n",
+        "crates/b/Cargo.toml": (
+            '[package]\nname = "b"\nversion = "0.1.0"\n'
+            '[dev-dependencies]\ntemp-env = { version = "0.3", '
+            'features = ["async_closure"] }\n'
+        ),
+        "crates/b/src/lib.rs": "pub fn run() {}\n",
+    },
     "wrapper_not_disallowed": {"Cargo.toml": with_dependency('temp-env = "0.3"')},
     "wrapper_renamed": {
         "Cargo.toml": with_dependency(

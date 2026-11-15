@@ -25,6 +25,7 @@ containment guard: no policy input is read from outside the checkout.
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 
 from .markdown_envelope import resolved_root
@@ -86,19 +87,26 @@ def _wrappers(
     return table((parameters or {}).get("wrapper_paths")) or DEFAULT_WRAPPERS
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Wrapping:
+    """What decides which wrapper crates a member needs disallowed."""
+
+    workspace_dependencies: dict[str, object]
+    wrappers: cabc.Mapping[str, object]
+
+
 def _member_fact(
     reader: Reader,
     directory: pathlib.Path,
     manifest: dict[str, object],
-    workspace_dependencies: dict[str, object],
-    wrappers: cabc.Mapping[str, object],
+    wrapping: _Wrapping,
 ) -> MemberFact:
     """Return what the audit records about one workspace member."""
-    enabled = enabled_features(manifest, workspace_dependencies)
+    enabled = enabled_features(manifest, wrapping.workspace_dependencies)
     return {
         "path": reader.relative(directory),
         "clippy": clippy_fact(reader, directory),
-        "wrappers": wrapper_requirements(enabled, wrappers),
+        "wrappers": wrapper_requirements(enabled, wrapping.wrappers),
     }
 
 
@@ -158,17 +166,16 @@ def build_test_environment_envelope(
         )
         for directory in directories
     }
-    workspace_dependencies = table(
-        table(root_manifest.get("workspace")).get("dependencies")
+    wrapping = _Wrapping(
+        table(table(root_manifest.get("workspace")).get("dependencies")),
+        _wrappers(parameters),
     )
-    wrappers = _wrappers(parameters)
     envelope["members"] = [
         _member_fact(
             reader,
             directory,
             manifests[reader.relative(directory / CARGO_MANIFEST)],
-            workspace_dependencies,
-            wrappers,
+            wrapping,
         )
         for directory in directories
     ]

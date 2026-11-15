@@ -102,30 +102,45 @@ deny contains finding("TE-001", "noncompliant", config.path, 0, msg) if {
 
 # -- TE-002: wrapper crates ------------------------------------------------------------
 
-# One entry per configuration file and wrapper crate, with the members that
-# depend on the crate and the paths the crate needs disallowed.
-wrapper_needs := {need |
+# One group per configuration file and wrapper crate. Members that share a file
+# can need different paths of one crate (one enables a feature that adds an
+# entry point), so the group needs the union of what its members need.
+wrapper_groups := {group |
 	some m in input.members
 	m.clippy.path != null
 	m.clippy.readable == true
 	some w in m.wrappers
-	need := {"config": m.clippy, "crate": w.crate, "paths": w.paths}
+	group := {"path": m.clippy.path, "crate": w.crate}
 }
 
-deny contains finding("TE-002", "noncompliant", need.config.path, 0, msg) if {
+group_needs(group) := {p |
+	some m in input.members
+	m.clippy.path == group.path
+	some w in m.wrappers
+	w.crate == group.crate
+	some p in w.paths
+}
+
+disallowed_by(config_path) := {d |
+	some m in input.members
+	m.clippy.path == config_path
+	some d in m.clippy.disallowed
+}
+
+deny contains finding("TE-002", "noncompliant", group.path, 0, msg) if {
 	audited
-	some need in wrapper_needs
-	missing := {p | some p in need.paths; not p in need.config.disallowed}
+	some group in wrapper_groups
+	missing := group_needs(group) - disallowed_by(group.path)
 	count(missing) > 0
 	users := sort([m.path |
 		some m in input.members
-		m.clippy.path == need.config.path
+		m.clippy.path == group.path
 		some w in m.wrappers
-		w.crate == need.crate
+		w.crate == group.crate
 	])
 	msg := sprintf(
 		"%d workspace member(s) (%s) depend on %s, whose entry points change the process-wide environment; %s does not disallow %s",
-		[count(users), concat(", ", users), need.crate, need.config.path, concat(", ", sort(missing))],
+		[count(users), concat(", ", users), group.crate, group.path, concat(", ", sort(missing))],
 	)
 }
 

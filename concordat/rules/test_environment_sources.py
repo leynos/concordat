@@ -3,60 +3,37 @@
 Clippy, after macro expansion, finds the calls to `std::env::set_var`,
 `remove_var` and `set_current_dir`. This module only finds the ways its verdict
 could be switched off (TE-003), so a file is read with tree-sitter and never
-searched as text. Attributes come from two places:
+searched as text. `test_environment_walk` lists the files of each member,
+`test_environment_sites` finds the attributes in a parsed file (including those
+written inside a macro body) and `test_environment_attributes` decides what each
+one means.
 
-- attribute items and inner attributes in the syntax tree; and
-- attribute-shaped tokens inside macro bodies and invocations (`#[allow(..)]` in
-  a `macro_rules!` transcriber), which tree-sitter leaves as token trees but
-  which Clippy honours once the macro expands.
-
-`test_environment_attributes` decides what each attribute means. A file that
-cannot be read, or whose syntax error names the lint, one of its groups or
-`warnings`, is reported as unreadable: an unread file is not evidence of
-absence. A syntax error elsewhere is ignored, because syntax the parser
+A file that cannot be read, or whose syntax error names the lint, one of its
+groups or `warnings`, is reported as unreadable: an unread file is not evidence
+of absence. A syntax error elsewhere is ignored, because syntax the parser
 predates cannot hide a suppression of this lint.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import os
 import typing as typ
 
 import tree_sitter
 import tree_sitter_rust
 
 from .prover_rust_use import descendants, node_text
-from .test_environment_attributes import (
-    AttributeSite,
-    Suppression,
-    judge,
-    site_scope,
-)
+from .test_environment_attributes import Suppression, judge
+from .test_environment_sites import attribute_sites
+from .test_environment_walk import rust_files
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import pathlib
 
-__all__ = [
-    "SKIPPED_DIRECTORIES",
-    "SourceScan",
-    "Suppression",
-    "scan_suppressions",
-]
+__all__ = ["SourceScan", "Suppression", "scan_suppressions"]
 
 _LANGUAGE: typ.Final = tree_sitter.Language(tree_sitter_rust.language())
 
-SKIPPED_DIRECTORIES: typ.Final = frozenset({
-    "target",
-    "node_modules",
-    ".git",
-    ".venv",
-    "fixtures",
-    "fixture",
-    "vendor",
-})
-ATTRIBUTE_ITEMS: typ.Final = frozenset({"attribute_item", "inner_attribute_item"})
 # Words that make a syntax error relevant: the lint, the groups it is in, and
 # the group of every warning.
 RELEVANT_WORDS: typ.Final = (
@@ -75,78 +52,11 @@ class SourceScan:
     unreadable: list[str] = dataclasses.field(default_factory=list)
 
 
-def _item_site(node: tree_sitter.Node) -> list[AttributeSite]:
-    """Return the attribute an `attribute_item` or `inner_attribute_item` holds."""
-    attribute = next((c for c in node.children if c.type == "attribute"), None)
-    if attribute is None:
-        return []
-    arguments = next((c for c in attribute.children if c.type == "token_tree"), None)
-    if arguments is None or not attribute.children:
-        return []
-    return [
-        AttributeSite(
-            node_text(attribute.children[0]),
-            arguments,
-            node.start_point.row + 1,
-            scope_ok=site_scope(node),
-        )
-    ]
-
-
-def _macro_attribute(
-    hash_token: tree_sitter.Node,
-) -> list[AttributeSite]:
-    """Return the attribute written as `#[name(..)]` or `#![name(..)]` tokens."""
-    following = hash_token.next_sibling
-    if following is not None and following.type == "!":
-        following = following.next_sibling
-    if following is None or following.type != "token_tree":
-        return []
-    named = [c for c in following.children if c.is_named]
-    if not named or named[0].type != "identifier":
-        return []
-    arguments = next((c for c in named[1:] if c.type == "token_tree"), None)
-    if arguments is None:
-        return []
-    return [
-        AttributeSite(
-            node_text(named[0]),
-            arguments,
-            hash_token.start_point.row + 1,
-            scope_ok=True,
-        )
-    ]
-
-
-def _token_tree_sites(tree: tree_sitter.Node) -> list[AttributeSite]:
-    """Return the attribute-shaped tokens directly inside a token tree."""
-    return [
-        site
-        for child in tree.children
-        if child.type == "#"
-        for site in _macro_attribute(child)
-    ]
-
-
-def _sites_of(node: tree_sitter.Node) -> list[AttributeSite]:
-    """Return the attributes a syntax node is, or directly holds as tokens."""
-    if node.type in ATTRIBUTE_ITEMS:
-        return _item_site(node)
-    if node.type == "token_tree":
-        return _token_tree_sites(node)
-    return []
-
-
-def attribute_sites(root: tree_sitter.Node) -> cabc.Iterator[AttributeSite]:
-    """Yield each attribute in a file, in the syntax tree and inside macros.
-
-    Yields
-    ------
-    AttributeSite
-        One entry per attribute, with its name, arguments and line.
-    """
-    for node in descendants(root):
-        yield from _sites_of(node)
+def _is_relevant_error(node: tree_sitter.Node) -> bool:
+    """Return whether a syntax error's text names the lint or a group."""
+    if node.type != "ERROR" and not node.is_missing:
+        return False
+    return any(word in node_text(node) for word in RELEVANT_WORDS)
 
 
 def _error_line(root: tree_sitter.Node) -> int | None:
@@ -154,12 +64,7 @@ def _error_line(root: tree_sitter.Node) -> int | None:
     if not root.has_error:
         return None
     return next(
-        (
-            node.start_point.row + 1
-            for node in descendants(root)
-            if (node.type == "ERROR" or node.is_missing)
-            and any(word in node_text(node) for word in RELEVANT_WORDS)
-        ),
+        (n.start_point.row + 1 for n in descendants(root) if _is_relevant_error(n)),
         None,
     )
 
@@ -191,51 +96,6 @@ def _file_facts(
     ], None
 
 
-def _is_walked(base: pathlib.Path, name: str, members: frozenset[pathlib.Path]) -> bool:
-    """Return whether the walk enters a directory.
-
-    A nested directory with its own `Cargo.toml` that is not a member is
-    another package (a fixture, an example workspace) that Clippy does not lint
-    as part of this one. Links are not followed.
-
-    Returns
-    -------
-    bool
-        True when the directory belongs to the member being walked.
-    """
-    here = base / name
-    if name in SKIPPED_DIRECTORIES or here.is_symlink():
-        return False
-    return here in members or not (here / "Cargo.toml").is_file()
-
-
-def _walk(
-    directory: pathlib.Path, members: frozenset[pathlib.Path], unreadable: list[str]
-) -> list[pathlib.Path]:
-    """Return the Rust files of a member crate, without entering other crates.
-
-    Returns
-    -------
-    list[pathlib.Path]
-        The Rust files, in a stable order.
-    """
-
-    def refuse(error: OSError) -> None:
-        """Record a directory the walk could not list."""
-        unreadable.append(f"{error.filename}: {error.strerror}")
-
-    found: list[pathlib.Path] = []
-    for here, names, files in os.walk(directory, onerror=refuse):
-        base = directory.joinpath(here)
-        names[:] = sorted(n for n in names if _is_walked(base, n, members))
-        found += [
-            base / f
-            for f in sorted(files)
-            if f.endswith(".rs") and not (base / f).is_symlink()
-        ]
-    return found
-
-
 def scan_suppressions(
     checkout: pathlib.Path,
     member_directories: typ.Sequence[pathlib.Path],
@@ -264,7 +124,7 @@ def scan_suppressions(
     sources = sorted({
         source
         for directory in sorted(members)
-        for source in _walk(directory, members, scan.unreadable)
+        for source in rust_files(directory, members, scan.unreadable)
     })
     for source in sources:
         found, problem = _file_facts(source, checkout, parser, lints)

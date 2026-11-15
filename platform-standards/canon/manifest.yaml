@@ -299,7 +299,7 @@ artifacts:
       (and the wrapper crates' entry points), suppressing the lint only by a
       site-level `expect` with a reason, and lowering it in no configuration,
       with unreadable inputs indeterminate and no waiver.
-    sha256: 12a7775d0e1e69d956f2f9606656734889aa505c3837a8ea1c809f6a2ffc1bb9
+    sha256: ee1603d206854876b1cd07bf133f5876461ac7e3e9b6de2e6358a927770bca79
   - id: lint-rule-rust-test-environment-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-test-environment/rule.yaml

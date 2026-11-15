@@ -870,11 +870,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `exclude` globs), finds the Clippy configuration Clippy itself would load for
   each (nearest `.clippy.toml` or `clippy.toml`, not merged), and records the
   wrapper crates each member depends on with the paths each needs disallowed
-  (renames, `workspace = true` and feature gates resolved). The source
-  attributes come from `test_environment_sources`, which parses each member's
-  Rust files with tree-sitter-rust and reports `allow`, reasonless `expect` and
-  wide-scope `expect` attributes. Fixtures are regenerated with
-  `fixtures/generate.py` in the package.
+  (renames, `workspace = true`, default feature forwarding and feature gates
+  resolved) and the crates Cargo enrols as members through path dependencies.
+  The source attributes come from `test_environment_sources`, which parses each
+  member's Rust files with tree-sitter-rust (`test_environment_walk` lists them,
+  `test_environment_sites` finds the attributes, including those written
+  inside macro bodies, and `test_environment_attributes` judges them) and
+  reports `allow`, reasonless `expect` and wide-scope `expect` attributes.
+  `test_environment_config` reads the lints tables and Cargo flags. Fixtures
+  are regenerated with `fixtures/generate.py` in the package.
 - `policy-input/python-duplication-gate` —
   `duplication_gate_envelope.build_duplication_gate_envelope`. It reads
   `pyproject.toml` with `tomllib` (through the shared containment guard), lifts

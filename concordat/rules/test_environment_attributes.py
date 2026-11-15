@@ -9,13 +9,12 @@ from its parsed argument tree, never from text. Three findings are reported:
 - `allow`: an `allow` (also inside `cfg_attr`) that names the lint, a group that
   contains it (`clippy::style`, `clippy::all`), or `warnings`, at any level.
 - `expect-no-reason`: an `expect` of the lint with no `reason`, or a blank one.
-  Ordinary, raw and multi-line string literals all count.
 - `expect-scope`: an `expect` that is an inner attribute, an outer attribute on
   an item that can hold many sites (a `mod`, `trait`, a struct, and the like),
   or an `expect` of a group, because one attribute there silences every site
   added later.
 
-`test_environment_sources` finds the attributes (including those written inside
+`test_environment_sites` finds the attributes (including those written inside
 a macro body, which Clippy honours after expansion); this module decides what
 each one means.
 """
@@ -27,6 +26,7 @@ import itertools
 import typing as typ
 
 from .prover_rust_use import descendants, node_text
+from .test_environment_arguments import Items, has_reason, lint_paths, top_level_items
 
 if typ.TYPE_CHECKING:
     import tree_sitter
@@ -36,7 +36,6 @@ __all__ = ["AttributeSite", "Suppression", "judge", "site_scope"]
 REQUIRED_LINT: typ.Final = "clippy::disallowed_methods"
 LEVELS: typ.Final = frozenset({"allow", "expect"})
 WRAPPING_ATTRIBUTES: typ.Final = frozenset({"cfg_attr"})
-LITERALS: typ.Final = frozenset({"string_literal", "raw_string_literal"})
 # An outer `expect` is a site-level suppression only on one of these. Anything
 # that can hold several statements or items (`mod`, `trait`) is wider than one
 # call, so it is an `expect-scope` finding.
@@ -57,7 +56,6 @@ KIND_NO_REASON: typ.Final = "expect-no-reason"
 KIND_SCOPE: typ.Final = "expect-scope"
 
 type Clause = tuple[str, tree_sitter.Node]
-type Items = list[list[tree_sitter.Node]]
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -140,51 +138,6 @@ def _levelled(site: AttributeSite) -> list[Clause]:
     return []
 
 
-def _top_level_items(tree: tree_sitter.Node) -> Items:
-    """Split an argument tree's own tokens on commas, ignoring nested trees."""
-    items: Items = [[]]
-    for child in tree.children:
-        if child.type in {"(", ")"}:
-            continue
-        if child.type == ",":
-            items.append([])
-        else:
-            items[-1].append(child)
-    return [item for item in items if item]
-
-
-def _lint_path(item: list[tree_sitter.Node]) -> str | None:
-    """Return `clippy::disallowed_methods`-style text for a lint item, if one."""
-    names = [node for node in item if node.type in {"identifier", "::"}]
-    if len(names) != len(item):
-        return None
-    return "".join(node_text(node) for node in names) or None
-
-
-def _literal_text(literal: tree_sitter.Node) -> str | None:
-    """Return a string literal's content, or None for any other node."""
-    if literal.type not in LITERALS:
-        return None
-    return "".join(
-        node_text(part) for part in literal.children if part.type == "string_content"
-    )
-
-
-def _reason_value(item: list[tree_sitter.Node]) -> tree_sitter.Node | None:
-    """Return the value node of a `reason = value` item, or None."""
-    head, *rest = item
-    if node_text(head) != "reason" or len(rest) < 2 or rest[0].type != "=":
-        return None
-    return rest[1]
-
-
-def _has_reason(items: Items) -> bool:
-    """Return whether a `reason` is a string literal with visible content."""
-    values = (_reason_value(item) for item in items)
-    texts = (_literal_text(value) for value in values if value is not None)
-    return any(text is not None and text.strip() for text in texts)
-
-
 def _findings(
     level: str, lint: str, items: Items, site: AttributeSite
 ) -> list[tuple[str, str]]:
@@ -196,7 +149,7 @@ def _findings(
         # is satisfied by any lint in the group, so it proves nothing here.
         return [(KIND_SCOPE, lint)]
     return [
-        *([(KIND_NO_REASON, lint)] if not _has_reason(items) else []),
+        *([(KIND_NO_REASON, lint)] if not has_reason(items) else []),
         *([(KIND_SCOPE, lint)] if not site.scope_ok else []),
     ]
 
@@ -206,9 +159,8 @@ def _clause_suppressions(
 ) -> list[Suppression]:
     """Return what one `level(...)` clause suppresses that the rule disallows."""
     level, tree = clause
-    items = _top_level_items(tree)
-    paths = (_lint_path(item) for item in items)
-    lints = [path for path in paths if path is not None and path in silencing]
+    items = top_level_items(tree)
+    lints = [lint for lint in lint_paths(items) if lint in silencing]
     return [
         Suppression(relative, site.line, kind, found)
         for lint in lints

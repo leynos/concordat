@@ -690,6 +690,74 @@
       "config_suppressions": [],
       "unreadable": []
     },
+    "wrapper_members_needing_different_paths": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": "crates/a",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "temp_env",
+              "paths": [
+                "temp_env::with_var",
+                "temp_env::with_var_unset",
+                "temp_env::with_vars",
+                "temp_env::with_vars_unset"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "crates/b",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "temp_env",
+              "paths": [
+                "temp_env::async_with_vars",
+                "temp_env::with_var",
+                "temp_env::with_var_unset",
+                "temp_env::with_vars",
+                "temp_env::with_vars_unset"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
     "wrapper_not_disallowed": {
       "schema_version": 1,
       "kind": "policy-input/rust-test-environment",

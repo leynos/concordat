@@ -94,6 +94,14 @@ test_wrapper_names_the_missing_paths if {
 	contains(f.msg, "temp_env::with_vars_unset")
 }
 
+test_wrapper_members_needing_different_paths_are_one_finding if {
+	[f] := findings(data.fixtures.wrapper_members_needing_different_paths)
+	f.rule_id == "TE-002"
+	contains(f.msg, "2 workspace member(s) (crates/a, crates/b)")
+	contains(f.msg, "temp_env::async_with_vars")
+	contains(f.msg, "temp_env::with_var")
+}
+
 test_wrapper_renamed if reported(data.fixtures.wrapper_renamed) == {"TE-002/noncompliant"}
 
 test_wrapper_async_feature_inherited if {
