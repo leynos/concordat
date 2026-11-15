@@ -10,16 +10,19 @@ from __future__ import annotations
 
 import dataclasses
 import posixpath
+import re
 import typing as typ
 
 from .prover_commands import (
     is_installer,
     is_runner,
+    is_substantive,
+    proof_tool,
     script_invoked,
     unwrap,
     wrapper_changes_directory,
 )
-from .prover_make_facts import commands_reached, goals
+from .prover_make_facts import EMPTY_RULES, commands_reached, goals
 from .prover_pins import command_pins
 from .shell_commands import Argv, commands
 
@@ -29,12 +32,24 @@ if typ.TYPE_CHECKING:
     from .prover_tooling_types import (
         InstallerStep,
         Pin,
+        ProofRun,
         SharedUse,
         WorkflowFacts,
     )
 
 SHARED_ACTION: typ.Final = "leynos/shared-actions/.github/actions/install-prover-tools"
 ROOT: typ.Final = "."
+# A Make target named for a prover (`kani`, `verus-proof`, `kani-corpus`).
+PROVER_TARGET: typ.Final = re.compile(r"(?:kani|verus)(?:-[\w-]+)?")
+# Make options under which a recipe is printed, tested or touched, not run.
+DRY_RUN_LETTERS: typ.Final = frozenset("nqt")
+DRY_RUN_OPTIONS: typ.Final = frozenset({
+    "--dry-run",
+    "--just-print",
+    "--recon",
+    "--question",
+    "--touch",
+})
 MAKEFILE_OPTIONS: typ.Final = frozenset({
     "-C",
     "-f",
@@ -46,10 +61,17 @@ MAKEFILE_OPTIONS: typ.Final = frozenset({
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Context:
-    """What a step's commands are read against."""
+    """What a step's commands are read against.
+
+    `proof_rules` are the Makefile's rules with its own variables expanded, so
+    a recipe that runs `$(VERUS_RUN)` shows the command the variable stands for,
+    and `proof_scripts` are the scripts whose commands run proofs.
+    """
 
     rules: MakeRules
     installer_scripts: frozenset[str]
+    proof_rules: MakeRules = EMPTY_RULES
+    proof_scripts: dict[str, frozenset[str]] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(slots=True)
@@ -69,6 +91,8 @@ class StepFacts:
     calls_make: bool = False
     runs: bool = False
     pins: list[Pin] = dataclasses.field(default_factory=list)
+    proof_runs: list[ProofRun] = dataclasses.field(default_factory=list)
+    make_goals: list[tuple[str, list[str]]] = dataclasses.field(default_factory=list)
 
 
 def _is_plain(path: str) -> bool:
@@ -138,12 +162,65 @@ def _make_runs(argv: Argv, context: Context) -> bool:
     return any(is_runner(command) for command in reached)
 
 
+def _command_tools(
+    argv: Argv, context: Context, directory: str | None = ROOT
+) -> set[str]:
+    """Return the provers *argv* runs proofs with, directly or through a script.
+
+    Returns
+    -------
+    set[str]
+        `kani` and `verus` as the command, or the repository script it runs,
+        verifies with.
+    """
+    tools = set(context.proof_scripts.get(_script_path(argv, directory), ()))
+    direct = proof_tool(argv)
+    return tools | {direct} if direct is not None else tools
+
+
+def _script_path(argv: Argv, directory: str | None) -> str:
+    """Return the checkout-relative path of the script *argv* runs, or empty."""
+    script = script_invoked(argv)
+    return (resolve(directory, script) or "") if script is not None else ""
+
+
+def _make_tools(argv: Argv, context: Context) -> set[str]:
+    """Return the provers a `make` command reaches proof runs for."""
+    reached = commands_reached(context.proof_rules, goals(context.proof_rules, argv))
+    return {tool for command in reached for tool in _command_tools(command, context)}
+
+
+def _is_dry_run_option(word: str) -> bool:
+    """Return whether *word* makes Make print, test or touch instead of run."""
+    if word.startswith("--"):
+        return word in DRY_RUN_OPTIONS
+    return word.startswith("-") and bool(set(word) & DRY_RUN_LETTERS)
+
+
+def _is_dry_run(argv: Argv) -> bool:
+    """Return whether a `make` command only prints what it would run."""
+    return any(_is_dry_run_option(word) for word in argv[1:])
+
+
+def _add_proof_runs(facts: StepFacts, command: str, tools: set[str]) -> None:
+    """Record one proof run per prover a command verifies with."""
+    facts.proof_runs += [
+        {"where": facts.where, "command": command, "tool": tool}
+        for tool in sorted(tools)
+    ]
+
+
 def _add_make(facts: StepFacts, argv: Argv, context: Context) -> None:
     """Record a `make` command's reach into the Makefile."""
     facts.calls_make = True
     if _make_installs(argv, context):
         facts.installers.append({"where": facts.where, "command": " ".join(argv)})
     facts.runs = facts.runs or _make_runs(argv, context)
+    if _is_dry_run(argv):
+        return
+    command = " ".join(argv)
+    facts.make_goals.append((command, goals(context.proof_rules, argv)))
+    _add_proof_runs(facts, command, _make_tools(argv, context))
 
 
 def _route_make(
@@ -190,6 +267,7 @@ def _add_command(facts: StepFacts, argv: Argv, context: Context) -> None:
     facts.runs = facts.runs or is_install or is_runner(argv)
     if is_install:
         facts.installers.append({"where": facts.where, "command": " ".join(argv)})
+    _add_proof_runs(facts, " ".join(argv), _command_tools(argv, context, directory))
     if _is_make(argv):
         _route_make(facts, unwrap(argv), context, directory)
     facts.directory = _next_directory(facts.directory, argv)
@@ -307,7 +385,46 @@ def _empty(workflow: WorkflowFile) -> WorkflowFacts:
         "installer_steps": [],
         "unresolved_make": [],
         "shared_uses": [],
+        "proof_runs": [],
     }
+
+
+def _is_proof_target(goal: str, context: Context) -> bool:
+    """Return whether *goal* is a prover-named target with a substantive recipe.
+
+    A generator's harnesses are verified inside a test suite, so no recipe names
+    the prover binary; a target named for the prover that does real work counts
+    once the workflow installs the prover through the shared action.
+
+    Returns
+    -------
+    bool
+        Whether the goal names a prover and its recipe does real work.
+    """
+    if PROVER_TARGET.fullmatch(goal) is None:
+        return False
+    reached = commands_reached(context.proof_rules, [goal])
+    return any(is_substantive(argv) for argv in reached)
+
+
+def _installed_then_run(steps: list[StepFacts], context: Context) -> list[ProofRun]:
+    """Return the `make` steps that run a prover-named target after an install.
+
+    Only a workflow that uses the shared install action qualifies: installing
+    through it is what shows the prover is there to be run.
+
+    Returns
+    -------
+    list[ProofRun]
+        The steps whose `make` goals include such a target.
+    """
+    return [
+        {"where": step.where, "command": command, "tool": goal.split("-")[0]}
+        for step in steps
+        for command, targets in step.make_goals
+        for goal in targets
+        if _is_proof_target(goal, context)
+    ]
 
 
 def workflow_facts(
@@ -327,12 +444,36 @@ def workflow_facts(
         return facts, False, []
     runs = False
     pins: list[Pin] = []
+    steps: list[StepFacts] = []
     for where, step, directory in _job_steps(typ.cast("dict[str, object]", document)):
         found = step_facts(where, step, context, directory=directory)
+        steps.append(found)
         facts["installer_steps"] += found.installers
         facts["unresolved_make"] += found.unresolved
         facts["shared_uses"] += found.shared
+        facts["proof_runs"] += found.proof_runs
         facts["calls_make"] = facts["calls_make"] or found.calls_make
         runs = runs or found.runs or bool(found.shared)
         pins += found.pins
+    facts["proof_runs"] += _new_target_runs(facts, steps, context)
     return facts, runs, pins
+
+
+def _new_target_runs(
+    facts: WorkflowFacts, steps: list[StepFacts], context: Context
+) -> list[ProofRun]:
+    """Return the prover-named target runs a workflow adds after its install.
+
+    A workflow that does not use the shared action adds none, and a run the
+    steps already recorded is not repeated.
+
+    Returns
+    -------
+    list[ProofRun]
+        The runs `_installed_then_run` finds that are not yet in *facts*.
+    """
+    if not facts["shared_uses"]:
+        return []
+    known = {tuple(run.values()) for run in facts["proof_runs"]}
+    found = _installed_then_run(steps, context)
+    return [run for run in found if tuple(run.values()) not in known]

@@ -14,4 +14,6 @@ Feature: Rust prover tooling
       | installs Verus in a workflow step     | 1      | PT-002    |
       | uses the shared action by tag         | 1      | PT-003    |
       | keeps a local installer script        | 1      | PT-004    |
+      | holds Kani proofs that nothing runs   | 1      | PT-006    |
+      | runs its Kani proofs from a make target | 0    | compliant |
       | uses no prover                        | 0      | compliant |

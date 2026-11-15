@@ -60,6 +60,44 @@ class SharedUse(typ.TypedDict):
     ref: str
 
 
+class ProofRun(typ.TypedDict):
+    """Store one workflow step that runs proofs, not merely installs a prover.
+
+    Attributes
+    ----------
+    where:
+        `<job>/<step index>`.
+    command:
+        The command that runs proofs, or the `make` target or script that
+        reaches one, as written.
+    tool:
+        `kani` or `verus`: the prover the run verifies with, so a Kani harness
+        is matched to a Kani run and not to a Verus one.
+    """
+
+    where: str
+    command: str
+    tool: str
+
+
+class ProofCode(typ.TypedDict):
+    """Store one kind of proof code found in one Rust file.
+
+    Attributes
+    ----------
+    path:
+        The file, relative to the checkout.
+    kind:
+        `kani-harness`, `verus-block` or `proof-generator`.
+    line:
+        The one-based line of the first occurrence of that kind in the file.
+    """
+
+    path: str
+    kind: str
+    line: int
+
+
 class WorkflowFacts(typ.TypedDict):
     """Store one workflow's prover facts, or the reason it could not be read.
 
@@ -78,6 +116,11 @@ class WorkflowFacts(typ.TypedDict):
         directory, `-C` or `-f`), so what they install is unknown.
     shared_uses:
         Every use of the shared install action.
+    proof_runs:
+        Steps that run proofs: a command that runs Kani or Verus on proof code,
+        a `make` target or script that reaches one, or a `make kani*` or
+        `make verus*` target with a substantive recipe in a workflow that
+        installs through the shared action.
     """
 
     path: str
@@ -86,6 +129,7 @@ class WorkflowFacts(typ.TypedDict):
     installer_steps: list[InstallerStep]
     unresolved_make: list[InstallerStep]
     shared_uses: list[SharedUse]
+    proof_runs: list[ProofRun]
 
 
 class LocalInstaller(typ.TypedDict):
@@ -165,6 +209,8 @@ class ProverToolingEnvelope(typ.TypedDict):
     runs_prover:
         Whether any Makefile recipe, workflow step or script installs or runs a
         prover.
+    proof_code:
+        The proof code in the checkout's Rust sources, read with a parser.
     workflows:
         Every root workflow's prover facts.
     local_installers:
@@ -184,6 +230,7 @@ class ProverToolingEnvelope(typ.TypedDict):
     version_files: list[str]
     pins: list[Pin]
     runs_prover: bool
+    proof_code: list[ProofCode]
     workflows: list[WorkflowFacts]
     local_installers: list[LocalInstaller]
     install_tests: list[str]

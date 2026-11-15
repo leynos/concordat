@@ -3087,20 +3087,28 @@ instance.
 
 ##### Prover tooling
 
-`rust-prover-tooling` (PT-001 to PT-005) holds a repository that uses Kani or
+`rust-prover-tooling` (PT-001 to PT-006) holds a repository that uses Kani or
 Verus to the estate's one way of obtaining them: one `rust-prover-tools` pin,
 installation in CI only through the shared `install-prover-tools` action pinned
-by SHA, no local installer scripts, and no tests of installation. The design
-question is telling an installer from a runner. A text search cannot: a recipe
-that prints `prover-tools verus install` mentions the installer, and a CI step
-that runs `make verus` is an installer only if `verus` depends on
-`verus-install`. The envelope therefore classifies parsed command lines, and
-follows the Makefile's prerequisites through the pinned `makeutil` report, so
-the policy is given facts about steps rather than text. The estate pin is a
-rule parameter, so bumping it is one change. Named exceptions are data in
-`.concordat`, as BD-010's are, and hold only while the pin they name is still
-the pin in the checkout and their decision record exists. The rule replaced a
-survey script whose verdicts it reproduces over the estate.
+by SHA, no local installer scripts, and no tests of installation. PT-006 adds
+that the proofs a repository holds are run: proof code is found with
+tree-sitter-rust (harness attributes resolved through `use` declarations,
+`verus!` blocks, and `quote!` generators in proc-macro crates), so it is read
+from syntax and not text, and it is compared with the workflow steps that run
+proofs, which are not installs or version checks. A repository whose proofs
+nothing runs used to read as not using a prover, which is how they were missed;
+PT-006 is not waivable because its only remedies are to run the proofs or
+remove the code. The design question is telling an installer from a runner. A
+text search cannot: a recipe that prints `prover-tools verus install` mentions
+the installer, and a CI step that runs `make verus` is an installer only if
+`verus` depends on `verus-install`. The envelope therefore classifies parsed
+command lines, and follows the Makefile's prerequisites through the pinned
+`makeutil` report, so the policy is given facts about steps rather than text.
+The estate pin is a rule parameter, so bumping it is one change. Named
+exceptions are data in `.concordat`, as BD-010's are, and hold only while the
+pin they name is still the pin in the checkout and their decision record
+exists. The rule replaced a survey script whose verdicts it reproduces over the
+estate.
 
 ##### Duplication gate scope
 

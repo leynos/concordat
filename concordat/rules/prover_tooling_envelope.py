@@ -1,4 +1,4 @@
-"""Build the facts for the `rust-prover-tooling` rule (PT-001 to PT-005).
+"""Build the facts for the `rust-prover-tooling` rule (PT-001 to PT-006).
 
 A repository that uses Kani or Verus is held to one standard: it pins
 `rust-prover-tools` to a single commit, installs provers in continuous
@@ -17,7 +17,10 @@ never from a text search:
   by `shell_commands` and `prover_commands`;
 - `tools/rust-prover-tools/REF` and the prover version files (`prover_pins`);
 - scripts and tests (`prover_script_facts`) and the exceptions declared in
-  `.concordat` (`prover_exceptions`).
+  `.concordat` (`prover_exceptions`);
+- the proof code in the Rust sources, read with tree-sitter
+  (`prover_proof_facts`), which PT-006 compares with the workflow steps that
+  run proofs.
 
 A workflow, script or Makefile that cannot be read stays a fact with its
 reason, so the policy answers indeterminate rather than reporting a broken
@@ -37,6 +40,7 @@ from .prover_commands import is_installer, is_runner
 from .prover_exceptions import declared_exceptions
 from .prover_make_facts import EMPTY_RULES, all_commands, make_rules, read_makefile
 from .prover_pins import OPERATION, command_pins, makefile_pins, ref_file_pins
+from .prover_proof_facts import scan_proof_code
 from .prover_script_facts import install_tests, scan_scripts
 from .prover_workflow_facts import Context, workflow_facts
 
@@ -102,8 +106,15 @@ def build_prover_tooling_envelope(
     root = resolved_root(checkout)
     state, report = read_makefile(checkout, root, inspect)
     rules = make_rules(report) if report is not None else EMPTY_RULES
+    proof_rules = make_rules(report, expand=True) if report is not None else EMPTY_RULES
     scripts = scan_scripts(checkout)
-    context = Context(rules, frozenset(item["path"] for item in scripts.installers))
+    proofs = scan_proof_code(checkout)
+    context = Context(
+        rules,
+        frozenset(item["path"] for item in scripts.installers),
+        proof_rules,
+        scripts.proof_scripts,
+    )
     workflows, workflows_run, workflow_pins = _workflows(checkout, context)
     pins = ref_file_pins(checkout, root) + workflow_pins + scripts.pins
     pins += makefile_pins(report) if report is not None else []
@@ -117,10 +128,11 @@ def build_prover_tooling_envelope(
         "version_files": _version_files(checkout),
         "pins": pins,
         "runs_prover": makefile_runs or workflows_run or scripts.runs,
+        "proof_code": proofs.proof_code,
         "workflows": workflows,
         "local_installers": scripts.installers,
         "install_tests": install_tests(checkout),
-        "unreadable": scripts.unreadable,
+        "unreadable": scripts.unreadable + proofs.unreadable,
         "exceptions": declared_exceptions(checkout),
     }
 
