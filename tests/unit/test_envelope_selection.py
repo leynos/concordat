@@ -64,6 +64,9 @@ from concordat.rules.prover_tooling_envelope import (
 from concordat.rules.spelling_envelope import (
     ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,
 )
+from concordat.rules.test_environment_envelope import (
+    ENVELOPE_KIND as TEST_ENVIRONMENT_ENVELOPE_KIND,
+)
 from concordat.rules.toolchain_policy_envelope import (
     ENVELOPE_KIND as TOOLCHAIN_POLICY_ENVELOPE_KIND,
 )
@@ -216,6 +219,11 @@ class TestRegisteredPackages:
                 "python-duplication-gate",
                 DUPLICATION_GATE_ENVELOPE_KIND,
                 id="python-duplication-gate",
+            ),
+            pytest.param(
+                "rust-test-environment",
+                TEST_ENVIRONMENT_ENVELOPE_KIND,
+                id="rust-test-environment",
             ),
             pytest.param(
                 "yaml-lint-baseline",
@@ -465,6 +473,7 @@ class TestDeclaredInputKind:
             ("uv-gate-baseline", UV_GATE_ENVELOPE_KIND),
             ("documentation-presence", DOCUMENTATION_ENVELOPE_KIND),
             ("python-duplication-gate", DUPLICATION_GATE_ENVELOPE_KIND),
+            ("rust-test-environment", TEST_ENVIRONMENT_ENVELOPE_KIND),
             ("yaml-lint-baseline", YAML_LINT_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)

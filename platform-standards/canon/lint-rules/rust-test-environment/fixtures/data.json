@@ -1,0 +1,2072 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_dotted_config": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": ".clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_string_entries": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_expect_on_statement": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_expect_on_impl_adapter": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_comments_and_strings": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_other_lint_allowed": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_syntax_error_elsewhere": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_workspace": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": "crates/a",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        },
+        {
+          "path": "crates/b",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_member_own_config": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": "crates/a",
+          "clippy": {
+            "path": "crates/a/clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_unlisted_fixture_crate": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_wrapper_disallowed": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var",
+              "temp_env::with_var",
+              "temp_env::with_var_unset",
+              "temp_env::with_vars",
+              "temp_env::with_vars_unset"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "temp_env",
+              "paths": [
+                "temp_env::with_var",
+                "temp_env::with_var_unset",
+                "temp_env::with_vars",
+                "temp_env::with_vars_unset"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_figment_without_test_feature": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "no_cargo_manifest": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": false
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "no_clippy_config": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": null,
+            "disallowed": [],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "config_without_disallowed_methods": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "missing_set_current_dir": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "member_config_shadows_root": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": "crates/a",
+          "clippy": {
+            "path": "crates/a/clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "member_without_inherited_config": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": "crates/a",
+          "clippy": {
+            "path": null,
+            "disallowed": [],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "workspace_sharing_an_incomplete_config": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": "crates/a",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        },
+        {
+          "path": "crates/b",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "wrapper_members_needing_different_paths": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": "crates/a",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "temp_env",
+              "paths": [
+                "temp_env::with_var",
+                "temp_env::with_var_unset",
+                "temp_env::with_vars",
+                "temp_env::with_vars_unset"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "crates/b",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "temp_env",
+              "paths": [
+                "temp_env::async_with_vars",
+                "temp_env::with_var",
+                "temp_env::with_var_unset",
+                "temp_env::with_vars",
+                "temp_env::with_vars_unset"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "wrapper_not_disallowed": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "temp_env",
+              "paths": [
+                "temp_env::with_var",
+                "temp_env::with_var_unset",
+                "temp_env::with_vars",
+                "temp_env::with_vars_unset"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "wrapper_renamed": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "temp_env",
+              "paths": [
+                "temp_env::with_var",
+                "temp_env::with_var_unset",
+                "temp_env::with_vars",
+                "temp_env::with_vars_unset"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "wrapper_inherited_from_workspace": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": "crates/a",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var",
+              "temp_env::with_var",
+              "temp_env::with_var_unset",
+              "temp_env::with_vars",
+              "temp_env::with_vars_unset"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "temp_env",
+              "paths": [
+                "temp_env::async_with_vars",
+                "temp_env::with_var",
+                "temp_env::with_var_unset",
+                "temp_env::with_vars",
+                "temp_env::with_vars_unset"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "wrapper_target_table": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "env_lock",
+              "paths": [
+                "env_lock::lock_current_dir",
+                "env_lock::lock_env"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "wrapper_figment_test_feature": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "figment",
+              "paths": [
+                "figment::Jail::expect_with",
+                "figment::Jail::try_with"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "allow_on_function": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "allow_crate_level": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "allow_in_cfg_attr": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "tests/it.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "allow_warnings_group": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "warnings"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "allow_inside_a_macro_body": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 3,
+          "kind": "allow",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_raw_string_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "path_dependency_is_an_implicit_member": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        },
+        {
+          "path": "inner",
+          "clippy": {
+            "path": "inner/clippy.toml",
+            "disallowed": [],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "inner/src/lib.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "clippy::all"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "figment_test_feature_by_default": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "figment",
+              "paths": [
+                "figment::Jail::expect_with",
+                "figment::Jail::try_with"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "allow_group_style": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "clippy::style"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "allow_group_all_in_a_list": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "clippy::all"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "expect_without_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "expect-no-reason",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "expect_blank_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "expect-no-reason",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "expect_crate_level": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "expect-scope",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "expect_on_module": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "expect-scope",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "expect_on_group": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "expect-scope",
+          "lint": "clippy::style"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "cargo_lints_allow": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [
+        {
+          "path": "Cargo.toml",
+          "detail": "clippy::disallowed_methods = \"allow\" in a lints table"
+        }
+      ],
+      "unreadable": []
+    },
+    "cargo_lints_table_form": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [
+        {
+          "path": "Cargo.toml",
+          "detail": "clippy::style = \"allow\" in a lints table"
+        }
+      ],
+      "unreadable": []
+    },
+    "cargo_workspace_lints": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [
+        {
+          "path": "Cargo.toml",
+          "detail": "clippy::all = \"allow\" in a lints table"
+        }
+      ],
+      "unreadable": []
+    },
+    "cargo_lints_deny_is_fine": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "cargo_config_rustflags": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [
+        {
+          "path": ".cargo/config.toml",
+          "detail": "a flag allows clippy::disallowed_methods"
+        }
+      ],
+      "unreadable": []
+    },
+    "cargo_config_joined_flag": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [
+        {
+          "path": ".cargo/config.toml",
+          "detail": "a flag allows clippy::style"
+        }
+      ],
+      "unreadable": []
+    },
+    "cargo_config_unrelated_flag": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "clippy_conf_dir_set": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": [
+        ".cargo/config.toml: [env] CLIPPY_CONF_DIR is set, so the Clippy configuration in force is unknown"
+      ]
+    },
+    "clippy_toml_invalid": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [],
+            "readable": false
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": [
+        "clippy.toml: invalid TOML: Invalid value (at end of document)"
+      ]
+    },
+    "cargo_manifest_invalid": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": [
+        "Cargo.toml: invalid TOML: Expected ']' at the end of a table declaration (at line 1, column 9)"
+      ]
+    },
+    "syntax_error_names_the_lint": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": [
+        "src/lib.rs: syntax the parser could not read near line 1 names the disallowed_methods lint, so whether it is suppressed is unknown"
+      ]
+    },
+    "test_file_allow_is_read": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "tests/it.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    }
+  },
+  "parameters": {
+    "required_paths": [
+      "std::env::set_var",
+      "std::env::remove_var",
+      "std::env::set_current_dir"
+    ],
+    "silencing_lints": [
+      "clippy::disallowed_methods",
+      "clippy::style",
+      "clippy::all",
+      "warnings"
+    ],
+    "wrapper_paths": {
+      "temp_env": {
+        "paths": [
+          "temp_env::with_var",
+          "temp_env::with_var_unset",
+          "temp_env::with_vars",
+          "temp_env::with_vars_unset"
+        ],
+        "feature_paths": {
+          "async_closure": [
+            "temp_env::async_with_vars"
+          ]
+        }
+      },
+      "env_lock": {
+        "paths": [
+          "env_lock::lock_env",
+          "env_lock::lock_current_dir"
+        ]
+      },
+      "figment": {
+        "required_feature": "test",
+        "paths": [
+          "figment::Jail::expect_with",
+          "figment::Jail::try_with"
+        ]
+      }
+    }
+  }
+}

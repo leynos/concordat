@@ -1251,6 +1251,41 @@ No clause can be waived. The rule reads `[tool.nose].exclude` only; a test tree
 hidden by a `.gitignore` inside a root is still reported. See the
 [rule reference](../platform-standards/canon/lint-rules/python-duplication-gate/README.md).
 
+### Auditing the test environment (Rust)
+
+The `rust-test-environment` package audits that a Rust repository's tests
+cannot change the process-wide environment:
+
+```shell
+concordat artefact rule run rust-test-environment --repo /path/to/checkout
+```
+
+It applies when the root has a `Cargo.toml`, and holds each workspace member to
+four rules:
+
+- **TE-001**: the Clippy configuration that applies to the member
+  (`.clippy.toml` or `clippy.toml`, nearest first; a member's own file replaces
+  the root's) lists `std::env::set_var`, `std::env::remove_var` and
+  `std::env::set_current_dir` under `disallowed-methods`.
+- **TE-002**: where the member depends on `temp_env`, `env-lock` or figment's
+  `Jail` (with its `test` feature), the same list names that crate's
+  environment-changing functions.
+- **TE-003**: the lint is suppressed only with
+  `#[expect(clippy::disallowed_methods, reason = "...")]` on the function or
+  statement that needs it. `allow`, a missing reason, an `expect` at crate or
+  module level, and a group `allow` such as `clippy::style` are reported with
+  their file and line. When a site is migrated, rustc reports the leftover
+  `expect` as unfulfilled.
+- **TE-004**: no `[lints.clippy]` table and no `-A` flag in
+  `.cargo/config.toml` lowers the lint.
+
+A file the audit cannot read, or `CLIPPY_CONF_DIR` in `.cargo/config.toml`, is
+reported as indeterminate (EN-001). No clause can be waived. Tests that need an
+environment variable or a working directory pass it in through an injected
+object, or run a subprocess with `Command::env` and `Command::current_dir`. See
+the
+[rule reference](../platform-standards/canon/lint-rules/rust-test-environment/README.md).
+
 ### Auditing documentation presence (Python and Rust)
 
 The `documentation-presence` package audits the interrogate gate that keeps
