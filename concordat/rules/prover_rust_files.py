@@ -65,23 +65,30 @@ def rust_files(checkout: pathlib.Path, unreadable: list[str]) -> list[pathlib.Pa
     return found
 
 
-def _declares_proc_macro(manifest: pathlib.Path) -> bool:
-    """Return whether a manifest declares `[lib] proc-macro = true`."""
-    try:
-        document = tomllib.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-        return False
-    library = document.get("lib")
-    return isinstance(library, dict) and library.get("proc-macro") is True
-
-
 class ManifestCache:
-    """Answer whether a Rust file's crate is a proc-macro crate, once per manifest."""
+    """Answer whether a Rust file's crate is a proc-macro crate, once per manifest.
 
-    def __init__(self, checkout: pathlib.Path) -> None:
-        """Remember the checkout the search for a manifest stops at."""
+    A manifest that cannot be read or parsed is reported through *unreadable*
+    and counts as not a proc-macro crate: the generator it might hold cannot be
+    told apart from library text, and EN-001 says so.
+    """
+
+    def __init__(self, checkout: pathlib.Path, unreadable: list[str]) -> None:
+        """Remember the checkout the search stops at and where refusals go."""
         self._checkout = checkout
+        self._unreadable = unreadable
         self._answers: dict[pathlib.Path, bool] = {}
+
+    def _declares_proc_macro(self, manifest: pathlib.Path) -> bool:
+        """Return whether a manifest declares `[lib] proc-macro = true`."""
+        try:
+            document = tomllib.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+            relative = manifest.relative_to(self._checkout).as_posix()
+            self._unreadable.append(f"{relative}: {error}")
+            return False
+        library = document.get("lib")
+        return isinstance(library, dict) and library.get("proc-macro") is True
 
     def _manifest_above(self, source: pathlib.Path) -> pathlib.Path | None:
         """Return the nearest `Cargo.toml` above *source*, within the checkout."""
@@ -104,5 +111,5 @@ class ManifestCache:
         if manifest is None:
             return False
         if manifest not in self._answers:
-            self._answers[manifest] = _declares_proc_macro(manifest)
+            self._answers[manifest] = self._declares_proc_macro(manifest)
         return self._answers[manifest]

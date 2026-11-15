@@ -268,7 +268,7 @@ artifacts:
       only through the shared action pinned by SHA, no local installers or
       installation tests, proof code that a workflow step runs, and recorded
       exceptions.
-    sha256: 824ae5bd2573a4d81fd9e96887f6cc18c7d212daadf8ca37d859646bc2aec51d
+    sha256: ac1bf6324f8dc27ef907a3c2b9f4ae8f6549ae683a43e57a9504c6eda4d17318
   - id: lint-rule-rust-prover-tooling-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-prover-tooling/rule.yaml

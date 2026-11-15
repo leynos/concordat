@@ -293,10 +293,39 @@ deny contains finding("PT-004", "noncompliant", installer.path, msg) if {
 # remedies are to run the proofs or to remove the code.
 workflow_proof_runs(workflow) := object.get(workflow, "proof_runs", [])
 
-proofs_run if {
+# The provers the workflows run proofs with. A Kani harness is matched to a Kani
+# run and a Verus block to a Verus run, so a repository whose only run is Verus
+# does not pass for its Kani harnesses. A generator emits either, so any run
+# will do for it.
+proof_tools contains run.tool if {
 	some workflow in input.workflows
 	workflow.error == null
-	count(workflow_proof_runs(workflow)) > 0
+	some run in workflow_proof_runs(workflow)
+}
+
+# Proof code no run matches.
+unmatched contains item if {
+	some item in proof_code
+	not run_matches(item)
+}
+
+run_matches(item) if {
+	item.kind == "kani-harness"
+	"kani" in proof_tools
+}
+
+run_matches(item) if {
+	item.kind == "verus-block"
+	"verus" in proof_tools
+}
+
+run_matches(item) if {
+	item.kind == "proof-generator"
+	count(proof_tools) > 0
+}
+
+proofs_run if {
+	count(unmatched) == 0
 }
 
 # Whether a workflow runs proofs is knowable only when every workflow was read
@@ -330,9 +359,9 @@ deny contains finding("PT-006", "noncompliant", first.path, msg) if {
 	count(proof_code) > 0
 	not proofs_run
 	count(proof_runs_unknowable) == 0
-	first := proof_code[0]
+	first := sort([item | some item in unmatched])[0]
 	msg := sprintf(
-		"%s holds %s proof code, and no workflow step runs the proofs. Proof code that nothing runs is a comment: run it in CI (installing through the shared install-prover-tools action), or remove it",
+		"%s holds %s proof code, and no workflow step runs proofs for it. Proof code that nothing runs is a comment: run it in CI (installing through the shared install-prover-tools action), or remove it",
 		[first.path, first.kind],
 	)
 }

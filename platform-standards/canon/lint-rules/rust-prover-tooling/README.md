@@ -99,12 +99,20 @@ A workflow step runs proofs when it:
   (`$(shell ...)`) stays masked;
 - runs a repository script whose commands include one, read from shell commands
   and, for Python scripts, from `ast` list literals (`["cargo", "kani", ...]`)
-  and command strings; or
+  and from a command string handed to a process call (`subprocess.run`,
+  `os.system`); a string that is only printed is not a run. A script that runs
+  another script runs what that script runs; or
 - sits in a workflow that installs through the shared action and runs
   `make kani*` or `make verus*` whose recipe does real work (more than
   printing, installing or checking a version). A proof generator's harnesses
   are verified inside a test suite, so no recipe names `cargo kani`; this is
-  the shape theoremc uses.
+  the shape theoremc uses. `cargo kani list` and `setup` do no work, so a
+  target that holds only those does not count.
+
+A run counts for the proof code of the same prover: a Kani harness needs a Kani
+run and a Verus block a Verus run, so a repository whose only run is Verus does
+not pass for its Kani harnesses. A generator is satisfied by either. A `make`
+with `-n`, `-q` or `-t` prints, tests or touches; it does not run.
 
 ## Checks
 
@@ -191,7 +199,10 @@ Only root workflows (`.github/workflows/*.yml`) are read; composite actions are
 not. A Make recipe that reaches an installer only through a variable is not
 seen by PT-002, and PT-006 expands only variables the Makefile itself assigns.
 A script that builds its command from variables, or runs proofs through a
-program the rule does not know, is not seen as running them. A proof generator
-is detected only in a proc-macro crate; a repository that consumes someone
-else's generator is not judged. Whether a repository's proofs are sound is not
-asked.
+program the rule does not know, is not seen as running them. A variable given
+on the `make` command line (`make verify RUN=echo`) is not applied to the
+expansion. Imports are resolved per file, not per module, so an alias imported
+in one module also resolves in another module of the same file, and any
+`<path>::verus!` is read as a Verus block. A proof generator is detected only
+in a proc-macro crate; a repository that consumes someone else's generator is
+not judged. Whether a repository's proofs are sound is not asked.

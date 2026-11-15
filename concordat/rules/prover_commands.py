@@ -34,6 +34,7 @@ __all__ = [
     "is_installer",
     "is_runner",
     "is_substantive",
+    "proof_tool",
     "runs_proofs",
     "script_invoked",
     "unwrap",
@@ -80,6 +81,7 @@ INTERPRETERS: typ.Final = frozenset({
 CARGO_INSTALLS: typ.Final = (["cargo", "install"], ["cargo", "binstall"])
 # Commands that arrange the shell rather than doing work.
 NO_WORK_COMMANDS: typ.Final = frozenset({"cd", "export", "set", "true", ":"})
+KANI_BINARIES: typ.Final = frozenset({"cargo-kani", "kani-driver"})
 KANI_INFO_COMMANDS: typ.Final = frozenset({"setup", "list"})
 KANI_INFO_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 CARGO_VERUS_RUNS: typ.Final = frozenset({"verify", "focus", "build"})
@@ -307,26 +309,37 @@ def _is_verus_proof_run(words: list[str]) -> bool:
     return False
 
 
-def _runs_binary(unwrapped: list[str], words: list[str]) -> bool:
-    """Return whether a prover binary is the command and verifies proofs.
+def _binary_tool(unwrapped: list[str], words: list[str]) -> str | None:
+    """Return the tool whose binary the command runs on proofs, or None.
 
     A leading Make reference is the estate runner (or an unresolved variable),
     never a binary named in the recipe, so it is not read here.
 
     Returns
     -------
-    bool
-        Whether the command is a prover binary run on proofs.
+    str | None
+        `kani` or `verus`.
     """
     if unwrapped[0].startswith("$"):
-        return False
-    return _is_kani_proof_run(words) or _is_verus_proof_run(words)
+        return None
+    if _is_kani_proof_run(words):
+        return "kani"
+    return "verus" if _is_verus_proof_run(words) else None
 
 
-def _runs_through_estate_runner(unwrapped: list[str], words: list[str]) -> bool:
-    """Return whether `prover-tools kani exec` or `verus run` is asked to verify."""
-    through = any(_adjacent(words, {tool}, verb) for tool, verb in PROOF_VERBS)
-    return through and _names_prover_tools(unwrapped, words)
+def _runner_tool(unwrapped: list[str], words: list[str]) -> str | None:
+    """Return the tool `prover-tools <tool> exec|run` is asked to verify with.
+
+    Returns
+    -------
+    str | None
+        `kani` or `verus`, or None when the estate runner is not the command.
+    """
+    if not _names_prover_tools(unwrapped, words):
+        return None
+    return next(
+        (tool for tool, verb in PROOF_VERBS if _adjacent(words, {tool}, verb)), None
+    )
 
 
 def runs_proofs(argv: cabc.Sequence[str]) -> bool:
@@ -345,18 +358,35 @@ def runs_proofs(argv: cabc.Sequence[str]) -> bool:
         `cargo verus verify|focus|build`. A command that only prints text, or
         whose program is an unresolved Make reference, is never one.
     """
+    return proof_tool(argv) is not None
+
+
+def proof_tool(argv: cabc.Sequence[str]) -> str | None:
+    """Return the prover (`kani` or `verus`) *argv* runs proofs with, or None.
+
+    Returns
+    -------
+    str | None
+        The tool a proof run uses, so a Kani harness is matched to a Kani run
+        and not to a Verus one; None for anything `runs_proofs` refuses.
+    """
     unwrapped = unwrap(argv)
     words = _words(unwrapped)
     if _prints(words):
-        return False
-    return _runs_binary(unwrapped, words) or _runs_through_estate_runner(
-        unwrapped, words
-    )
+        return None
+    return _binary_tool(unwrapped, words) or _runner_tool(unwrapped, words)
 
 
 def _checks_version(words: list[str]) -> bool:
     """Return whether the command asks a tool for its version."""
     return any(word in {"check-version", "--version"} for word in words)
+
+
+def _is_kani_query(words: list[str]) -> bool:
+    """Return whether the command is Kani asked to list, set up or report."""
+    head = _basename(words[0])
+    is_kani = words[:2] == ["cargo", "kani"] or head in KANI_BINARIES
+    return is_kani and not _is_kani_proof_run(words)
 
 
 def is_substantive(argv: cabc.Sequence[str]) -> bool:
@@ -377,7 +407,7 @@ def is_substantive(argv: cabc.Sequence[str]) -> bool:
     words = _words(unwrap(argv))
     if _prints(words) or words[0] in NO_WORK_COMMANDS:
         return False
-    return not (is_installer(argv) or _checks_version(words))
+    return not (is_installer(argv) or _checks_version(words) or _is_kani_query(words))
 
 
 def _first_operand(words: cabc.Sequence[str]) -> str | None:

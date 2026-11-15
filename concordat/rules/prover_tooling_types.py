@@ -70,10 +70,14 @@ class ProofRun(typ.TypedDict):
     command:
         The command that runs proofs, or the `make` target or script that
         reaches one, as written.
+    tool:
+        `kani` or `verus`: the prover the run verifies with, so a Kani harness
+        is matched to a Kani run and not to a Verus one.
     """
 
     where: str
     command: str
+    tool: str
 
 
 class ProofCode(typ.TypedDict):

@@ -17,7 +17,7 @@ from .prover_commands import (
     is_installer,
     is_runner,
     is_substantive,
-    runs_proofs,
+    proof_tool,
     script_invoked,
     unwrap,
     wrapper_changes_directory,
@@ -41,6 +41,14 @@ SHARED_ACTION: typ.Final = "leynos/shared-actions/.github/actions/install-prover
 ROOT: typ.Final = "."
 # A Make target named for a prover (`kani`, `verus-proof`, `kani-corpus`).
 PROVER_TARGET: typ.Final = re.compile(r"(?:kani|verus)(?:-[\w-]+)?")
+# Make options under which a recipe is printed, tested or touched, not run.
+DRY_RUN_OPTIONS: typ.Final = frozenset({
+    "--dry-run",
+    "--just-print",
+    "--recon",
+    "--question",
+    "--touch",
+})
 MAKEFILE_OPTIONS: typ.Final = frozenset({
     "-C",
     "-f",
@@ -62,7 +70,7 @@ class Context:
     rules: MakeRules
     installer_scripts: frozenset[str]
     proof_rules: MakeRules = EMPTY_RULES
-    proof_scripts: frozenset[str] = frozenset()
+    proof_scripts: dict[str, frozenset[str]] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(slots=True)
@@ -153,19 +161,54 @@ def _make_runs(argv: Argv, context: Context) -> bool:
     return any(is_runner(command) for command in reached)
 
 
-def _script_proves(argv: Argv, context: Context, directory: str | None = ROOT) -> bool:
-    """Return whether *argv* runs a script the rule found to run proofs."""
+def _command_tools(
+    argv: Argv, context: Context, directory: str | None = ROOT
+) -> set[str]:
+    """Return the provers *argv* runs proofs with, directly or through a script.
+
+    Returns
+    -------
+    set[str]
+        `kani` and `verus` as the command, or the repository script it runs,
+        verifies with.
+    """
+    tools = set(context.proof_scripts.get(_script_path(argv, directory), ()))
+    direct = proof_tool(argv)
+    return tools | {direct} if direct is not None else tools
+
+
+def _script_path(argv: Argv, directory: str | None) -> str:
+    """Return the checkout-relative path of the script *argv* runs, or empty."""
     script = script_invoked(argv)
-    if script is None:
-        return False
-    resolved = resolve(directory, script)
-    return resolved is not None and resolved in context.proof_scripts
+    return (resolve(directory, script) or "") if script is not None else ""
 
 
-def _make_proves(argv: Argv, context: Context) -> bool:
-    """Return whether a `make` command reaches a command that runs proofs."""
+def _make_tools(argv: Argv, context: Context) -> set[str]:
+    """Return the provers a `make` command reaches proof runs for."""
     reached = commands_reached(context.proof_rules, goals(context.proof_rules, argv))
-    return any(runs_proofs(c) or _script_proves(c, context) for c in reached)
+    return {tool for command in reached for tool in _command_tools(command, context)}
+
+
+def _is_dry_run(argv: Argv) -> bool:
+    """Return whether a `make` command only prints what it would run."""
+    words = argv[1:]
+    return any(
+        word in DRY_RUN_OPTIONS
+        or (
+            word.startswith("-")
+            and not word.startswith("--")
+            and set(word) & {"n", "q", "t"}
+        )
+        for word in words
+    )
+
+
+def _add_proof_runs(facts: StepFacts, command: str, tools: set[str]) -> None:
+    """Record one proof run per prover a command verifies with."""
+    facts.proof_runs += [
+        {"where": facts.where, "command": command, "tool": tool}
+        for tool in sorted(tools)
+    ]
 
 
 def _add_make(facts: StepFacts, argv: Argv, context: Context) -> None:
@@ -174,10 +217,11 @@ def _add_make(facts: StepFacts, argv: Argv, context: Context) -> None:
     if _make_installs(argv, context):
         facts.installers.append({"where": facts.where, "command": " ".join(argv)})
     facts.runs = facts.runs or _make_runs(argv, context)
+    if _is_dry_run(argv):
+        return
     command = " ".join(argv)
     facts.make_goals.append((command, goals(context.proof_rules, argv)))
-    if _make_proves(argv, context):
-        facts.proof_runs.append({"where": facts.where, "command": command})
+    _add_proof_runs(facts, command, _make_tools(argv, context))
 
 
 def _route_make(
@@ -224,8 +268,7 @@ def _add_command(facts: StepFacts, argv: Argv, context: Context) -> None:
     facts.runs = facts.runs or is_install or is_runner(argv)
     if is_install:
         facts.installers.append({"where": facts.where, "command": " ".join(argv)})
-    if runs_proofs(argv) or _script_proves(argv, context, directory):
-        facts.proof_runs.append({"where": facts.where, "command": " ".join(argv)})
+    _add_proof_runs(facts, " ".join(argv), _command_tools(argv, context, directory))
     if _is_make(argv):
         _route_make(facts, unwrap(argv), context, directory)
     facts.directory = _next_directory(facts.directory, argv)
@@ -377,10 +420,11 @@ def _installed_then_run(steps: list[StepFacts], context: Context) -> list[ProofR
         The steps whose `make` goals include such a target.
     """
     return [
-        {"where": step.where, "command": command}
+        {"where": step.where, "command": command, "tool": goal.split("-")[0]}
         for step in steps
         for command, targets in step.make_goals
-        if any(_is_proof_target(goal, context) for goal in targets)
+        for goal in targets
+        if _is_proof_target(goal, context)
     ]
 
 
@@ -413,10 +457,10 @@ def workflow_facts(
         runs = runs or found.runs or bool(found.shared)
         pins += found.pins
     if facts["shared_uses"]:
-        known = {(run["where"], run["command"]) for run in facts["proof_runs"]}
+        known = {tuple(run.values()) for run in facts["proof_runs"]}
         facts["proof_runs"] += [
             run
             for run in _installed_then_run(steps, context)
-            if (run["where"], run["command"]) not in known
+            if tuple(run.values()) not in known
         ]
     return facts, runs, pins

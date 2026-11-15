@@ -1381,7 +1381,63 @@
           "proof_runs": [
             {
               "where": "verify/3",
-              "command": "make kani"
+              "command": "make kani",
+              "tool": "kani"
+            }
+          ]
+        }
+      ],
+      "local_installers": [],
+      "install_tests": [],
+      "unreadable": [],
+      "exceptions": []
+    },
+    "proof_code_wrong_tool": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-prover-tooling",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "makefile": {
+        "state": "ok",
+        "error": null
+      },
+      "version_files": [
+        "tools/kani/VERSION"
+      ],
+      "pins": [
+        {
+          "value": "592558f7183b554fc749696246984c5d7300d029",
+          "source": "tools/rust-prover-tools/REF"
+        }
+      ],
+      "runs_prover": true,
+      "proof_code": [
+        {
+          "path": "src/kani.rs",
+          "kind": "kani-harness",
+          "line": 12
+        }
+      ],
+      "workflows": [
+        {
+          "path": ".github/workflows/proofs.yml",
+          "error": null,
+          "calls_make": true,
+          "installer_steps": [],
+          "unresolved_make": [],
+          "shared_uses": [
+            {
+              "where": "verify/2",
+              "ref": "a0519a1476ab769ca7b8badfa794f3751213f1ea"
+            }
+          ],
+          "proof_runs": [
+            {
+              "where": "verify/3",
+              "command": "make verus",
+              "tool": "verus"
             }
           ]
         }

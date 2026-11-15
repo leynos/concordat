@@ -18,6 +18,7 @@ if typ.TYPE_CHECKING:
     import tree_sitter
 
 __all__ = [
+    "KANI_PROOF_NAMES",
     "KANI_PROOF_PATHS",
     "Bindings",
     "bindings_of",

@@ -183,3 +183,9 @@ test_pt_006_cannot_be_waived if {
 	"PT-006" in ids(data.fixtures.proof_code_excepted)
 	"EX-001" in ids(data.fixtures.proof_code_excepted)
 }
+
+test_a_run_of_the_other_prover_does_not_run_these_proofs if {
+	ids(data.fixtures.proof_code_wrong_tool) == {"PT-006"}
+	some f in findings(data.fixtures.proof_code_wrong_tool)
+	contains(f.msg, "kani-harness")
+}

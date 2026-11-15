@@ -113,7 +113,7 @@ def build_prover_tooling_envelope(
         rules,
         frozenset(item["path"] for item in scripts.installers),
         proof_rules,
-        frozenset(scripts.proof_scripts),
+        scripts.proof_scripts,
     )
     workflows, workflows_run, workflow_pins = _workflows(checkout, context)
     pins = ref_file_pins(checkout, root) + workflow_pins + scripts.pins

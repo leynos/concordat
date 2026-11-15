@@ -14,7 +14,7 @@ import ast
 import dataclasses
 import typing as typ
 
-from .prover_commands import is_installer, is_runner, runs_proofs
+from .prover_commands import is_installer, is_runner, proof_tool, script_invoked
 from .prover_pins import command_pins
 from .shell_commands import commands
 
@@ -36,6 +36,15 @@ SKIPPED_DIRECTORIES: typ.Final = frozenset({
     "test",
 })
 SHELL_SUFFIXES: typ.Final = frozenset({".sh", ".bash"})
+# Calls that launch a process from a command string.
+PROCESS_CALLS: typ.Final = frozenset({
+    "run",
+    "call",
+    "check_call",
+    "check_output",
+    "Popen",
+    "system",
+})
 READ_SUFFIXES: typ.Final = frozenset({".sh", ".bash", ".py"})
 INSTALL_WORDS: typ.Final = ("install", "setup", "bootstrap")
 TOOL_WORDS: typ.Final = ("kani", "verus", "z3")
@@ -53,7 +62,7 @@ class ScriptFacts:
 
     installers: list[LocalInstaller] = dataclasses.field(default_factory=list)
     runs: bool = False
-    proof_scripts: list[str] = dataclasses.field(default_factory=list)
+    proof_scripts: dict[str, frozenset[str]] = dataclasses.field(default_factory=dict)
     unreadable: list[str] = dataclasses.field(default_factory=list)
     pins: list[Pin] = dataclasses.field(default_factory=list)
 
@@ -181,48 +190,112 @@ def _leading_words(node: ast.List) -> list[str]:
     return words
 
 
-def _python_runs_proofs(source: str) -> bool:
-    """Return whether Python *source* builds a command that runs proofs.
+def _list_tool(node: ast.List) -> str | None:
+    """Return the prover a list literal's leading words run proofs with, if any.
 
-    A script that drives a prover holds its command as a list literal
-    (`["verus", "run", *flags]`, `["cargo", "kani", "--harness", name]`) or as a
-    string constant (`"cargo kani --workspace"`). The list's leading constants
-    are read as a command, also under the estate runner, since a script that
-    already runs through it names only the noun and the verb.
+    The words are read as a command, also under the estate runner, since a
+    script that already runs through it names only the noun and the verb.
 
     Returns
     -------
-    bool
-        Whether the source builds a command that runs proofs.
+    str | None
+        `kani` or `verus`, or None.
+    """
+    words = _leading_words(node)
+    if not words:
+        return None
+    return proof_tool(words) or proof_tool(["prover-tools", *words])
+
+
+def _call_tool(node: ast.Call) -> str | None:
+    """Return the prover a process-spawning call's string command runs with, if any.
+
+    Only a string handed to a call named like a process launcher counts, so a
+    script that merely prints or logs `cargo kani --workspace` does not run it.
+
+    Returns
+    -------
+    str | None
+        `kani` or `verus`, or None.
+    """
+    name = node.func.attr if isinstance(node.func, ast.Attribute) else ""
+    first = node.args[0] if node.args else None
+    if name in PROCESS_CALLS and isinstance(first, ast.Constant):
+        return proof_tool(str(first.value).split())
+    return None
+
+
+def _node_tool(node: ast.AST) -> str | None:
+    """Return the prover one syntax node runs proofs with, or None."""
+    match node:
+        case ast.List():
+            return _list_tool(node)
+        case ast.Call():
+            return _call_tool(node)
+        case _:
+            return None
+
+
+def _python_tools(source: str) -> set[str]:
+    """Return the provers Python *source* builds a proof-running command for.
+
+    A script that drives a prover holds its command as a list literal
+    (`["verus", "run", *flags]`, `["cargo", "kani", "--harness", name]`) or as a
+    string handed to `subprocess.run`, `os.system` and the like.
+
+    Returns
+    -------
+    set[str]
+        `kani` and `verus` as the source runs them.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return False
-    for node in ast.walk(tree):
-        match node:
-            case ast.List():
-                words = _leading_words(node)
-                runs = bool(words) and (
-                    runs_proofs(words) or runs_proofs(["prover-tools", *words])
-                )
-            case ast.Constant(value=str() as text):
-                words = text.split()
-                runs = len(words) > 1 and runs_proofs(words)
-            case _:
-                runs = False
-        if runs:
-            return True
-    return False
+        return set()
+    tools = {_node_tool(node) for node in ast.walk(tree)}
+    return {tool for tool in tools if tool is not None}
 
 
-def _runs_proofs(path: pathlib.Path, source: str | None) -> bool:
-    """Return whether a script runs proofs, as a shell or Python script."""
+def _script_tools(path: pathlib.Path, source: str | None) -> set[str]:
+    """Return the provers a script runs proofs with, as a shell or Python script."""
     if source is None:
-        return False
+        return set()
     if path.suffix in SHELL_SUFFIXES:
-        return any(runs_proofs(argv) for argv in commands(source))
-    return path.suffix == ".py" and _python_runs_proofs(source)
+        tools = {proof_tool(argv) for argv in commands(source)}
+        return {tool for tool in tools if tool is not None}
+    return _python_tools(source) if path.suffix == ".py" else set()
+
+
+def _called_scripts(path: pathlib.Path, source: str | None) -> set[str]:
+    """Return the scripts a shell script runs, as paths from the repository root."""
+    if source is None or path.suffix not in SHELL_SUFFIXES:
+        return set()
+    called = {script_invoked(argv) for argv in commands(source)}
+    return {script for script in called if script is not None}
+
+
+def _close_over_calls(
+    tools: dict[str, set[str]], calls: dict[str, set[str]]
+) -> dict[str, frozenset[str]]:
+    """Return each script's tools including those of the scripts it calls.
+
+    A script that only runs `scripts/inner.sh` runs whatever that script runs.
+
+    Returns
+    -------
+    dict[str, frozenset[str]]
+        The provers each script that runs proofs, directly or through another
+        script, verifies with.
+    """
+    known = {path: set(found) for path, found in tools.items()}
+    changed = True
+    while changed:
+        changed = False
+        for path, callees in calls.items():
+            gained = set().union(*(known.get(c, set()) for c in callees)) - known[path]
+            known[path] |= gained
+            changed = changed or bool(gained)
+    return {path: frozenset(found) for path, found in known.items() if found}
 
 
 def _script_pins(path: pathlib.Path, relative: str, source: str | None) -> list[Pin]:
@@ -241,6 +314,8 @@ def scan_scripts(checkout: pathlib.Path) -> ScriptFacts:
         What the script directories hold.
     """
     facts = ScriptFacts()
+    tools: dict[str, set[str]] = {}
+    calls: dict[str, set[str]] = {}
     for path in _script_files(checkout, facts):
         relative = path.relative_to(checkout).as_posix()
         source = _read(path, relative, facts)
@@ -248,9 +323,10 @@ def scan_scripts(checkout: pathlib.Path) -> ScriptFacts:
         if reason is not None:
             facts.installers.append({"path": relative, "reason": reason})
         facts.runs = facts.runs or _runs_prover(path, source)
-        if _runs_proofs(path, source):
-            facts.proof_scripts.append(relative)
+        tools[relative] = _script_tools(path, source)
+        calls[relative] = _called_scripts(path, source)
         facts.pins += _script_pins(path, relative, source)
+    facts.proof_scripts = _close_over_calls(tools, calls)
     return facts
 
 

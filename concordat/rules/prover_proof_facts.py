@@ -38,6 +38,7 @@ import tree_sitter_rust
 
 from .prover_rust_files import ManifestCache, rust_files
 from .prover_rust_use import (
+    KANI_PROOF_NAMES,
     KANI_PROOF_PATHS,
     Bindings,
     bindings_of,
@@ -106,9 +107,24 @@ def _attribute_resolves_to_proof(
         return True
     if len(path) == len(KANI_MODULE_PATH) and path[0] in bindings.kani_modules:
         return ("kani", path[1]) in KANI_PROOF_PATHS
-    return path == ("cfg_attr",) and _contains(
-        _leaves(attribute), ("kani", "::", "proof")
-    )
+    return path == ("cfg_attr",) and _conditional_proof(attribute, bindings)
+
+
+def _conditional_proof(attribute: tree_sitter.Node, bindings: Bindings) -> bool:
+    """Return whether a `cfg_attr` applies a harness attribute under a condition.
+
+    `#[cfg_attr(kani, kani::proof)]`, `#[cfg_attr(kani, kani::proof_for_contract(f))]`
+    and `#[cfg_attr(kani, p)]` after `use kani::proof as p` all make the item a
+    harness when the condition holds.
+
+    Returns
+    -------
+    bool
+        Whether the attribute's tokens name a harness attribute.
+    """
+    tokens = _leaves(attribute)
+    named = any(_contains(tokens, ("kani", "::", name)) for name in KANI_PROOF_NAMES)
+    return named or any(name in bindings.proof_names for name in tokens)
 
 
 def _attribute_kind(item: tree_sitter.Node, bindings: Bindings) -> str | None:
@@ -225,7 +241,7 @@ def scan_proof_code(checkout: pathlib.Path) -> ProofScan:
     """
     scan = ProofScan()
     parser = tree_sitter.Parser(_LANGUAGE)
-    manifests = ManifestCache(checkout)
+    manifests = ManifestCache(checkout, scan.unreadable)
     for source in rust_files(checkout, scan.unreadable):
         proof_code, problem = _file_facts(source, checkout, parser, manifests)
         scan.proof_code += proof_code

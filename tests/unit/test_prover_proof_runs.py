@@ -161,8 +161,15 @@ def test_a_make_variable_in_a_recipe_is_expanded(tmp_path: pathlib.Path) -> None
         "VERUS_RUN ?= env -u RUSTUP_TOOLCHAIN $(PROVER_TOOLS) verus run\n\n"
         "verus:\n\t$(VERUS_RUN) --proof-file verus/lib.rs\n"
     )
+    verus_proof = {"src/kani.rs": "verus! { fn f() {} }\n"}
     assert (
-        audit(tmp_path, makefile=makefile, steps=(INSTALL, run("make verus"))) == set()
+        audit(
+            tmp_path,
+            makefile=makefile,
+            steps=(INSTALL, run("make verus")),
+            extra=verus_proof,
+        )
+        == set()
     )
 
 
@@ -263,3 +270,101 @@ def test_proof_code_nobody_runs_is_not_waivable(tmp_path: pathlib.Path) -> None:
         extra={".concordat": exception, "docs/adr.md": "# adr\n"},
     )
     assert {"PT-006", "EX-001"} <= ids(root)
+
+
+def test_a_kani_list_recipe_is_not_substantive() -> None:
+    """Enumerating harnesses is not work that verifies them."""
+    assert not is_substantive(["cargo", "kani", "list"])
+    assert not is_substantive(["cargo-kani", "kani", "setup"])
+    assert is_substantive(["cargo", "kani", "--workspace"])
+
+
+def test_a_prover_named_target_that_only_lists_does_not_count(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `kani` target holding only `cargo kani list` verifies nothing."""
+    assert audit(tmp_path, makefile="kani:\n\tcargo kani list\n") == {"PT-006"}
+
+
+def test_a_script_that_only_prints_the_command_does_not_count(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A Python string that is printed, not launched, is not a proof run."""
+    script = 'print("cargo kani --workspace")\n'
+    audit_ids = audit(
+        tmp_path,
+        steps=(INSTALL, run("python3 scripts/prove.py")),
+        extra={"scripts/prove.py": script},
+    )
+    assert audit_ids == {"PT-006"}
+
+
+def test_a_string_handed_to_a_process_call_counts(tmp_path: pathlib.Path) -> None:
+    """`os.system("cargo kani")` launches the command."""
+    script = 'import os\nos.system("cargo kani --workspace")\n'
+    audit_ids = audit(
+        tmp_path,
+        steps=(INSTALL, run("python3 scripts/prove.py")),
+        extra={"scripts/prove.py": script},
+    )
+    assert audit_ids == set()
+
+
+def test_a_script_that_runs_another_script_that_runs_the_proofs_counts(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The proof run is followed through a chain of scripts."""
+    audit_ids = audit(
+        tmp_path,
+        steps=(INSTALL, run("./scripts/outer.sh")),
+        extra={
+            "scripts/outer.sh": "#!/bin/sh\n./scripts/inner.sh\n",
+            "scripts/inner.sh": "#!/bin/sh\ncargo kani --workspace\n",
+        },
+    )
+    assert audit_ids == set()
+
+
+def test_a_dry_run_make_does_not_run_the_proofs(tmp_path: pathlib.Path) -> None:
+    """`make -n kani` prints the recipe; it verifies nothing."""
+    assert audit(tmp_path, steps=(INSTALL, run("make -n kani"))) == {"PT-006"}
+
+
+def test_a_verus_run_does_not_run_kani_harnesses(tmp_path: pathlib.Path) -> None:
+    """A Kani harness is matched to a Kani run, not to any prover run."""
+    makefile = "verus:\n\tverus --crate-type=lib proof.rs\n"
+    assert audit(tmp_path, makefile=makefile, steps=(INSTALL, run("make verus"))) == {
+        "PT-006"
+    }
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    [
+        "#[cfg_attr(kani, kani::proof_for_contract(f))]",
+        "use kani::proof as p;\n#[cfg_attr(kani, p)]",
+    ],
+)
+def test_a_conditional_harness_attribute_is_proof_code(
+    tmp_path: pathlib.Path, attribute: str
+) -> None:
+    """`cfg_attr` applies the harness attribute under a condition."""
+    from concordat.rules.prover_proof_facts import scan_proof_code
+
+    put(tmp_path, "src/kani.rs", f"{attribute}\nfn h() {{}}\n")
+    found = {c["kind"] for c in scan_proof_code(tmp_path).proof_code}
+    assert found == {"kani-harness"}
+
+
+def test_an_unreadable_proc_macro_manifest_is_reported(tmp_path: pathlib.Path) -> None:
+    """A manifest that cannot be parsed hides whether `quote!` is a generator."""
+    from concordat.rules.prover_proof_facts import scan_proof_code
+
+    put(tmp_path, "crates/m/Cargo.toml", "[lib\nproc-macro = true\n")
+    put(
+        tmp_path,
+        "crates/m/src/lib.rs",
+        "pub fn emit() { quote::quote! { #[kani::proof] fn h() {} }; }\n",
+    )
+    scan = scan_proof_code(tmp_path)
+    assert [u.split(":")[0] for u in scan.unreadable] == ["crates/m/Cargo.toml"]
