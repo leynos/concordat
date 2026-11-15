@@ -76,11 +76,16 @@ def _allowed_lints(words: list[str]) -> set[str]:
             allowed.add(word.removeprefix("--allow="))
         elif word.startswith("-A"):
             allowed.add(word.removeprefix("-A"))
-        elif word == "--cap-lints=allow" or (
-            word == "--cap-lints" and following == ["allow"]
-        ):
+        elif _is_cap(word, following):
             allowed.add(CAP_LINTS)
     return allowed
+
+
+def _is_cap(word: str, following: list[str]) -> bool:
+    """Return whether a flag is `--cap-lints=allow` or `--cap-lints allow`."""
+    if word == CAP_LINTS:
+        return True
+    return word == "--cap-lints" and following == ["allow"]
 
 
 def _flag_lists(config: dict[str, object]) -> list[list[str]]:

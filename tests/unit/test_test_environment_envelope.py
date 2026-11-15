@@ -663,6 +663,7 @@ class TestConfigurationSuppressions:
         """A contained file that cannot be opened is EN-001, not a crash."""
 
         def refuse(path: pathlib.Path, operation: str) -> str:
+            """Fail as `read_text` does for a file that cannot be opened."""
             message = f"cannot read {path}"
             raise OperationalRuleError(message, operation=operation, resource=path)
 
