@@ -120,6 +120,18 @@ test_allow_crate_level if reported(data.fixtures.allow_crate_level) == {"TE-003/
 
 test_allow_in_cfg_attr if reported(data.fixtures.allow_in_cfg_attr) == {"TE-003/noncompliant"}
 
+test_allow_warnings_group if reported(data.fixtures.allow_warnings_group) == {"TE-003/noncompliant"}
+
+test_allow_inside_a_macro_body if reported(data.fixtures.allow_inside_a_macro_body) == {"TE-003/noncompliant"}
+
+test_compliant_raw_string_reason if reported(data.fixtures.compliant_raw_string_reason) == set()
+
+test_path_dependency_is_an_implicit_member if {
+	reported(data.fixtures.path_dependency_is_an_implicit_member) == {"TE-001/noncompliant", "TE-003/noncompliant"}
+}
+
+test_figment_test_feature_by_default if reported(data.fixtures.figment_test_feature_by_default) == {"TE-002/noncompliant"}
+
 test_allow_group_style if reported(data.fixtures.allow_group_style) == {"TE-003/noncompliant"}
 
 test_allow_group_all_in_a_list if reported(data.fixtures.allow_group_all_in_a_list) == {"TE-003/noncompliant"}

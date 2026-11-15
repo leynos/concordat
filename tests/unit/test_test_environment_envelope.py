@@ -50,6 +50,12 @@ def _kinds(envelope: TestEnvironmentEnvelope) -> list[tuple[str, int, str]]:
     return [(s["path"], s["line"], s["kind"]) for s in envelope["suppressions"]]
 
 
+def _macro(attribute: str) -> str:
+    """Return a `macro_rules!` whose body emits a function with *attribute*."""
+    body = f"{attribute} fn g() {{}}"
+    return f"macro_rules! m {{ () => {{ {body} }}; }}\n"
+
+
 def _workspace(*members: str, extra: str = "") -> str:
     """Return a virtual workspace manifest."""
     listed = ", ".join(f'"{m}"' for m in members)
@@ -109,6 +115,67 @@ class TestMembers:
             },
         )
         assert [m["path"] for m in envelope["members"]] == [".", "a"]
+
+    def test_path_dependencies_are_members_of_a_workspace(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Cargo enrols a crate a member depends on by path, listed or not."""
+        envelope = _build(
+            tmp_path,
+            {
+                "Cargo.toml": PACKAGE
+                + '[workspace]\n[dependencies]\ninner = { path = "inner" }\n',
+                "inner/Cargo.toml": PACKAGE
+                + '[dependencies]\ndeep = { path = "../crates/deep" }\n',
+                "crates/deep/Cargo.toml": PACKAGE,
+            },
+        )
+        assert [m["path"] for m in envelope["members"]] == [".", "crates/deep", "inner"]
+
+    def test_path_dependencies_need_a_workspace_table(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Without a `[workspace]`, a path dependency is its own package."""
+        envelope = _build(
+            tmp_path,
+            {
+                "Cargo.toml": PACKAGE + '[dependencies]\ninner = { path = "inner" }\n',
+                "inner/Cargo.toml": PACKAGE,
+            },
+        )
+        assert [m["path"] for m in envelope["members"]] == ["."]
+
+    def test_excluded_and_outside_path_dependencies_are_not_members(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An excluded crate, or one outside the root, is not enrolled."""
+        checkout = tmp_path / "checkout"
+        _lay_out(tmp_path / "sibling", {"Cargo.toml": PACKAGE})
+        envelope = _build(
+            checkout,
+            {
+                "Cargo.toml": PACKAGE
+                + '[workspace]\nexclude = ["old"]\n[dependencies]\n'
+                + 'old = { path = "old" }\nsibling = { path = "../sibling" }\n',
+                "old/Cargo.toml": PACKAGE,
+            },
+        )
+        assert [m["path"] for m in envelope["members"]] == ["."]
+
+    def test_inherited_path_dependencies_resolve_from_the_root(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A `workspace = true` path is relative to the workspace root."""
+        envelope = _build(
+            tmp_path,
+            {
+                "Cargo.toml": PACKAGE
+                + '[workspace.dependencies]\nshared = { path = "libs/shared" }\n'
+                + "[dependencies]\nshared = { workspace = true }\n",
+                "libs/shared/Cargo.toml": PACKAGE,
+            },
+        )
+        assert [m["path"] for m in envelope["members"]] == [".", "libs/shared"]
 
     def test_glob_cannot_leave_the_checkout(self, tmp_path: pathlib.Path) -> None:
         """A member pattern that climbs out of the checkout is refused."""
@@ -280,6 +347,38 @@ class TestWrappers:
         assert crate == "figment"
         assert "figment::Jail::expect_with" in paths
 
+    def test_default_feature_forwarding(self, tmp_path: pathlib.Path) -> None:
+        """A default feature that forwards `figment/test` enables `Jail`."""
+        manifest = (
+            PACKAGE
+            + '[features]\ndefault = ["extras"]\nextras = ["figment/test"]\n'
+            + '[dev-dependencies]\nfigment = "0.10"\n'
+        )
+        assert [crate for crate, _ in self._wrappers(tmp_path, manifest)] == ["figment"]
+
+    def test_forwarding_that_is_not_default_is_ignored(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A feature nobody enables by default does not enable the wrapper."""
+        manifest = (
+            PACKAGE
+            + '[features]\nextras = ["figment/test"]\n'
+            + '[dev-dependencies]\nfigment = "0.10"\n'
+        )
+        assert self._wrappers(tmp_path, manifest) == []
+
+    def test_optional_forwarding_and_async_closure(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`dep?/feature` forwards too, here `temp-env`'s async closures."""
+        manifest = (
+            PACKAGE
+            + '[features]\ndefault = ["temp-env?/async_closure"]\n'
+            + '[dev-dependencies]\ntemp-env = { version = "0.3", optional = true }\n'
+        )
+        [(_, paths)] = self._wrappers(tmp_path, manifest)
+        assert "temp_env::async_with_vars" in paths
+
     def test_wrapper_table_is_a_parameter(self, tmp_path: pathlib.Path) -> None:
         """The manifest's table replaces the default."""
         envelope = _build(
@@ -311,6 +410,13 @@ class TestSuppressions:
             'const S: &str = "#![allow(clippy::all)]";\n',
             "#[allow(dead_code)]\nfn f() {}\n",
             f"#[inline]\n{EXPECT}fn f() {{}}\n",
+            '#[expect(clippy::disallowed_methods, reason = r#"adapter"#)]\nfn f() {}\n',
+            (
+                '#[expect(clippy::disallowed_methods, reason = "one line \\\n'
+                '    and another")]\nfn f() {}\n'
+            ),
+            _macro(EXPECT),
+            "macro_rules! m { () => { #[allow(dead_code)] fn g() {} }; }\n",
         ],
     )
     def test_sanctioned_and_unrelated_forms(
@@ -343,6 +449,15 @@ class TestSuppressions:
             (f"{EXPECT}mod m {{}}\n", "expect-scope"),
             (f"{EXPECT}trait T {{}}\n", "expect-scope"),
             ('#[expect(clippy::all, reason = "x")]\nfn f() {}\n', "expect-scope"),
+            ("#![allow(warnings)]\n", "allow"),
+            ("#[allow(warnings)]\nfn f() {}\n", "allow"),
+            (_macro("#[allow(clippy::disallowed_methods)]"), "allow"),
+            ("m! { #![allow(warnings)] }\n", "allow"),
+            (_macro("#[expect(clippy::disallowed_methods)]"), "expect-no-reason"),
+            (
+                '#[expect(clippy::disallowed_methods, reason = r"")]\nfn f() {}\n',
+                "expect-no-reason",
+            ),
         ],
     )
     def test_each_kind(self, tmp_path: pathlib.Path, source: str, kind: str) -> None:
@@ -447,6 +562,7 @@ class TestConfigurationSuppressions:
             PACKAGE + '[lints.clippy]\ndisallowed_methods = "allow"\n',
             PACKAGE + '[lints.clippy]\nstyle = { level = "allow", priority = -1 }\n',
             PACKAGE + '[workspace.lints.clippy]\nall = "allow"\n',
+            PACKAGE + '[lints.rust]\nwarnings = "allow"\n',
         ],
     )
     def test_lints_tables(self, tmp_path: pathlib.Path, manifest: str) -> None:
@@ -469,6 +585,7 @@ class TestConfigurationSuppressions:
             '[target.x]\nrustflags = "--allow=clippy::all"\n',
             '[env]\nCLIPPY_ARGS = "--allow clippy::disallowed_methods"\n',
             '[env]\nRUSTFLAGS = { value = "-A clippy::all", force = true }\n',
+            '[build]\nrustflags = ["-Awarnings"]\n',
         ],
     )
     def test_flags(self, tmp_path: pathlib.Path, config: str) -> None:

@@ -39,7 +39,7 @@ Feature: Rust test environment rule run
     Given a crate whose Cargo manifest allows the lint
     When I audit the checkout for its test environment
     Then the audit exit status is 1
-    And the audit output reports "TE-004" "[lints.clippy]"
+    And the audit output reports "TE-004" "lints table"
 
   Scenario: a Clippy configuration that cannot be read is reported as indeterminate
     Given a crate whose Clippy configuration is not valid TOML

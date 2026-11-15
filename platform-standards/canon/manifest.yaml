@@ -305,7 +305,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/rust-test-environment/rule.yaml
     description: >-
       Rule package manifest for the rust-test-environment audit.
-    sha256: ea98ef4a5484260537f16c62472b7961af1900020e02941768fd7e693ef2ea7a
+    sha256: 046ed7f21de628e45c4f1d75517ee066006d10a3dc4b9aa131b5b390d531245b
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

@@ -250,6 +250,32 @@ SCENARIOS: typ.Final[dict[str, dict[str, str | None]]] = {
             "#[test]\nfn it() {}\n"
         )
     },
+    "allow_warnings_group": {"src/lib.rs": "#![allow(warnings)]\n"},
+    "allow_inside_a_macro_body": {
+        "src/lib.rs": (
+            "macro_rules! adapter {\n    () => {\n"
+            "        #[allow(clippy::disallowed_methods)]\n"
+            "        fn adapter() {}\n    };\n}\n"
+        )
+    },
+    "compliant_raw_string_reason": {
+        "src/lib.rs": (
+            '#[expect(clippy::disallowed_methods, reason = r#"adapter"#)]\n'
+            "fn adapter() {}\n"
+        )
+    },
+    "path_dependency_is_an_implicit_member": {
+        "Cargo.toml": CARGO
+        + '[workspace]\n[dependencies]\ninner = { path = "inner" }\n',
+        "inner/Cargo.toml": '[package]\nname = "inner"\nversion = "0.1.0"\n',
+        "inner/src/lib.rs": "#![allow(clippy::all)]\n",
+        "inner/clippy.toml": "too-many-lines-threshold = 70\n",
+    },
+    "figment_test_feature_by_default": {
+        "Cargo.toml": CARGO
+        + '[features]\ndefault = ["extras"]\nextras = ["figment/test"]\n'
+        + '[dev-dependencies]\nfigment = "0.10"\n'
+    },
     "allow_group_style": {"src/lib.rs": "#![allow(clippy::style)]\n"},
     "allow_group_all_in_a_list": {
         "src/lib.rs": "#[allow(dead_code, clippy::all)]\nfn f() {}\n"

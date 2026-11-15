@@ -85,6 +85,7 @@ parameters:
       - clippy::disallowed_methods
       - clippy::style
       - clippy::all
+      - warnings
     wrapper_paths:
       temp_env:
         paths:

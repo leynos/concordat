@@ -1,41 +1,41 @@
 """Find the attributes that silence the process-environment lint in Rust files.
 
-`rust-test-environment` (TE-003) holds a repository to one way of suppressing
-`clippy::disallowed_methods` on a call to `std::env::set_var`, `remove_var` or
-`set_current_dir`: `#[expect(clippy::disallowed_methods, reason = "...")]` on
-the function, `let` or statement that makes the call. Clippy, after macro
-expansion, is what finds the calls; this module only finds the ways its verdict
-could be switched off, so a file is read with tree-sitter and never searched as
-text. Three things are reported, each with its line:
+Clippy, after macro expansion, finds the calls to `std::env::set_var`,
+`remove_var` and `set_current_dir`. This module only finds the ways its verdict
+could be switched off (TE-003), so a file is read with tree-sitter and never
+searched as text. Attributes come from two places:
 
-- `allow`: an `allow` (also inside `cfg_attr`) that names the lint or a group
-  that contains it, at any level.
-- `expect-no-reason`: an `expect` of the lint with no `reason`, or a blank one.
-- `expect-scope`: an `expect` that is a crate or module inner attribute, or an
-  outer attribute on an item that can hold many sites (a `mod`, `trait`, a
-  struct, and the like), because one attribute there silences every site added
-  later. A function, `let`, statement, `const`, `static` and an `impl` block
-  (the one named adapter behind an injection seam) are site scopes.
+- attribute items and inner attributes in the syntax tree; and
+- attribute-shaped tokens inside macro bodies and invocations (`#[allow(..)]` in
+  a `macro_rules!` transcriber), which tree-sitter leaves as token trees but
+  which Clippy honours once the macro expands.
 
-A file that cannot be read, or whose syntax error names the lint or one of its
-groups, is reported as unreadable: an unread file is not evidence of absence.
-A syntax error elsewhere is ignored, because syntax the parser predates cannot
-hide a suppression of this lint.
+`test_environment_attributes` decides what each attribute means. A file that
+cannot be read, or whose syntax error names the lint, one of its groups or
+`warnings`, is reported as unreadable: an unread file is not evidence of
+absence. A syntax error elsewhere is ignored, because syntax the parser
+predates cannot hide a suppression of this lint.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import itertools
 import os
 import typing as typ
 
 import tree_sitter
 import tree_sitter_rust
 
-from .prover_rust_use import descendants, node_text, path_of
+from .prover_rust_use import descendants, node_text
+from .test_environment_attributes import (
+    AttributeSite,
+    Suppression,
+    judge,
+    site_scope,
+)
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 __all__ = [
@@ -56,38 +56,15 @@ SKIPPED_DIRECTORIES: typ.Final = frozenset({
     "fixture",
     "vendor",
 })
-LEVELS: typ.Final = frozenset({"allow", "expect"})
-WRAPPING_ATTRIBUTES: typ.Final = frozenset({"cfg_attr"})
-# An outer `expect` is a site-level suppression only on one of these. Anything
-# that can hold several statements or items (`mod`, `trait`) is wider than one
-# call, so it is an `expect-scope` finding.
-SITE_ITEMS: typ.Final = frozenset({
-    "function_item",
-    "let_declaration",
-    "expression_statement",
-    "const_item",
-    "static_item",
-    # A trait impl that is the process-backed adapter behind an injection seam
-    # (netsuke's `SystemEnv`): one named adapter, not a module of sites.
-    "impl_item",
-})
-TRIVIA: typ.Final = frozenset({"attribute_item", "line_comment", "block_comment"})
-# Words that make a syntax error relevant: the lint, and the groups it is in.
-RELEVANT_WORDS: typ.Final = ("disallowed_methods", "clippy::style", "clippy::all")
-
-KIND_ALLOW: typ.Final = "allow"
-KIND_NO_REASON: typ.Final = "expect-no-reason"
-KIND_SCOPE: typ.Final = "expect-scope"
-
-
-@dataclasses.dataclass(slots=True, frozen=True)
-class Suppression:
-    """One attribute that silences the lint other than a site-level `expect`."""
-
-    path: str
-    line: int
-    kind: str
-    lint: str
+ATTRIBUTE_ITEMS: typ.Final = frozenset({"attribute_item", "inner_attribute_item"})
+# Words that make a syntax error relevant: the lint, the groups it is in, and
+# the group of every warning.
+RELEVANT_WORDS: typ.Final = (
+    "disallowed_methods",
+    "clippy::style",
+    "clippy::all",
+    "warnings",
+)
 
 
 @dataclasses.dataclass(slots=True)
@@ -98,140 +75,78 @@ class SourceScan:
     unreadable: list[str] = dataclasses.field(default_factory=list)
 
 
-def _clauses(tree: tree_sitter.Node) -> list[tuple[str, tree_sitter.Node]]:
-    """Return each `(level, argument tree)` an attribute argument tree holds.
-
-    `allow(a)` inside `cfg_attr(test, allow(a))` is found by looking, at every
-    nesting depth, for a level name directly followed by a token tree.
-
-    Returns
-    -------
-    list[tuple[str, tree_sitter.Node]]
-        The level name and the token tree that follows it, for each clause.
-    """
-    found: list[tuple[str, tree_sitter.Node]] = []
-    for node in descendants(tree):
-        for here, following in itertools.pairwise(node.children):
-            if (
-                here.type == "identifier"
-                and following.type == "token_tree"
-                and node_text(here) in LEVELS
-            ):
-                found.append((node_text(here), following))
-    return found
-
-
-def _top_level_items(tree: tree_sitter.Node) -> list[list[tree_sitter.Node]]:
-    """Split an argument tree's own tokens on commas, ignoring nested trees."""
-    items: list[list[tree_sitter.Node]] = [[]]
-    for child in tree.children:
-        if child.type in {"(", ")"}:
-            continue
-        if child.type == ",":
-            items.append([])
-        else:
-            items[-1].append(child)
-    return [item for item in items if item]
-
-
-def _lint_path(item: list[tree_sitter.Node]) -> str | None:
-    """Return `clippy::disallowed_methods`-style text for a lint item, if one."""
-    names = [node for node in item if node.type in {"identifier", "::"}]
-    if len(names) != len(item) or not names:
-        return None
-    return "".join(node_text(node) for node in names)
-
-
-def _reason_of(items: list[list[tree_sitter.Node]]) -> str | None:
-    """Return the text of `reason = "..."`, or None when absent or not a string."""
-    for item in items:
-        head, *rest = item
-        if (
-            node_text(head) == "reason"
-            and rest[:1]
-            and rest[0].type == "="
-            and rest[1:]
-        ):
-            literal = rest[1]
-            if literal.type != "string_literal":
-                return None
-            return "".join(
-                node_text(part)
-                for part in literal.children
-                if part.type == "string_content"
-            )
-    return None
-
-
-def _site_scope(attribute: tree_sitter.Node) -> bool:
-    """Return whether an attribute is outer and on an item that is one site.
-
-    The target is the next sibling that is not another attribute or a comment.
-
-    Returns
-    -------
-    bool
-        True when the attribute is an outer one on a site-level item.
-    """
-    if attribute.type != "attribute_item":
-        return False
-    target = attribute.next_named_sibling
-    while target is not None and target.type in TRIVIA:
-        target = target.next_named_sibling
-    return target is not None and target.type in SITE_ITEMS
-
-
-def _attribute_suppressions(
-    attribute: tree_sitter.Node, relative: str, silencing: frozenset[str]
-) -> list[Suppression]:
-    """Return what one attribute item suppresses that the rule does not allow."""
-    inner = next((c for c in attribute.children if c.type == "attribute"), None)
-    arguments = (
-        None
-        if inner is None
-        else next((c for c in inner.children if c.type == "token_tree"), None)
-    )
-    if inner is None or arguments is None:
+def _item_site(node: tree_sitter.Node) -> list[AttributeSite]:
+    """Return the attribute an `attribute_item` or `inner_attribute_item` holds."""
+    attribute = next((c for c in node.children if c.type == "attribute"), None)
+    if attribute is None:
         return []
-    head = path_of(inner.children[0]) if inner.children else ()
-    levelled = (
-        [(node_text(inner.children[0]), arguments)]
-        if head and head[0] in LEVELS
-        else []
-    )
-    if head and head[0] in WRAPPING_ATTRIBUTES:
-        levelled = _clauses(arguments)
-    line = attribute.start_point.row + 1
-    found: list[Suppression] = []
-    for level, tree in levelled:
-        items = _top_level_items(tree)
-        lints = [lint for item in items if (lint := _lint_path(item)) is not None]
-        for lint in (lint for lint in lints if lint in silencing):
-            found += _judge(level, lint, items, (attribute, relative, line))
-    return found
+    arguments = next((c for c in attribute.children if c.type == "token_tree"), None)
+    if arguments is None or not attribute.children:
+        return []
+    return [
+        AttributeSite(
+            node_text(attribute.children[0]),
+            arguments,
+            node.start_point.row + 1,
+            scope_ok=site_scope(node),
+        )
+    ]
 
 
-def _judge(
-    level: str,
-    lint: str,
-    items: list[list[tree_sitter.Node]],
-    where: tuple[tree_sitter.Node, str, int],
-) -> list[Suppression]:
-    """Return the findings for one `level(lint, ...)` clause."""
-    attribute, relative, line = where
-    if level == "allow":
-        return [Suppression(relative, line, KIND_ALLOW, lint)]
-    if lint != "clippy::disallowed_methods":
-        # `expect(clippy::style)` also covers the lint, and a group expectation
-        # is satisfied by any lint in the group, so it proves nothing here.
-        return [Suppression(relative, line, KIND_SCOPE, lint)]
-    reason = _reason_of(items)
-    found: list[Suppression] = []
-    if reason is None or not reason.strip():
-        found.append(Suppression(relative, line, KIND_NO_REASON, lint))
-    if not _site_scope(attribute):
-        found.append(Suppression(relative, line, KIND_SCOPE, lint))
-    return found
+def _macro_attribute(
+    hash_token: tree_sitter.Node,
+) -> list[AttributeSite]:
+    """Return the attribute written as `#[name(..)]` or `#![name(..)]` tokens."""
+    following = hash_token.next_sibling
+    if following is not None and following.type == "!":
+        following = following.next_sibling
+    if following is None or following.type != "token_tree":
+        return []
+    named = [c for c in following.children if c.is_named]
+    if not named or named[0].type != "identifier":
+        return []
+    arguments = next((c for c in named[1:] if c.type == "token_tree"), None)
+    if arguments is None:
+        return []
+    return [
+        AttributeSite(
+            node_text(named[0]),
+            arguments,
+            hash_token.start_point.row + 1,
+            scope_ok=True,
+        )
+    ]
+
+
+def _token_tree_sites(tree: tree_sitter.Node) -> list[AttributeSite]:
+    """Return the attribute-shaped tokens directly inside a token tree."""
+    return [
+        site
+        for child in tree.children
+        if child.type == "#"
+        for site in _macro_attribute(child)
+    ]
+
+
+def _sites_of(node: tree_sitter.Node) -> list[AttributeSite]:
+    """Return the attributes a syntax node is, or directly holds as tokens."""
+    if node.type in ATTRIBUTE_ITEMS:
+        return _item_site(node)
+    if node.type == "token_tree":
+        return _token_tree_sites(node)
+    return []
+
+
+def attribute_sites(root: tree_sitter.Node) -> cabc.Iterator[AttributeSite]:
+    """Yield each attribute in a file, in the syntax tree and inside macros.
+
+    Yields
+    ------
+    AttributeSite
+        One entry per attribute, with its name, arguments and line.
+    """
+    for node in descendants(root):
+        yield from _sites_of(node)
 
 
 def _error_line(root: tree_sitter.Node) -> int | None:
@@ -266,25 +181,38 @@ def _file_facts(
     if line is not None:
         return [], (
             f"{relative}: syntax the parser could not read near line {line} "
-            "names the disallowed_methods lint, so whether it is suppressed is unknown"
+            "names the disallowed_methods lint, so whether it is suppressed is "
+            "unknown"
         )
-    found = [
+    return [
         suppression
-        for node in descendants(root)
-        if node.type in {"attribute_item", "inner_attribute_item"}
-        for suppression in _attribute_suppressions(node, relative, silencing)
-    ]
-    return found, None
+        for site in attribute_sites(root)
+        for suppression in judge(site, relative, silencing)
+    ], None
+
+
+def _is_walked(base: pathlib.Path, name: str, members: frozenset[pathlib.Path]) -> bool:
+    """Return whether the walk enters a directory.
+
+    A nested directory with its own `Cargo.toml` that is not a member is
+    another package (a fixture, an example workspace) that Clippy does not lint
+    as part of this one. Links are not followed.
+
+    Returns
+    -------
+    bool
+        True when the directory belongs to the member being walked.
+    """
+    here = base / name
+    if name in SKIPPED_DIRECTORIES or here.is_symlink():
+        return False
+    return here in members or not (here / "Cargo.toml").is_file()
 
 
 def _walk(
     directory: pathlib.Path, members: frozenset[pathlib.Path], unreadable: list[str]
 ) -> list[pathlib.Path]:
     """Return the Rust files of a member crate, without entering other crates.
-
-    A nested directory with its own `Cargo.toml` that is not a member is
-    another package (a fixture, an example workspace) that Clippy does not lint
-    as part of this one, so the walk leaves it alone. Links are not followed.
 
     Returns
     -------
@@ -299,13 +227,7 @@ def _walk(
     found: list[pathlib.Path] = []
     for here, names, files in os.walk(directory, onerror=refuse):
         base = directory.joinpath(here)
-        names[:] = sorted(
-            n
-            for n in names
-            if n not in SKIPPED_DIRECTORIES
-            and not (base / n).is_symlink()
-            and not ((base / n / "Cargo.toml").is_file() and (base / n) not in members)
-        )
+        names[:] = sorted(n for n in names if _is_walked(base, n, members))
         found += [
             base / f
             for f in sorted(files)
@@ -339,15 +261,14 @@ def scan_suppressions(
     parser = tree_sitter.Parser(_LANGUAGE)
     lints = frozenset(silencing)
     members = frozenset(member_directories)
-    seen: set[pathlib.Path] = set()
-    for directory in sorted(members):
-        for source in _walk(directory, members, scan.unreadable):
-            if source in seen:
-                continue
-            seen.add(source)
-            found, problem = _file_facts(source, checkout, parser, lints)
-            scan.suppressions += found
-            if problem is not None:
-                scan.unreadable.append(problem)
+    sources = sorted({
+        source
+        for directory in sorted(members)
+        for source in _walk(directory, members, scan.unreadable)
+    })
+    for source in sources:
+        found, problem = _file_facts(source, checkout, parser, lints)
+        scan.suppressions += found
+        scan.unreadable += [problem] if problem is not None else []
     scan.suppressions.sort(key=lambda s: (s.path, s.line, s.kind))
     return scan

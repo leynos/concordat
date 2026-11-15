@@ -1034,6 +1034,214 @@
       "config_suppressions": [],
       "unreadable": []
     },
+    "allow_warnings_group": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "warnings"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "allow_inside_a_macro_body": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "src/lib.rs",
+          "line": 3,
+          "kind": "allow",
+          "lint": "clippy::disallowed_methods"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "compliant_raw_string_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "path_dependency_is_an_implicit_member": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": []
+        },
+        {
+          "path": "inner",
+          "clippy": {
+            "path": "inner/clippy.toml",
+            "disallowed": [],
+            "readable": true
+          },
+          "wrappers": []
+        }
+      ],
+      "suppressions": [
+        {
+          "path": "inner/src/lib.rs",
+          "line": 1,
+          "kind": "allow",
+          "lint": "clippy::all"
+        }
+      ],
+      "config_suppressions": [],
+      "unreadable": []
+    },
+    "figment_test_feature_by_default": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-test-environment",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true
+      },
+      "required_paths": [
+        "std::env::set_var",
+        "std::env::remove_var",
+        "std::env::set_current_dir"
+      ],
+      "members": [
+        {
+          "path": ".",
+          "clippy": {
+            "path": "clippy.toml",
+            "disallowed": [
+              "std::env::remove_var",
+              "std::env::set_current_dir",
+              "std::env::set_var"
+            ],
+            "readable": true
+          },
+          "wrappers": [
+            {
+              "crate": "figment",
+              "paths": [
+                "figment::Jail::expect_with",
+                "figment::Jail::try_with"
+              ]
+            }
+          ]
+        }
+      ],
+      "suppressions": [],
+      "config_suppressions": [],
+      "unreadable": []
+    },
     "allow_group_style": {
       "schema_version": 1,
       "kind": "policy-input/rust-test-environment",
@@ -1355,7 +1563,7 @@
       "config_suppressions": [
         {
           "path": "Cargo.toml",
-          "detail": "disallowed_methods = \"allow\" in a [lints.clippy] table"
+          "detail": "clippy::disallowed_methods = \"allow\" in a lints table"
         }
       ],
       "unreadable": []
@@ -1394,7 +1602,7 @@
       "config_suppressions": [
         {
           "path": "Cargo.toml",
-          "detail": "style = \"allow\" in a [lints.clippy] table"
+          "detail": "clippy::style = \"allow\" in a lints table"
         }
       ],
       "unreadable": []
@@ -1433,7 +1641,7 @@
       "config_suppressions": [
         {
           "path": "Cargo.toml",
-          "detail": "all = \"allow\" in a [lints.clippy] table"
+          "detail": "clippy::all = \"allow\" in a lints table"
         }
       ],
       "unreadable": []
@@ -1761,7 +1969,8 @@
     "silencing_lints": [
       "clippy::disallowed_methods",
       "clippy::style",
-      "clippy::all"
+      "clippy::all",
+      "warnings"
     ],
     "wrapper_paths": {
       "temp_env": {
