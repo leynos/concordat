@@ -91,6 +91,13 @@ from .spelling_envelope import (
     build_spelling_envelope,
 )
 from .spelling_envelope import ENVELOPE_KIND as SPELLING_ENVELOPE_KIND
+from .test_environment_envelope import (
+    ENVELOPE_KIND as TEST_ENVIRONMENT_ENVELOPE_KIND,
+)
+from .test_environment_envelope import (
+    TestEnvironmentEnvelope,
+    build_test_environment_envelope,
+)
 from .toolchain_policy_envelope import (
     ENVELOPE_KIND as TOOLCHAIN_POLICY_ENVELOPE_KIND,
 )
@@ -132,6 +139,7 @@ type RuleEnvelope = (
     | ProvisioningEnvelope
     | DocumentationEnvelope
     | DuplicationGateEnvelope
+    | TestEnvironmentEnvelope
     | ToolchainPolicyEnvelope
     | YamlLintEnvelope
     | ProverToolingEnvelope
@@ -627,6 +635,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "yaml-lint-baseline": _yaml_lint_envelope,
     "rust-prover-tooling": _prover_tooling_envelope,
     "python-duplication-gate": build_duplication_gate_envelope,
+    "rust-test-environment": build_test_environment_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -649,6 +658,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     YAML_LINT_ENVELOPE_KIND: _yaml_lint_envelope,
     PROVER_TOOLING_ENVELOPE_KIND: _prover_tooling_envelope,
     DUPLICATION_GATE_ENVELOPE_KIND: build_duplication_gate_envelope,
+    TEST_ENVIRONMENT_ENVELOPE_KIND: build_test_environment_envelope,
 })
 
 

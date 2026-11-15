@@ -290,6 +290,22 @@ artifacts:
     description: >-
       Rule package manifest for the python-duplication-gate audit.
     sha256: ac779a6c0f598680f16b71c0a9e8cd2c9540adc0c0e1dae86252110fc405c0d3
+  - id: lint-rule-rust-test-environment
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/rust-test-environment/policy/rust_test_environment.rego
+    description: >-
+      Audit-only TE-001 to TE-004 policy holding a Rust repository to Clippy
+      disallowing process-wide environment changes in every workspace member
+      (and the wrapper crates' entry points), suppressing the lint only by a
+      site-level `expect` with a reason, and lowering it in no configuration,
+      with unreadable inputs indeterminate and no waiver.
+    sha256: 12a7775d0e1e69d956f2f9606656734889aa505c3837a8ea1c809f6a2ffc1bb9
+  - id: lint-rule-rust-test-environment-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-test-environment/rule.yaml
+    description: >-
+      Rule package manifest for the rust-test-environment audit.
+    sha256: ea98ef4a5484260537f16c62472b7961af1900020e02941768fd7e693ef2ea7a
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

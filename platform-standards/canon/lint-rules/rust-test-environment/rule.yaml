@@ -1,0 +1,106 @@
+schema_version: 1
+id: rust-test-environment
+name: Rust test environment
+description: >-
+  Audits that a Rust repository's tests cannot change the process-wide
+  environment (TE-001 to TE-004). Tests that call `std::env::set_var`,
+  `remove_var` or `set_current_dir` force the test runner to serialise them, so
+  the environment must be an injected object or isolated to a subprocess.
+  Clippy finds the calls, after macro expansion, so the rule keeps Clippy's
+  verdict standing: every workspace member's effective Clippy configuration
+  (the nearest `.clippy.toml` or `clippy.toml` at or above the member, as
+  Clippy loads it) disallows the `required_paths` in `disallowed-methods`
+  (TE-001) and the entry points of every wrapper crate the member depends on
+  (TE-002: `temp_env`, `env-lock`, and figment's `Jail` with its `test`
+  feature); the lint is suppressed only by `#[expect(clippy::disallowed_methods,
+  reason = "...")]` on the function, `let` or statement that needs it, never by
+  `allow`, a reasonless or crate- or module-level `expect`, or a group allow
+  (TE-003, read from the Rust sources with tree-sitter); and no `[lints.clippy]`
+  table or `.cargo/config.toml` flag lowers it (TE-004). A file that cannot be
+  read, or a `CLIPPY_CONF_DIR` that makes the configuration unknowable, is
+  reported as indeterminate (EN-001). Manifests and configuration are read with
+  a TOML parser; no clause is judged from searched text. A repository with no
+  root `Cargo.toml` is not audited. No clause is waivable: sites that remain
+  carry an `expect`, which reports itself when the site is migrated.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/rust-test-environment
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      required_paths:
+        type: array
+        items:
+          type: string
+        description: >-
+          Function paths every member's Clippy `disallowed-methods` must list
+          (TE-001). Dropping `std::env::set_current_dir` is a change to this
+          default only.
+      silencing_lints:
+        type: array
+        items:
+          type: string
+        description: >-
+          The lint and the Clippy groups that contain it. Allowing one of them
+          (TE-003, TE-004), or expecting a group, silences the rule.
+      wrapper_paths:
+        type: object
+        description: >-
+          Wrapper crates whose entry points change the environment, by crate
+          name in underscore form (TE-002). `paths` must all be disallowed
+          when a member depends on the crate; `feature_paths` adds paths when
+          the member enables the named feature; `required_feature` limits the
+          requirement to members that enable it.
+        additionalProperties:
+          type: object
+          additionalProperties: false
+          properties:
+            paths:
+              type: array
+              items:
+                type: string
+            feature_paths:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+            required_feature:
+              type: string
+  defaults:
+    required_paths:
+      - std::env::set_var
+      - std::env::remove_var
+      - std::env::set_current_dir
+    silencing_lints:
+      - clippy::disallowed_methods
+      - clippy::style
+      - clippy::all
+    wrapper_paths:
+      temp_env:
+        paths:
+          - temp_env::with_var
+          - temp_env::with_var_unset
+          - temp_env::with_vars
+          - temp_env::with_vars_unset
+        feature_paths:
+          async_closure:
+            - temp_env::async_with_vars
+      env_lock:
+        paths:
+          - env_lock::lock_env
+          - env_lock::lock_current_dir
+      figment:
+        required_feature: test
+        paths:
+          - figment::Jail::expect_with
+          - figment::Jail::try_with

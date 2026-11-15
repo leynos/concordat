@@ -728,6 +728,15 @@ the Section 2.1.2 format.
   over the estate's main branches it reads the repositories with `top = 0` and
   excluded test trees as compliant and those with a positive `top` as
   noncompliant.
+- [x] Ship the Rust test environment rule (TE-001 to TE-004): the
+  `rust-test-environment` package holds each workspace member's Clippy
+  configuration to disallowing `std::env::set_var`, `remove_var` and
+  `set_current_dir` and the wrapper crates' entry points, allows only a
+  site-level `#[expect(.., reason = "..")]` as suppression, and rejects
+  configuration that lowers the lint, with none of it waivable. Acceptance: the
+  audit reads a guarded workspace with sanctioned sites as compliant, and a
+  missing entry, an `allow`, a crate-level `expect` and a lints-table `allow`
+  as noncompliant.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and
