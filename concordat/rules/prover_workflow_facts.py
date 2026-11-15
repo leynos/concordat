@@ -42,6 +42,7 @@ ROOT: typ.Final = "."
 # A Make target named for a prover (`kani`, `verus-proof`, `kani-corpus`).
 PROVER_TARGET: typ.Final = re.compile(r"(?:kani|verus)(?:-[\w-]+)?")
 # Make options under which a recipe is printed, tested or touched, not run.
+DRY_RUN_LETTERS: typ.Final = frozenset("nqt")
 DRY_RUN_OPTIONS: typ.Final = frozenset({
     "--dry-run",
     "--just-print",
@@ -189,18 +190,16 @@ def _make_tools(argv: Argv, context: Context) -> set[str]:
     return {tool for command in reached for tool in _command_tools(command, context)}
 
 
+def _is_dry_run_option(word: str) -> bool:
+    """Return whether *word* makes Make print, test or touch instead of run."""
+    if word.startswith("--"):
+        return word in DRY_RUN_OPTIONS
+    return word.startswith("-") and bool(set(word) & DRY_RUN_LETTERS)
+
+
 def _is_dry_run(argv: Argv) -> bool:
     """Return whether a `make` command only prints what it would run."""
-    words = argv[1:]
-    return any(
-        word in DRY_RUN_OPTIONS
-        or (
-            word.startswith("-")
-            and not word.startswith("--")
-            and set(word) & {"n", "q", "t"}
-        )
-        for word in words
-    )
+    return any(_is_dry_run_option(word) for word in argv[1:])
 
 
 def _add_proof_runs(facts: StepFacts, command: str, tools: set[str]) -> None:
@@ -456,11 +455,25 @@ def workflow_facts(
         facts["calls_make"] = facts["calls_make"] or found.calls_make
         runs = runs or found.runs or bool(found.shared)
         pins += found.pins
-    if facts["shared_uses"]:
-        known = {tuple(run.values()) for run in facts["proof_runs"]}
-        facts["proof_runs"] += [
-            run
-            for run in _installed_then_run(steps, context)
-            if tuple(run.values()) not in known
-        ]
+    facts["proof_runs"] += _new_target_runs(facts, steps, context)
     return facts, runs, pins
+
+
+def _new_target_runs(
+    facts: WorkflowFacts, steps: list[StepFacts], context: Context
+) -> list[ProofRun]:
+    """Return the prover-named target runs a workflow adds after its install.
+
+    A workflow that does not use the shared action adds none, and a run the
+    steps already recorded is not repeated.
+
+    Returns
+    -------
+    list[ProofRun]
+        The runs `_installed_then_run` finds that are not yet in *facts*.
+    """
+    if not facts["shared_uses"]:
+        return []
+    known = {tuple(run.values()) for run in facts["proof_runs"]}
+    found = _installed_then_run(steps, context)
+    return [run for run in found if tuple(run.values()) not in known]
