@@ -26,7 +26,13 @@ import itertools
 import typing as typ
 
 from .prover_rust_use import descendants, node_text
-from .test_environment_arguments import Items, has_reason, lint_paths, top_level_items
+from .test_environment_arguments import (
+    Items,
+    has_reason,
+    lint_paths,
+    significant,
+    top_level_items,
+)
 
 if typ.TYPE_CHECKING:
     import tree_sitter
@@ -124,7 +130,7 @@ def _clauses(tree: tree_sitter.Node) -> list[Clause]:
     return [
         (node_text(here), following)
         for node in descendants(tree)
-        for here, following in itertools.pairwise(node.children)
+        for here, following in itertools.pairwise(significant(node.children))
         if _is_clause(here, following)
     ]
 

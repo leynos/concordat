@@ -34,8 +34,10 @@ workspace member: the root package if it has a `[package]`, each directory that
 automatically unless excluded. A nested crate that is none of these (a fixture
 crate, an example workspace) is another package: Clippy does not lint it as
 part of this one, and the audit does not read it. Directories named `target`,
-`fixtures`, `fixture`, `vendor`, `node_modules` and `.git` are not entered, and
-a symbolic link is never followed.
+`node_modules`, `.git` and `.venv` are not entered, and a symbolic link is
+never followed. A directory is never skipped for being called `fixtures` or
+`vendor`: a module such as `mod fixtures;` is compiled into the member, so what
+it suppresses counts.
 
 ## How the facts are read
 
@@ -113,8 +115,10 @@ cannot hide a suppression of this lint.
   `[workspace.lints.rust]` entry that does so for `warnings` (string or table
   form), is reported, as is an `-A` or `--allow` flag for them in
   `build.rustflags`, `target.*.rustflags`, or `[env]` `RUSTFLAGS` or
-  `CLIPPY_ARGS` of `.cargo/config.toml` (or the legacy `.cargo/config`). Flags
-  in Make recipes and workflow steps are not read.
+  `CLIPPY_ARGS` of `.cargo/config.toml` (or the legacy `.cargo/config`).
+  `--cap-lints allow` (or `--cap-lints=allow`) in those places is reported too,
+  because it hides every lint. Flags in Make recipes and workflow steps are not
+  read.
 - **EN-001** (error, indeterminate): a file could not be read or decoded, a
   syntax error hides the lint, or `CLIPPY_CONF_DIR` is set. The rule reports
   what it cannot judge instead of guessing.

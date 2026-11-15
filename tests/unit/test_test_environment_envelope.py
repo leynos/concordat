@@ -8,6 +8,7 @@ attributes that suppress the lint, and the files it refuses to judge.
 
 from __future__ import annotations
 
+import pathlib
 import typing as typ
 
 import pytest
@@ -19,8 +20,6 @@ from concordat.rules.test_environment_envelope import (
 )
 
 if typ.TYPE_CHECKING:
-    import pathlib
-
     from concordat.rules.test_environment_envelope import TestEnvironmentEnvelope
 
 PACKAGE = '[package]\nname = "demo"\nversion = "0.1.0"\n'
@@ -492,20 +491,71 @@ class TestSuppressions:
         ]
 
     def test_other_packages_are_not_read(self, tmp_path: pathlib.Path) -> None:
-        """Fixtures, vendored code, build output and non-member crates are skipped."""
+        """Build output and crates that are not members are skipped."""
         allow = "#![allow(clippy::disallowed_methods)]\n"
         envelope = _build(
             tmp_path,
             {
                 "Cargo.toml": PACKAGE,
-                "tests/fixtures/probe/src/lib.rs": allow,
-                "vendor/dep/src/lib.rs": allow,
                 "target/debug/build/x.rs": allow,
+                "tests/fixtures/probe/Cargo.toml": PACKAGE,
+                "tests/fixtures/probe/src/lib.rs": allow,
                 "examples/ws/Cargo.toml": PACKAGE,
                 "examples/ws/src/lib.rs": allow,
             },
         )
         assert envelope["suppressions"] == []
+
+    def test_directories_are_not_skipped_by_name(self, tmp_path: pathlib.Path) -> None:
+        """A `fixtures` or `vendor` module is compiled into the member."""
+        allow = "#![allow(clippy::disallowed_methods)]\n"
+        envelope = _build(
+            tmp_path,
+            {
+                "Cargo.toml": PACKAGE,
+                "src/fixtures/mod.rs": allow,
+                "src/vendor/mod.rs": allow,
+            },
+        )
+        assert [s["path"] for s in envelope["suppressions"]] == [
+            "src/fixtures/mod.rs",
+            "src/vendor/mod.rs",
+        ]
+
+    def test_a_relative_checkout_is_walked_once(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A relative checkout path does not double its own prefix."""
+        _lay_out(
+            tmp_path / "repo",
+            {
+                "Cargo.toml": PACKAGE + '[workspace]\nmembers = ["crates/a"]\n',
+                "src/lib.rs": "#![allow(clippy::all)]\n",
+                "crates/a/Cargo.toml": PACKAGE,
+                "crates/a/src/lib.rs": "#![allow(warnings)]\n",
+            },
+        )
+        monkeypatch.chdir(tmp_path)
+        envelope = build_test_environment_envelope(pathlib.Path("repo"))
+        assert [s["path"] for s in envelope["suppressions"]] == [
+            "crates/a/src/lib.rs",
+            "src/lib.rs",
+        ]
+
+    def test_a_comment_inside_the_arguments_does_not_hide_the_lint(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`allow(lint /* why */)` still allows it."""
+        source = "#[allow(clippy::disallowed_methods /* legacy */)]\nfn f() {}\n"
+        assert self._lib(tmp_path, source) == [("src/lib.rs", 1, "allow")]
+
+    def test_a_comment_beside_a_reason_is_ignored(self, tmp_path: pathlib.Path) -> None:
+        """A comment between arguments leaves a sanctioned `expect` alone."""
+        source = (
+            "#[expect(clippy::disallowed_methods /* seam */, "
+            'reason = "adapter")]\nfn f() {}\n'
+        )
+        assert self._lib(tmp_path, source) == []
 
     def test_a_member_nested_in_the_root_package_is_read_once(
         self, tmp_path: pathlib.Path
@@ -586,6 +636,8 @@ class TestConfigurationSuppressions:
             '[env]\nCLIPPY_ARGS = "--allow clippy::disallowed_methods"\n',
             '[env]\nRUSTFLAGS = { value = "-A clippy::all", force = true }\n',
             '[build]\nrustflags = ["-Awarnings"]\n',
+            '[build]\nrustflags = ["--cap-lints", "allow"]\n',
+            '[build]\nrustflags = "--cap-lints=allow"\n',
         ],
     )
     def test_flags(self, tmp_path: pathlib.Path, config: str) -> None:
@@ -604,6 +656,19 @@ class TestConfigurationSuppressions:
             )
             == []
         )
+
+    def test_a_file_that_cannot_be_read_is_unreadable(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A contained file that cannot be opened is EN-001, not a crash."""
+
+        def refuse(path: pathlib.Path, operation: str) -> str:
+            message = f"cannot read {path}"
+            raise OperationalRuleError(message, operation=operation, resource=path)
+
+        monkeypatch.setattr("concordat.rules.test_environment_types.read_text", refuse)
+        envelope = _build(tmp_path, {"Cargo.toml": PACKAGE})
+        assert [u.split(":")[0] for u in envelope["unreadable"]] == ["Cargo.toml"]
 
     def test_invalid_cargo_manifest_is_unreadable(self, tmp_path: pathlib.Path) -> None:
         """A manifest that is not TOML is reported, and no member is invented."""

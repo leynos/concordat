@@ -15,6 +15,7 @@ from __future__ import annotations
 import typing as typ
 
 from .prover_rust_use import descendants, node_text
+from .test_environment_arguments import significant
 from .test_environment_attributes import AttributeSite, site_scope
 
 if typ.TYPE_CHECKING:
@@ -73,7 +74,7 @@ def _macro_attribute(hash_token: tree_sitter.Node) -> list[AttributeSite]:
     brackets = _after_hash(hash_token)
     if brackets is None or brackets.type != "token_tree":
         return []
-    named = [c for c in brackets.children if c.is_named]
+    named = [c for c in significant(brackets.children) if c.is_named]
     return _site_from_tokens(named, hash_token.start_point.row + 1)
 
 

@@ -154,9 +154,12 @@ def build_test_environment_envelope(
     silencing = frozenset(
         _parameter_list(parameters, "silencing_lints", DEFAULT_SILENCING_LINTS)
     )
-    reader = Reader(checkout, resolved_root(checkout))
+    # Every path below is built from the resolved root, so a relative checkout
+    # cannot double its own prefix when member directories are walked.
+    root = resolved_root(checkout)
+    reader = Reader(root, root)
     envelope = _empty_envelope(checkout, required, reader)
-    root_manifest = reader.toml(checkout / CARGO_MANIFEST)
+    root_manifest = reader.toml(root / CARGO_MANIFEST)
     if root_manifest is None:
         return envelope
     directories = member_directories(reader, root_manifest)
@@ -182,7 +185,7 @@ def build_test_environment_envelope(
     envelope["config_suppressions"] = config_suppressions(
         reader, {CARGO_MANIFEST: root_manifest, **manifests}, silencing
     )
-    scan = scan_suppressions(checkout, directories, silencing)
+    scan = scan_suppressions(root, directories, silencing)
     envelope["suppressions"] = [
         {"path": s.path, "line": s.line, "kind": s.kind, "lint": s.lint}
         for s in scan.suppressions

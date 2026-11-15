@@ -1,10 +1,12 @@
 """Walk a workspace member's tree for Rust files, for `rust-test-environment`.
 
-The walk skips build output and vendored code, never follows a symbolic link,
-and records a directory it cannot list instead of stopping. A nested directory
-with its own `Cargo.toml` that is not a member is another package (a fixture,
-an example workspace) that Clippy does not lint as part of this one, so it is
-not entered.
+The walk skips build output, never follows a symbolic link, and records a
+directory it cannot list instead of stopping. A nested directory with its own
+`Cargo.toml` that is not a member is another package (a fixture crate, an
+example workspace) that Clippy does not lint as part of this one, so it is not
+entered. A directory is never skipped by its name alone (`fixtures`, `vendor`):
+a module such as `mod fixtures;` is compiled into the member, so what it
+suppresses counts.
 """
 
 from __future__ import annotations
@@ -22,9 +24,6 @@ SKIPPED_DIRECTORIES: typ.Final = frozenset({
     "node_modules",
     ".git",
     ".venv",
-    "fixtures",
-    "fixture",
-    "vendor",
 })
 
 

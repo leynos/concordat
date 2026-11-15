@@ -4,7 +4,8 @@ TE-004: a `[lints.clippy]` or `[lints.rust]` table in a `Cargo.toml` (or the
 workspace's `[workspace.lints]`) that sets the lint, a group that contains it, or
 `warnings` to `allow`, and an `-A` or `--allow` flag for them in
 `.cargo/config.toml` (or the legacy `.cargo/config`), in `build.rustflags`,
-`target.*.rustflags`, or `[env]` `RUSTFLAGS` and `CLIPPY_ARGS`. A `[env]`
+`target.*.rustflags`, or `[env]` `RUSTFLAGS` and `CLIPPY_ARGS`; so is
+`--cap-lints allow`, which hides every lint. A `[env]`
 `CLIPPY_CONF_DIR` is reported as unreadable instead, because it moves Clippy's
 configuration somewhere the audit cannot know.
 
@@ -26,6 +27,8 @@ __all__ = ["config_suppressions"]
 CARGO_CONFIG_NAMES: typ.Final = (".cargo/config.toml", ".cargo/config")
 FLAG_ENVIRONMENT: typ.Final = ("RUSTFLAGS", "CLIPPY_ARGS")
 ALLOW_LEVEL: typ.Final = "allow"
+# `--cap-lints allow` caps every lint at allow, so it hides the lint outright.
+CAP_LINTS: typ.Final = "--cap-lints=allow"
 
 
 def _level_of(spec: object) -> str:
@@ -73,6 +76,10 @@ def _allowed_lints(words: list[str]) -> set[str]:
             allowed.add(word.removeprefix("--allow="))
         elif word.startswith("-A"):
             allowed.add(word.removeprefix("-A"))
+        elif word == "--cap-lints=allow" or (
+            word == "--cap-lints" and following == ["allow"]
+        ):
+            allowed.add(CAP_LINTS)
     return allowed
 
 
@@ -94,11 +101,19 @@ def _config_flag_suppressions(
     path: str, config: dict[str, object], silencing: frozenset[str]
 ) -> list[ConfigSuppressionFact]:
     """Return the flags in a Cargo configuration that allow the lint."""
+    hidden = silencing | {CAP_LINTS}
     return [
-        {"path": path, "detail": f"a flag allows {lint}"}
+        {"path": path, "detail": _flag_detail(lint)}
         for words in _flag_lists(config)
-        for lint in sorted(_allowed_lints(words) & silencing)
+        for lint in sorted(_allowed_lints(words) & hidden)
     ]
+
+
+def _flag_detail(lint: str) -> str:
+    """Describe a flag that hides the lint."""
+    if lint == CAP_LINTS:
+        return "--cap-lints allow hides every lint"
+    return f"a flag allows {lint}"
 
 
 def _conf_dir_unknowable(path: str, config: dict[str, object]) -> list[str]:

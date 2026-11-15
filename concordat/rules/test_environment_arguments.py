@@ -16,13 +16,28 @@ from .prover_rust_use import node_text
 if typ.TYPE_CHECKING:
     import tree_sitter
 
-__all__ = ["Items", "has_reason", "lint_paths", "top_level_items"]
+__all__ = ["Items", "has_reason", "lint_paths", "significant", "top_level_items"]
 
 LITERALS: typ.Final = frozenset({"string_literal", "raw_string_literal"})
 PATH_TOKENS: typ.Final = frozenset({"identifier", "::"})
 PARENTHESES: typ.Final = frozenset({"(", ")"})
+COMMENTS: typ.Final = frozenset({"line_comment", "block_comment"})
 
 type Items = list[list[tree_sitter.Node]]
+
+
+def significant(nodes: list[tree_sitter.Node]) -> list[tree_sitter.Node]:
+    """Return *nodes* without comments, which the grammar keeps as tokens.
+
+    `#[allow(clippy::disallowed_methods /* legacy */)]` is a valid suppression,
+    so a comment between the tokens of an argument must not hide it.
+
+    Returns
+    -------
+    list[tree_sitter.Node]
+        The nodes that are not line or block comments.
+    """
+    return [node for node in nodes if node.type not in COMMENTS]
 
 
 def top_level_items(tree: tree_sitter.Node) -> Items:
@@ -33,7 +48,9 @@ def top_level_items(tree: tree_sitter.Node) -> Items:
     Items
         The tokens of each comma-separated argument.
     """
-    tokens = [child for child in tree.children if child.type not in PARENTHESES]
+    tokens = [
+        child for child in significant(tree.children) if child.type not in PARENTHESES
+    ]
     groups = itertools.groupby(tokens, key=lambda token: token.type == ",")
     return [list(group) for is_comma, group in groups if not is_comma]
 

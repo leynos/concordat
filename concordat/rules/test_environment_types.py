@@ -14,6 +14,8 @@ import dataclasses as dc
 import tomllib
 import typing as typ
 
+from concordat.errors import OperationalRuleError
+
 from .markdown_envelope import (
     Repository,
     is_file,
@@ -153,6 +155,11 @@ class Reader:
             return None
         try:
             return tomllib.loads(read_text(path, operation))
+        except OperationalRuleError as error:
+            # A file inside the checkout that cannot be opened is a fact about
+            # the repository (EN-001); containment was settled above, and a
+            # path that escapes the checkout still stops the audit.
+            self.unreadable.append(f"{self.relative(path)}: {error}")
         except UnicodeDecodeError as error:
             self.unreadable.append(f"{self.relative(path)}: not UTF-8 text: {error}")
         except tomllib.TOMLDecodeError as error:
