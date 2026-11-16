@@ -48,6 +48,19 @@ _LISTING_FLAGS: typ.Final = frozenset({"--list", "-l"})
 _LITERAL: typ.Final = re.compile(r'"(?:[^"\\]|\\.)*"')
 
 
+def _is_plain_literal(item: str) -> bool:
+    """Report whether *item* is one string literal whose text is its value.
+
+    Returns
+    -------
+    bool
+        False for an expression, and for a literal holding a backslash escape,
+        whose value at run time (a hexadecimal escape can spell `build`) is not
+        its text.
+    """
+    return _LITERAL.fullmatch(item) is not None and "\\" not in item
+
+
 def _argument_words(calls: cabc.Iterable[tuple[str, str]]) -> list[str | None]:
     """Return a command's arguments in order, one word per argument.
 
@@ -66,7 +79,7 @@ def _argument_words(calls: cabc.Iterable[tuple[str, str]]) -> list[str | None]:
             words.append(None)
         elif method in ARGUMENT_METHODS:
             words.extend(
-                item[1:-1] if _LITERAL.fullmatch(item) else None
+                item[1:-1] if _is_plain_literal(item) else None
                 for item in argument_items(payload)
             )
     return words

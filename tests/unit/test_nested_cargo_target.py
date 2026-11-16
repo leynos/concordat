@@ -224,6 +224,28 @@ def test_an_unreadable_element_is_a_value_only_after_an_option(
     assert read_target(calls, TEMP_SOURCE).state == state
 
 
+def test_an_unconditional_unreadable_argument_may_be_the_flag() -> None:
+    """`.arg("build").arg(flag)` may pass `--target-dir=..`: the target is unknown."""
+    calls = [
+        env("CARGO_TARGET_DIR", "scratch.path()"),
+        ("arg", '"build"'),
+        ("arg", "flag"),
+    ]
+    assert read_target(calls, TEMP_SOURCE).state == UNKNOWN
+    after_option = [
+        env("CARGO_TARGET_DIR", "scratch.path()"),
+        ("arg", '"--manifest-path"'),
+        ("arg", "path"),
+    ]
+    assert read_target(after_option, TEMP_SOURCE).state == PRIVATE
+
+
+def test_an_escaped_variable_name_is_not_its_text() -> None:
+    """A hexadecimal escape can spell `CARGO_TARGET_DIR`: the text is not the name."""
+    calls = [("env", '"\\x43ARGO_TARGET_DIR", scratch.path()')]
+    assert read_target(calls, TEMP_SOURCE).state == UNKNOWN
+
+
 def test_a_computed_argument_is_not_an_exact_literal() -> None:
     """`"--target-".to_owned() + &format!(..)` builds the flag at run time."""
     payload = '["--timings".to_owned(), "--target-".to_owned() + &format!("dir={}", p)]'
@@ -353,6 +375,8 @@ def test_an_opaque_call_after_the_removal_may_restore_the_higher_variable() -> N
         ([("unseen-arguments", ""), ("arg", '"build"')], "unknown"),
         ([("unseen-arguments", "")], "unknown"),
         ([("unseen", "")], "no"),
+        # An escaped literal is not its text: a hexadecimal escape can spell build.
+        ([("arg", '"\\x62uild"')], "unknown"),
         ([], "no"),
     ],
 )

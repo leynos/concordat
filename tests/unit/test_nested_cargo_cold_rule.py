@@ -695,8 +695,15 @@ def test_a_platform_restricted_setup_rule_is_not_counted(
 @pytest.mark.parametrize(
     "matcher",
     # The second is a TOML basic string holding one backslash: `binary(u\i)`.
-    ["package(app{2,3})", "binary(u\\\\i)"],
-    ids=["braces", "backslash"],
+    [
+        "package(app{2,3})",
+        "binary(u\\\\i)",
+        # Nextest decodes escapes in an equality matcher, and its regex flavour
+        # accepts `\z`, which Python's does not.
+        "package(=a\\\\u{70}p)",
+        "package(/^app\\\\z/)",
+    ],
+    ids=["braces", "backslash", "unicode-escape", "regex-end-anchor"],
 )
 def test_a_glob_with_braces_or_escapes_is_not_evaluated(
     tmp_path: pathlib.Path, matcher: str

@@ -254,16 +254,21 @@ def _is_union_of_selectors(filterset: str) -> bool:
 def _is_unsupported_glob(atom: str) -> bool:
     """Report whether a selector's matcher is a glob the reader cannot evaluate.
 
-    Only a glob (`#glob`, or text with no prefix) is read with `globset`; an
-    equality, contains or regular-expression matcher may hold braces and
-    backslashes of its own (`/^app[0-9]{2}$/`).
+    Only a glob (`#glob`, or text with no prefix) is read with `globset`, which
+    also takes braces; an equality, contains or regular-expression matcher may
+    hold braces of its own (`/^app[0-9]{2}$/`). A backslash is declined in every
+    kind.
 
     Returns
     -------
     bool
-        True when the matcher is a glob that uses braces or backslash escapes.
+        True when the matcher uses a backslash, or is a glob that uses braces.
     """
     matcher = atom.partition("(")[2].removesuffix(")").strip()
+    # A backslash starts an escape nextest decodes (`\u{70}`) or a regex form
+    # Python lacks (`\z`), whatever the matcher's kind, so it is never evaluated.
+    if "\\" in matcher:
+        return True
     is_regex = len(matcher) > _MIN_REGEX and matcher[0] == matcher[-1] == "/"
     if matcher[:1] in {"=", "~"} or is_regex:
         return False

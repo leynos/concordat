@@ -206,7 +206,7 @@ def _literal_name(slot: str) -> str | None:
         The literal's text, or None when the slot is anything else.
     """
     stripped = slot.strip()
-    return stripped[1:-1] if STRING.fullmatch(stripped) else None
+    return stripped[1:-1] if _is_plain_literal(stripped) else None
 
 
 def _may_carry_flag(payload: str) -> bool:
@@ -304,6 +304,8 @@ class _Replay:
         self.has_manifest_path = False
         self._is_after_separator = False
         self._is_flag_value_next = False
+        # The argument before this one, which says whether this one is a value.
+        self._previous = ""
 
     def hide(self) -> None:
         """Take on a call the reader cannot see through."""
@@ -361,9 +363,14 @@ class _Replay:
         for item in argument_items(payload):
             if not self._is_after_separator:
                 self._read_argument(item)
+            self._previous = item
 
     def _read_argument(self, item: str) -> None:
-        """Read one argument that precedes any `--` separator."""
+        """Read one argument that precedes any `--` separator.
+
+        An argument the reader cannot read, outside an option's value, may be the
+        flag, as it may in a call made on only some paths.
+        """
         if item == _SEPARATOR:
             self._is_after_separator = True
         elif self._is_flag_value_next:
@@ -376,7 +383,9 @@ class _Replay:
         elif item.startswith(_MANIFEST_PATH):
             self.has_manifest_path = True
         elif _is_escaped_literal(item):
-            # `"\x2d\x2dtarget-dir=.."` is the flag at run time.
+            # An escaped spelling of the flag is the flag at run time.
+            self.is_flag_unknown = True
+        elif not _is_plain_literal(item) and not _awaits_value(self._previous):
             self.is_flag_unknown = True
 
     def reading(self) -> TargetReading:
