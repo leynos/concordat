@@ -31,6 +31,8 @@ from __future__ import annotations
 import re
 import typing as typ
 
+from .nested_cargo_shell_scan import mask_quotes, value_end
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
@@ -69,6 +71,8 @@ SED_SUBSTITUTE: typ.Final = re.compile(
     r"""(?:[ \t]+[\w./~$][^\s;&|()'"`]*)*[ \t]*(?=$|[;&|)])""",
     re.MULTILINE,
 )
+# The words whose arguments are checked rather than trusted by name alone.
+COMMAND_GUARDS: typ.Final = {"rustup": RUSTUP_SETUP, "sed": SED_SUBSTITUTE}
 CARGO_WORD: typ.Final = re.compile(r"(?<![\w.-])(?:[\w.~$/{}-]*/)?cargo(?![\w-])")
 # `cargo`, then an optional toolchain selector (quoted or not), then the word
 # that must be a check-style subcommand.
@@ -86,7 +90,6 @@ COMMAND_START: typ.Final = re.compile(
 )
 WORD: typ.Final = re.compile(r"[ \t]*(?P<word>[^\s;&|()`]+)")
 ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_]\w*=")
-CLOSERS: typ.Final = {"(": ")", "{": "}"}
 # What is left of a `case` arm (`*)`) once the parenthesis is split off, or the
 # descriptor of a redirection such as `>&2`.
 PATTERN_ONLY: typ.Final = re.compile(r"[*?]+|\d+")
@@ -99,59 +102,6 @@ def _cargo_is_check_style(script: str) -> bool:
         if sub is None or sub["subcommand"] not in CHECK_SUBCOMMANDS:
             return False
     return True
-
-
-def _skip_quoted(script: str, index: int) -> int:
-    """Return the index just past the quoted string that starts at *index*."""
-    quote = script[index]
-    index += 1
-    while index < len(script) and script[index] != quote:
-        if quote == '"' and script[index : index + 2] in {"$(", "${"}:
-            # An expansion inside double quotes nests its own quotes.
-            index = _skip_expansion(script, index)
-        else:
-            index += 2 if script[index] == "\\" and quote == '"' else 1
-    return index + 1
-
-
-def _skip_expansion(script: str, index: int) -> int:
-    """Return the index just past the `$(..)` or `${..}` that starts at *index*."""
-    opener = script[index + 1]
-    closer = CLOSERS[opener]
-    depth = 0
-    while index < len(script):
-        if script[index] in "\"'":
-            index = _skip_quoted(script, index)
-            continue
-        depth += (script[index] == opener) - (script[index] == closer)
-        index += 1
-        if depth == 0 and script[index - 1] == closer:
-            break
-    return index
-
-
-def _value_end(script: str, index: int) -> int:
-    """Return the index where an assignment value that starts at *index* ends.
-
-    The value runs to the next unquoted separator, skipping quoted strings,
-    command substitutions, parameter expansions and backquotes whole.
-
-    Returns
-    -------
-    int
-        The index of the first character after the value.
-    """
-    while index < len(script) and script[index] not in " \t\n;&|)":
-        char = script[index]
-        if char in "\"'":
-            index = _skip_quoted(script, index)
-        elif char == "$" and script[index + 1 : index + 2] in CLOSERS:
-            index = _skip_expansion(script, index)
-        elif char == "`":
-            index = script.find("`", index + 1) + 1 or len(script)
-        else:
-            index += 1
-    return index
 
 
 def _resolve_command(script: str, found: re.Match[str]) -> re.Match[str] | None:
@@ -169,73 +119,51 @@ def _resolve_command(script: str, found: re.Match[str]) -> re.Match[str] | None:
     word: re.Match[str] | None = found
     while word is not None and ASSIGNMENT.match(word["word"]):
         value = word.start("word") + word["word"].index("=") + 1
-        word = WORD.match(script, _value_end(script, value))
+        word = WORD.match(script, value_end(script, value))
     return word
 
 
-def _mask_range(script: str, masked: list[str], low: int, high: int) -> None:
-    """Blank the text of quoted strings in `script[low:high]`, in place.
-
-    Offsets are kept, so a match on the masked copy lines up with the original.
-    Expansions nested inside double quotes stay visible, because they run.
-    """
-    index = low
-    while index < high:
-        char = script[index]
-        if char not in "\"'":
-            index += 1
-            continue
-        end = _skip_quoted(script, index)
-        inner = index + 1
-        while inner < min(end - 1, high):
-            if char == '"' and script[inner : inner + 2] in {"$(", "${"}:
-                stop = _skip_expansion(script, inner)
-                _mask_range(script, masked, inner + 2, stop)
-                inner = stop
-            else:
-                masked[inner] = "_" if script[inner] != "\n" else "\n"
-                inner += 1
-        index = end
+def _is_known_word(word: str) -> bool:
+    """Report whether a command word needs no arguments checked to be harmless."""
+    return (
+        not word
+        or word in HARMLESS_WORDS
+        or PATTERN_ONLY.fullmatch(word) is not None
+        or CARGO_WORD.fullmatch(word) is not None
+    )
 
 
-def _mask_quotes(script: str) -> str:
-    """Return *script* with the text of its quoted strings blanked out.
+def _is_harmless_command(script: str, command: re.Match[str]) -> bool:
+    """Report whether one command word of *script* starts no build.
 
-    A quoted string is data (a sed script, a message), so its brackets and
-    separators must not be read as commands.
+    *command* is matched on the quote-masked copy of *script*, so its offsets
+    also index the original, where the arguments of a guarded word are read.
 
     Returns
     -------
-    str
-        A copy of the same length, with quoted text replaced by underscores.
+    bool
+        True when the word is a known harmless one, or a guarded one whose
+        arguments pass its guard.
     """
-    masked = list(script)
-    _mask_range(script, masked, 0, len(script))
-    return "".join(masked)
+    word = command["word"].strip("\"'")
+    guard = COMMAND_GUARDS.get(word)
+    if guard is not None:
+        return guard.match(script, command.end("word")) is not None
+    return _is_known_word(word)
 
 
 def _commands_are_harmless(script: str) -> bool:
     """Report whether every command of *script* is cargo, an assignment or harmless."""
-    visible = _mask_quotes(script)
-    for position in COMMAND_START.finditer(visible):
-        found = _resolve_command(visible, position)
-        if found is None:
-            continue
-        word = found["word"].strip("\"'")
-        guard = {"rustup": RUSTUP_SETUP, "sed": SED_SUBSTITUTE}.get(word)
-        if guard is not None:
-            if guard.match(script, found.end("word")):
-                continue
-            return False
-        if (
-            not word
-            or word in HARMLESS_WORDS
-            or PATTERN_ONLY.fullmatch(word)
-            or CARGO_WORD.fullmatch(word)
-        ):
-            continue
-        return False
-    return True
+    visible = mask_quotes(script)
+    resolved = (
+        _resolve_command(visible, position)
+        for position in COMMAND_START.finditer(visible)
+    )
+    return all(
+        _is_harmless_command(script, command)
+        for command in resolved
+        if command is not None
+    )
 
 
 def _uses_only_setup_actions(uses: cabc.Iterable[object]) -> bool:
