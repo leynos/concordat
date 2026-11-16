@@ -679,6 +679,69 @@ CASES: dict[str, Case] = {
         'fn run() -> Command {\n    cargo("x")\n}\n',
         (("helper", "unresolved"),),
     ),
+    # A name written with an escape is the offline variable at run time, and
+    # Windows compares names without regard to case, so neither is "another
+    # variable" the reader may step over.
+    "helper-offline-then-conditional-escaped-name": Case(
+        "fn cargo(online: bool) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if online {\n"
+        '        command.env("\\x43ARGO_NET_OFFLINE", "0");\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(true)\n}\n",
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-conditional-other-case": Case(
+        "fn cargo(online: bool) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if online {\n"
+        '        command.env("Cargo_Net_Offline", "0");\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(true)\n}\n",
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-conditional-removal-escaped-name": Case(
+        "fn cargo(online: bool) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if online {\n"
+        '        command.env_remove("\\x43ARGO_NET_OFFLINE");\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(true)\n}\n",
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-conditional-removal-other-case": Case(
+        "fn cargo(online: bool) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if online {\n"
+        '        command.env_remove("cargo_net_offline");\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(true)\n}\n",
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-conditional-removal-unreadable-name": Case(
+        "fn cargo(name: &str) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if !name.is_empty() {\n"
+        "        command.env_remove(name);\n"
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        'fn run() -> Command {\n    cargo("x")\n}\n',
+        (("helper", "unresolved"),),
+    ),
     "helper-offline-then-conditional-environment-list": Case(
         "fn cargo(extra: Vec<(String, String)>) -> Command {\n"
         '    let mut command = Command::new("cargo");\n'

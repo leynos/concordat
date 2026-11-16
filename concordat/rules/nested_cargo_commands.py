@@ -38,9 +38,9 @@ import typing as typ
 
 from .nested_cargo_source import RustSource, enclosing_block
 from .nested_cargo_text import environment_slots
+from .nested_cargo_variable_names import OFFLINE_VARIABLE, may_include_offline_variable
 from .rust_source import scan_balanced, skip_trivia
 
-OFFLINE_VARIABLE: typ.Final = "CARGO_NET_OFFLINE"
 # Cargo reads this variable through its boolean parser, which accepts only `1`
 # and `true`. Measured against cargo 1.99.1: `1` reported the offline-mode
 # note that `--offline` prints, while `yes`, `on`, an empty value and `0` did
@@ -562,26 +562,22 @@ def _record_unseen(
 def _may_name_offline_variable(method: str, text: str) -> bool:
     """Report whether an environment call on some paths could touch the offline name.
 
-    `env("CARGO_TARGET_DIR", target)` and `env_remove("RUSTFLAGS")` name a
-    variable the reader can read, and it is not `CARGO_NET_OFFLINE`, so whether
-    they run says nothing about the network. Every other form may write or
-    remove the offline variable: `envs(..)` and `env_clear()` always do, and a
-    name the reader cannot read might be it.
+    `envs(..)` and `env_clear()` always may; `env` and `env_remove` may unless
+    every name they carry is plainly another variable (see
+    `nested_cargo_variable_names`).
 
     Returns
     -------
     bool
-        False only when the call names one readable variable that is not the
-        offline one.
+        False only when the call names plainly another variable.
     """
     if method == "env":
         pairs = _environment_pairs(text)
-        return pairs is None or any(
-            key is None or key == OFFLINE_VARIABLE for key, _value in pairs
+        return may_include_offline_variable(
+            None if pairs is None else [key for key, _value in pairs]
         )
     if method == "env_remove":
-        names = _string_literals(text)
-        return names is None or not names or OFFLINE_VARIABLE in names
+        return may_include_offline_variable(_string_literals(text))
     return True
 
 
