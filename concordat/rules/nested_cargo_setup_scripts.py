@@ -115,7 +115,7 @@ def _matches(matcher: str, name: str) -> bool:
     """Report whether a nextest matcher selects *name*.
 
     A matcher is `=text` (equal), `~text` (contains), `/pattern/` (a regular
-    expression), `#glob` or, with no prefix, equality, which is the default for
+    expression), `#glob` or, with no prefix, a glob, which is the default for
     `binary`, `binary_id` and `package`. A form the reader does not understand
     selects nothing, so it can only fail to credit a preparation, never invent
     one.
@@ -137,7 +137,7 @@ def _matches(matcher: str, name: str) -> bool:
             return re.search(text[1:-1], name) is not None
         except re.error:
             return False
-    return name == text
+    return fnmatch.fnmatchcase(name, text)
 
 
 def covers(rules: list[SetupRule], binary: str | None, package: str | None) -> bool:
@@ -175,8 +175,9 @@ def _selects(atoms: list[str], binary: str | None, package: str | None) -> bool:
 def _selects_one(atom: str, binary: str | None, package: str | None) -> bool:
     """Report whether one selector picks the binary (or the package, for `package`).
 
-    A `binary_id` is the package and binary joined by `::` (the package alone for
-    its unit tests), so it is compared with that form and with the binary's name.
+    A `binary_id` names the package and the binary joined by `::`
+    (`app::ui` for `app/tests/ui.rs`; the package alone is its library's unit
+    tests), so it is compared with that form only.
 
     Returns
     -------
@@ -189,8 +190,9 @@ def _selects_one(atom: str, binary: str | None, package: str | None) -> bool:
         return package is not None and _matches(matcher, package)
     if binary is None:
         return False
-    candidates = [binary, f"{package}::{binary}"] if kind == "binary_id" else [binary]
-    return any(_matches(matcher, candidate) for candidate in candidates)
+    if kind == "binary_id":
+        return package is not None and _matches(matcher, f"{package}::{binary}")
+    return _matches(matcher, binary)
 
 
 def _is_union_of_selectors(filterset: str) -> bool:

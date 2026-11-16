@@ -199,6 +199,9 @@ def test_an_unseen_argument_call_hides_a_target_only_when_it_may_carry_the_flag(
         # no more, so what follows either may be `--target-dir=...`.
         ('["--release", flag]', UNKNOWN),
         ('["--out-dir=x", flag]', UNKNOWN),
+        # Cargo has many switches; an option the reader does not know takes no value.
+        ('["--timings", flag]', UNKNOWN),
+        ('["--some-unknown-option", flag]', UNKNOWN),
         ('["--manifest-path", path]', PRIVATE),
     ],
     ids=[
@@ -208,6 +211,8 @@ def test_an_unseen_argument_call_hides_a_target_only_when_it_may_carry_the_flag(
         "two-unreadable",
         "after-a-switch",
         "after-an-inline-value",
+        "after-timings",
+        "after-an-unknown-option",
         "after-a-value-option",
     ],
 )

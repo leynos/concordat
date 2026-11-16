@@ -631,6 +631,13 @@ def test_a_reused_command_is_judged_at_each_run(tmp_path: pathlib.Path) -> None:
         ("package(~ui)", False),
         ("binary(#u*)", True),
         ("binary(#x*)", False),
+        # `app/tests/ui.rs` is binary `app::ui`; `ui` alone is package `ui`'s library.
+        ("binary_id(=ui)", False),
+        ("binary_id(=app)", False),
+        ("binary_id(app::*)", True),
+        # An unprefixed matcher is a glob.
+        ("package(app*)", True),
+        ("package(u*)", False),
         ("binary_id(app::ui)", True),
         ("binary_id(ui::ui)", False),
     ],

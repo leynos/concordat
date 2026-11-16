@@ -85,14 +85,15 @@ not read. The reading is one of five states:
   so it leaves the target unknown too, and no `env_clear()` or later variable
   settles it, because `--target-dir` beats every variable. An element of its
   source the reader cannot read is taken as a value only when an option that
-  consumes one precedes it (`"--out-dir", path`: not one of cargo's switches
-  such as `--release`, and not an option given its value inline as
+  consumes one precedes it (`"--out-dir", path`, `"--manifest-path", path`: an
+  option the reader knows takes a value, and not one given its value inline as
   `--out-dir=x`); anywhere else (`[flag, path]`, `["--release", flag]`,
-  `.args(extra)`, a handoff) it may be the flag. A `--` that already sent the
-  rest of the line to the program cargo runs ends the question. A helper's own
-  parameter, including every name a destructuring pattern binds, is unknown in
-  the same way: it holds what the caller passed, and an unrelated binding of
-  the same name in the caller is never read in its place.
+  `["--timings", flag]`, an option the reader has not heard of, `.args(extra)`,
+  a handoff) it may be the flag. A `--` that already sent the rest of the line
+  to the program cargo runs ends the question. A helper's own parameter,
+  including every name a destructuring pattern binds, is unknown in the same
+  way: it holds what the caller passed, and an unrelated binding of the same
+  name in the caller is never read in its place.
 - `dedicated`: a fixed `target/...` directory inside the crate
   (`CARGO_MANIFEST_DIR` joined with `"target/..."`), or a fixed path under the
   system temporary directory (`env::temp_dir().join("scenario")`). It persists
@@ -159,12 +160,14 @@ The compile is *prepared* when any one of these holds:
    `package(..)` selector against the crate's package name, so `package(=ui)`
    does not cover a binary called `ui` in package `app`. A matcher is evaluated
    as nextest reads it (`=text` equal, `~text` contains, `/regex/`, `#glob`,
-   and plain text equal), not searched for the name, so
-   `package(/^app[0-9]+$/)` does not cover package `app`. A filter that negates
-   (`not binary(ui)`), subtracts (`all() - binary(ui)`), intersects
-   (`binary(ui) & test(=one)`) or uses another predicate names a binary without
-   selecting all of it, so it never counts as coverage and the reader reports
-   it as indeterminate.
+   and plain text a glob), not searched for the name, so
+   `package(/^app[0-9]+$/)` does not cover package `app`. A `binary_id` is the
+   package and binary joined by `::` (`app::ui` for `app/tests/ui.rs`), so
+   `binary_id(=ui)` names package `ui`'s library, not that binary. A filter
+   that negates (`not binary(ui)`), subtracts (`all() - binary(ui)`), intersects
+   (`binary(ui) & test(=one)`) or uses another predicate names a binary
+   without selecting all of it, so it never counts as coverage and the reader
+   reports it as indeterminate.
 2. **A named preparation test in the same crate.** A test function (carrying
    `#[test]`, `#[rstest]`, `#[test_case]` or a `::test` attribute) whose name
    matches a pattern in `preparation_gates.tests`. An ordinary function of the

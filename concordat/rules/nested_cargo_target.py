@@ -49,38 +49,32 @@ UNKNOWN: typ.Final = "unknown"
 TARGET_VARIABLES: typ.Final = ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR")
 TARGET_FLAG: typ.Final = '"--target-dir"'
 _SEPARATOR: typ.Final = '"--"'
-# Cargo options that take no value, so the argument after one is not theirs.
-_CARGO_SWITCHES: typ.Final = frozenset({
-    "--release",
-    "-r",
-    "--locked",
-    "--frozen",
-    "--offline",
-    "--workspace",
-    "--all",
-    "--all-targets",
-    "--all-features",
-    "--no-default-features",
-    "--lib",
-    "--bins",
-    "--tests",
-    "--benches",
-    "--examples",
-    "--doc",
-    "--quiet",
-    "-q",
-    "--verbose",
-    "-v",
-    "-vv",
-    "--no-run",
-    "--no-fail-fast",
-    "--keep-going",
-    "--allow-dirty",
-    "--no-verify",
-    "--list",
-    "-l",
-    "--unit-graph",
-    "--ignore-rust-version",
+# Options known to consume the argument after them. Any other option may be a
+# switch (cargo has many: `--release`, `--timings`, `--locked`), and what
+# follows a switch may itself be `--target-dir=...`.
+_VALUE_OPTIONS: typ.Final = frozenset({
+    "--manifest-path",
+    "--package",
+    "-p",
+    "--exclude",
+    "--bin",
+    "--example",
+    "--test",
+    "--bench",
+    "--features",
+    "-F",
+    "--profile",
+    "--target",
+    "--jobs",
+    "-j",
+    "--color",
+    "--message-format",
+    "--config",
+    "-Z",
+    "--lockfile-path",
+    "--out-dir",
+    "--build-dir",
+    "--artifact-dir",
 })
 # Matches `"--manifest-path"` and `"--manifest-path=..."`.
 _MANIFEST_PATH: typ.Final = '"--manifest-path'
@@ -244,11 +238,10 @@ def _may_carry_flag(payload: str) -> bool:
 def _awaits_value(previous: str) -> bool:
     """Report whether the argument *previous* leaves the next one as its value.
 
-    An option takes a value when it is not a switch (`--release`) and has not
-    been given one inline (`--out-dir=x`). Which options a third-party program
-    defines is not known, so any other option is taken to consume its value;
-    cargo's own switches are listed, because `["--release", flag]` leaves `flag`
-    free to be `--target-dir=...`.
+    Only an option known to take a value, and not already given one inline
+    (`--out-dir=x`), does. Cargo has many switches and a program may define
+    more, so `["--timings", flag]` and `["--release", flag]` leave `flag` free to
+    be `--target-dir=...`, and so does any option the reader has not heard of.
 
     Returns
     -------
@@ -257,7 +250,7 @@ def _awaits_value(previous: str) -> bool:
     """
     if not previous.startswith('"-') or "=" in previous:
         return False
-    return previous.strip('"') not in _CARGO_SWITCHES
+    return previous.strip('"') in _VALUE_OPTIONS
 
 
 def _hidden() -> TargetReading:
