@@ -82,13 +82,15 @@ not read. The reading is one of five states:
   may have set a target. This is reported as indeterminate, never as a pass and
   never as a private target. An argument call the reader cannot see (one made
   on only some paths, or handed to another function) may carry `--target-dir`,
-  so it leaves the target unknown too. When its source is a literal list that
-  does not name the flag, an element the reader cannot read is taken as a value
-  and the target stands; a call with no list (`.args(extra)`, a handoff) may
-  hold anything. A `--` that already sent the rest of the line to the program
-  cargo runs ends the question. A helper's own parameter is unknown in the same
-  way: it holds what the caller passed, and an unrelated binding of the same
-  name in the caller is never read in its place.
+  so it leaves the target unknown too, and no `env_clear()` or later variable
+  settles it, because `--target-dir` beats every variable. An element of its
+  source the reader cannot read is taken as a value only when an option it
+  spells out precedes it (`"--out-dir", path`); anywhere else (`[flag, path]`,
+  `.args(extra)`, a handoff) it may be the flag. A `--` that already sent the
+  rest of the line to the program cargo runs ends the question. A helper's own
+  parameter, including every name a destructuring pattern binds, is unknown in
+  the same way: it holds what the caller passed, and an unrelated binding of
+  the same name in the caller is never read in its place.
 - `dedicated`: a fixed `target/...` directory inside the crate
   (`CARGO_MANIFEST_DIR` joined with `"target/..."`), or a fixed path under the
   system temporary directory (`env::temp_dir().join("scenario")`). It persists
@@ -150,7 +152,10 @@ The compile is *prepared* when any one of these holds:
    names the test binary or the crate's package. Nextest runs it before the
    tests it covers, so the build is paid for outside any test's deadline. Only
    `all()` and a union (`|`, `+`, `or`) of `binary(..)`, `binary_id(..)` and
-   `package(..)` selectors are evaluated. A filter that negates
+   `package(..)` selectors are evaluated, each against its own kind of name: a
+   `binary(..)` or `binary_id(..)` selector against the test binary's name and a
+   `package(..)` selector against the crate's package name, so `package(=ui)`
+   does not cover a binary called `ui` in package `app`. A filter that negates
    (`not binary(ui)`), subtracts (`all() - binary(ui)`), intersects
    (`binary(ui) & test(=one)`) or uses another predicate names a binary without
    selecting all of it, so it never counts as coverage and the reader reports

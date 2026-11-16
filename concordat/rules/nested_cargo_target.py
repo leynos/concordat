@@ -37,7 +37,7 @@ from .nested_cargo_commands import (
     UNSEEN_ARGUMENTS,
     UNSEEN_CALL,
 )
-from .nested_cargo_text import argument_items, environment_slots
+from .nested_cargo_text import argument_items, environment_slots, split_top_level
 from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
@@ -52,9 +52,6 @@ UNKNOWN: typ.Final = "unknown"
 TARGET_VARIABLES: typ.Final = ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR")
 TARGET_FLAG: typ.Final = '"--target-dir"'
 _SEPARATOR: typ.Final = '"--"'
-# A source that holds a bracketed list or a string literal spells its arguments
-# out, so the reader can tell whether it names the flag.
-_LITERAL_LIST: typ.Final = re.compile(r'[\["]')
 # Matches `"--manifest-path"` and `"--manifest-path=..."`.
 _MANIFEST_PATH: typ.Final = '"--manifest-path'
 
@@ -91,9 +88,11 @@ _EXPANSION_DEPTH: typ.Final = 3
 _AMBIGUOUS: typ.Final = "<Ambiguous>"
 _PARAMETER: typ.Final = "<Parameter>"
 _FUNCTION_HEAD: typ.Final = re.compile(r"fn\s+\w+\s*(?:<[^{(]*>)?\s*\(")
-_PARAMETER_NAME: typ.Final = re.compile(
-    r"(?:^|,)\s*(?:mut\s+)?(?P<name>[A-Za-z_]\w*)\s*:"
-)
+# A parameter is `pattern: Type`; the separator is a single colon, not a path's.
+_PARAMETER_SPLIT: typ.Final = re.compile(r"(?<!:):(?!:)")
+_PATTERN_NAME: typ.Final = re.compile(r"[A-Za-z_]\w*")
+_NESTING: typ.Final = str.maketrans("{}[]", "()()")
+_PATTERN_KEYWORDS: typ.Final = frozenset({"mut", "ref", "self"})
 # `let x = std::env::current_exe()?;` names the test executable.
 _TEST_EXECUTABLE: typ.Final = "current_exe"
 _SUMMARY_LENGTH: typ.Final = 60
@@ -167,8 +166,18 @@ def _signature_parameters(text: str) -> set[str]:
     close = scan_balanced(text, head.end() - 1)
     if close is None:
         return set()
-    signature = text[head.end() : close - 1]
-    return {match["name"] for match in _PARAMETER_NAME.finditer(signature)}
+    names: set[str] = set()
+    # Braces and brackets nest as parentheses do, and `split_top_level` only
+    # tracks parentheses, so a struct or slice pattern would otherwise be split
+    # at the commas inside it.
+    signature = text[head.end() : close - 1].translate(_NESTING)
+    for segment in split_top_level(signature):
+        # A parameter is `pattern: Type`, and the pattern may destructure
+        # (`(target,): (&Path,)`), so every name the pattern binds counts.
+        parts = _PARAMETER_SPLIT.split(segment, maxsplit=1)
+        if len(parts) == 2:
+            names.update(_PATTERN_NAME.findall(parts[0]))
+    return names - _PATTERN_KEYWORDS
 
 
 def local_bindings(text: str) -> dict[str, str]:
@@ -316,6 +325,33 @@ def _literal_name(slot: str) -> str | None:
     return stripped[1:-1] if _STRING.fullmatch(stripped) else None
 
 
+def _may_carry_flag(payload: str) -> bool:
+    """Report whether an argument call's source may name `--target-dir`.
+
+    A literal argument is read. An argument the reader cannot read is a value
+    when an option the call spells out precedes it (`"--out-dir", path`), and
+    may be the flag otherwise (`[flag, path]`, `.arg(flag)`). A call with no
+    arguments the reader can see at all, such as a handoff, may hold anything.
+
+    Returns
+    -------
+    bool
+        True when the flag cannot be ruled out.
+    """
+    items = argument_items(payload)
+    if not items:
+        return True
+    previous = ""
+    for item in items:
+        if "--target-dir" in item:
+            return True
+        is_value = previous.startswith('"-')
+        if not item.startswith('"') and not is_value:
+            return True
+        previous = item
+    return False
+
+
 def _hidden() -> TargetReading:
     """Return the answer for a target a later hidden operation may have replaced."""
     return TargetReading(UNKNOWN, "set before a call the reader cannot see through")
@@ -334,6 +370,8 @@ class _Replay:
         # A call the reader could not see through may have set a target, so the
         # absence of one is no longer evidence. An `env_clear` after it wipes it.
         self.is_opaque = False
+        # An argument call the reader could not read may have added `--target-dir`.
+        self.is_flag_unknown = False
         # `--manifest-path` points cargo at another workspace, whose own target
         # is the default, whatever the working directory is.
         self.has_manifest_path = False
@@ -351,16 +389,12 @@ class _Replay:
         """Take on an argument call the reader cannot see through.
 
         It may have added `--target-dir`, unless a `--` already handed the rest
-        of the line to the program cargo runs, or its source is a literal list
-        that does not name the flag. An element of such a list the reader cannot
-        read is taken to be a value and not the flag; a call with no list at all
-        (a variable, or a handoff to another function) may hold anything.
+        of the line to the program cargo runs. Whether it did is kept apart from
+        the environment calls: `--target-dir` beats every variable, so a later
+        `env_clear()` or `CARGO_TARGET_DIR` cannot settle it.
         """
-        if self._is_after_separator:
-            return
-        if _LITERAL_LIST.search(payload) and "--target-dir" not in payload:
-            return
-        self.hide()
+        if not self._is_after_separator and _may_carry_flag(payload):
+            self.is_flag_unknown = True
 
     def environment(self, payload: str) -> None:
         """Apply one `.env`/`.envs` call."""
@@ -419,6 +453,10 @@ class _Replay:
         """Return where the replayed command builds."""
         if self.flag is not None:
             return self.flag
+        if self.is_flag_unknown:
+            return TargetReading(
+                UNKNOWN, "an argument call the reader cannot see may select a target"
+            )
         higher, lower = TARGET_VARIABLES
         if higher in self.variables:
             return self.variables[higher]

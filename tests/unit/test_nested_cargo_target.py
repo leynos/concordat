@@ -187,6 +187,52 @@ def test_an_unseen_argument_call_hides_a_target_only_when_it_may_carry_the_flag(
     assert read_target(calls, TEMP_SOURCE).state == state
 
 
+@pytest.mark.parametrize(
+    ("payload", "state"),
+    [
+        # An unreadable first element may be the flag; a value after an option may not.
+        ("[flag, scratch.path()]", UNKNOWN),
+        ("flag", UNKNOWN),
+        ('["--out-dir", out.path()]', PRIVATE),
+        ('["--out-dir", out.path(), other]', UNKNOWN),
+    ],
+    ids=["unreadable-first", "bare-variable", "option-value", "two-unreadable"],
+)
+def test_an_unreadable_element_is_a_value_only_after_an_option(
+    payload: str, state: str
+) -> None:
+    """`[flag, path]` may select a target; `["--out-dir", path]` cannot."""
+    calls = [env("CARGO_TARGET_DIR", "scratch.path()"), ("unseen-arguments", payload)]
+    assert read_target(calls, TEMP_SOURCE).state == state
+
+
+def test_the_environment_cannot_settle_an_unseen_flag() -> None:
+    """`--target-dir` beats the variables, so `env_clear()` or a write cannot help."""
+    hidden = ("unseen-arguments", "[flag, x]")
+    cleared = [hidden, ("env_clear", "")]
+    assert read_target(cleared, TEMP_SOURCE).state == UNKNOWN
+    set_after = [hidden, env("CARGO_TARGET_DIR", "scratch.path()")]
+    assert read_target(set_after, TEMP_SOURCE).state == UNKNOWN
+    named_after = [hidden, ("args", '["--target-dir", scratch.path()]')]
+    assert read_target(named_after, TEMP_SOURCE).state == PRIVATE
+
+
+@pytest.mark.parametrize(
+    "signature",
+    [
+        "fn build(target: &Path)",
+        "fn build((target,): (&Path,))",
+        "fn build(Pair { target, .. }: Pair)",
+        "fn build(mut target: PathBuf, flag: bool)",
+    ],
+    ids=["simple", "tuple", "struct", "mut"],
+)
+def test_every_name_a_parameter_pattern_binds_is_unknown(signature: str) -> None:
+    """A destructured parameter holds what the caller passed, not a caller's binding."""
+    text = f'{signature} {{ cmd.env("CARGO_TARGET_DIR", target); }}\n'
+    assert local_bindings(text)["target"] == "<Parameter>"
+
+
 def test_an_unseen_argument_list_after_the_separator_is_the_programs() -> None:
     """After `--` the rest of the line is not cargo's, so no hidden word is a flag."""
     calls = [("args", '["run", "--"]'), ("unseen-arguments", "")]

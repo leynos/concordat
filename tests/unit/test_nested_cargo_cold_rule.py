@@ -616,6 +616,31 @@ def test_a_reused_command_is_judged_at_each_run(tmp_path: pathlib.Path) -> None:
     assert ("NC-009", "tests/twice.rs") in profile(tmp_path)
 
 
+@pytest.mark.parametrize(
+    ("filter_text", "is_prepared"),
+    [
+        # `package(=ui)` selects a package called ui, and this binary is in app.
+        ("package(=ui)", False),
+        ("package(=app)", True),
+        ("binary(=ui)", True),
+        ("binary(=app)", False),
+    ],
+)
+def test_a_setup_selector_is_matched_to_its_own_kind_of_name(
+    tmp_path: pathlib.Path, filter_text: str, *, is_prepared: bool
+) -> None:
+    """A package name never covers a binary of the same name in another package."""
+    put(tmp_path, "app/Cargo.toml", '[package]\nname = "app"\n')
+    put(tmp_path, "ui/Cargo.toml", '[package]\nname = "ui"\n')
+    put(tmp_path, "app/tests/ui.rs", TRYBUILD_TEST)
+    put(
+        tmp_path,
+        ".config/nextest.toml",
+        SETUP_SCRIPT.format(filter=filter_text, setup="prepare-nested"),
+    )
+    assert (("NC-010", "app/tests/ui.rs") in profile(tmp_path)) is not is_prepared
+
+
 def test_a_negated_setup_filter_is_reported_as_a_problem(
     tmp_path: pathlib.Path,
 ) -> None:

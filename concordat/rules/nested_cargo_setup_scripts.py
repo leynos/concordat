@@ -114,8 +114,12 @@ def _mentions(filterset: str, name: str) -> bool:
     return re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", filterset) is not None
 
 
-def covers(rules: list[SetupRule], names: list[str]) -> bool:
-    """Report whether a setup rule selects every test or names one of *names*.
+def covers(rules: list[SetupRule], binary: str | None, package: str | None) -> bool:
+    """Report whether a setup rule selects every test, or the binary or package.
+
+    A `binary(..)` or `binary_id(..)` selector is compared with the binary's
+    name and a `package(..)` selector with the package's, so `package(=ui)` does
+    not cover a binary called `ui` in package `app`.
 
     Only `all()` and a union of `binary(..)`, `binary_id(..)` and `package(..)`
     selectors are evaluated. A filter that negates (`not binary(ui)`), subtracts
@@ -129,17 +133,24 @@ def covers(rules: list[SetupRule], names: list[str]) -> bool:
         True when nextest runs a setup script before the named binary or crate.
     """
     return any(
-        _selects(_ATOM.findall(rule.filter), names)
+        _selects(_ATOM.findall(rule.filter), binary, package)
         for rule in rules
         if _is_union_of_selectors(rule.filter)
     )
 
 
-def _selects(atoms: list[str], names: list[str]) -> bool:
-    """Report whether a union of selectors includes `all()` or one of *names*."""
+def _selects(atoms: list[str], binary: str | None, package: str | None) -> bool:
+    """Report whether a union of selectors includes `all()` or the binary or package."""
     return ALL_FILTER in atoms or any(
-        _mentions(atom, name) for atom in atoms for name in names
+        _selects_one(atom, binary, package) for atom in atoms
     )
+
+
+def _selects_one(atom: str, binary: str | None, package: str | None) -> bool:
+    """Report whether one selector names the binary (or the package, for `package`)."""
+    kind = atom.partition("(")[0]
+    name = package if kind == "package" else binary
+    return name is not None and _mentions(atom, name)
 
 
 def _is_union_of_selectors(filterset: str) -> bool:

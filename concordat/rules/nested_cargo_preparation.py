@@ -301,7 +301,7 @@ def collect_builds(
         binary = _BINARY.search(path)
         stem = binary["stem"] if binary else None
         prepared = sorted(declared.get(crate, set()))
-        if covers(preparation.rules, [n for n in (stem, crates.get(crate)) if n]):
+        if covers(preparation.rules, stem, crates.get(crate)):
             prepared.insert(0, SETUP_SCRIPT)
         builds.append({
             "path": path,
