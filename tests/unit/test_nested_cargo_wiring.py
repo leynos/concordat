@@ -130,6 +130,271 @@ CASES = {
 }
 
 
+MSRV_TARGET = "          CARGO_TARGET_DIR: ${{ runner.temp }}/msrv-target\n"
+MSRV_CHECK = (
+    '      - run: cargo "+${MSRV}" check --all-targets --locked\n        env:\n'
+    + MSRV_TARGET
+)
+
+
+def msrv_workflow(*, steps: str, top: str = "", extra_job: str = "") -> str:
+    """Return a workflow whose `msrv` job runs *steps* after a checkout."""
+    return (
+        f"name: ci\non: push\n{top}jobs:\n  msrv:\n    runs-on: ubuntu-latest\n"
+        + STEPS
+        + '      - run: rustup toolchain install "$MSRV" --profile minimal\n'
+        + steps
+        + extra_job
+    )
+
+
+TEST_JOB = (
+    "  test:\n    runs-on: ubuntu-latest\n" + STEPS + "      - run: cargo nextest run\n"
+)
+CHECK_ONLY_CASES = {
+    "msrv-check-with-a-per-run-target-is-silent": Case(
+        msrv_workflow(steps=MSRV_CHECK), set()
+    ),
+    "clippy-only-job-is-silent": Case(
+        msrv_workflow(steps=MSRV_CHECK.replace("check --all-targets", "clippy")),
+        set(),
+    ),
+    "check-and-test-in-one-job-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: cargo test\n"), {"NC-006"}
+    ),
+    "check-then-make-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: make test\n"), {"NC-006"}
+    ),
+    "check-then-a-script-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: ./scripts/ci.sh\n"),
+        {"NC-006"},
+    ),
+    "check-beside-an-unknown-action-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - uses: acme/runs-tests@v1\n"),
+        {"NC-006"},
+    ),
+    "global-option-before-the-subcommand-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: cargo --verbose test\n"),
+        {"NC-006"},
+    ),
+    "global-option-with-test-after-check-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: cargo --locked test\n"),
+        {"NC-006"},
+    ),
+    "absolute-cargo-path-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: /usr/bin/cargo test\n"),
+        {"NC-006"},
+    ),
+    "slash-script-without-dot-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: scripts/ci\n"), {"NC-006"}
+    ),
+    "unknown-interpreter-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: ruby ci.rb\n"), {"NC-006"}
+    ),
+    "command-after-if-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: if make test; then true; fi\n"),
+        {"NC-006"},
+    ),
+    "command-after-while-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: while make test; do break; done\n"
+        ),
+        {"NC-006"},
+    ),
+    "expression-as-the-command-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: ${{ inputs.command }}\n"),
+        {"NC-006"},
+    ),
+    "variable-as-the-command-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: $TEST_COMMAND\n"), {"NC-006"}
+    ),
+    "command-in-a-wildcard-case-arm-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + "      - run: |\n          case x in\n            *) make test ;;\n"
+            "          esac\n"
+        ),
+        {"NC-006"},
+    ),
+    "command-after-a-quoted-assignment-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + '      - run: RUST_BACKTRACE="1" make test\n'),
+        {"NC-006"},
+    ),
+    "command-after-an-expanded-assignment-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: RUST_BACKTRACE=$TRACE make test\n"
+        ),
+        {"NC-006"},
+    ),
+    "command-after-a-substituted-assignment-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + '      - run: X="$(true)" make test\n'),
+        {"NC-006"},
+    ),
+    "substitution-inside-an-assignment-prefix-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + '      - run: RUSTFLAGS="$(make rustflags)" cargo check --locked\n'
+        ),
+        {"NC-006"},
+    ),
+    "quoted-variable-assignment-then-a-command-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + '      - run: RUST_BACKTRACE="$TRACE" make test\n'
+        ),
+        {"NC-006"},
+    ),
+    "quoted-default-assignment-then-a-command-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + '      - run: RUST_BACKTRACE="${RUST_BACKTRACE:-1}" make test\n'
+        ),
+        {"NC-006"},
+    ),
+    "two-assignments-then-a-command-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + '      - run: A="x y" B=$(true) make test\n'),
+        {"NC-006"},
+    ),
+    "substitution-in-a-default-expansion-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + "      - run: RUSTFLAGS=${RUSTFLAGS:-$(make rustflags)} cargo check\n"
+        ),
+        {"NC-006"},
+    ),
+    "a-plain-default-expansion-stays-silent": Case(
+        msrv_workflow(
+            steps="      - run: RUSTFLAGS=${RUSTFLAGS:-x} cargo check --locked\n"
+            "        env:\n" + MSRV_TARGET
+        ),
+        set(),
+    ),
+    "backquoted-command-inside-double-quotes-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + '      - run: RUSTFLAGS="`make rustflags`" cargo check --locked\n'
+        ),
+        {"NC-006"},
+    ),
+    "backquoted-command-in-an-echo-argument-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + '      - run: echo "`make test`"\n'),
+        {"NC-006"},
+    ),
+    "sed-script-with-brackets-in-quotes-stays-silent": Case(
+        msrv_workflow(
+            steps=(
+                "      - run: |\n"
+                '          msrv="$(sed -n \'s/^rust-version *= *"\\(.*\\)"/\\1/p\''
+                ' Cargo.toml | head -n 1)"\n'
+                '          echo "a; b | c" >&2\n'
+            )
+            + MSRV_CHECK
+        ),
+        set(),
+    ),
+    "a-quoted-make-is-still-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: '\"make\" test'\n"),
+        {"NC-006"},
+    ),
+    "a-quoted-assignment-before-cargo-check-stays-silent": Case(
+        msrv_workflow(
+            steps='      - run: RUSTFLAGS="-D warnings" cargo check --locked\n'
+            "        env:\n" + MSRV_TARGET
+        ),
+        set(),
+    ),
+    "background-ampersand-then-a-command-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: true & make test\n"),
+        {"NC-006"},
+    ),
+    "sed-with-a-trailing-expression-option-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + "      - run: sed -n 's/a/b/p' -e '1e make test' Cargo.toml\n"
+        ),
+        {"NC-006"},
+    ),
+    "sed-execute-command-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: printf 'x' | sed '1e make test'\n"
+        ),
+        {"NC-006"},
+    ),
+    "sed-substitute-execute-flag-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: sed -n 's/a/make test/e' Cargo.toml\n"
+        ),
+        {"NC-006"},
+    ),
+    "sed-second-command-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: sed -n 's/a/b/;e make test/p' Cargo.toml\n"
+        ),
+        {"NC-006"},
+    ),
+    "rustup-run-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: rustup run stable make test\n"),
+        {"NC-006"},
+    ),
+    "awk-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: awk 'BEGIN { system(\"make test\") }'\n"
+        ),
+        {"NC-006"},
+    ),
+    "lookalike-checkout-owner-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - uses: acme/checkout@v1\n"),
+        {"NC-006"},
+    ),
+    "local-action-named-like-a-setup-action-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - uses: ./.github/actions/checkout\n"),
+        {"NC-006"},
+    ),
+    "case-and-substitution-script-stays-silent": Case(
+        msrv_workflow(
+            steps=(
+                "      - run: |\n"
+                "          msrv=\"$(sed -n 's/^x/y/p' Cargo.toml | head -n 1)\"\n"
+                '          test -n "$msrv"\n'
+                '          case "$msrv" in *.*.*) ;; *) msrv="$msrv.0" ;; esac\n'
+                '          echo "MSRV=${msrv}" >> "$GITHUB_ENV"\n'
+            )
+            + MSRV_CHECK
+        ),
+        set(),
+    ),
+    "a-job-with-no-cargo-command-is-flagged": Case(
+        msrv_workflow(steps="      - run: echo hi\n        env:\n" + MSRV_TARGET),
+        {"NC-006"},
+    ),
+    "workflow-env-reaching-a-test-job-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK.replace(MSRV_TARGET, ""),
+            top="env:\n  CARGO_TARGET_DIR: ${{ runner.temp }}/t\n",
+            extra_job=TEST_JOB,
+        ),
+        {"NC-006"},
+    ),
+    "workflow-env-reaching-only-check-jobs-is-silent": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK.replace(MSRV_TARGET, ""),
+            top="env:\n  CARGO_TARGET_DIR: ${{ runner.temp }}/t\n",
+        ),
+        set(),
+    ),
+    "a-test-job-with-a-per-run-target-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK,
+            extra_job=TEST_JOB.replace(
+                "      - run: cargo nextest run\n",
+                "      - run: cargo nextest run\n        env:\n" + MSRV_TARGET,
+            ),
+        ),
+        {"NC-006"},
+    ),
+}
+CASES |= CHECK_ONLY_CASES
+
+
 @pytest.mark.parametrize("case", CASES.values(), ids=CASES.keys())
 def test_workflows_draw_the_expected_findings(
     tmp_path: pathlib.Path, case: Case
@@ -187,7 +452,10 @@ def test_the_envelope_records_each_place_and_each_job(tmp_path: pathlib.Path) ->
         ("env", "/tmp/a"),  # noqa: S108 - the value under test
         ("step test/2 run", "$RUNNER_TEMP/t"),
     ]
-    assert fact["jobs"] == [{"id": "test", "opts_out": True, "wrapper_named": False}]
+    assert fact["jobs"] == [
+        {"id": "test", "opts_out": True, "wrapper_named": False, "check_only": False}
+    ]
+    assert [s["job"] for s in fact["target_settings"]] == [None, "test"]
 
 
 TEMP_TARGET = "  CARGO_TARGET_DIR: ${{ runner.temp }}/target\n"

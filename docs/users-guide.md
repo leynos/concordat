@@ -857,7 +857,11 @@ a missing piece of `.config/nextest.toml`: a test group with `max-threads = 1`,
 an override that places tests in it, a `slow-timeout` (in a profile or an
 override) and a `global-timeout` (in a profile). **NC-005** reports a top-level
 `tests/<stem>.rs` that spawns a compiler but is not named, by binary or test
-function, in a serial group's override filter, so the group never holds it.
+function, in a serial group's override filter, so the group never holds it. A
+`rustc` command with a version flag (`--version`, `-V`, `-vV`) or a `--print`
+of a table that needs no compile (`sysroot`, `cfg`, `target-list` and similar)
+compiles nothing and is not a spawn; `--print=link-args` and
+`--print=native-static-libs` still are.
 
 The scan is textual and conservative: only test code counts, `cargo metadata`
 and similar do not, Python tests are left to pytest, and a helper under `src/`
@@ -881,14 +885,20 @@ concordat artefact rule run nested-cargo-ci-wiring --repo /path/to/checkout
 **NC-006** reports a workflow that sets `CARGO_TARGET_DIR` to a per-run or
 temporary path (`runner.temp`, the run id or number, the commit SHA, `mktemp`,
 `/tmp`, a command substitution), whether in an `env` block or a `run` script,
-and a job whose `setup-rust` step sets `export-rustc-wrapper: false` while
-`RUSTC_WRAPPER` is named nowhere in the workflow or job. `setup-rust` exports
-the wrapper through `GITHUB_ENV` by default, which reaches every later step, so
-the rule does not ask for a job-level `env`. The opt-out is documented for
-nested builds such as trybuild fixtures; scope the wrapper to the commands that
-should use it (`RUSTC_WRAPPER="$SCCACHE_PATH" cargo test`) and the job passes.
-The `temporary_patterns` and `exemptions` parameters tune the check; an
-exemption names the repository, workflow and reason.
+unless the job it applies to is check-only (it runs cargo, every cargo command
+is `check`, `clippy`, `fmt`, `metadata` or `tree`, and no script hands off to
+`make`, a test runner, an interpreter or another script; an MSRV `cargo check`
+job is the usual case), because a job with no nested build has no warm tree to
+inherit. A workflow-level setting counts as harmless only when every job of the
+workflow is check-only. The rule also reports a job whose `setup-rust` step sets
+`export-rustc-wrapper: false` while `RUSTC_WRAPPER` is named nowhere in the
+workflow or job. `setup-rust` exports the wrapper through `GITHUB_ENV` by
+default, which reaches every later step, so the rule does not ask for a
+job-level `env`. The opt-out is documented for nested builds such as trybuild
+fixtures; scope the wrapper to the commands that should use it
+(`RUSTC_WRAPPER="$SCCACHE_PATH" cargo test`) and the job passes. The
+`temporary_patterns` and `exemptions` parameters tune the check; an exemption
+names the repository, workflow and reason.
 
 ### Auditing prover tooling
 

@@ -69,11 +69,37 @@ deny contains finding("EN-001", "indeterminate", workflow.path, msg) if {
 	msg := sprintf("the workflow could not be read: %s", [workflow.error])
 }
 
+# A check-only job runs cargo, and only check-style cargo commands, with no hand-off
+# that could start a test or another build. A per-run target costs it nothing: there
+# is no nested build to inherit a warm tree, and a shared target would only hold a
+# second toolchain's artefacts. An envelope without the fact (an older one) counts
+# every job as able to start nested builds.
+is_check_only(job) if object.get(job, "check_only", false) == true
+
+# A workflow-level setting reaches every job, so it is harmless only when every
+# job of the workflow is check-only; a job-level or step-level one concerns its
+# own job.
+setting_is_harmless(workflow, setting) if {
+	is_string(object.get(setting, "job", null))
+	some job in workflow.jobs
+	job.id == setting.job
+	is_check_only(job)
+}
+
+setting_is_harmless(workflow, setting) if {
+	object.get(setting, "job", null) == null
+	count(workflow.jobs) > 0
+	every job in workflow.jobs {
+		is_check_only(job)
+	}
+}
+
 deny contains finding("NC-006", "noncompliant", workflow.path, msg) if {
 	some workflow in audited
 	workflow.error == null
 	some setting in workflow.target_settings
 	is_temporary(setting.value)
+	not setting_is_harmless(workflow, setting)
 	msg := sprintf(
 		"%s sets CARGO_TARGET_DIR to %q (%s), a per-run or temporary path, so every run and every nested cargo build starts with an empty target tree and sccache keys miss on the differing paths. Build into a stable directory such as the workspace target, or name the workflow in this rule's exemptions",
 		[workflow.path, setting.value, setting.where],

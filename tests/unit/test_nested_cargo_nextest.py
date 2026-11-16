@@ -33,7 +33,17 @@ BUILD_TEST = (
 RUSTC_TEST = (
     "use std::process::Command;\n"
     "#[test]\nfn direct() {\n"
-    '    Command::new("rustc").arg("--version").status().unwrap();\n}\n'
+    '    Command::new("rustc").arg("fixture.rs").status().unwrap();\n}\n'
+)
+RUSTC_VERSION_TEST = RUSTC_TEST.replace('"fixture.rs"', '"--version"')
+RUSTC_VERBOSE_VERSION_TEST = RUSTC_TEST.replace('"fixture.rs"', '"-vV"')
+RUSTC_SHORT_VERSION_TEST = RUSTC_TEST.replace('.arg("fixture.rs")', '.args(["-V"])')
+RUSTC_PRINT_TEST = RUSTC_TEST.replace('"fixture.rs"', '"--print=sysroot"')
+RUSTC_VERSION_THEN_COMPILE_TEST = (
+    "use std::process::Command;\n"
+    "#[test]\nfn probe_then_compile() {\n"
+    '    Command::new("rustc").arg("--version").status().unwrap();\n'
+    '    Command::new("rustc").arg("fixture.rs").status().unwrap();\n}\n'
 )
 METADATA_TEST = (
     "use std::process::Command;\n"
@@ -86,6 +96,109 @@ CASES = {
         BUILD_TEST, CLEAN.replace("binary(ui)", "test(compiles)"), set()
     ),
     "direct-rustc-counts": Case(RUSTC_TEST, None, {"NC-004"}),
+    "rustc-version-probe-does-not": Case(RUSTC_VERSION_TEST, None, set()),
+    "rustc-verbose-version-probe-does-not": Case(
+        RUSTC_VERBOSE_VERSION_TEST, None, set()
+    ),
+    "rustc-short-version-probe-does-not": Case(RUSTC_SHORT_VERSION_TEST, None, set()),
+    "rustc-print-query-does-not": Case(RUSTC_PRINT_TEST, None, set()),
+    "rustc-print-link-args-compiles": Case(
+        RUSTC_TEST.replace(
+            '.arg("fixture.rs")', '.args(["fixture.rs", "--print=link-args"])'
+        ),
+        None,
+        {"NC-004"},
+    ),
+    "rustc-print-native-static-libs-compiles": Case(
+        RUSTC_TEST.replace(
+            '.arg("fixture.rs")', '.args(["fixture.rs", "--print=native-static-libs"])'
+        ),
+        None,
+        {"NC-004"},
+    ),
+    "rustc-print-sysroot-split-args-is-a-query": Case(
+        RUSTC_TEST.replace('.arg("fixture.rs")', '.args(["--print", "sysroot"])'),
+        None,
+        set(),
+    ),
+    "a-version-argument-of-another-command-does-not-excuse-the-compile": Case(
+        "use std::process::Command;\n#[test]\nfn direct() {\n"
+        '    let mut other = Command::new("echo");\n'
+        '    Command::new("rustc").arg("fixture.rs").status().unwrap();\n'
+        '    other.arg("--version");\n}\n',
+        None,
+        {"NC-004"},
+    ),
+    "a-flag-chosen-by-a-condition-is-not-a-known-probe": Case(
+        "use std::process::Command;\n#[test]\nfn chosen() {\n"
+        '    Command::new("rustc")\n'
+        '        .arg(if false { "--version" } else { "fixture.rs" })\n'
+        "        .status()\n        .unwrap();\n}\n",
+        None,
+        {"NC-004"},
+    ),
+    "a-probe-flag-after-another-statement-in-a-block-is-not-proof": Case(
+        "use std::process::Command;\n#[test]\nfn maybe() {\n"
+        '    let mut cmd = Command::new("rustc");\n'
+        "    if query_only {\n"
+        '        cmd.env("RUST_LOG", "info");\n'
+        '        cmd.arg("--print=cfg");\n'
+        "    }\n"
+        '    cmd.arg("fixture.rs");\n'
+        "    cmd.status().unwrap();\n}\n",
+        None,
+        {"NC-004"},
+    ),
+    "a-conditionally-added-probe-flag-is-not-proof": Case(
+        "use std::process::Command;\n#[test]\nfn maybe() {\n"
+        '    let mut cmd = Command::new("rustc");\n'
+        '    if query_only { cmd.arg("--print=cfg"); }\n'
+        '    cmd.arg("fixture.rs");\n'
+        "    cmd.status().unwrap();\n}\n",
+        None,
+        {"NC-004"},
+    ),
+    "a-launch-inside-control-flow-ends-the-arguments": Case(
+        "use std::process::Command;\n#[test]\nfn guarded() {\n"
+        '    let mut cmd = Command::new("rustc");\n'
+        '    cmd.arg("fixture.rs");\n'
+        "    if true { cmd.status().unwrap(); }\n"
+        '    cmd.arg("--version");\n}\n',
+        None,
+        {"NC-004"},
+    ),
+    "an-argument-added-after-the-launch-does-not-excuse-the-compile": Case(
+        "use std::process::Command;\n#[test]\nfn reuse() {\n"
+        '    let mut command = Command::new("rustc");\n'
+        '    command.arg("fixture.rs");\n'
+        "    command.status().unwrap();\n"
+        '    command.arg("--version");\n}\n',
+        None,
+        {"NC-004"},
+    ),
+    "a-bound-command-keeps-its-own-version-argument": Case(
+        "use std::process::Command;\n#[test]\nfn probe() {\n"
+        '    let mut command = Command::new("rustc");\n'
+        '    command.arg("--version");\n'
+        "    command.status().unwrap();\n}\n",
+        None,
+        set(),
+    ),
+    "a-compile-followed-by-a-version-assertion-counts": Case(
+        RUSTC_TEST.replace("}\n", '    assert_eq!(actual, "--version");\n}\n'),
+        None,
+        {"NC-004"},
+    ),
+    "a-compile-followed-by-a-version-comment-counts": Case(
+        RUSTC_TEST.replace(
+            "}\n", '    // Unlike "--version", this compiles a fixture.\n}\n'
+        ),
+        None,
+        {"NC-004"},
+    ),
+    "rustc-version-probe-then-compile-counts": Case(
+        RUSTC_VERSION_THEN_COMPILE_TEST, None, {"NC-004"}
+    ),
     "cargo-metadata-does-not": Case(METADATA_TEST, None, set()),
     "helper-judged-at-repository-level": Case(
         BUILD_TEST, CLEAN.replace("binary(ui)", "binary(other)"), set(), "src/helper.rs"

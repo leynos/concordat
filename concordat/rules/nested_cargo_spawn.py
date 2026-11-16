@@ -16,7 +16,10 @@ from a repository that needs none.
   from the spawn to the next `Command::new` or the next function, so a
   compiling argument elsewhere in the file (a production `cargo build`, say)
   does not turn a test's `cargo metadata` into compiler work. A `rustc` spawn
-  always counts.
+  counts unless one of its own arguments asks who the compiler is (`--version`,
+  `-V`, `-vV`) or for a table that needs no compile (`--print` of `sysroot`,
+  `cfg`, `target-list`, ...): those compile nothing. `--print=link-args` and
+  `--print=native-static-libs` build the crate, so they still count.
 - Python tests that spawn `cargo` are outside the scan: pytest, not nextest,
   bounds them.
 - A file must name `Command`, so `env!("CARGO")` read for a path alone is not a
@@ -33,6 +36,7 @@ import os
 import pathlib
 import re
 import typing as typ
+from itertools import starmap
 
 from .nested_cargo_source import brace_pairs
 from .rust_source import mask_literals
@@ -57,6 +61,27 @@ CARGO_SPAWN: typ.Final = re.compile(
 RUSTC_SPAWN: typ.Final = re.compile(
     r'Command::new\(\s*(?:"rustc"|&?\w*rustc\w*\b|env!\("RUSTC"\))'
 )
+# The `--print` requests that read a table or a path and exit without compiling
+# an input. `link-args` and `native-static-libs` are deliberately absent: they
+# build the crate first.
+QUERY_PRINTS: typ.Final = (
+    "sysroot|target-libdir|host-tuple|cfg|target-list|target-cpus|target-features"
+    "|code-models|relocation-models|tls-models"
+)
+# A version or query flag given as a plain string literal: either the sole
+# argument of `.arg("..")`, or an item of an array literal of string literals
+# passed to `.args([..])`. Anything computed (`.arg(if c { "--version" } ..)`)
+# is not a known value and is not a probe.
+_LITERAL: typ.Final = r'"[^"]*"'
+_SINGLE_FLAG: typ.Final = rf'"(?:--version|-V|-vV|-Vv|--print=(?:{QUERY_PRINTS}))"'
+_FLAG: typ.Final = rf'{_SINGLE_FLAG}|"--print"\s*,\s*"(?:{QUERY_PRINTS})"'
+RUSTC_PROBE: typ.Final = re.compile(
+    rf"""\.arg\(\s*&?{_SINGLE_FLAG}\s*\)"""
+    rf"""|\.args\(\s*&?\[\s*(?:{_LITERAL}\s*,\s*)*(?:{_FLAG})\s*"""
+    rf"""(?:,\s*{_LITERAL}\s*)*,?\s*\]\s*\)"""
+)
+LAUNCH: typ.Final = re.compile(r"\.(?:status|output|spawn)\(")
+COMMENT: typ.Final = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
 SUBCOMMANDS: typ.Final = (
     "build|check|test|run|package|clippy|doc|rustc|install|publish|bench|miri"
     "|nextest|llvm-cov|rustdoc"
@@ -205,13 +230,80 @@ def _command_window(text: str, start: int) -> str:
     return f"{window}\n{_callee_text(text, window, bound['name'])}"
 
 
+def _own_statements(text: str, start: int, window: str) -> list[tuple[str, int]]:
+    """Return the statements of *window* that can add arguments to the command.
+
+    A command built in one chain owns only its first statement. A command bound
+    to a name owns the statements that start with that name (`command.arg(..)`),
+    plus the binding itself, up to its first launch (`.status()`, `.output()`,
+    `.spawn()`); another command's `.arg(..)`, or an argument added when the
+    command is reused after a launch, is not its argument.
+
+    Returns
+    -------
+    list[tuple[str, int]]
+        Each statement, comments removed, with the number of blocks still open
+        where it starts (the window's own braces, counted from the command).
+    """
+    statements = COMMENT.sub("", window).split(";")
+    bound = BINDING.search(text[max(0, start - 120) : start])
+    if bound is None:
+        return [(statements[0], 0)]
+    # A statement mentions the command when the name is followed by a method
+    # call, wherever it sits (an `if` body included), so a launch in control
+    # flow still ends the arguments.
+    own = re.compile(rf"\b{re.escape(bound['name'])}\s*\.")
+    found: list[tuple[str, int]] = []
+    depth = 0
+    for index, statement in enumerate(statements):
+        if index == 0 or own.search(statement):
+            found.append((statement, depth))
+            # An argument added after the command has run belongs to a reuse.
+            if LAUNCH.search(statement):
+                break
+        depth += statement.count("{") - statement.count("}")
+    return found
+
+
+def _is_probe(text: str, start: int, window: str) -> bool:
+    """Report whether a `rustc` command only asks a question and compiles nothing.
+
+    Only arguments added to this command count, so a `"--version"` in a comment,
+    in an assertion after it or on another command is not its argument.
+
+    Returns
+    -------
+    bool
+        True when an argument of the command is a version or query flag.
+    """
+    return any(starmap(_unconditional_probe, _own_statements(text, start, window)))
+
+
+def _unconditional_probe(statement: str, depth: int) -> bool:
+    """Report whether a statement adds a probe flag on every path through it.
+
+    A flag added inside a block (`if query_only { cmd.arg("--print=cfg") }`),
+    whether in the same statement or in one that follows the opening brace, may
+    not be there when the command runs, so it proves nothing.
+
+    Returns
+    -------
+    bool
+        True when the statement holds a probe flag outside any block.
+    """
+    found = RUSTC_PROBE.search(statement)
+    return found is not None and depth == 0 and "{" not in statement[: found.start()]
+
+
 def _spawn_kind(relative: str, text: str) -> str | None:
     """Return `rustc` or `cargo` if the file spawns a compiler in test code."""
     if "Command" not in text:
         return None
     spans = _test_spans(text)
     for match in RUSTC_SPAWN.finditer(text):
-        if _is_test_position(relative, spans, match.start()):
+        if _is_test_position(relative, spans, match.start()) and not _is_probe(
+            text, match.start(), _command_window(text, match.start())
+        ):
             return "rustc"
     compiles = any(
         COMPILES.search(_command_window(text, match.start()))
