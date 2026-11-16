@@ -133,6 +133,7 @@ _LEADING_VALUE_FLAGS: typ.Final = frozenset({
     "-Z",
 })
 _NON_COMPILING_FLAG: typ.Final = "--unit-graph"
+_LISTING_FLAGS: typ.Final = frozenset({"--list", "-l"})
 COMPILES_YES: typ.Final = "yes"
 COMPILES_NO: typ.Final = "no"
 COMPILES_UNKNOWN: typ.Final = "unknown"
@@ -185,22 +186,54 @@ def compiles_state(calls: cabc.Iterable[tuple[str, str]]) -> str:
     cargo_words = words[: words.index("--")] if "--" in words else words
     if _NON_COMPILING_FLAG in cargo_words:
         return COMPILES_NO
+    for index, word in _positional_words(words):
+        if word is None:
+            return COMPILES_UNKNOWN
+        return _subcommand_state(word, words[index + 1 :])
+    return COMPILES_NO
+
+
+def _positional_words(
+    words: list[str | None],
+) -> cabc.Iterator[tuple[int, str | None]]:
+    """Yield the first word that is neither an option nor an option's value.
+
+    An unreadable word is yielded as None and ends the scan, because it may be
+    the subcommand or the value of an option before it.
+
+    Yields
+    ------
+    tuple[int, str | None]
+        The word's index and text, at most once.
+    """
     skip_value = False
     for index, word in enumerate(words):
         if word is None:
-            return COMPILES_UNKNOWN
+            yield index, None
+            return
         if skip_value:
             skip_value = False
         elif word in _LEADING_VALUE_FLAGS:
             skip_value = True
         elif not word.startswith(("-", "+")):
-            if word not in COMPILING_SUBCOMMANDS:
-                return COMPILES_NO
-            is_listing = word == "package" and any(
-                rest in {"--list", "-l"} for rest in words[index + 1 :]
-            )
-            return COMPILES_NO if is_listing else COMPILES_YES
-    return COMPILES_NO
+            yield index, word
+            return
+
+
+def _subcommand_state(subcommand: str, rest: list[str | None]) -> str:
+    """Say whether one literal subcommand compiles, given the words after it.
+
+    Returns
+    -------
+    str
+        `no` for a subcommand that builds nothing and for `package --list`,
+        `yes` otherwise.
+    """
+    if subcommand not in COMPILING_SUBCOMMANDS:
+        return COMPILES_NO
+    if subcommand == "package" and _LISTING_FLAGS.intersection(rest):
+        return COMPILES_NO
+    return COMPILES_YES
 
 
 def _test_spans(text: str) -> list[tuple[int, int]]:

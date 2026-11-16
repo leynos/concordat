@@ -63,7 +63,7 @@ from .nested_cargo_source import (
     whole_file_scope,
 )
 from .nested_cargo_spawn import COMPILES_UNKNOWN, compiles_state
-from .nested_cargo_target import INHERITED, read_target, sets_target_variable
+from .nested_cargo_target import builds_into_target, read_target, target_signature
 from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
@@ -208,37 +208,16 @@ def _in_ranges(offset: int, ranges: typ.Iterable[tuple[int, int]]) -> bool:
     return any(start <= offset < end for start, end in ranges)
 
 
-def _sets_target(command: CargoCommand, source: RustSource) -> bool:
-    """Report whether a command sets a cargo target variable itself.
-
-    A `--target-dir` flag is not evidence on a program that is not cargo: it is
-    that program's own option, and whitaker's `ls --target-dir` lists a suite
-    without building anything. Only the variables cargo itself reads count.
-
-    Returns
-    -------
-    bool
-        True when the command's environment names a target variable and the
-        reading rests on that, not on an inference from its working directory.
-    """
-    reading = read_target(command.calls, source.text)
-    return (
-        reading.state != INHERITED
-        and not reading.is_inferred
-        and sets_target_variable(command.calls)
-    )
-
-
 def _direct_commands(
     source: RustSource,
     helpers: dict[str, tuple[int, int]],
     pairs: list[tuple[int, int]],
     *,
-    any_program: bool = False,
+    cold_build: bool = False,
 ) -> list[CargoCommand]:
     """Return the cargo commands this source builds outside a helper body.
 
-    With *any_program*, a command that starts another program is returned too
+    With *cold_build*, a command that starts another program is returned too
     when its chain sets the build's target directory: the program builds
     through its own cargo, and the target it is given decides whether that
     build can be warm.
@@ -253,10 +232,12 @@ def _direct_commands(
     for match in COMMAND_NEW.finditer(source.masked):
         if _in_ranges(match.start(), bodies):
             continue
-        command = construction(source, match, pairs, any_program=any_program)
+        command = construction(source, match, pairs, any_program=cold_build)
         if command is None:
             continue
-        if command.form == PROGRAM_FORM and not _sets_target(command, source):
+        if command.form == PROGRAM_FORM and not builds_into_target(
+            command.program, command.calls, source.text
+        ):
             continue
         found.append(command)
     return found
@@ -326,24 +307,33 @@ def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
     Returns
     -------
     list[tuple[CargoCommand, str]]
-        One entry per distinct state, in the order the states were established.
-        An execution that only probes for a version or help contributes none.
+        One entry per distinct state and target configuration, in the order they
+        were established. An execution that only probes for a version or help
+        contributes none.
     """
     found: list[tuple[CargoCommand, str]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
     for execution in command.executions or [command]:
         state = command_state(execution)
-        if state is None or state in seen:
+        # Two online runs that build in different places are two facts: the
+        # cold-build rule judges where each one builds.
+        key = (state or "", target_signature(execution.calls))
+        if state is None or key in seen:
             continue
-        seen.add(state)
+        seen.add(key)
         found.append((execution, state))
     return found
 
 
 def _source_facts(
-    source: RustSource, scope: TestScope, *, any_program: bool = False
+    source: RustSource, scope: TestScope, *, cold_build: bool = False
 ) -> list[SpawnFact]:
     """Return the spawn facts of one source.
+
+    With *cold_build* the facts serve the cold-build rule, which asks where a
+    command builds and not whether it can reach the network: a helper call site
+    proven offline is kept (`--frozen` stops no compile), and a command that
+    starts another program is read when it sets a cargo target variable.
 
     A construction written in the file is recorded whatever its state, so the
     envelope carries the offline ones as evidence of what was examined. A
@@ -367,7 +357,7 @@ def _source_facts(
     helpers = _helper_names(source)
     direct = [
         command
-        for command in _direct_commands(source, helpers, pairs, any_program=any_program)
+        for command in _direct_commands(source, helpers, pairs, cold_build=cold_build)
         if scope.contains(command.start)
     ]
     sites: list[CargoCommand] = []
@@ -392,7 +382,11 @@ def _source_facts(
         # file the rule promises to leave alone.
         if not calls and scope.contains(definition.start):
             sites.append(unreached_helper(definition))
-        sites.extend(site for site in calls if not _absorbed(site, definition))
+        # `_absorbed` runs first, because it takes the helper's evidence onto
+        # the site; the cold-build rule keeps the site whatever it returns.
+        sites.extend(
+            site for site in calls if not _absorbed(site, definition) or cold_build
+        )
     direct_facts = [
         _fact(source, ledger, state)
         for command in direct
@@ -402,7 +396,7 @@ def _source_facts(
         _fact(source, ledger, state)
         for command in sites
         for ledger, state in _reads(command)
-        if state != "offline"
+        if cold_build or state != "offline"
     ]
     return sorted(direct_facts + site_facts, key=operator.itemgetter("line"))
 
@@ -734,7 +728,7 @@ def collect_rust_evidence(
     manifests: typ.Mapping[pathlib.Path, Manifest],
     problems: list[str],
     *,
-    any_program: bool = False,
+    cold_build: bool = False,
 ) -> RustEvidence:
     """Return the spawn and trybuild evidence for one checkout.
 
@@ -746,10 +740,11 @@ def collect_rust_evidence(
         Each decoded `Cargo.toml` below and at the root, by absolute path.
     problems:
         The fact list; an unreadable source appends one sentence each.
-    any_program:
-        Also report a command that starts another program but sets the build's
-        target directory (see `_direct_commands`). The offline rule leaves it
-        off: such a command is not a cargo spawn, so NC-007 does not judge it.
+    cold_build:
+        Read the facts for the cold-build rule: also report a command that
+        starts another program but sets the build's target directory, and keep
+        a helper call site proven offline (see `_source_facts`). The offline
+        rule leaves it off: neither is something NC-007 judges.
 
     Returns
     -------
@@ -763,7 +758,7 @@ def collect_rust_evidence(
         fact
         for source in sources
         for fact in _source_facts(
-            source, scopes[source.relative], any_program=any_program
+            source, scopes[source.relative], cold_build=cold_build
         )
     ]
     aliases = _aliases_by_directory(checkout, manifests)

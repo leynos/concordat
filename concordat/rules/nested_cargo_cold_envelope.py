@@ -23,13 +23,14 @@ from __future__ import annotations
 import typing as typ
 
 from .nested_cargo import load_manifests, origin_slug
+from .nested_cargo_gates import read_gates
 from .nested_cargo_preparation import (
     BuildFact,
+    Preparation,
     collect_builds,
     crate_directories,
-    read_gates,
-    read_setup_rules,
 )
+from .nested_cargo_setup_scripts import read_setup_rules
 from .nested_cargo_source import read_sources
 from .nested_cargo_spawns import (
     SpawnFact,
@@ -96,19 +97,18 @@ def build_nested_cargo_cold_envelope(
     """
     problems: list[str] = []
     manifests = load_manifests(checkout, problems)
-    evidence = collect_rust_evidence(checkout, manifests, problems, any_program=True)
+    evidence = collect_rust_evidence(checkout, manifests, problems, cold_build=True)
     fixtures = fixture_directories(checkout, manifests)
     # The sources are read a second time rather than shared with the spawn
     # reader: only the names of preparation functions are wanted from them, and
     # the spawn reader's scope map is no use to that question.
     sources = read_sources(checkout, fixtures, [])
-    builds = collect_builds(
-        evidence,
-        sources,
+    preparation = Preparation(
         crate_directories(checkout, manifests),
         read_setup_rules(checkout, problems),
         read_gates(parameters),
     )
+    builds = collect_builds(evidence, sources, preparation)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,

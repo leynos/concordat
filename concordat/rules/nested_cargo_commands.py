@@ -148,6 +148,9 @@ class CargoCommand:
     # cannot see through. The target-directory reader replays them, because the
     # last write to a name wins and only the source text says what was written.
     calls: list[tuple[str, str]] = dataclasses.field(default_factory=list)
+    # The source text of the program `Command::new` was given, which tells a
+    # command that starts another program from one that starts cargo.
+    program: str = ""
 
     def add_arguments(self, text: str) -> None:
         """Record `.arg(..)`/`.args(..)` text; an unreadable source is unknown."""
@@ -537,29 +540,6 @@ def _record_unseen(methods: typ.Iterable[str], command: CargoCommand) -> None:
             command.mark_environment_unknown()
 
 
-def _is_rerun(text: str, start: int, end: int) -> bool:
-    """Report whether a `Command::new` argument names the test executable.
-
-    The test executable run again builds nothing: it is how a test reruns
-    itself as a child with a prepared environment, either as
-    `Command::new(env::current_exe()?)` or through a name bound to that call.
-
-    Returns
-    -------
-    bool
-        True when the program is the running test binary.
-    """
-    program = text[start:end].strip()
-    if "current_exe" in program:
-        return True
-    if not _IDENTIFIER.fullmatch(program):
-        return False
-    return (
-        re.search(rf"\blet\s+(?:mut\s+)?{re.escape(program)}\b[^;]*current_exe", text)
-        is not None
-    )
-
-
 def construction(
     source: RustSource,
     match: re.Match[str],
@@ -590,11 +570,12 @@ def construction(
     """
     start, end = _argument_span(source.masked, match)
     form = _cargo_form(source.masked[start:end], source.text[start:end])
-    if form is None and any_program and not _is_rerun(source.text, start, end):
-        form = PROGRAM_FORM
+    form = form or (PROGRAM_FORM if any_program else None)
     if form is None:
         return None
-    command = CargoCommand(start=match.start(), form=form)
+    command = CargoCommand(
+        start=match.start(), form=form, program=source.text[start:end].strip()
+    )
     after = follow_chain(source, command, end + 1)
     block = enclosing_block(pairs, match.start())
     name = bound_name(source.masked, match.start())

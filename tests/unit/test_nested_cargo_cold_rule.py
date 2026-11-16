@@ -368,33 +368,104 @@ def test_a_repository_names_its_own_gate_in_the_parameters(
 
 
 @pytest.mark.parametrize(
-    ("rule", "setup", "filter_text", "is_prepared"),
+    ("script", "is_prepared"),
     [
-        ("covers every test", "prepare-nested", "all()", True),
-        ("names the binary", "prepare-nested", "binary(ui)", True),
-        ("names another binary", "prepare-nested", "binary(other)", False),
-        ("names a script nothing defines", "missing", "all()", False),
+        (SETUP_SCRIPT.format(filter="all()", setup="prepare-nested"), True),
+        (SETUP_SCRIPT.format(filter="binary(ui)", setup="prepare-nested"), True),
+        (SETUP_SCRIPT.format(filter="binary(other)", setup="prepare-nested"), False),
+        (SETUP_SCRIPT.format(filter="all()", setup="missing"), False),
     ],
-    ids=lambda value: str(value),
+    ids=["covers-every-test", "names-the-binary", "names-another", "undefined-script"],
 )
 def test_a_nextest_setup_script_prepares_the_tests_it_covers(
-    tmp_path: pathlib.Path,
-    rule: str,
-    setup: str,
-    filter_text: str,
-    *,
-    is_prepared: bool,
+    tmp_path: pathlib.Path, script: str, *, is_prepared: bool
 ) -> None:
     """Nextest runs a covering setup script before the tests it selects."""
-    del rule
     put(tmp_path, "Cargo.toml", '[package]\nname = "app"\n')
     put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
-    put(
-        tmp_path,
-        ".config/nextest.toml",
-        SETUP_SCRIPT.format(filter=filter_text, setup=setup),
-    )
+    put(tmp_path, ".config/nextest.toml", script)
     assert (("NC-010", "tests/ui.rs") in profile(tmp_path)) is not is_prepared
+
+
+FROZEN_HELPER_CALL = """\
+fn cargo_command(cwd: &std::path::Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new(env!("CARGO"));
+    cmd.current_dir(cwd);
+    cmd
+}
+
+fn build_frozen() {
+    let scratch = tempfile::tempdir().unwrap();
+    cargo_command(scratch.path())
+        .arg("build")
+        .arg("--frozen")
+        .env("CARGO_TARGET_DIR", scratch.path())
+        .status()
+        .unwrap();
+}
+"""
+
+SAME_NAME_TWO_FUNCTIONS = """\
+fn build_shared() {
+    let target = std::env::var("CARGO_TARGET_DIR").unwrap();
+    std::process::Command::new("cargo")
+        .arg("build")
+        .env("CARGO_TARGET_DIR", &target)
+        .status()
+        .unwrap();
+}
+
+fn build_private() {
+    let target = tempfile::tempdir().unwrap();
+    std::process::Command::new("cargo")
+        .arg("build")
+        .env("CARGO_TARGET_DIR", target.path())
+        .status()
+        .unwrap();
+}
+"""
+
+REUSED_COMMAND = """\
+fn build_twice(shared: &std::path::Path) {
+    let scratch = tempfile::tempdir().unwrap();
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.arg("build");
+    cmd.env("CARGO_TARGET_DIR", shared);
+    cmd.status().unwrap();
+    cmd.env("CARGO_TARGET_DIR", scratch.path());
+    cmd.status().unwrap();
+}
+"""
+
+
+def test_a_frozen_helper_call_still_builds_into_its_target(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`--frozen` stops the network and not the compile, so NC-009 still reads it."""
+    put(tmp_path, "tests/frozen.rs", FROZEN_HELPER_CALL)
+    assert ("NC-009", "tests/frozen.rs") in profile(tmp_path)
+
+
+def test_a_name_bound_differently_in_two_functions_is_not_guessed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Neither function is read through the other's binding of `target`.
+
+    The shared build is not accused because a later function binds the name to a
+    temporary directory, and the private one is not excused by the earlier
+    function. Both read as unknown.
+    """
+    put(tmp_path, "tests/two.rs", SAME_NAME_TWO_FUNCTIONS)
+    reported = {(f.rule_id, f.verdict, f.line) for f in findings(tmp_path)}
+    assert not any(rule == "NC-009" for rule, _verdict, _line in reported)
+    assert ("EN-001", "indeterminate", 3) in reported
+    assert ("EN-001", "indeterminate", 12) in reported
+
+
+def test_a_reused_command_is_judged_at_each_run(tmp_path: pathlib.Path) -> None:
+    """The second run builds into a temporary directory, whatever the first did."""
+    put(tmp_path, "tests/twice.rs", REUSED_COMMAND)
+    assert ("NC-009", "tests/twice.rs") in profile(tmp_path)
 
 
 def test_a_private_tempdir_target_is_noncompliant(tmp_path: pathlib.Path) -> None:

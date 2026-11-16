@@ -71,6 +71,9 @@ _TEMPORARY_PARAMETER: typ.Final = re.compile(
 )
 _IDENTIFIER: typ.Final = re.compile(r"(?<![\w.:$])[a-z_]\w*\b(?!\s*[(:!])")
 _EXPANSION_DEPTH: typ.Final = 3
+_AMBIGUOUS: typ.Final = "<a name bound to different expressions in this file>"
+# `let x = std::env::current_exe()?;` names the test executable.
+_TEST_EXECUTABLE: typ.Final = "current_exe"
 _SUMMARY_LENGTH: typ.Final = 60
 
 
@@ -99,11 +102,14 @@ class TargetReading:
 
 
 def local_bindings(text: str) -> dict[str, str]:
-    """Return the expression each local name was last bound to in *text*.
+    """Return the expression each local name is bound to in *text*.
 
-    The latest `let` wins, which is only an approximation of scope, but the
-    reader uses the answer to decide whether a value is *visibly* temporary and
-    answers `unknown` for everything else.
+    The reader does not track scope, so a name bound to different expressions in
+    different functions of one file could resolve to another function's value.
+    Such a name is answered with an ambiguous binding, which no pattern matches,
+    and the value reads `unknown` instead of a guess in either direction. A name
+    bound to the same expression everywhere is unambiguous, which is the common
+    case of one idiom repeated across a file's tests.
 
     Returns
     -------
@@ -111,10 +117,15 @@ def local_bindings(text: str) -> dict[str, str]:
         Right-hand-side source text by name; a `TempDir` parameter is bound to
         the type so that `dir.path()` reads as temporary.
     """
-    found = {match["name"]: match["rhs"] for match in _LET.finditer(text)}
+    seen: dict[str, set[str]] = {}
+    for match in _LET.finditer(text):
+        seen.setdefault(match["name"], set()).add(" ".join(match["rhs"].split()))
     for match in _TEMPORARY_PARAMETER.finditer(text):
-        found.setdefault(match["name"], "tempfile::TempDir")
-    return found
+        seen.setdefault(match["name"], set()).add("tempfile::TempDir")
+    return {
+        name: next(iter(rhs)) if len(rhs) == 1 else _AMBIGUOUS
+        for name, rhs in seen.items()
+    }
 
 
 def _expand(expression: str, bindings: dict[str, str]) -> str:
@@ -282,18 +293,31 @@ class _Replay:
         for name in TARGET_VARIABLES:
             if name in self.variables:
                 return self.variables[name]
-        if (
-            self.directory is not None
-            and not self.is_opaque
-            and set(TARGET_VARIABLES) <= self.removed
-            and _is_temporary(self.directory, self.bindings)
-        ):
+        if self._is_cut_off_in_temporary_directory():
             return TargetReading(
                 PRIVATE,
                 "a temporary working directory with no inherited target directory",
                 is_inferred=True,
             )
         return TargetReading(INHERITED)
+
+    def _is_cut_off_in_temporary_directory(self) -> bool:
+        """Report whether cargo would build under a temporary directory by default.
+
+        That needs a temporary working directory and no way for a target to
+        reach the child: both variables removed (or the environment cleared)
+        and no call after that the reader could not see through.
+
+        Returns
+        -------
+        bool
+            True when nothing can have given the child a target directory.
+        """
+        if self.directory is None or self.is_opaque:
+            return False
+        if not set(TARGET_VARIABLES) <= self.removed:
+            return False
+        return _is_temporary(self.directory, self.bindings)
 
 
 def sets_target_variable(calls: typ.Iterable[tuple[str, str]]) -> bool:
@@ -302,6 +326,77 @@ def sets_target_variable(calls: typ.Iterable[tuple[str, str]]) -> bool:
         method in ENVIRONMENT_METHODS
         and any(name in payload for name in TARGET_VARIABLES)
         for method, payload in calls
+    )
+
+
+def target_signature(
+    calls: typ.Iterable[tuple[str, str]],
+) -> tuple[tuple[str, str], ...]:
+    """Return the calls that can change where a command builds.
+
+    Two runs of one reused command that differ only here start processes that
+    build in different places, so a reader that keeps one fact per distinct
+    state must also tell them apart by this signature.
+
+    Returns
+    -------
+    tuple[tuple[str, str], ...]
+        The environment, removal, working-directory and `--target-dir` calls, in
+        source order, and every call the reader could not see through.
+    """
+    return tuple(
+        (method, payload)
+        for method, payload in calls
+        if method in ENVIRONMENT_METHODS
+        or method in {"env_remove", ENVIRONMENT_CLEAR, "current_dir", UNSEEN_CALL}
+        or "--target-dir" in payload
+    )
+
+
+def is_test_rerun(program: str, text: str) -> bool:
+    """Report whether a `Command::new` argument names the running test executable.
+
+    The test executable run again builds nothing: it is how a test reruns itself
+    as a child with a prepared environment, either as
+    `Command::new(env::current_exe()?)` or through a name bound to that call.
+
+    Returns
+    -------
+    bool
+        True when *program* is the running test binary.
+    """
+    if _TEST_EXECUTABLE in program:
+        return True
+    if not program.isidentifier():
+        return False
+    pattern = rf"\blet\s+(?:mut\s+)?{re.escape(program)}\b[^;]*{_TEST_EXECUTABLE}"
+    return re.search(pattern, text) is not None
+
+
+def builds_into_target(
+    program: str, calls: typ.Sequence[tuple[str, str]], text: str
+) -> bool:
+    """Report whether a command that is not cargo sets a cargo target itself.
+
+    A program run with `CARGO_TARGET_DIR` set builds through its own cargo into
+    that directory. A `--target-dir` flag is not evidence: it is that program's
+    own option, and whitaker's `ls --target-dir` lists a suite without building
+    anything. Only the variables cargo itself reads count, and the test
+    executable run again as a child builds nothing at all.
+
+    Returns
+    -------
+    bool
+        True when the command's environment names a target variable and the
+        reading rests on that, not on an inference from its working directory.
+    """
+    if is_test_rerun(program, text):
+        return False
+    reading = read_target(calls, text)
+    return (
+        reading.state != INHERITED
+        and not reading.is_inferred
+        and sets_target_variable(calls)
     )
 
 

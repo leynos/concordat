@@ -23,11 +23,9 @@ from __future__ import annotations
 
 import dataclasses
 import re
-import tomllib
 import typing as typ
 
-from .dependency_family_coverage import mapping, sequence
-from .fs_probe import probe_file
+from .nested_cargo_setup_scripts import covers
 from .nested_cargo_spawn import COMPILES_NO, COMPILES_YES, TEST_PATH
 
 if typ.TYPE_CHECKING:
@@ -35,14 +33,14 @@ if typ.TYPE_CHECKING:
     import pathlib
 
     from .nested_cargo import Manifest
+    from .nested_cargo_gates import Gates
+    from .nested_cargo_setup_scripts import SetupRule
     from .nested_cargo_source import RustSource
     from .nested_cargo_spawns import RustEvidence
 
-NEXTEST_CONFIG: typ.Final = ".config/nextest.toml"
 SETUP_SCRIPT: typ.Final = "setup-script"
 PREPARATION_TEST: typ.Final = "preparation-test"
 GATE_CALL: typ.Final = "gate-call"
-ALL_FILTER: typ.Final = "all()"
 # A command whose subcommand the reader cannot see, until the crate it belongs
 # to is shown to compile elsewhere.
 MAYBE_KIND: typ.Final = "cargo-unknown"
@@ -82,133 +80,22 @@ class BuildFact(typ.TypedDict):
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class Gates:
-    """Hold the names a repository uses for its preparation and compiling helpers.
+class Preparation:
+    """Hold what a checkout declares, and the names it declares them by.
 
     Attributes
     ----------
-    functions:
-        Names of functions that gate a timed test on prepared artefacts.
-    tests:
-        Patterns matched against test function names that prepare artefacts.
-    compiling_calls:
-        Names of harness functions that build in the caller's behalf.
+    crates:
+        Crate directories with their package names.
+    rules:
+        The nextest rules that run a defined setup script.
+    gates:
+        The configured preparation and compiling-helper names.
     """
 
-    functions: tuple[str, ...]
-    tests: tuple[re.Pattern[str], ...]
-    compiling_calls: tuple[str, ...]
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class SetupRule:
-    """Store one nextest rule that runs a defined setup script.
-
-    Attributes
-    ----------
-    filter:
-        The rule's filterset expression; a missing one selects every test.
-    """
-
-    filter: str
-
-
-def _strings(value: object) -> tuple[str, ...]:
-    """Return the string items of a configured list, ignoring anything else."""
-    if not isinstance(value, list):
-        return ()
-    return tuple(item for item in value if isinstance(item, str) and item)
-
-
-def read_gates(parameters: cabc.Mapping[str, object] | None) -> Gates:
-    """Return the preparation names the rule's parameters configure.
-
-    A pattern that is not a valid regular expression is skipped: the rule would
-    otherwise refuse to run, and the policy reports nothing it cannot read.
-
-    Returns
-    -------
-    Gates
-        The configured function names, test patterns and compiling helpers.
-    """
-    configured = (parameters or {}).get("preparation_gates")
-    block = configured if isinstance(configured, dict) else {}
-    patterns: list[re.Pattern[str]] = []
-    for text in _strings(block.get("tests")):
-        try:
-            patterns.append(re.compile(text))
-        except re.error:
-            continue
-    return Gates(
-        functions=_strings(block.get("functions")),
-        tests=tuple(patterns),
-        compiling_calls=_strings((parameters or {}).get("compiling_calls")),
-    )
-
-
-def _defined_scripts(document: dict[str, object]) -> set[str]:
-    """Return the names of the setup scripts a nextest configuration defines."""
-    scripts = mapping(document.get("scripts")) or {}
-    return set(mapping(scripts.get("setup")) or {})
-
-
-def _profile_rules(document: dict[str, object]) -> list[dict[str, object]]:
-    """Return every `[[profile.<name>.scripts]]` rule of every profile."""
-    rules: list[dict[str, object]] = []
-    for profile in (mapping(document.get("profile")) or {}).values():
-        found = sequence((mapping(profile) or {}).get("scripts")) or []
-        rules.extend(rule for item in found if (rule := mapping(item)) is not None)
-    return rules
-
-
-def read_setup_rules(checkout: pathlib.Path, problems: list[str]) -> list[SetupRule]:
-    """Return the nextest rules that run a setup script the file defines.
-
-    A rule naming a script nothing defines is a configuration nextest itself
-    refuses, so it prepares nothing and is left out.
-
-    Returns
-    -------
-    list[SetupRule]
-        One entry per rule, empty when there is no readable configuration.
-    """
-    path = checkout / NEXTEST_CONFIG
-    probe = probe_file(path)
-    if probe.read_error is not None:
-        problems.append(f"{NEXTEST_CONFIG}: {probe.read_error}")
-        return []
-    if not probe.present:
-        return []
-    try:
-        document = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
-        problems.append(f"cannot read {NEXTEST_CONFIG}: {error}")
-        return []
-    defined = _defined_scripts(document)
-    rules: list[SetupRule] = []
-    for rule in _profile_rules(document):
-        names = rule.get("setup")
-        listed = [names] if isinstance(names, str) else _strings(names)
-        if listed and all(name in defined for name in listed):
-            selection = rule.get("filter")
-            rules.append(
-                SetupRule(selection if isinstance(selection, str) else ALL_FILTER)
-            )
-    return rules
-
-
-def _mentions(filterset: str, name: str) -> bool:
-    """Report whether *name* occurs in *filterset* as a whole word."""
-    return re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", filterset) is not None
-
-
-def _covered(rules: list[SetupRule], names: list[str]) -> bool:
-    """Report whether a setup rule selects every test or names one of *names*."""
-    return any(
-        rule.filter.strip() == ALL_FILTER
-        or any(_mentions(rule.filter, name) for name in names)
-        for rule in rules
-    )
+    crates: cabc.Mapping[str, str | None]
+    rules: list[SetupRule]
+    gates: Gates
 
 
 def crate_directories(
@@ -256,10 +143,17 @@ def _calls(source: RustSource, name: str) -> re.Match[str] | None:
     return None
 
 
+def _declares_preparation_test(source: RustSource, gates: Gates) -> bool:
+    """Report whether *source* defines a function a preparation pattern matches."""
+    return any(
+        pattern.search(match["name"])
+        for match in _FUNCTION.finditer(source.masked)
+        for pattern in gates.tests
+    )
+
+
 def _declared_by_crate(
-    sources: list[RustSource],
-    crates: cabc.Mapping[str, str | None],
-    gates: Gates,
+    sources: list[RustSource], preparation: Preparation
 ) -> dict[str, set[str]]:
     """Return the preparation each crate declares in source, by crate directory.
 
@@ -271,16 +165,11 @@ def _declared_by_crate(
     """
     declared: dict[str, set[str]] = {}
     for source in sources:
-        relative = source.relative.as_posix()
-        crate = owning_crate(relative, crates)
+        crate = owning_crate(source.relative.as_posix(), preparation.crates)
         found = declared.setdefault(crate, set())
-        if any(
-            pattern.search(match["name"])
-            for match in _FUNCTION.finditer(source.masked)
-            for pattern in gates.tests
-        ):
+        if _declares_preparation_test(source, preparation.gates):
             found.add(PREPARATION_TEST)
-        if any(_calls(source, name) for name in gates.functions):
+        if any(_calls(source, name) for name in preparation.gates.functions):
             found.add(GATE_CALL)
     return declared
 
@@ -299,59 +188,65 @@ def _helper_facts(sources: list[RustSource], gates: Gates) -> list[tuple[str, in
     found: list[tuple[str, int]] = []
     for source in sources:
         relative = source.relative.as_posix()
-        if not TEST_PATH.search(relative):
-            continue
         calls = [
             match
             for name in gates.compiling_calls
             if (match := _calls(source, name)) is not None
         ]
-        if calls:
+        if calls and TEST_PATH.search(relative):
             first = min(match.start() for match in calls)
             found.append((relative, source.text.count("\n", 0, first) + 1))
     return found
 
 
-def _first_compiles(
+def _spawn_kind(compiles: str) -> str | None:
+    """Return the build kind of a spawn, or None when it compiles nothing."""
+    if compiles == COMPILES_YES:
+        return "cargo"
+    return None if compiles == COMPILES_NO else MAYBE_KIND
+
+
+def _triggers(
     evidence: RustEvidence, sources: list[RustSource], gates: Gates
-) -> dict[tuple[str, str], int]:
-    """Return the first line each file starts a build of each kind on.
+) -> list[tuple[str, int, str]]:
+    """Return every `(path, line, kind)` at which a test source starts a build.
 
     Returns
     -------
-    dict[tuple[str, str], int]
-        The line, keyed by `(path, kind)`, where kind is `cargo`, the
-        `cargo-unknown` of an unseen subcommand, `trybuild`, `macrotest` or
-        `helper`.
+    list[tuple[str, int, str]]
+        One entry per spawn that compiles or may, trybuild source reference,
+        macrotest use and call to a configured compiling helper.
     """
-    first: dict[tuple[str, str], int] = {}
+    spawns = [
+        (spawn["path"], spawn["line"], kind)
+        for spawn in evidence.spawns
+        if (kind := _spawn_kind(spawn["compiles"])) is not None
+    ]
+    trybuild = [
+        (fact["path"], fact["line"], "trybuild")
+        for fact in evidence.trybuild
+        if fact["form"] == "source"
+    ]
+    macrotest = [
+        (fact["path"], fact["line"], "macrotest") for fact in evidence.macrotest
+    ]
+    helpers = [(path, line, "helper") for path, line in _helper_facts(sources, gates)]
+    return [*spawns, *trybuild, *macrotest, *helpers]
 
-    def note(path: str, line: int, kind: str) -> None:
-        """Keep the earliest line a file starts a build of this kind on."""
+
+def _first_lines(
+    triggers: list[tuple[str, int, str]],
+) -> dict[tuple[str, str], int]:
+    """Return the first line each file starts a build of each kind on."""
+    first: dict[tuple[str, str], int] = {}
+    for path, line, kind in triggers:
         key = (path, kind)
         first[key] = min(line, first.get(key, line))
-
-    for spawn in evidence.spawns:
-        if spawn["compiles"] == COMPILES_YES:
-            note(spawn["path"], spawn["line"], "cargo")
-        elif spawn["compiles"] != COMPILES_NO:
-            note(spawn["path"], spawn["line"], MAYBE_KIND)
-    for fact in evidence.trybuild:
-        if fact["form"] == "source":
-            note(fact["path"], fact["line"], "trybuild")
-    for fact in evidence.macrotest:
-        note(fact["path"], fact["line"], "macrotest")
-    for path, line in _helper_facts(sources, gates):
-        note(path, line, "helper")
     return first
 
 
 def collect_builds(
-    evidence: RustEvidence,
-    sources: list[RustSource],
-    crates: cabc.Mapping[str, str | None],
-    rules: list[SetupRule],
-    gates: Gates,
+    evidence: RustEvidence, sources: list[RustSource], preparation: Preparation
 ) -> list[BuildFact]:
     """Return every test source that compiles in a timed test, and its preparation.
 
@@ -361,20 +256,17 @@ def collect_builds(
         The spawn, trybuild and macrotest facts of the checkout.
     sources:
         The decoded Rust sources, which carry the gate and preparation names.
-    crates:
-        Crate directories with their package names.
-    rules:
-        The nextest rules that run a defined setup script.
-    gates:
-        The configured preparation and compiling-helper names.
+    preparation:
+        What the checkout declares: its crates, nextest setup rules and names.
 
     Returns
     -------
     list[BuildFact]
         One fact per path and kind, in path order.
     """
-    declared = _declared_by_crate(sources, crates, gates)
-    first = _first_compiles(evidence, sources, gates)
+    crates = preparation.crates
+    declared = _declared_by_crate(sources, preparation)
+    first = _first_lines(_triggers(evidence, sources, preparation.gates))
     # A command whose subcommand the reader cannot see is a build only where the
     # same crate visibly compiles elsewhere. Anywhere else the arguments are as
     # likely `metadata` or `--unit-graph` as `build`, and calling it a build is
@@ -385,17 +277,15 @@ def collect_builds(
     builds: list[BuildFact] = []
     for (path, kind), line in sorted(first.items()):
         crate = owning_crate(path, crates)
-        settled = "cargo" if kind == MAYBE_KIND and crate in compiling else kind
         binary = _BINARY.search(path)
         stem = binary["stem"] if binary else None
         prepared = sorted(declared.get(crate, set()))
-        names = [name for name in (stem, crates.get(crate)) if name]
-        if _covered(rules, names):
+        if covers(preparation.rules, [n for n in (stem, crates.get(crate)) if n]):
             prepared.insert(0, SETUP_SCRIPT)
         builds.append({
             "path": path,
             "line": line,
-            "kind": settled,
+            "kind": "cargo" if kind == MAYBE_KIND and crate in compiling else kind,
             "binary": stem,
             "crate": crate,
             "prepared_by": prepared,
