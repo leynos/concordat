@@ -513,8 +513,14 @@ def test_a_test_binary_rerun_in_a_temporary_directory_is_not_a_build(
             "Command::new(std::env::current_exe().unwrap())\n"
             '            .env("CARGO_TARGET_DIR", scratch.path())'
         ),
+        # The same rerun through a binding, as whitaker's lock test writes it.
+        (
+            "let executable = std::env::current_exe().unwrap();\n"
+            "    Command::new(executable)\n"
+            '            .env("CARGO_TARGET_DIR", scratch.path())'
+        ),
     ],
-    ids=["program-flag", "test-executable-rerun"],
+    ids=["program-flag", "test-executable-rerun", "rerun-through-a-binding"],
 )
 def test_a_program_that_is_not_a_build_is_not_judged(
     tmp_path: pathlib.Path, command: str

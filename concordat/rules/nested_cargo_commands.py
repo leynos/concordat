@@ -537,6 +537,29 @@ def _record_unseen(methods: typ.Iterable[str], command: CargoCommand) -> None:
             command.mark_environment_unknown()
 
 
+def _is_rerun(text: str, start: int, end: int) -> bool:
+    """Report whether a `Command::new` argument names the test executable.
+
+    The test executable run again builds nothing: it is how a test reruns
+    itself as a child with a prepared environment, either as
+    `Command::new(env::current_exe()?)` or through a name bound to that call.
+
+    Returns
+    -------
+    bool
+        True when the program is the running test binary.
+    """
+    program = text[start:end].strip()
+    if "current_exe" in program:
+        return True
+    if not _IDENTIFIER.fullmatch(program):
+        return False
+    return (
+        re.search(rf"\blet\s+(?:mut\s+)?{re.escape(program)}\b[^;]*current_exe", text)
+        is not None
+    )
+
+
 def construction(
     source: RustSource,
     match: re.Match[str],
@@ -567,9 +590,7 @@ def construction(
     """
     start, end = _argument_span(source.masked, match)
     form = _cargo_form(source.masked[start:end], source.text[start:end])
-    # The test executable run again builds nothing: it is how a test reruns
-    # itself as a child with a prepared environment.
-    if form is None and any_program and "current_exe" not in source.text[start:end]:
+    if form is None and any_program and not _is_rerun(source.text, start, end):
         form = PROGRAM_FORM
     if form is None:
         return None
