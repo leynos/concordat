@@ -123,12 +123,22 @@ _cold_paths := {build.path |
 	not is_exempt(build.path)
 }
 
+# Paths with a definite unprepared build, exempt or not. An exempt file's
+# unseen-subcommand builds are the same compile its definite build already
+# explains, so they stay out of `_maybe_paths` whether or not it is exempt.
+_definite_paths := {build.path |
+	some build in input.builds
+	_well_formed_build(build)
+	_unprepared(build)
+	_definite(build)
+}
+
 _maybe_paths := {build.path |
 	some build in input.builds
 	_well_formed_build(build)
 	_unprepared(build)
 	not _definite(build)
-	not build.path in _cold_paths
+	not build.path in _definite_paths
 }
 
 _cold_kinds(path) := kinds if {
@@ -197,7 +207,7 @@ deny contains finding("EN-001", "error", "indeterminate", "", 0, msg) if {
 deny contains finding("EN-001", "error", "indeterminate", "", 0, msg) if {
 	envelope_ok
 	some build in input.builds
-	msg := _malformed_build(build)
+	some msg in _malformed_build(build)
 }
 
 _malformed_spawn(spawn) := msg if {
@@ -220,19 +230,18 @@ _malformed_spawn(spawn) := msg if {
 	msg := sprintf("a spawn fact is missing required %v", [missing])
 }
 
-_malformed_build(build) := msg if {
+# A build can be malformed in more than one way at once (`{}` is missing every
+# field and carries no preparation list), so the messages are a set: a function
+# with several outputs for one input is a conflict in Rego, not several findings.
+_malformed_build(build) := {msg |
 	not is_object(build)
 	msg := sprintf("a build fact is not an object: %v", [build])
-}
-
-_malformed_build(build) := msg if {
+} | {msg |
 	is_object(build)
 	missing := _missing_fields(build, [["path", "string"], ["line", "number"], ["kind", "string"]])
 	count(missing) > 0
 	msg := sprintf("a build fact is missing required %v", [missing])
-}
-
-_malformed_build(build) := msg if {
+} | {msg |
 	is_object(build)
 	not is_array(object.get(build, "prepared_by", null))
 	msg := "a build fact carries no prepared_by list"

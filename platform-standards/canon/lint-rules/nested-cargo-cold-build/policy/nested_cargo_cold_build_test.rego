@@ -186,6 +186,29 @@ test_a_build_fact_without_a_preparation_list_is_an_error if {
 	f.severity == "error"
 }
 
+# `{}` is malformed twice over (every field missing, no preparation list); the
+# findings are a set and must not be a Rego conflict.
+test_an_empty_build_fact_reports_each_defect_once if {
+	found := findings(data.fixtures.empty_build)
+	count(found) == 2
+	every f in found {
+		f.rule_id == "EN-001"
+		f.severity == "error"
+	}
+}
+
+# An exempt file with a definite build keeps its unseen-subcommand builds quiet:
+# they are the compile the exempt build already explains.
+test_an_exempt_definite_build_silences_its_unseen_subcommand if {
+	exempt_macros := [{
+		"repository": "leynos/example",
+		"path": "tests/macros.rs",
+		"rationale": "the macros suite builds a fresh fixture on purpose",
+		"review_trigger": "review when the fixture gains a registry dependency",
+	}]
+	count(findings_with(data.fixtures.unprepared_unknown_beside_definite, exempt_macros)) == 0
+}
+
 test_an_envelope_of_another_kind_is_an_error if {
 	profile(data.fixtures.wrong_kind) == {["EN-001", "indeterminate", ""]}
 	some f in findings(data.fixtures.wrong_kind)

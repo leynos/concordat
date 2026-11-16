@@ -24,7 +24,16 @@ COMPILES_YES: typ.Final = "yes"
 COMPILES_NO: typ.Final = "no"
 COMPILES_UNKNOWN: typ.Final = "unknown"
 
-COMPILING_SUBCOMMANDS: typ.Final = frozenset(SUBCOMMANDS.split("|"))
+# Cargo's built-in aliases (`b`, `c`, `d`, `r`, `t`) and `fix` compile too, but
+# the spawner table above does not list them.
+COMPILING_SUBCOMMANDS: typ.Final = frozenset(SUBCOMMANDS.split("|")) | {
+    "b",
+    "c",
+    "d",
+    "r",
+    "t",
+    "fix",
+}
 # Options cargo reads one value for before the subcommand, so the value is not
 # mistaken for it (`cargo --color never build`).
 _LEADING_VALUE_FLAGS: typ.Final = frozenset({

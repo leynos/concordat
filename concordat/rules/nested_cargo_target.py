@@ -35,7 +35,6 @@ from .nested_cargo_commands import (
     ENVIRONMENT_CLEAR,
     ENVIRONMENT_METHODS,
     UNSEEN_CALL,
-    first_literal,
 )
 from .nested_cargo_text import argument_items, environment_slots
 from .rust_source import scan_balanced
@@ -262,6 +261,22 @@ def classify_value(expression: str, bindings: dict[str, str]) -> TargetReading:
     return TargetReading(UNKNOWN, f"`{_summary(expression)}`")
 
 
+def _literal_name(slot: str) -> str | None:
+    """Return the name a slot holds when it is exactly one string literal.
+
+    A slot that merely contains a literal (`vec![("A", "b")`, `format!("{}_X",
+    "CARGO")`) does not name that variable, and reading its first string would
+    credit the call with a name it does not have.
+
+    Returns
+    -------
+    str | None
+        The literal's text, or None when the slot is anything else.
+    """
+    stripped = slot.strip()
+    return stripped[1:-1] if _STRING.fullmatch(stripped) else None
+
+
 def _hidden() -> TargetReading:
     """Return the answer for a target a later hidden operation may have replaced."""
     return TargetReading(UNKNOWN, "set before a call the reader cannot see through")
@@ -280,6 +295,10 @@ class _Replay:
         # A call the reader could not see through may have set a target, so the
         # absence of one is no longer evidence. An `env_clear` after it wipes it.
         self.is_opaque = False
+        # `--manifest-path` points cargo at another workspace, whose own target
+        # is the default, whatever the working directory is.
+        self.has_manifest_path = False
+        self._is_after_separator = False
         self._is_flag_value_next = False
 
     def hide(self) -> None:
@@ -296,7 +315,7 @@ class _Replay:
             self.hide()
             return
         for name_slot, value_slot in slots:
-            name = first_literal(name_slot)
+            name = _literal_name(name_slot)
             if name is None or value_slot is None:
                 self.hide()
             elif name in TARGET_VARIABLES:
@@ -310,7 +329,7 @@ class _Replay:
             self.removed.update(TARGET_VARIABLES)
             self.is_opaque = False
             return
-        name = first_literal(payload)
+        name = _literal_name(payload)
         if name is None:
             self.hide()
         elif name in TARGET_VARIABLES:
@@ -318,9 +337,20 @@ class _Replay:
             self.removed.add(name)
 
     def arguments(self, payload: str) -> None:
-        """Apply one `.arg(..)`/`.args(..)` call, reading `--target-dir`."""
+        """Apply one `.arg(..)`/`.args(..)` call, reading `--target-dir`.
+
+        Words after `--` belong to the program cargo runs, not to cargo, so
+        they are not read, and a `--manifest-path` is noted because it moves
+        the default target to that workspace.
+        """
         for item in argument_items(payload):
-            if self._is_flag_value_next:
+            if self._is_after_separator:
+                continue
+            if item == '"--"':
+                self._is_after_separator = True
+            elif item == '"--manifest-path"' or item.startswith('"--manifest-path='):
+                self.has_manifest_path = True
+            elif self._is_flag_value_next:
                 self.flag = classify_value(item, self.bindings)
                 self._is_flag_value_next = False
             elif item == TARGET_FLAG:
@@ -365,7 +395,7 @@ class _Replay:
         bool
             True when nothing can have given the child a target directory.
         """
-        if self.directory is None or self.is_opaque:
+        if self.directory is None or self.is_opaque or self.has_manifest_path:
             return False
         if not set(TARGET_VARIABLES) <= self.removed:
             return False

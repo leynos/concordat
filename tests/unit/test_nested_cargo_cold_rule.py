@@ -316,6 +316,35 @@ def test_rstest_bdd_at_916_is_compliant(tmp_path: pathlib.Path) -> None:
     assert result.verdict == "compliant"
 
 
+def test_an_ordinary_function_named_like_a_preparation_test_prepares_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Only an identified test counts: a helper of that name is not run as one."""
+    rstest_bdd_before(tmp_path)
+    put(
+        tmp_path,
+        "crates/cargo-bdd/tests/cli/helper.rs",
+        "pub fn nested_fixture_preparation() { build_everything(); }\n",
+    )
+    assert ("NC-010", "crates/cargo-bdd/tests/cli.rs") in profile(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "attribute", ["#[test]", "#[rstest]", "#[tokio::test]", "#[test]\n#[serial]"]
+)
+def test_a_test_attribute_makes_the_preparation_test(
+    tmp_path: pathlib.Path, attribute: str
+) -> None:
+    """The ordinary test attributes all identify a preparation test."""
+    rstest_bdd_before(tmp_path)
+    put(
+        tmp_path,
+        "crates/cargo-bdd/tests/cli/preparation.rs",
+        f"{attribute}\nfn nested_fixture_preparation() {{ build_everything(); }}\n",
+    )
+    assert ("NC-010", "crates/cargo-bdd/tests/cli.rs") not in profile(tmp_path)
+
+
 def test_a_gate_call_alone_declares_the_preparation(tmp_path: pathlib.Path) -> None:
     """A timed test that refuses on a missing stamp has declared its preparation."""
     rstest_bdd_before(tmp_path)
@@ -525,6 +554,24 @@ def test_a_name_rebound_inside_one_function_is_not_guessed(
     found = {(f.rule_id, f.verdict) for f in findings(tmp_path)}
     assert ("NC-009", "noncompliant") not in found
     assert ("EN-001", "indeterminate") in found
+
+
+REUSED_PROGRAM = """\
+fn run_twice(exe: &str) {
+    let scratch = tempfile::tempdir().unwrap();
+    let mut command = std::process::Command::new(exe);
+    command.env("CARGO_TARGET_DIR", scratch.path());
+    command.output().unwrap();
+    command.env_remove("CARGO_TARGET_DIR");
+    command.output().unwrap();
+}
+"""
+
+
+def test_a_reused_program_is_read_at_its_first_run(tmp_path: pathlib.Path) -> None:
+    """The first run built into a temporary target, whatever the last run did."""
+    put(tmp_path, "tests/program.rs", REUSED_PROGRAM)
+    assert ("NC-009", "tests/program.rs") in profile(tmp_path)
 
 
 def test_a_reused_command_is_judged_at_each_run(tmp_path: pathlib.Path) -> None:

@@ -236,12 +236,30 @@ def _direct_commands(
         command = construction(source, match, pairs, any_program=cold_build)
         if command is None:
             continue
-        if command.form == PROGRAM_FORM and not builds_into_target(
-            command.program, command.calls, function_text(source, command.start)
-        ):
+        if command.form == PROGRAM_FORM and not _is_target_program(command, source):
             continue
         found.append(command)
     return found
+
+
+def _is_target_program(command: CargoCommand, source: RustSource) -> bool:
+    """Report whether any run of a program command sets a cargo target itself.
+
+    Each run is judged by what the command carried when it started, so a command
+    that builds into a temporary target and then removes the variable is still
+    one whose first run was a build.
+
+    Returns
+    -------
+    bool
+        True when some execution (or the command itself, if never run) names a
+        target variable the reader can place.
+    """
+    text = function_text(source, command.start)
+    return any(
+        builds_into_target(command.program, run.calls, text)
+        for run in command.executions or [command]
+    )
 
 
 def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:

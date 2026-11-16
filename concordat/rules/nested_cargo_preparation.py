@@ -47,6 +47,9 @@ GATE_CALL: typ.Final = "gate-call"
 MAYBE_KIND: typ.Final = "cargo-unknown"
 _FUNCTION: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)")
 _BINARY: typ.Final = re.compile(r"(?:^|/)tests/(?P<stem>[^/]+)\.rs$")
+# `#[test]`, `#[tokio::test]`, `#[rstest]` and `#[test_case(..)]` mark a harness
+# test; a bare function of the same name does not.
+_TEST_ATTRIBUTE: typ.Final = re.compile(r"#\[\s*(?:\w+::)*(?:test|rstest|test_case)\b")
 
 
 class BuildFact(typ.TypedDict):
@@ -144,12 +147,29 @@ def _calls(source: RustSource, name: str) -> re.Match[str] | None:
     return None
 
 
+def _is_test_function(masked: str, start: int) -> bool:
+    """Report whether the `fn` at *start* carries a test attribute.
+
+    The attributes of a function sit between the end of the item before it (a
+    closing brace or a semicolon) and its `fn` keyword, so that stretch is what
+    is searched. An ordinary helper that happens to share a preparation test's
+    name is not one.
+
+    Returns
+    -------
+    bool
+        True when a test attribute precedes the function.
+    """
+    boundary = max(masked.rfind("}", 0, start), masked.rfind(";", 0, start))
+    return _TEST_ATTRIBUTE.search(masked, boundary + 1, start) is not None
+
+
 def _declares_preparation_test(source: RustSource, gates: Gates) -> bool:
-    """Report whether *source* defines a function a preparation pattern matches."""
+    """Report whether *source* defines a test a preparation pattern matches."""
     return any(
-        pattern.search(match["name"])
+        _is_test_function(source.masked, match.start())
         for match in _FUNCTION.finditer(source.masked)
-        for pattern in gates.tests
+        if any(pattern.search(match["name"]) for pattern in gates.tests)
     )
 
 

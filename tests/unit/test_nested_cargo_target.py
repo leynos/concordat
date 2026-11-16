@@ -167,6 +167,42 @@ def test_an_unseen_argument_list_leaves_the_target_as_it_was() -> None:
     assert read_target([("unseen-arguments", "")], "").state == INHERITED
 
 
+@pytest.mark.parametrize(
+    "slot",
+    [
+        'vec![("A", "b")',
+        'format!("{}_TARGET_DIR", "CARGO")',
+        "name",
+    ],
+    ids=["first-string-of-a-larger-expression", "format-macro", "variable"],
+)
+def test_only_an_exact_literal_names_a_target_variable(slot: str) -> None:
+    """The first string in a slot is not its name, so the call is not read as one."""
+    calls = [("env", f"{slot}, scratch.path()")]
+    assert read_target(calls, TEMP_SOURCE).state == UNKNOWN
+
+
+def test_words_after_the_separator_are_not_cargos_target_flag() -> None:
+    """`cargo run -- ls --target-dir x` hands the flag to the program cargo runs."""
+    calls = [
+        ("args", '["run", "--bin", "tool", "--", "ls", "--target-dir"]'),
+        ("arg", "scratch.path()"),
+    ]
+    assert read_target(calls, TEMP_SOURCE).state == INHERITED
+
+
+def test_a_manifest_path_moves_the_default_target_out_of_the_directory() -> None:
+    """With `--manifest-path`, a temporary working directory proves nothing."""
+    base = [
+        ("current_dir", "scratch.path()"),
+        ("env_clear", ""),
+        ("args", '["build", "--manifest-path", "../app/Cargo.toml"]'),
+    ]
+    assert read_target(base, TEMP_SOURCE).state == INHERITED
+    without = [call for call in base if call[0] != "args"]
+    assert read_target(without, TEMP_SOURCE).state == PRIVATE
+
+
 def test_the_build_target_variable_yields_to_an_inherited_target_variable() -> None:
     """Cargo reads `CARGO_TARGET_DIR` first, and a parent may have set it."""
     lower = [env("CARGO_BUILD_TARGET_DIR", "scratch.path()")]
@@ -200,6 +236,12 @@ def test_an_opaque_call_after_the_removal_may_restore_the_higher_variable() -> N
         ([("args", '["package", "--allow-dirty"]')], "yes"),
         ([("args", '["--manifest-path", path, "build"]')], "unknown"),
         ([("arg", "subcommand")], "unknown"),
+        ([("arg", '"t"')], "yes"),
+        ([("args", '["b", "--release"]')], "yes"),
+        ([("arg", '"fix"')], "yes"),
+        # An unseen environment call cannot change the subcommand.
+        ([("unseen", ""), ("arg", '"build"')], "yes"),
+        ([("unseen-arguments", ""), ("arg", '"build"')], "unknown"),
         ([("unseen-arguments", "")], "unknown"),
         ([("unseen", "")], "no"),
         ([], "no"),

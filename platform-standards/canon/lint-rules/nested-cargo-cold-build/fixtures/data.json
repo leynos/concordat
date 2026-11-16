@@ -168,6 +168,14 @@
       "builds": [],
       "problems": []
     },
+    "empty_build": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [{}],
+      "problems": []
+    },
     "malformed_build": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-cold-build",

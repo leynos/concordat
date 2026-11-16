@@ -227,7 +227,7 @@ artifacts:
       Sensor requiring a test's nested build to avoid a private target
       directory, and a test that compiles in a timed body to have its
       preparation declared outside it.
-    sha256: 5ac56321d089fc80ad2e174e3a242e1abe1703c35f0da036d1ccdd2e5b8f373a
+    sha256: da11cb981a7e0d1c7b5a0c9d9b31983e5205e08596c70e0511327da1ebb80d0a
   - id: lint-rule-nested-cargo-cold-build-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/nested-cargo-cold-build/rule.yaml

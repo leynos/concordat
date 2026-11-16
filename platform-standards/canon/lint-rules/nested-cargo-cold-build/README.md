@@ -56,20 +56,24 @@ recorded in `docs/roadmap.md` (DF12-109).
 
 ## What counts as a private target (NC-009)
 
-The reader replays the calls a test makes on one command, the last write
-winning, as the NC-007 reader does for `CARGO_NET_OFFLINE`. Cargo takes the
-target from `--target-dir`, then `CARGO_TARGET_DIR`, then
-`CARGO_BUILD_TARGET_DIR` (cargo reads the second as `build.target-dir`), then
-the workspace default. The reading is one of five states:
+The reader replays the calls a test makes on one command. Within one source of
+the target, the last write wins, as the NC-007 reader does for
+`CARGO_NET_OFFLINE`. Across sources, precedence decides and write order does
+not: cargo takes the target from `--target-dir`, then `CARGO_TARGET_DIR`, then
+`CARGO_BUILD_TARGET_DIR` (cargo reads the last as `build.target-dir`), then the
+workspace default. Words after `--` belong to the program cargo runs and are
+not read. The reading is one of five states:
 
 - `private`: the value derives from `tempfile::tempdir()`, `TempDir`,
   `tempdir_in`, `mkdtemp` or a `NamedTempFile`, or from a `uuid`, `SystemTime`,
   `process::id()` or a random source. A name bound to one of those in the same
   function counts, followed through three levels of `let` bindings; a `TempDir`
   parameter counts. The same applies when the command's working directory is
-  temporary and the command can inherit no target: an `env_clear()`, or an
-  `env_remove` of **both** `CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET_DIR`,
-  with no target set afterwards and no environment call the reader cannot read.
+  temporary, the command passes no `--manifest-path` (which moves the default
+  target to that workspace), and the command can inherit no target: an
+  `env_clear()`, or an `env_remove` of **both** `CARGO_TARGET_DIR` and
+  `CARGO_BUILD_TARGET_DIR`, with no target set afterwards and no environment
+  call the reader cannot read.
 - `unknown`: a target is set from a value the reader cannot follow, such as the
   result of a function in another file; it was set before a call the reader
   cannot see through; only `CARGO_BUILD_TARGET_DIR` is set while an inherited
@@ -141,10 +145,12 @@ The compile is *prepared* when any one of these holds:
    filter that negates or subtracts (`not binary(ui)`, `all() - binary(ui)`)
    names a binary in order to leave it out, so it never counts as coverage and
    the reader reports it as indeterminate.
-2. **A named preparation test in the same crate.** A function whose name matches
-   a pattern in `preparation_gates.tests`. The test compiles what the timed
-   tests would otherwise compile, and the nextest configuration gives it a
-   budget of its own, first in file order, in the same serial test group.
+2. **A named preparation test in the same crate.** A test function (carrying
+   `#[test]`, `#[rstest]`, `#[test_case]` or a `::test` attribute) whose name
+   matches a pattern in `preparation_gates.tests`. An ordinary function of the
+   same name is not a test and prepares nothing. The test compiles what the
+   timed tests would otherwise compile, and the nextest configuration gives it
+   a budget of its own, first in file order, in the same serial test group.
 3. **A preparation gate called in the same crate.** A call to a function in
    `preparation_gates.functions`: a function that fails the timed test, naming
    the preparing command, when the artefacts are missing or stale.
