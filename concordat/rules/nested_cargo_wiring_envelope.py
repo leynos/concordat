@@ -48,6 +48,27 @@ WRAPPER_VARIABLE: typ.Final = "RUSTC_WRAPPER"
 SETUP_ACTION: typ.Final = "setup-rust"
 OPT_OUT_INPUT: typ.Final = "export-rustc-wrapper"
 FALSE_SPELLINGS: typ.Final = frozenset({"false", "0", "no", "off"})
+# Actions that only prepare the machine; none runs a test or a build.
+SETUP_ACTIONS: typ.Final = frozenset({
+    "checkout",
+    "setup-rust",
+    "rust-toolchain",
+    "install-action",
+    "cache",
+    "upload-artifact",
+    "download-artifact",
+})
+CHECK_SUBCOMMANDS: typ.Final = frozenset({"check", "clippy", "fmt", "metadata", "tree"})
+# `cargo [+toolchain] <subcommand>`; the toolchain selector may be quoted.
+CARGO_COMMAND: typ.Final = re.compile(
+    r"(?<![\w./-])cargo[ \t]+(?:[\"']?\+[^\s\"']+[\"']?[ \t]+)?"
+    r"(?P<subcommand>[a-z][\w-]*)"
+)
+# A script that runs these may start a test or another cargo behind the reader.
+HANDS_OFF: typ.Final = re.compile(
+    r"(?<![\w-])(?:make|just|nextest|pytest|npm|pnpm|bun|uv|python3?|bash|sh)(?![\w-])"
+    r"|\./|(?<![\w.])cargo-[a-z]"
+)
 # An unquoted value is a run of ordinary characters and whole `${{ .. }}`
 # expressions, because GitHub substitutes an expression (which may hold spaces)
 # before the shell runs; the variable name needs a boundary so that
@@ -68,10 +89,14 @@ class TargetSetting(typ.TypedDict):
         for an assignment inside a `run` script.
     value:
         The value as written, expressions unevaluated.
+    job:
+        The id of the job the setting belongs to, or None for a workflow-level
+        `env`, which every job of the workflow inherits.
     """
 
     where: str
     value: str
+    job: str | None
 
 
 class JobWiring(typ.TypedDict):
@@ -86,11 +111,19 @@ class JobWiring(typ.TypedDict):
     wrapper_named:
         Whether `RUSTC_WRAPPER` appears in the workflow's or the job's `env`, in
         a step's `env`, or in a `run` script of the job.
+    check_only:
+        Whether the job can start no nested build: it runs cargo, every cargo
+        command is a check-style one (`check`, `clippy`, `fmt`, `metadata`,
+        `tree`), no `run` script hands off to `make`, a test runner, an
+        interpreter or a script, and every action it uses is a plain
+        set-up one. A per-run target costs such a job nothing, because there
+        is no second build to inherit a warm tree.
     """
 
     id: str
     opts_out: bool
     wrapper_named: bool
+    check_only: bool
 
 
 class WorkflowWiring(typ.TypedDict):
@@ -146,15 +179,15 @@ def _steps(job: dict[str, object]) -> list[dict[str, object]]:
     return [_mapping(step) for step in steps] if isinstance(steps, list) else []
 
 
-def _env_target(env: object, where: str) -> list[TargetSetting]:
+def _env_target(env: object, where: str, job: str | None) -> list[TargetSetting]:
     """Return the `CARGO_TARGET_DIR` entry of an `env` mapping, if any."""
     table = _mapping(env)
     if TARGET_VARIABLE not in table:
         return []
-    return [{"where": where, "value": str(table[TARGET_VARIABLE])}]
+    return [{"where": where, "value": str(table[TARGET_VARIABLE]), "job": job}]
 
 
-def _run_targets(run: object, where: str) -> list[TargetSetting]:
+def _run_targets(run: object, where: str, job: str) -> list[TargetSetting]:
     """Return every `CARGO_TARGET_DIR=value` assignment in a `run` script."""
     if not isinstance(run, str):
         return []
@@ -163,18 +196,18 @@ def _run_targets(run: object, where: str) -> list[TargetSetting]:
         line for line in run.splitlines() if not line.lstrip().startswith("#")
     )
     return [
-        {"where": f"{where} run", "value": match["value"].strip("\"'")}
+        {"where": f"{where} run", "value": match["value"].strip("\"'"), "job": job}
         for match in RUN_ASSIGNMENT.finditer(script)
     ]
 
 
 def _job_targets(job_id: str, job: dict[str, object]) -> list[TargetSetting]:
     """Return the `CARGO_TARGET_DIR` settings of one job and its steps."""
-    found = _env_target(job.get("env"), f"job {job_id}")
+    found = _env_target(job.get("env"), f"job {job_id}", job_id)
     for index, step in enumerate(_steps(job)):
         where = f"step {job_id}/{index}"
-        found += _env_target(step.get("env"), where)
-        found += _run_targets(step.get("run"), where)
+        found += _env_target(step.get("env"), where, job_id)
+        found += _run_targets(step.get("run"), where, job_id)
     return found
 
 
@@ -203,12 +236,65 @@ def _names_wrapper(job: dict[str, object], workflow_env: object) -> bool:
     )
 
 
+def _run_scripts(job: dict[str, object]) -> list[str]:
+    """Return a job's `run` scripts, comment lines removed."""
+    return [
+        "\n".join(
+            line
+            for line in str(step["run"]).splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        for step in _steps(job)
+        if isinstance(step.get("run"), str)
+    ]
+
+
+def _uses_only_setup_actions(job: dict[str, object]) -> bool:
+    """Report whether every `uses` step of a job is a plain set-up action."""
+    for step in _steps(job):
+        uses = step.get("uses")
+        if uses is None:
+            continue
+        action = str(uses).split("@", maxsplit=1)[0].rsplit("/", maxsplit=1)[-1]
+        if action not in SETUP_ACTIONS:
+            return False
+    return True
+
+
+def _is_check_only(job: dict[str, object]) -> bool:
+    """Report whether a job can start no nested cargo build.
+
+    The test is deliberately narrow: a job qualifies only when it runs cargo,
+    every cargo command it runs is check-style, and nothing else in its scripts
+    or actions could run tests or hand the work to another program. Anything
+    the reader cannot place leaves the job subject to the rule.
+
+    Returns
+    -------
+    bool
+        True when the job is a bare check job with no nested build to protect.
+    """
+    scripts = _run_scripts(job)
+    subcommands = [
+        found["subcommand"]
+        for script in scripts
+        for found in CARGO_COMMAND.finditer(script)
+    ]
+    return (
+        bool(subcommands)
+        and all(name in CHECK_SUBCOMMANDS for name in subcommands)
+        and not any(HANDS_OFF.search(script) for script in scripts)
+        and _uses_only_setup_actions(job)
+    )
+
+
 def _job_wiring(job_id: str, job: dict[str, object], workflow_env: object) -> JobWiring:
     """Return one job's wrapper wiring."""
     return {
         "id": job_id,
         "opts_out": any(_opts_out(step) for step in _steps(job)),
         "wrapper_named": _names_wrapper(job, workflow_env),
+        "check_only": _is_check_only(job),
     }
 
 
@@ -226,7 +312,7 @@ def _wiring(workflow: WorkflowFile) -> WorkflowWiring:
     jobs = {
         str(name): _mapping(job) for name, job in _mapping(document.get("jobs")).items()
     }
-    settings = _env_target(document.get("env"), "env")
+    settings = _env_target(document.get("env"), "env", None)
     for job_id, job in jobs.items():
         settings += _job_targets(job_id, job)
     return {

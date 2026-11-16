@@ -33,7 +33,17 @@ BUILD_TEST = (
 RUSTC_TEST = (
     "use std::process::Command;\n"
     "#[test]\nfn direct() {\n"
-    '    Command::new("rustc").arg("--version").status().unwrap();\n}\n'
+    '    Command::new("rustc").arg("fixture.rs").status().unwrap();\n}\n'
+)
+RUSTC_VERSION_TEST = RUSTC_TEST.replace('"fixture.rs"', '"--version"')
+RUSTC_VERBOSE_VERSION_TEST = RUSTC_TEST.replace('"fixture.rs"', '"-vV"')
+RUSTC_SHORT_VERSION_TEST = RUSTC_TEST.replace('.arg("fixture.rs")', '.args(["-V"])')
+RUSTC_PRINT_TEST = RUSTC_TEST.replace('"fixture.rs"', '"--print=sysroot"')
+RUSTC_VERSION_THEN_COMPILE_TEST = (
+    "use std::process::Command;\n"
+    "#[test]\nfn probe_then_compile() {\n"
+    '    Command::new("rustc").arg("--version").status().unwrap();\n'
+    '    Command::new("rustc").arg("fixture.rs").status().unwrap();\n}\n'
 )
 METADATA_TEST = (
     "use std::process::Command;\n"
@@ -86,6 +96,15 @@ CASES = {
         BUILD_TEST, CLEAN.replace("binary(ui)", "test(compiles)"), set()
     ),
     "direct-rustc-counts": Case(RUSTC_TEST, None, {"NC-004"}),
+    "rustc-version-probe-does-not": Case(RUSTC_VERSION_TEST, None, set()),
+    "rustc-verbose-version-probe-does-not": Case(
+        RUSTC_VERBOSE_VERSION_TEST, None, set()
+    ),
+    "rustc-short-version-probe-does-not": Case(RUSTC_SHORT_VERSION_TEST, None, set()),
+    "rustc-print-query-does-not": Case(RUSTC_PRINT_TEST, None, set()),
+    "rustc-version-probe-then-compile-counts": Case(
+        RUSTC_VERSION_THEN_COMPILE_TEST, None, {"NC-004"}
+    ),
     "cargo-metadata-does-not": Case(METADATA_TEST, None, set()),
     "helper-judged-at-repository-level": Case(
         BUILD_TEST, CLEAN.replace("binary(ui)", "binary(other)"), set(), "src/helper.rs"

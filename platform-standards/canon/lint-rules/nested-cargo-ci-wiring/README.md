@@ -34,7 +34,18 @@ leaves to the repository: scope the wrapper to the commands that should use it
   matching one of the `temporary_patterns` parameter. The defaults are the
   runner's temp directory (`runner.temp`, `RUNNER_TEMP`), the run id, number,
   attempt or commit SHA, `mktemp`, `TMPDIR`, a `/tmp` path and a `$(...)`
-  command substitution. Expressions are matched as written, not evaluated.
+  command substitution. Expressions are matched as written, not evaluated. A
+  setting is harmless, and not reported, when the job it belongs to is
+  **check-only**: it runs cargo, every cargo command
+  (`cargo [+toolchain] <subcommand>`) is `check`, `clippy`, `fmt`, `metadata` or
+  `tree`, no `run` script mentions `make`, `just`, `nextest`, a test runner,
+  an interpreter, a shell, `./script` or a `cargo-*` plugin, and every action
+  it uses is a plain set-up one (`checkout`, `setup-rust`, `rust-toolchain`,
+  `install-action`, `cache`, artefact transfer). An MSRV `cargo +<msrv> check`
+  job is the usual case: it has no nested build to inherit a warm tree, and
+  sharing the target would only hold a second toolchain's artefacts. A
+  workflow-level setting is harmless only when every job of the workflow is
+  check-only. A job the reader cannot place stays subject to the rule.
 - **NC-006** (error), silent opt-out: a job has a `setup-rust` step whose
   `export-rustc-wrapper` input is false (`false`, `'false'`, `0`, `no` or
   `off`) and `RUSTC_WRAPPER` appears nowhere in the workflow `env`, the job

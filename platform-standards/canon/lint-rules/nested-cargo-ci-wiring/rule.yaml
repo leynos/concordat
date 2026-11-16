@@ -8,7 +8,9 @@ description: >-
   path: the runner's temp directory, the run id, number or attempt, the commit
   SHA, a `mktemp` directory or `/tmp`, because every run and every nested build
   then starts with an empty target tree and sccache keys miss on differing
-  paths. A job that sets `setup-rust`'s `export-rustc-wrapper` to false must
+  paths. A job that is check-only (it runs cargo, only `check`, `clippy`,
+  `fmt`, `metadata` or `tree`, and hands off to nothing that could run tests)
+  starts no nested build, so a per-run target there is not reported. A job that sets `setup-rust`'s `export-rustc-wrapper` to false must
   name `RUSTC_WRAPPER` somewhere in the workflow or job, since `setup-rust`
   otherwise exports the wrapper to every later step and child `cargo`
   inherits it without any job-level `env`. A named exemption, with its

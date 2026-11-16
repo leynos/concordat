@@ -130,6 +130,82 @@ CASES = {
 }
 
 
+MSRV_TARGET = "          CARGO_TARGET_DIR: ${{ runner.temp }}/msrv-target\n"
+MSRV_CHECK = (
+    '      - run: cargo "+${MSRV}" check --all-targets --locked\n        env:\n'
+    + MSRV_TARGET
+)
+
+
+def msrv_workflow(*, steps: str, top: str = "", extra_job: str = "") -> str:
+    """Return a workflow whose `msrv` job runs *steps* after a checkout."""
+    return (
+        f"name: ci\non: push\n{top}jobs:\n  msrv:\n    runs-on: ubuntu-latest\n"
+        + STEPS
+        + '      - run: rustup toolchain install "$MSRV" --profile minimal\n'
+        + steps
+        + extra_job
+    )
+
+
+TEST_JOB = (
+    "  test:\n    runs-on: ubuntu-latest\n" + STEPS + "      - run: cargo nextest run\n"
+)
+CHECK_ONLY_CASES = {
+    "msrv-check-with-a-per-run-target-is-silent": Case(
+        msrv_workflow(steps=MSRV_CHECK), set()
+    ),
+    "clippy-only-job-is-silent": Case(
+        msrv_workflow(steps=MSRV_CHECK.replace("check --all-targets", "clippy")),
+        set(),
+    ),
+    "check-and-test-in-one-job-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: cargo test\n"), {"NC-006"}
+    ),
+    "check-then-make-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: make test\n"), {"NC-006"}
+    ),
+    "check-then-a-script-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: ./scripts/ci.sh\n"),
+        {"NC-006"},
+    ),
+    "check-beside-an-unknown-action-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - uses: acme/runs-tests@v1\n"),
+        {"NC-006"},
+    ),
+    "a-job-with-no-cargo-command-is-flagged": Case(
+        msrv_workflow(steps="      - run: echo hi\n        env:\n" + MSRV_TARGET),
+        {"NC-006"},
+    ),
+    "workflow-env-reaching-a-test-job-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK.replace(MSRV_TARGET, ""),
+            top="env:\n  CARGO_TARGET_DIR: ${{ runner.temp }}/t\n",
+            extra_job=TEST_JOB,
+        ),
+        {"NC-006"},
+    ),
+    "workflow-env-reaching-only-check-jobs-is-silent": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK.replace(MSRV_TARGET, ""),
+            top="env:\n  CARGO_TARGET_DIR: ${{ runner.temp }}/t\n",
+        ),
+        set(),
+    ),
+    "a-test-job-with-a-per-run-target-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK,
+            extra_job=TEST_JOB.replace(
+                "      - run: cargo nextest run\n",
+                "      - run: cargo nextest run\n        env:\n" + MSRV_TARGET,
+            ),
+        ),
+        {"NC-006"},
+    ),
+}
+CASES |= CHECK_ONLY_CASES
+
+
 @pytest.mark.parametrize("case", CASES.values(), ids=CASES.keys())
 def test_workflows_draw_the_expected_findings(
     tmp_path: pathlib.Path, case: Case
@@ -187,7 +263,10 @@ def test_the_envelope_records_each_place_and_each_job(tmp_path: pathlib.Path) ->
         ("env", "/tmp/a"),  # noqa: S108 - the value under test
         ("step test/2 run", "$RUNNER_TEMP/t"),
     ]
-    assert fact["jobs"] == [{"id": "test", "opts_out": True, "wrapper_named": False}]
+    assert fact["jobs"] == [
+        {"id": "test", "opts_out": True, "wrapper_named": False, "check_only": False}
+    ]
+    assert [s["job"] for s in fact["target_settings"]] == [None, "test"]
 
 
 TEMP_TARGET = "  CARGO_TARGET_DIR: ${{ runner.temp }}/target\n"

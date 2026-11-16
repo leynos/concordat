@@ -95,6 +95,26 @@ test_a_foreign_envelope_kind_is_not_a_pass if {
 
 # An exemption without a rationale or a review trigger is not a record, and
 # suppresses nothing.
+test_a_check_only_job_may_use_a_per_run_target if {
+	count(findings(data.fixtures.check_only_job_temp_target)) == 0
+}
+
+test_a_test_job_beside_a_check_job_still_may_not if {
+	ids(data.fixtures.test_job_temp_target_beside_check_job) == {"NC-006"}
+}
+
+test_a_workflow_env_reaching_a_test_job_is_flagged if {
+	ids(data.fixtures.workflow_env_temp_target_reaching_a_test_job) == {"NC-006"}
+}
+
+test_a_workflow_env_over_check_jobs_only_is_silent if {
+	count(findings(data.fixtures.workflow_env_temp_target_over_check_jobs_only)) == 0
+}
+
+test_an_envelope_without_the_check_fact_stays_flagged if {
+	ids(data.fixtures.runner_temp_target) == {"NC-006"}
+}
+
 test_an_exemption_without_a_rationale_suppresses_nothing if {
 	blank := [object.union(exemptions[0], {"rationale": "  "})]
 	fs := policy.deny with input as data.fixtures.runner_temp_target with data.parameters as object.union(parameters, {"exemptions": blank})

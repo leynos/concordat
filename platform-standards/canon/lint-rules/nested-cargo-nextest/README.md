@@ -33,7 +33,9 @@ configuration from a repository that needs none:
   next function; a command bound to a name and handed to a function in the same
   file is also read against that function's body. `cargo metadata` and
   `cargo config` do not count;
-- a `rustc` spawn always counts;
+- a `rustc` spawn counts, unless its own command is a version or print query
+  (`--version`, `-V`, `-vV`, `--print`): such a probe compiles nothing and
+  exits at once;
 - the file must name `Command`, so `env!("CARGO")` read for a path alone is not
   a spawn;
 - Python tests that spawn `cargo` are outside the scan: pytest bounds them.

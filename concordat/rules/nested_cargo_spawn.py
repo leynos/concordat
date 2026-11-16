@@ -16,7 +16,8 @@ from a repository that needs none.
   from the spawn to the next `Command::new` or the next function, so a
   compiling argument elsewhere in the file (a production `cargo build`, say)
   does not turn a test's `cargo metadata` into compiler work. A `rustc` spawn
-  always counts.
+  counts unless its own command asks only who the compiler is (`--version`,
+  `-V`, `-vV`) or what it prints (`--print`): those compile nothing.
 - Python tests that spawn `cargo` are outside the scan: pytest, not nextest,
   bounds them.
 - A file must name `Command`, so `env!("CARGO")` read for a path alone is not a
@@ -56,6 +57,9 @@ CARGO_SPAWN: typ.Final = re.compile(
 )
 RUSTC_SPAWN: typ.Final = re.compile(
     r'Command::new\(\s*(?:"rustc"|&?\w*rustc\w*\b|env!\("RUSTC"\))'
+)
+RUSTC_PROBE: typ.Final = re.compile(
+    r"""["'](?:--version|-V|-vV|-Vv|--print(?:=[^"']*)?)["']"""
 )
 SUBCOMMANDS: typ.Final = (
     "build|check|test|run|package|clippy|doc|rustc|install|publish|bench|miri"
@@ -211,7 +215,9 @@ def _spawn_kind(relative: str, text: str) -> str | None:
         return None
     spans = _test_spans(text)
     for match in RUSTC_SPAWN.finditer(text):
-        if _is_test_position(relative, spans, match.start()):
+        if _is_test_position(relative, spans, match.start()) and not RUSTC_PROBE.search(
+            _command_window(text, match.start())
+        ):
             return "rustc"
     compiles = any(
         COMPILES.search(_command_window(text, match.start()))

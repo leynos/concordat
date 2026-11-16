@@ -258,6 +258,140 @@
           ]
         }
       ]
+    },
+    "check_only_job_temp_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "step msrv/2",
+              "value": "${{ runner.temp }}/msrv-target",
+              "job": "msrv"
+            }
+          ],
+          "jobs": [
+            {
+              "id": "msrv",
+              "opts_out": false,
+              "wrapper_named": false,
+              "check_only": true
+            },
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false,
+              "check_only": false
+            }
+          ]
+        }
+      ]
+    },
+    "test_job_temp_target_beside_check_job": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "job test",
+              "value": "${{ runner.temp }}/target",
+              "job": "test"
+            }
+          ],
+          "jobs": [
+            {
+              "id": "msrv",
+              "opts_out": false,
+              "wrapper_named": false,
+              "check_only": true
+            },
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false,
+              "check_only": false
+            }
+          ]
+        }
+      ]
+    },
+    "workflow_env_temp_target_reaching_a_test_job": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "env",
+              "value": "${{ runner.temp }}/target",
+              "job": null
+            }
+          ],
+          "jobs": [
+            {
+              "id": "msrv",
+              "opts_out": false,
+              "wrapper_named": false,
+              "check_only": true
+            },
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false,
+              "check_only": false
+            }
+          ]
+        }
+      ]
+    },
+    "workflow_env_temp_target_over_check_jobs_only": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "env",
+              "value": "${{ runner.temp }}/target",
+              "job": null
+            }
+          ],
+          "jobs": [
+            {
+              "id": "msrv",
+              "opts_out": false,
+              "wrapper_named": false,
+              "check_only": true
+            }
+          ]
+        }
+      ]
     }
   }
 }

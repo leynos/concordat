@@ -252,13 +252,13 @@ artifacts:
     description: >-
       Sensor refusing per-run or temporary CARGO_TARGET_DIR values and a silent
       setup-rust wrapper opt-out in workflows.
-    sha256: 884b0b95ef42c2f2d614a62c36bd9a5c304c626f5b5c1d4376390ba6d613da76
+    sha256: 97f023d83aeb9d5295c0fc123c46758141b550d92ffcd66bc8fa2250a1073a50
   - id: lint-rule-nested-cargo-ci-wiring-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/nested-cargo-ci-wiring/rule.yaml
     description: >-
       Rule package manifest for the nested cargo CI wiring audit.
-    sha256: 7da6b7ff13fee41088a0e66db62a94cc24b0d21673dbb5fc05734172d64d3349
+    sha256: 311b0035ffbb8cb574f977d490b1294678338de61bd8f65133b718d39e598d0a
   - id: lint-rule-rust-prover-tooling
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-prover-tooling/policy/rust_prover_tooling.rego
