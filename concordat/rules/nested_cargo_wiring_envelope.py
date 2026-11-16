@@ -35,6 +35,7 @@ import typing as typ
 
 from .codescene_coverage_envelope import _load_workflows
 from .nested_cargo import origin_slug
+from .nested_cargo_check_only import is_check_only
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -48,27 +49,6 @@ WRAPPER_VARIABLE: typ.Final = "RUSTC_WRAPPER"
 SETUP_ACTION: typ.Final = "setup-rust"
 OPT_OUT_INPUT: typ.Final = "export-rustc-wrapper"
 FALSE_SPELLINGS: typ.Final = frozenset({"false", "0", "no", "off"})
-# Actions that only prepare the machine; none runs a test or a build.
-SETUP_ACTIONS: typ.Final = frozenset({
-    "checkout",
-    "setup-rust",
-    "rust-toolchain",
-    "install-action",
-    "cache",
-    "upload-artifact",
-    "download-artifact",
-})
-CHECK_SUBCOMMANDS: typ.Final = frozenset({"check", "clippy", "fmt", "metadata", "tree"})
-# `cargo [+toolchain] <subcommand>`; the toolchain selector may be quoted.
-CARGO_COMMAND: typ.Final = re.compile(
-    r"(?<![\w./-])cargo[ \t]+(?:[\"']?\+[^\s\"']+[\"']?[ \t]+)?"
-    r"(?P<subcommand>[a-z][\w-]*)"
-)
-# A script that runs these may start a test or another cargo behind the reader.
-HANDS_OFF: typ.Final = re.compile(
-    r"(?<![\w-])(?:make|just|nextest|pytest|npm|pnpm|bun|uv|python3?|bash|sh)(?![\w-])"
-    r"|\./|(?<![\w.])cargo-[a-z]"
-)
 # An unquoted value is a run of ordinary characters and whole `${{ .. }}`
 # expressions, because GitHub substitutes an expression (which may hold spaces)
 # before the shell runs; the variable name needs a boundary so that
@@ -249,43 +229,19 @@ def _run_scripts(job: dict[str, object]) -> list[str]:
     ]
 
 
-def _uses_only_setup_actions(job: dict[str, object]) -> bool:
-    """Report whether every `uses` step of a job is a plain set-up action."""
-    for step in _steps(job):
-        uses = step.get("uses")
-        if uses is None:
-            continue
-        action = str(uses).split("@", maxsplit=1)[0].rsplit("/", maxsplit=1)[-1]
-        if action not in SETUP_ACTIONS:
-            return False
-    return True
-
-
 def _is_check_only(job: dict[str, object]) -> bool:
     """Report whether a job can start no nested cargo build.
 
-    The test is deliberately narrow: a job qualifies only when it runs cargo,
-    every cargo command it runs is check-style, and nothing else in its scripts
-    or actions could run tests or hand the work to another program. Anything
-    the reader cannot place leaves the job subject to the rule.
+    The judgement lives in `nested_cargo_check_only`; this gathers the job's
+    scripts and `uses` values for it.
 
     Returns
     -------
     bool
         True when the job is a bare check job with no nested build to protect.
     """
-    scripts = _run_scripts(job)
-    subcommands = [
-        found["subcommand"]
-        for script in scripts
-        for found in CARGO_COMMAND.finditer(script)
-    ]
-    return (
-        bool(subcommands)
-        and all(name in CHECK_SUBCOMMANDS for name in subcommands)
-        and not any(HANDS_OFF.search(script) for script in scripts)
-        and _uses_only_setup_actions(job)
-    )
+    uses = [step["uses"] for step in _steps(job) if step.get("uses") is not None]
+    return is_check_only(_run_scripts(job), uses)
 
 
 def _job_wiring(job_id: str, job: dict[str, object], workflow_env: object) -> JobWiring:

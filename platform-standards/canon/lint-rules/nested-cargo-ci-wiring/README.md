@@ -36,16 +36,24 @@ leaves to the repository: scope the wrapper to the commands that should use it
   attempt or commit SHA, `mktemp`, `TMPDIR`, a `/tmp` path and a `$(...)`
   command substitution. Expressions are matched as written, not evaluated. A
   setting is harmless, and not reported, when the job it belongs to is
-  **check-only**: it runs cargo, every cargo command
-  (`cargo [+toolchain] <subcommand>`) is `check`, `clippy`, `fmt`, `metadata` or
-  `tree`, no `run` script mentions `make`, `just`, `nextest`, a test runner,
-  an interpreter, a shell, `./script` or a `cargo-*` plugin, and every action
-  it uses is a plain set-up one (`checkout`, `setup-rust`, `rust-toolchain`,
-  `install-action`, `cache`, artefact transfer). An MSRV `cargo +<msrv> check`
-  job is the usual case: it has no nested build to inherit a warm tree, and
-  sharing the target would only hold a second toolchain's artefacts. A
-  workflow-level setting is harmless only when every job of the workflow is
-  check-only. A job the reader cannot place stays subject to the rule.
+  **check-only**: it runs cargo, and every `cargo` word in its scripts (by any
+  path) is followed, after an optional `+toolchain`, by `check`, `clippy`,
+  `fmt`, `metadata` or `tree`; a global option before the subcommand
+  (`cargo --locked test`) is not classified and disqualifies the job. Every
+  command in its scripts is cargo, a variable assignment or one of a small set
+  of shell and text words (`echo`, `test`, `sed`, `head`, `rustup`, `case`, …);
+  any other program, script (with or without `./`) or interpreter disqualifies
+  it. Every action it uses is one of a few known set-up actions matched by full
+  identity (`actions/checkout`, `actions/cache`, `actions/upload-artifact`,
+  `actions/download-artifact`, `dtolnay/rust-toolchain`,
+  `taiki-e/install-action`, shared-actions `setup-rust`); a local action or an
+  action of the same name from another owner disqualifies it. An MSRV
+  `cargo +<msrv> check` job is the usual case: it has no nested build to
+  inherit a warm tree, and sharing the target would only hold a second
+  toolchain's artefacts. A workflow-level setting is harmless only when every
+  job of the workflow is check-only. A job the reader cannot place stays
+  subject to the rule. A `check` can run a dependency's build script; the
+  reader does not count build scripts, which are production code and not a test.
 - **NC-006** (error), silent opt-out: a job has a `setup-rust` step whose
   `export-rustc-wrapper` input is false (`false`, `'false'`, `0`, `no` or
   `off`) and `RUSTC_WRAPPER` appears nowhere in the workflow `env`, the job

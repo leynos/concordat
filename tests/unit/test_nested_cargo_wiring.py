@@ -173,6 +173,45 @@ CHECK_ONLY_CASES = {
         msrv_workflow(steps=MSRV_CHECK + "      - uses: acme/runs-tests@v1\n"),
         {"NC-006"},
     ),
+    "global-option-before-the-subcommand-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: cargo --verbose test\n"),
+        {"NC-006"},
+    ),
+    "global-option-with-test-after-check-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: cargo --locked test\n"),
+        {"NC-006"},
+    ),
+    "absolute-cargo-path-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: /usr/bin/cargo test\n"),
+        {"NC-006"},
+    ),
+    "slash-script-without-dot-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: scripts/ci\n"), {"NC-006"}
+    ),
+    "unknown-interpreter-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: ruby ci.rb\n"), {"NC-006"}
+    ),
+    "lookalike-checkout-owner-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - uses: acme/checkout@v1\n"),
+        {"NC-006"},
+    ),
+    "local-action-named-like-a-setup-action-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - uses: ./.github/actions/checkout\n"),
+        {"NC-006"},
+    ),
+    "case-and-substitution-script-stays-silent": Case(
+        msrv_workflow(
+            steps=(
+                "      - run: |\n"
+                "          msrv=\"$(sed -n 's/^x/y/p' Cargo.toml | head -n 1)\"\n"
+                '          test -n "$msrv"\n'
+                '          case "$msrv" in *.*.*) ;; *) msrv="$msrv.0" ;; esac\n'
+                '          echo "MSRV=${msrv}" >> "$GITHUB_ENV"\n'
+            )
+            + MSRV_CHECK
+        ),
+        set(),
+    ),
     "a-job-with-no-cargo-command-is-flagged": Case(
         msrv_workflow(steps="      - run: echo hi\n        env:\n" + MSRV_TARGET),
         {"NC-006"},

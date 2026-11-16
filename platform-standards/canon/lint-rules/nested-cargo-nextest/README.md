@@ -33,9 +33,13 @@ configuration from a repository that needs none:
   next function; a command bound to a name and handed to a function in the same
   file is also read against that function's body. `cargo metadata` and
   `cargo config` do not count;
-- a `rustc` spawn counts, unless its own command is a version or print query
-  (`--version`, `-V`, `-vV`, `--print`): such a probe compiles nothing and
-  exits at once;
+- a `rustc` spawn counts, unless an argument added to that same command is a
+  version flag (`--version`, `-V`, `-vV`) or a `--print` of a table that needs
+  no compile (`sysroot`, `target-libdir`, `host-tuple`, `cfg`, `target-list`,
+  `target-cpus`, `target-features`, `code-models`, `relocation-models`,
+  `tls-models`): such a probe exits at once. Comments and other statements do
+  not count, and `--print=link-args` and `--print=native-static-libs` still do,
+  because they build the crate;
 - the file must name `Command`, so `env!("CARGO")` read for a path alone is not
   a spawn;
 - Python tests that spawn `cargo` are outside the scan: pytest bounds them.

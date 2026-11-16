@@ -102,6 +102,37 @@ CASES = {
     ),
     "rustc-short-version-probe-does-not": Case(RUSTC_SHORT_VERSION_TEST, None, set()),
     "rustc-print-query-does-not": Case(RUSTC_PRINT_TEST, None, set()),
+    "rustc-print-link-args-compiles": Case(
+        RUSTC_TEST.replace(
+            '.arg("fixture.rs")', '.args(["fixture.rs", "--print=link-args"])'
+        ),
+        None,
+        {"NC-004"},
+    ),
+    "rustc-print-native-static-libs-compiles": Case(
+        RUSTC_TEST.replace(
+            '.arg("fixture.rs")', '.args(["fixture.rs", "--print=native-static-libs"])'
+        ),
+        None,
+        {"NC-004"},
+    ),
+    "rustc-print-sysroot-split-args-is-a-query": Case(
+        RUSTC_TEST.replace('.arg("fixture.rs")', '.args(["--print", "sysroot"])'),
+        None,
+        set(),
+    ),
+    "a-compile-followed-by-a-version-assertion-counts": Case(
+        RUSTC_TEST.replace("}\n", '    assert_eq!(actual, "--version");\n}\n'),
+        None,
+        {"NC-004"},
+    ),
+    "a-compile-followed-by-a-version-comment-counts": Case(
+        RUSTC_TEST.replace(
+            "}\n", '    // Unlike "--version", this compiles a fixture.\n}\n'
+        ),
+        None,
+        {"NC-004"},
+    ),
     "rustc-version-probe-then-compile-counts": Case(
         RUSTC_VERSION_THEN_COMPILE_TEST, None, {"NC-004"}
     ),

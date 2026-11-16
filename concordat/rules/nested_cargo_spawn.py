@@ -16,8 +16,10 @@ from a repository that needs none.
   from the spawn to the next `Command::new` or the next function, so a
   compiling argument elsewhere in the file (a production `cargo build`, say)
   does not turn a test's `cargo metadata` into compiler work. A `rustc` spawn
-  counts unless its own command asks only who the compiler is (`--version`,
-  `-V`, `-vV`) or what it prints (`--print`): those compile nothing.
+  counts unless one of its own arguments asks who the compiler is (`--version`,
+  `-V`, `-vV`) or for a table that needs no compile (`--print` of `sysroot`,
+  `cfg`, `target-list`, ...): those compile nothing. `--print=link-args` and
+  `--print=native-static-libs` build the crate, so they still count.
 - Python tests that spawn `cargo` are outside the scan: pytest, not nextest,
   bounds them.
 - A file must name `Command`, so `env!("CARGO")` read for a path alone is not a
@@ -58,9 +60,21 @@ CARGO_SPAWN: typ.Final = re.compile(
 RUSTC_SPAWN: typ.Final = re.compile(
     r'Command::new\(\s*(?:"rustc"|&?\w*rustc\w*\b|env!\("RUSTC"\))'
 )
-RUSTC_PROBE: typ.Final = re.compile(
-    r"""["'](?:--version|-V|-vV|-Vv|--print(?:=[^"']*)?)["']"""
+# The `--print` requests that read a table or a path and exit without compiling
+# an input. `link-args` and `native-static-libs` are deliberately absent: they
+# build the crate first.
+QUERY_PRINTS: typ.Final = (
+    "sysroot|target-libdir|host-tuple|cfg|target-list|target-cpus|target-features"
+    "|code-models|relocation-models|tls-models"
 )
+# A version or query flag handed to the command with `.arg(..)` or `.args(..)`,
+# within one statement, so a later assertion on a "--version" string does not
+# count.
+RUSTC_PROBE: typ.Final = re.compile(
+    r"""\.args?\([^;]*?["'](?:--version|-V|-vV|-Vv"""
+    rf"""|--print(?:=|["']\s*,\s*["'])(?:{QUERY_PRINTS}))["']"""
+)
+COMMENT: typ.Final = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
 SUBCOMMANDS: typ.Final = (
     "build|check|test|run|package|clippy|doc|rustc|install|publish|bench|miri"
     "|nextest|llvm-cov|rustdoc"
@@ -209,13 +223,29 @@ def _command_window(text: str, start: int) -> str:
     return f"{window}\n{_callee_text(text, window, bound['name'])}"
 
 
+def _is_probe(window: str) -> bool:
+    """Report whether a `rustc` command only asks a question and compiles nothing.
+
+    Comments are dropped and each statement is read alone, so an unrelated
+    `"--version"` in a comment or an assertion after the command is not an
+    argument of it.
+
+    Returns
+    -------
+    bool
+        True when an argument of the command is a version or query flag.
+    """
+    code = COMMENT.sub("", window)
+    return any(RUSTC_PROBE.search(statement) for statement in code.split(";"))
+
+
 def _spawn_kind(relative: str, text: str) -> str | None:
     """Return `rustc` or `cargo` if the file spawns a compiler in test code."""
     if "Command" not in text:
         return None
     spans = _test_spans(text)
     for match in RUSTC_SPAWN.finditer(text):
-        if _is_test_position(relative, spans, match.start()) and not RUSTC_PROBE.search(
+        if _is_test_position(relative, spans, match.start()) and not _is_probe(
             _command_window(text, match.start())
         ):
             return "rustc"

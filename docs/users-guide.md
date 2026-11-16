@@ -858,8 +858,10 @@ an override that places tests in it, a `slow-timeout` (in a profile or an
 override) and a `global-timeout` (in a profile). **NC-005** reports a top-level
 `tests/<stem>.rs` that spawns a compiler but is not named, by binary or test
 function, in a serial group's override filter, so the group never holds it. A
-`rustc` command that only asks who the compiler is or what it prints
-(`--version`, `-V`, `-vV`, `--print`) compiles nothing and is not a spawn.
+`rustc` command with a version flag (`--version`, `-V`, `-vV`) or a `--print`
+of a table that needs no compile (`sysroot`, `cfg`, `target-list` and similar)
+compiles nothing and is not a spawn; `--print=link-args` and
+`--print=native-static-libs` still are.
 
 The scan is textual and conservative: only test code counts, `cargo metadata`
 and similar do not, Python tests are left to pytest, and a helper under `src/`
