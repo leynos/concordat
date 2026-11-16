@@ -49,6 +49,39 @@ UNKNOWN: typ.Final = "unknown"
 TARGET_VARIABLES: typ.Final = ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR")
 TARGET_FLAG: typ.Final = '"--target-dir"'
 _SEPARATOR: typ.Final = '"--"'
+# Cargo options that take no value, so the argument after one is not theirs.
+_CARGO_SWITCHES: typ.Final = frozenset({
+    "--release",
+    "-r",
+    "--locked",
+    "--frozen",
+    "--offline",
+    "--workspace",
+    "--all",
+    "--all-targets",
+    "--all-features",
+    "--no-default-features",
+    "--lib",
+    "--bins",
+    "--tests",
+    "--benches",
+    "--examples",
+    "--doc",
+    "--quiet",
+    "-q",
+    "--verbose",
+    "-v",
+    "-vv",
+    "--no-run",
+    "--no-fail-fast",
+    "--keep-going",
+    "--allow-dirty",
+    "--no-verify",
+    "--list",
+    "-l",
+    "--unit-graph",
+    "--ignore-rust-version",
+})
 # Matches `"--manifest-path"` and `"--manifest-path=..."`.
 _MANIFEST_PATH: typ.Final = '"--manifest-path'
 
@@ -202,11 +235,29 @@ def _may_carry_flag(payload: str) -> bool:
     for item in items:
         if "--target-dir" in item:
             return True
-        is_value = previous.startswith('"-')
-        if not item.startswith('"') and not is_value:
+        if not item.startswith('"') and not _awaits_value(previous):
             return True
         previous = item
     return False
+
+
+def _awaits_value(previous: str) -> bool:
+    """Report whether the argument *previous* leaves the next one as its value.
+
+    An option takes a value when it is not a switch (`--release`) and has not
+    been given one inline (`--out-dir=x`). Which options a third-party program
+    defines is not known, so any other option is taken to consume its value;
+    cargo's own switches are listed, because `["--release", flag]` leaves `flag`
+    free to be `--target-dir=...`.
+
+    Returns
+    -------
+    bool
+        True when *previous* is an option that consumes the next argument.
+    """
+    if not previous.startswith('"-') or "=" in previous:
+        return False
+    return previous.strip('"') not in _CARGO_SWITCHES
 
 
 def _hidden() -> TargetReading:

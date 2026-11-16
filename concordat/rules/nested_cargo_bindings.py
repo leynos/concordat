@@ -39,8 +39,6 @@ _EXPANSION_DEPTH: typ.Final = 3
 # the identifier pattern, which reads lower-case names, cannot expand them again.
 _AMBIGUOUS: typ.Final = "<Ambiguous>"
 _PARAMETER: typ.Final = "<Parameter>"
-# A parameter is `pattern: Type`; the separator is a single colon, not a path's.
-_PARAMETER_SPLIT: typ.Final = re.compile(r"(?<!:):(?!:)")
 _PATTERN_NAME: typ.Final = re.compile(r"[A-Za-z_]\w*")
 _NESTING: typ.Final = str.maketrans("{}[]", "()()")
 _PATTERN_KEYWORDS: typ.Final = frozenset({"mut", "ref", "self"})
@@ -109,10 +107,36 @@ def _signature_parameters(text: str) -> set[str]:
         return set()
     names: set[str] = set()
     for segment in split_top_level(signature.translate(_NESTING)):
-        parts = _PARAMETER_SPLIT.split(segment, maxsplit=1)
-        if len(parts) == 2:
-            names.update(_PATTERN_NAME.findall(parts[0]))
+        pattern = _pattern_of(segment)
+        if pattern is not None:
+            names.update(_PATTERN_NAME.findall(pattern))
     return names - _PATTERN_KEYWORDS
+
+
+def _pattern_of(parameter: str) -> str | None:
+    """Return the pattern of a `pattern: Type` parameter, or None if it has none.
+
+    The separator is the first colon outside any nesting that is not half of a
+    path's `::`, so a renamed field (`Pair { path: target }: Pair`) does not end
+    the pattern early.
+
+    Returns
+    -------
+    str | None
+        The text before the separator, or None when there is no separator.
+    """
+    depth = 0
+    index = 0
+    while index < len(parameter):
+        char = parameter[index]
+        if parameter.startswith("::", index):
+            index += 2
+            continue
+        depth += (char == "(") - (char == ")")
+        if char == ":" and depth == 0:
+            return parameter[:index]
+        index += 1
+    return None
 
 
 def local_bindings(text: str) -> dict[str, str]:

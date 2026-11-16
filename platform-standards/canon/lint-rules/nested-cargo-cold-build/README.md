@@ -84,8 +84,10 @@ not read. The reading is one of five states:
   on only some paths, or handed to another function) may carry `--target-dir`,
   so it leaves the target unknown too, and no `env_clear()` or later variable
   settles it, because `--target-dir` beats every variable. An element of its
-  source the reader cannot read is taken as a value only when an option it
-  spells out precedes it (`"--out-dir", path`); anywhere else (`[flag, path]`,
+  source the reader cannot read is taken as a value only when an option that
+  consumes one precedes it (`"--out-dir", path`: not one of cargo's switches
+  such as `--release`, and not an option given its value inline as
+  `--out-dir=x`); anywhere else (`[flag, path]`, `["--release", flag]`,
   `.args(extra)`, a handoff) it may be the flag. A `--` that already sent the
   rest of the line to the program cargo runs ends the question. A helper's own
   parameter, including every name a destructuring pattern binds, is unknown in

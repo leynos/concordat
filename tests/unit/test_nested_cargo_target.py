@@ -195,8 +195,21 @@ def test_an_unseen_argument_call_hides_a_target_only_when_it_may_carry_the_flag(
         ("flag", UNKNOWN),
         ('["--out-dir", out.path()]', PRIVATE),
         ('["--out-dir", out.path(), other]', UNKNOWN),
+        # A switch takes no value, and an option given its value inline takes
+        # no more, so what follows either may be `--target-dir=...`.
+        ('["--release", flag]', UNKNOWN),
+        ('["--out-dir=x", flag]', UNKNOWN),
+        ('["--manifest-path", path]', PRIVATE),
     ],
-    ids=["unreadable-first", "bare-variable", "option-value", "two-unreadable"],
+    ids=[
+        "unreadable-first",
+        "bare-variable",
+        "option-value",
+        "two-unreadable",
+        "after-a-switch",
+        "after-an-inline-value",
+        "after-a-value-option",
+    ],
 )
 def test_an_unreadable_element_is_a_value_only_after_an_option(
     payload: str, state: str
@@ -224,8 +237,12 @@ def test_the_environment_cannot_settle_an_unseen_flag() -> None:
         "fn build((target,): (&Path,))",
         "fn build(Pair { target, .. }: Pair)",
         "fn build(mut target: PathBuf, flag: bool)",
+        # A renamed field has its own colon, which does not end the pattern.
+        "fn build(Pair { path: target }: Pair)",
+        "fn build(Outer { inner: Pair { path: target } }: Outer)",
+        "fn build(Pair::Both(target, _): Pair::Both)",
     ],
-    ids=["simple", "tuple", "struct", "mut"],
+    ids=["simple", "tuple", "struct", "mut", "renamed-field", "nested", "path-pattern"],
 )
 def test_every_name_a_parameter_pattern_binds_is_unknown(signature: str) -> None:
     """A destructured parameter holds what the caller passed, not a caller's binding."""
