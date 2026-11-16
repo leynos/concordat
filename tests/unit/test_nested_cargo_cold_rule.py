@@ -882,7 +882,7 @@ fn build(use_shared: bool) {
 
 
 def test_an_escaped_target_flag_is_not_read_as_text(tmp_path: pathlib.Path) -> None:
-    """`"\\x2d\\x2dtarget-dir=.."` is the flag at run time, so the target is unknown."""
+    """An escaped spelling of the flag is the flag at run time, so it is unknown."""
     put(tmp_path, "tests/escaped.rs", ESCAPED_TARGET_FLAG)
     reported = profile(tmp_path)
     assert ("NC-009", "tests/escaped.rs") not in reported

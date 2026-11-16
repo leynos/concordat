@@ -256,8 +256,9 @@ def _awaits_value(previous: str) -> bool:
 def _is_plain_literal(item: str) -> bool:
     """Report whether *item* is exactly one string literal with no escapes.
 
-    The reader compares literal text, and a Rust escape (`"\\x2d"`) spells a
-    character the text does not show, so an escaped literal is not read.
+    The reader compares literal text, and a Rust backslash escape spells a
+    character the text does not show (a hexadecimal escape for 2d is a hyphen),
+    so an escaped literal is not read.
 
     Returns
     -------
