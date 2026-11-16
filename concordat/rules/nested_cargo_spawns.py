@@ -208,6 +208,12 @@ def _in_ranges(offset: int, ranges: typ.Iterable[tuple[int, int]]) -> bool:
     return any(start <= offset < end for start, end in ranges)
 
 
+def _sets_target(command: CargoCommand, source: RustSource) -> bool:
+    """Report whether a command's own calls pick its target directory."""
+    reading = read_target(command.calls, source.text)
+    return reading.state != INHERITED and not reading.is_inferred
+
+
 def _direct_commands(
     source: RustSource,
     helpers: dict[str, tuple[int, int]],
@@ -235,9 +241,7 @@ def _direct_commands(
         command = construction(source, match, pairs, any_program=any_program)
         if command is None:
             continue
-        if command.form == PROGRAM_FORM and (
-            read_target(command.calls, source.text).state == INHERITED
-        ):
+        if command.form == PROGRAM_FORM and not _sets_target(command, source):
             continue
         found.append(command)
     return found

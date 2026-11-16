@@ -439,6 +439,26 @@ def test_a_program_that_sets_no_target_is_not_a_build(tmp_path: pathlib.Path) ->
     assert findings(tmp_path) == ()
 
 
+def test_a_test_binary_rerun_in_a_temporary_directory_is_not_a_build(
+    tmp_path: pathlib.Path,
+) -> None:
+    """ortho-config's XDG oracle reruns the test executable with a clean environment.
+
+    A temporary working directory and an `env_clear()` are how a *cargo* command
+    is proven private; on any other program they say nothing about a build.
+    """
+    put(
+        tmp_path,
+        "src/paths_tests.rs",
+        "#[cfg(test)]\nmod tests {\n    fn oracle() {\n"
+        "        let root = tempfile::TempDir::new().unwrap();\n"
+        "        std::process::Command::new(std::env::current_exe().unwrap())\n"
+        '            .env_clear()\n            .current_dir(root.path())\n'
+        "            .output()\n            .unwrap();\n    }\n}\n",
+    )
+    assert findings(tmp_path) == ()
+
+
 def test_the_default_exemption_covers_netsukes_generated_fixture(
     tmp_path: pathlib.Path,
 ) -> None:

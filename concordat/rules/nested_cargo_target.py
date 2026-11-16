@@ -85,10 +85,17 @@ class TargetReading:
     source:
         A short description of the evidence, for the finding's message. Empty
         for `inherited`.
+    is_inferred:
+        True when no call set a target and the answer rests on what cargo
+        would do by default (a temporary working directory with the inherited
+        target removed). A command that is not cargo is read only when its
+        target is set outright, because the inference says nothing about a
+        program that may not build at all.
     """
 
     state: str
     source: str = ""
+    is_inferred: bool = False
 
 
 def local_bindings(text: str) -> dict[str, str]:
@@ -284,6 +291,7 @@ class _Replay:
             return TargetReading(
                 PRIVATE,
                 "a temporary working directory with no inherited target directory",
+                is_inferred=True,
             )
         return TargetReading(INHERITED)
 
