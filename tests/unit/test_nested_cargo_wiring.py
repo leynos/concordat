@@ -268,6 +268,22 @@ CHECK_ONLY_CASES = {
         ),
         set(),
     ),
+    "sed-script-with-brackets-in-quotes-stays-silent": Case(
+        msrv_workflow(
+            steps=(
+                "      - run: |\n"
+                '          msrv="$(sed -n \'s/^rust-version *= *"\\(.*\\)"/\\1/p\''
+                ' Cargo.toml | head -n 1)"\n'
+                '          echo "a; b | c" >&2\n'
+            )
+            + MSRV_CHECK
+        ),
+        set(),
+    ),
+    "a-quoted-make-is-still-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: '\"make\" test'\n"),
+        {"NC-006"},
+    ),
     "a-quoted-assignment-before-cargo-check-stays-silent": Case(
         msrv_workflow(
             steps='      - run: RUSTFLAGS="-D warnings" cargo check --locked\n'

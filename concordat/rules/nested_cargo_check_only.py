@@ -173,10 +173,52 @@ def _resolve_command(script: str, found: re.Match[str]) -> re.Match[str] | None:
     return word
 
 
+def _mask_range(script: str, masked: list[str], low: int, high: int) -> None:
+    """Blank the text of quoted strings in `script[low:high]`, in place.
+
+    Offsets are kept, so a match on the masked copy lines up with the original.
+    Expansions nested inside double quotes stay visible, because they run.
+    """
+    index = low
+    while index < high:
+        char = script[index]
+        if char not in "\"'":
+            index += 1
+            continue
+        end = _skip_quoted(script, index)
+        inner = index + 1
+        while inner < min(end - 1, high):
+            if char == '"' and script[inner : inner + 2] in {"$(", "${"}:
+                stop = _skip_expansion(script, inner)
+                _mask_range(script, masked, inner + 2, stop)
+                inner = stop
+            else:
+                masked[inner] = "_" if script[inner] != "\n" else "\n"
+                inner += 1
+        index = end
+
+
+def _mask_quotes(script: str) -> str:
+    """Return *script* with the text of its quoted strings blanked out.
+
+    A quoted string is data (a sed script, a message), so its brackets and
+    separators must not be read as commands.
+
+    Returns
+    -------
+    str
+        A copy of the same length, with quoted text replaced by underscores.
+    """
+    masked = list(script)
+    _mask_range(script, masked, 0, len(script))
+    return "".join(masked)
+
+
 def _commands_are_harmless(script: str) -> bool:
     """Report whether every command of *script* is cargo, an assignment or harmless."""
-    for position in COMMAND_START.finditer(script):
-        found = _resolve_command(script, position)
+    visible = _mask_quotes(script)
+    for position in COMMAND_START.finditer(visible):
+        found = _resolve_command(visible, position)
         if found is None:
             continue
         word = found["word"].strip("\"'")
