@@ -32,18 +32,19 @@ import typing as typ
 from .dependency_family_coverage import mapping
 from .dependency_family_discovery import cargo_tables
 from .nested_cargo import is_fixture_directory, standalone_directories
+from .nested_cargo_bindings import function_text
 from .nested_cargo_commands import (
     COMMAND_NEW,
+    PROGRAM_FORM,
     CargoCommand,
-    bound_name,
-    collect_variable,
     command_state,
     construction,
-    follow_chain,
     has_cargo_construction,
     helper_body,
     unreached_helper,
 )
+from .nested_cargo_compiles import COMPILES_UNKNOWN, compiles_state
+from .nested_cargo_helpers import helper_call_sites, helper_definition
 from .nested_cargo_modules import (
     Reach,
     is_crate_root,
@@ -54,14 +55,18 @@ from .nested_cargo_source import (
     RustSource,
     TestScope,
     brace_pairs,
-    enclosing_block,
     in_fixture,
     line_of,
     read_source,
     read_sources,
     whole_file_scope,
 )
-from .rust_source import scan_balanced
+from .nested_cargo_target import (
+    builds_into_target,
+    read_target,
+    scoped_calls,
+    target_signature,
+)
 
 if typ.TYPE_CHECKING:
     from .nested_cargo import Manifest
@@ -84,6 +89,13 @@ class SpawnFact(typ.TypedDict):
         The literal arguments that look like flags, in source order.
     environment:
         The environment variables the command sets itself, in source order.
+    compiles:
+        `yes`, `no` or `unknown`: whether the arguments start a compile.
+    target_state:
+        `inherited`, `shared`, `dedicated`, `private` or `unknown`: where the
+        command builds, as `nested_cargo_target` reads it.
+    target_source:
+        A short description of the evidence behind `target_state`.
     """
 
     path: str
@@ -92,6 +104,9 @@ class SpawnFact(typ.TypedDict):
     state: str
     flags: list[str]
     environment: list[str]
+    compiles: str
+    target_state: str
+    target_source: str
 
 
 class TrybuildFact(typ.TypedDict):
@@ -122,10 +137,18 @@ class RustEvidence:
         Every cargo construction in test scope that may resolve dependencies.
     trybuild:
         Every manifest declaration or source reference that drives trybuild.
+    macrotest:
+        Every test-scope `macrotest::expand` reference. Macrotest builds in
+        its own `<target>/tests/macrotest` tree, so it is a nested build the
+        outer build never warms, as trybuild is.
     """
 
     spawns: list[SpawnFact]
     trybuild: list[TrybuildFact]
+    macrotest: list[TrybuildFact] = dataclasses.field(default_factory=list)
+
+
+MACROTEST_USE: typ.Final = re.compile(r"\bmacrotest\s*::\s*expand\w*")
 
 
 # The package a test uses to compile its UI cases. It is named here rather than
@@ -134,11 +157,11 @@ class RustEvidence:
 TRYBUILD_PACKAGE: typ.Final = "trybuild"
 
 _HELPER: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)\s*\(")
-_DECLARATION: typ.Final = re.compile(r"\bfn\s*$")
 
 
 def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
     """Return the policy fact for one classified command."""
+    target = read_target(command.calls, function_text(source, command.start))
     return {
         "path": source.relative.as_posix(),
         "line": line_of(source.text, command.start),
@@ -150,6 +173,15 @@ def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
             if isinstance(word, str) and word.startswith("-")
         ],
         "environment": list(command.environment),
+        # A program other than cargo builds through its own cargo, and nothing
+        # in its argument list says which subcommand that is.
+        "compiles": (
+            COMPILES_UNKNOWN
+            if command.form == PROGRAM_FORM
+            else compiles_state(command.calls)
+        ),
+        "target_state": target.state,
+        "target_source": target.source,
     }
 
 
@@ -181,8 +213,15 @@ def _direct_commands(
     source: RustSource,
     helpers: dict[str, tuple[int, int]],
     pairs: list[tuple[int, int]],
+    *,
+    cold_build: bool = False,
 ) -> list[CargoCommand]:
     """Return the cargo commands this source builds outside a helper body.
+
+    With *cold_build*, a command that starts another program is returned too
+    when its chain sets the build's target directory: the program builds
+    through its own cargo, and the target it is given decides whether that
+    build can be warm.
 
     Returns
     -------
@@ -194,62 +233,33 @@ def _direct_commands(
     for match in COMMAND_NEW.finditer(source.masked):
         if _in_ranges(match.start(), bodies):
             continue
-        command = construction(source, match, pairs)
-        if command is not None:
-            found.append(command)
-    return found
-
-
-def _definition(
-    source: RustSource, body: tuple[int, int], pairs: list[tuple[int, int]]
-) -> CargoCommand | None:
-    """Return the command a helper function itself builds, if it is readable.
-
-    Returns
-    -------
-    CargoCommand | None
-        The first cargo construction in the body, or None.
-    """
-    for match in COMMAND_NEW.finditer(source.masked, body[0], body[1]):
-        command = construction(source, match, pairs)
-        if command is not None:
-            return command
-    return None
-
-
-def _helper_sites(
-    source: RustSource,
-    name: str,
-    body: tuple[int, int],
-    pairs: list[tuple[int, int]],
-) -> list[CargoCommand]:
-    """Return the call sites of one helper and the commands they build.
-
-    Returns
-    -------
-    list[CargoCommand]
-        One command per call site outside the helper's own body.
-    """
-    pattern = re.compile(rf"\b{re.escape(name)}\s*\(")
-    found: list[CargoCommand] = []
-    for match in pattern.finditer(source.masked):
-        if body[0] < match.start() < body[1]:
+        command = construction(source, match, pairs, any_program=cold_build)
+        if command is None:
             continue
-        if _DECLARATION.search(
-            source.masked[max(0, match.start() - 8) : match.start()]
-        ):
+        if command.form == PROGRAM_FORM and not _is_target_program(command, source):
             continue
-        close = scan_balanced(source.masked, match.end() - 1)
-        if close is None:
-            continue
-        command = CargoCommand(start=match.start(), form="helper")
-        after = follow_chain(source, command, close)
-        block = enclosing_block(pairs, match.start())
-        bound = bound_name(source.masked, match.start())
-        if block is not None and bound is not None:
-            collect_variable(source, command, bound, after, block[1], block, pairs)
         found.append(command)
     return found
+
+
+def _is_target_program(command: CargoCommand, source: RustSource) -> bool:
+    """Report whether any run of a program command sets a cargo target itself.
+
+    Each run is judged by what the command carried when it started, so a command
+    that builds into a temporary target and then removes the variable is still
+    one whose first run was a build.
+
+    Returns
+    -------
+    bool
+        True when some execution (or the command itself, if never run) names a
+        target variable the reader can place.
+    """
+    text = function_text(source, command.start)
+    return any(
+        builds_into_target(command.program, run.calls, text)
+        for run in command.executions or [command]
+    )
 
 
 def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
@@ -264,22 +274,88 @@ def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
     Returns
     -------
     list[tuple[CargoCommand, str]]
-        One entry per distinct state, in the order the states were established.
-        An execution that only probes for a version or help contributes none.
+        One entry per distinct state and target configuration, in the order they
+        were established. An execution that only probes for a version or help
+        contributes none.
     """
     found: list[tuple[CargoCommand, str]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
     for execution in command.executions or [command]:
         state = command_state(execution)
-        if state is None or state in seen:
+        # Two online runs that build in different places are two facts: the
+        # cold-build rule judges where each one builds.
+        key = (state or "", target_signature(execution.calls))
+        if state is None or key in seen:
             continue
-        seen.add(state)
+        seen.add(key)
         found.append((execution, state))
     return found
 
 
-def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
+def _helper_commands(
+    source: RustSource,
+    helpers: dict[str, tuple[int, int]],
+    scope: TestScope,
+    pairs: list[tuple[int, int]],
+    *,
+    cold_build: bool,
+) -> list[CargoCommand]:
+    """Return the commands the call sites of this source's cargo helpers build.
+
+    Returns
+    -------
+    list[CargoCommand]
+        Each call site that can still reach the network (every one, for the
+        cold-build rule), and each helper no call site reaches, as one
+        definition the reader cannot settle.
+    """
+    sites: list[CargoCommand] = []
+    for name, body in helpers.items():
+        definition = helper_definition(source, body, pairs)
+        if definition is None:
+            continue
+        # The helper's calls are copied onto each call site, which is another
+        # function: its names mean the helper's bindings, not the caller's.
+        definition = dataclasses.replace(
+            definition,
+            calls=scoped_calls(
+                definition.calls, function_text(source, definition.start)
+            ),
+        )
+        calls = [
+            site
+            for site in helper_call_sites(source, name, body, pairs)
+            if scope.contains(site.start)
+        ]
+        # A helper with no call site in this file may be called from another,
+        # and a call proven offline does not carry the helper's other call
+        # sites with it. Either way the definition is reported once, as
+        # unreadable, so the construction never drops out of the audit.
+        #
+        # Only a definition that is itself test code is reported. A helper in
+        # library code is outside the reader's scope and stays outside it: its
+        # call sites are visible here, and library code is not something this
+        # rule judges. Reporting it would put an unsuppressable EN-001 on a
+        # file the rule promises to leave alone.
+        if not calls and scope.contains(definition.start):
+            sites.append(unreached_helper(definition))
+        # `_absorbed` runs first, because it takes the helper's evidence onto
+        # the site; the cold-build rule keeps the site whatever it returns.
+        sites.extend(
+            site for site in calls if not _absorbed(site, definition) or cold_build
+        )
+    return sites
+
+
+def _source_facts(
+    source: RustSource, scope: TestScope, *, cold_build: bool = False
+) -> list[SpawnFact]:
     """Return the spawn facts of one source.
+
+    With *cold_build* the facts serve the cold-build rule, which asks where a
+    command builds and not whether it can reach the network: a helper call site
+    proven offline is kept (`--frozen` stops no compile), and a command that
+    starts another program is read when it sets a cargo target variable.
 
     A construction written in the file is recorded whatever its state, so the
     envelope carries the offline ones as evidence of what was examined. A
@@ -303,32 +379,10 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
     helpers = _helper_names(source)
     direct = [
         command
-        for command in _direct_commands(source, helpers, pairs)
+        for command in _direct_commands(source, helpers, pairs, cold_build=cold_build)
         if scope.contains(command.start)
     ]
-    sites: list[CargoCommand] = []
-    for name, body in helpers.items():
-        definition = _definition(source, body, pairs)
-        if definition is None:
-            continue
-        calls = [
-            site
-            for site in _helper_sites(source, name, body, pairs)
-            if scope.contains(site.start)
-        ]
-        # A helper with no call site in this file may be called from another,
-        # and a call proven offline does not carry the helper's other call
-        # sites with it. Either way the definition is reported once, as
-        # unreadable, so the construction never drops out of the audit.
-        #
-        # Only a definition that is itself test code is reported. A helper in
-        # library code is outside the reader's scope and stays outside it: its
-        # call sites are visible here, and library code is not something this
-        # rule judges. Reporting it would put an unsuppressable EN-001 on a
-        # file the rule promises to leave alone.
-        if not calls and scope.contains(definition.start):
-            sites.append(unreached_helper(definition))
-        sites.extend(site for site in calls if not _absorbed(site, definition))
+    sites = _helper_commands(source, helpers, scope, pairs, cold_build=cold_build)
     direct_facts = [
         _fact(source, ledger, state)
         for command in direct
@@ -338,7 +392,7 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
         _fact(source, ledger, state)
         for command in sites
         for ledger, state in _reads(command)
-        if state != "offline"
+        if cold_build or state != "offline"
     ]
     return sorted(direct_facts + site_facts, key=operator.itemgetter("line"))
 
@@ -669,6 +723,8 @@ def collect_rust_evidence(
     checkout: pathlib.Path,
     manifests: typ.Mapping[pathlib.Path, Manifest],
     problems: list[str],
+    *,
+    cold_build: bool = False,
 ) -> RustEvidence:
     """Return the spawn and trybuild evidence for one checkout.
 
@@ -680,6 +736,11 @@ def collect_rust_evidence(
         Each decoded `Cargo.toml` below and at the root, by absolute path.
     problems:
         The fact list; an unreadable source appends one sentence each.
+    cold_build:
+        Read the facts for the cold-build rule: also report a command that
+        starts another program but sets the build's target directory, and keep
+        a helper call site proven offline (see `_source_facts`). The offline
+        rule leaves it off: neither is something NC-007 judges.
 
     Returns
     -------
@@ -692,7 +753,9 @@ def collect_rust_evidence(
     spawns = [
         fact
         for source in sources
-        for fact in _source_facts(source, scopes[source.relative])
+        for fact in _source_facts(
+            source, scopes[source.relative], cold_build=cold_build
+        )
     ]
     aliases = _aliases_by_directory(checkout, manifests)
     trybuild = [
@@ -707,7 +770,13 @@ def collect_rust_evidence(
             )
         ),
     ]
+    macrotest = [
+        fact
+        for source in sources
+        for fact in _trybuild_facts(source, scopes[source.relative], MACROTEST_USE)
+    ]
     return RustEvidence(
+        macrotest=sorted(macrotest, key=operator.itemgetter("path", "line")),
         spawns=sorted(spawns, key=operator.itemgetter("path", "line")),
         trybuild=sorted(
             trybuild,

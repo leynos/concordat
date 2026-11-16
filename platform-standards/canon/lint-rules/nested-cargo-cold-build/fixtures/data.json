@@ -1,0 +1,206 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [
+        {
+          "path": "tests/support.rs", "line": 12, "form": "command_new", "state": "online",
+          "flags": ["build"], "environment": [], "compiles": "yes",
+          "target_state": "inherited", "target_source": ""
+        }
+      ],
+      "builds": [
+        {
+          "path": "tests/support.rs", "line": 12, "kind": "cargo", "binary": null,
+          "crate": ".", "prepared_by": ["setup-script"]
+        }
+      ],
+      "problems": []
+    },
+    "private_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [
+        {
+          "path": "tests/scenario.rs", "line": 40, "form": "command_new", "state": "online",
+          "flags": ["build"], "environment": ["CARGO_TARGET_DIR"], "compiles": "yes",
+          "target_state": "private", "target_source": "a temporary directory"
+        }
+      ],
+      "builds": [],
+      "problems": []
+    },
+    "private_target_without_compile": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [
+        {
+          "path": "tests/metadata.rs", "line": 8, "form": "command_new", "state": "online",
+          "flags": [], "environment": ["CARGO_TARGET_DIR"], "compiles": "no",
+          "target_state": "private", "target_source": "a temporary directory"
+        }
+      ],
+      "builds": [],
+      "problems": []
+    },
+    "unknown_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [
+        {
+          "path": "tests/steps.rs", "line": 129, "form": "program", "state": "online",
+          "flags": [], "environment": ["CARGO_TARGET_DIR"], "compiles": "unknown",
+          "target_state": "unknown", "target_source": "`target_dir.as_str()`"
+        }
+      ],
+      "builds": [],
+      "problems": []
+    },
+    "dedicated_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [
+        {
+          "path": "tests/ui.rs", "line": 195, "form": "command_new", "state": "online",
+          "flags": ["--locked"], "environment": ["CARGO_TARGET_DIR"], "compiles": "yes",
+          "target_state": "dedicated", "target_source": "a target directory inside the crate"
+        }
+      ],
+      "builds": [
+        {
+          "path": "tests/ui.rs", "line": 195, "kind": "cargo", "binary": "ui",
+          "crate": ".", "prepared_by": ["preparation-test", "gate-call"]
+        }
+      ],
+      "problems": []
+    },
+    "unprepared_build": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/cli.rs", "line": 100, "kind": "helper", "binary": "cli",
+          "crate": "crates/tool", "prepared_by": []
+        }
+      ],
+      "problems": []
+    },
+    "unprepared_unknown_subcommand": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/wrapper.rs", "line": 31, "kind": "cargo-unknown", "binary": "wrapper",
+          "crate": ".", "prepared_by": []
+        }
+      ],
+      "problems": []
+    },
+    "unprepared_unknown_beside_definite": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/macros.rs", "line": 12, "kind": "cargo-unknown", "binary": "macros",
+          "crate": ".", "prepared_by": []
+        },
+        {
+          "path": "tests/macros.rs", "line": 57, "kind": "trybuild", "binary": "macros",
+          "crate": ".", "prepared_by": []
+        }
+      ],
+      "problems": []
+    },
+    "unprepared_two_kinds": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/macros.rs", "line": 195, "kind": "cargo", "binary": "macros",
+          "crate": ".", "prepared_by": []
+        },
+        {
+          "path": "tests/macros.rs", "line": 57, "kind": "trybuild", "binary": "macros",
+          "crate": ".", "prepared_by": []
+        }
+      ],
+      "problems": []
+    },
+    "malformed_spawn": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [
+        {
+          "path": "tests/odd.rs", "line": "12", "form": "command_new", "state": "online",
+          "flags": [], "environment": [], "compiles": "yes",
+          "target_state": "private", "target_source": "a temporary directory"
+        }
+      ],
+      "builds": [],
+      "problems": []
+    },
+    "unknown_target_state": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [
+        {
+          "path": "tests/odd.rs", "line": 12, "form": "command_new", "state": "online",
+          "flags": [], "environment": [], "compiles": "yes",
+          "target_state": "elsewhere", "target_source": ""
+        }
+      ],
+      "builds": [],
+      "problems": []
+    },
+    "empty_build": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [{}],
+      "problems": []
+    },
+    "malformed_build": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {"path": "tests/odd.rs", "line": 3, "kind": "cargo"}
+      ],
+      "problems": []
+    },
+    "with_problem": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [],
+      "problems": ["tests/broken.rs: brackets do not balance"]
+    },
+    "wrong_kind": {
+      "schema_version": 1,
+      "kind": "policy-input/something-else",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [],
+      "problems": []
+    }
+  }
+}

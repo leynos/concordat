@@ -686,6 +686,26 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   compares `(name, version, source)` of packages that have a source and records
   the first ten foreign ones. Anything it cannot read is a problem fact, which
   the policy answers as indeterminate. It runs no Cargo and reads no network.
+- `policy-input/nested-cargo-cold-build` —
+  `nested_cargo_cold_envelope.build_nested_cargo_cold_envelope`. It reuses the
+  offline envelope's spawn reader (`collect_rust_evidence`, with
+  `cold_build=True`, so a command that starts another program but sets a target
+  variable is read too, and a helper call site proven offline is kept, because
+  `--frozen` stops the network and not the compile) and adds two facts to each
+  spawn: `compiles` (`yes`, `no` or `unknown`, from
+  `nested_cargo_compiles.compiles_state`) and `target_state` (`inherited`,
+  `shared`, `dedicated`, `private` or `unknown`, from
+  `nested_cargo_target.read_target`, with names resolved inside the enclosing
+  function by `nested_cargo_bindings`). `CargoCommand.calls` records the
+  builder calls in source order so the target reader can replay them with
+  last-write-wins semantics, as the offline ledger does for `CARGO_NET_OFFLINE`.
+  `nested_cargo_preparation` joins the spawns, the trybuild and macrotest uses
+  and the configured compiling helpers into `builds`, and records for each
+  which of a nextest setup script (`nested_cargo_setup_scripts`), a preparation
+  test and a preparation gate (the names come from `nested_cargo_gates`) the
+  owning crate declares. The builder reads the `preparation_gates` and
+  `compiling_calls` parameters because they decide which facts exist;
+  exemptions and severity stay with the policy.
 - `policy-input/nested-cargo-offline-tests` —
   `nested_cargo_offline_envelope.build_nested_cargo_offline_envelope`. It joins
   two readers: `nested_cargo_spawns` classifies every `cargo` a test scope
