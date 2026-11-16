@@ -208,6 +208,32 @@ CHECK_ONLY_CASES = {
     "variable-as-the-command-is-flagged": Case(
         msrv_workflow(steps=MSRV_CHECK + "      - run: $TEST_COMMAND\n"), {"NC-006"}
     ),
+    "command-in-a-wildcard-case-arm-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + "      - run: |\n          case x in\n            *) make test ;;\n"
+            "          esac\n"
+        ),
+        {"NC-006"},
+    ),
+    "sed-execute-command-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: printf 'x' | sed '1e make test'\n"
+        ),
+        {"NC-006"},
+    ),
+    "sed-substitute-execute-flag-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: sed -n 's/a/make test/e' Cargo.toml\n"
+        ),
+        {"NC-006"},
+    ),
+    "sed-second-command-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: sed -n 's/a/b/;e make test/p' Cargo.toml\n"
+        ),
+        {"NC-006"},
+    ),
     "rustup-run-is-flagged": Case(
         msrv_workflow(steps=MSRV_CHECK + "      - run: rustup run stable make test\n"),
         {"NC-006"},

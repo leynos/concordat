@@ -41,13 +41,15 @@ leaves to the repository: scope the wrapper to the commands that should use it
   `fmt`, `metadata` or `tree`; a global option before the subcommand
   (`cargo --locked test`) is not classified and disqualifies the job. Every
   command in its scripts is cargo, a variable assignment or one of a small set
-  of shell and text words (`echo`, `test`, `sed`, `head`, `case`, …), or a
-  `rustup` set-up subcommand (`rustup run` is not one); a command after `if`,
-  `while` or `then` is read like any other, and an expression or variable as
-  the command is not classifiable; any other program, script (with or without
-  `./`) or interpreter disqualifies it. Every action it uses is one of a few
-  known set-up actions matched by full identity (`actions/checkout`,
-  `actions/cache`, `actions/upload-artifact`, `actions/download-artifact`,
+  of shell and text words (`echo`, `test`, `head`, `case`, …),
+  `sed -n 's/…/…/p'` (a single substitution with flags limited to `p`, `g`,
+  `I`, because GNU `sed` can run commands), or a `rustup` set-up subcommand
+  (`rustup run` is not one); a command after `if`, `while` or `then` is read
+  like any other, and an expression or variable as the command is not
+  classifiable; any other program, script (with or without `./`) or interpreter
+  disqualifies it. Every action it uses is one of a few known set-up actions
+  matched by full identity (`actions/checkout`, `actions/cache`,
+  `actions/upload-artifact`, `actions/download-artifact`,
   `dtolnay/rust-toolchain`, `taiki-e/install-action`, shared-actions
   `setup-rust`); a local action or an action of the same name from another
   owner disqualifies it. An MSRV `cargo +<msrv> check` job is the usual case:

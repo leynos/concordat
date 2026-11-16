@@ -129,6 +129,15 @@ CASES = {
         None,
         {"NC-004"},
     ),
+    "an-argument-added-after-the-launch-does-not-excuse-the-compile": Case(
+        "use std::process::Command;\n#[test]\nfn reuse() {\n"
+        '    let mut command = Command::new("rustc");\n'
+        '    command.arg("fixture.rs");\n'
+        "    command.status().unwrap();\n"
+        '    command.arg("--version");\n}\n',
+        None,
+        {"NC-004"},
+    ),
     "a-bound-command-keeps-its-own-version-argument": Case(
         "use std::process::Command;\n#[test]\nfn probe() {\n"
         '    let mut command = Command::new("rustc");\n'

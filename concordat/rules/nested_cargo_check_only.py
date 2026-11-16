@@ -44,7 +44,7 @@ SETUP_ACTIONS: typ.Final = frozenset({
 # Words a check job's scripts may run besides cargo itself: shell plumbing and
 # text tools that start no build.
 HARMLESS_WORDS: typ.Final = frozenset({
-    "echo", "printf", "test", "[", "[[", "sed", "head", "tail", "cut", "tr", "grep",
+    "echo", "printf", "test", "[", "[[", "head", "tail", "cut", "tr", "grep",
     "cat", "export", "set", "cd", "true", "false", "exit", "pwd", "dirname",
     "basename", "case", "esac", "fi", "done", "for", "read", "mkdir", ":",
 })  # fmt: skip
@@ -54,6 +54,10 @@ CONTROL_WORDS: typ.Final = r"(?:(?:then|do|else|elif|if|while|until)\b|!)[ \t]*"
 RUSTUP_SETUP: typ.Final = re.compile(
     r"[ \t]+(?:toolchain|target|component|show|default|update|set)\b"
 )
+# GNU `sed` can run a command (`1e cmd`, `s/a/b/e`), so only one shape is read
+# as text processing: `sed -n 's/PATTERN/REPLACEMENT/FLAGS'` with no further
+# slash or quote inside it and flags limited to `p`, `g` and `I`.
+SED_SUBSTITUTE: typ.Final = re.compile(r"""[ \t]+-n[ \t]+'s/[^/']*/[^/']*/[pgI]*'""")
 CARGO_WORD: typ.Final = re.compile(r"(?<![\w.-])(?:[\w.~$/{}-]*/)?cargo(?![\w-])")
 # `cargo`, then an optional toolchain selector (quoted or not), then the word
 # that must be a check-style subcommand.
@@ -64,7 +68,7 @@ CARGO_SUBCOMMAND: typ.Final = re.compile(
 # substitution, a subshell or a compound-command keyword. Plain `NAME=value`
 # prefixes are skipped so the command they precede is still read.
 COMMAND_START: typ.Final = re.compile(
-    r"(?:^|;|&&|\|\||\||\(|`)[ \t]*"
+    r"(?:^|;|&&|\|\||\||\(|\)|`)[ \t]*"
     rf"(?:{CONTROL_WORDS})*"
     r"""(?:[A-Za-z_]\w*=[^\s"'$();&|`]*[ \t]+)*"""
     r"(?P<word>[^\s;&|()`]+)",
@@ -88,12 +92,14 @@ def _commands_are_harmless(script: str) -> bool:
     """Report whether every command of *script* is cargo, an assignment or harmless."""
     for found in COMMAND_START.finditer(script):
         word = found["word"].strip("\"'")
-        if word == "rustup":
-            if RUSTUP_SETUP.match(script, found.end("word")):
+        guard = {"rustup": RUSTUP_SETUP, "sed": SED_SUBSTITUTE}.get(word)
+        if guard is not None:
+            if guard.match(script, found.end("word")):
                 continue
             return False
         if (
-            ASSIGNMENT.match(word)
+            not word
+            or ASSIGNMENT.match(word)
             or word in HARMLESS_WORDS
             or PATTERN_ONLY.fullmatch(word)
             or CARGO_WORD.fullmatch(word)

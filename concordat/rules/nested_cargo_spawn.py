@@ -74,6 +74,7 @@ RUSTC_PROBE: typ.Final = re.compile(
     r"""\.args?\([^;]*?["'](?:--version|-V|-vV|-Vv"""
     rf"""|--print(?:=|["']\s*,\s*["'])(?:{QUERY_PRINTS}))["']"""
 )
+LAUNCH: typ.Final = re.compile(r"\.(?:status|output|spawn)\(")
 COMMENT: typ.Final = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
 SUBCOMMANDS: typ.Final = (
     "build|check|test|run|package|clippy|doc|rustc|install|publish|bench|miri"
@@ -228,7 +229,9 @@ def _own_statements(text: str, start: int, window: str) -> list[str]:
 
     A command built in one chain owns only its first statement. A command bound
     to a name owns the statements that start with that name (`command.arg(..)`),
-    plus the binding itself; another command's `.arg(..)` is not its argument.
+    plus the binding itself, up to its first launch (`.status()`, `.output()`,
+    `.spawn()`); another command's `.arg(..)`, or an argument added when the
+    command is reused after a launch, is not its argument.
 
     Returns
     -------
@@ -240,11 +243,14 @@ def _own_statements(text: str, start: int, window: str) -> list[str]:
     if bound is None:
         return statements[:1]
     own = re.compile(rf"\s*&?(?:mut\s+)?{re.escape(bound['name'])}\b")
-    return [
-        statement
-        for index, statement in enumerate(statements)
-        if index == 0 or own.match(statement)
-    ]
+    found: list[str] = []
+    for index, statement in enumerate(statements):
+        if index == 0 or own.match(statement):
+            found.append(statement)
+            # An argument added after the command has run belongs to a reuse.
+            if LAUNCH.search(statement):
+                break
+    return found
 
 
 def _is_probe(text: str, start: int, window: str) -> bool:
