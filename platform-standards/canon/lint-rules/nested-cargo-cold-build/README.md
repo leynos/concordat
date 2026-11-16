@@ -164,6 +164,11 @@ timeout is long enough, are NC-004 and NC-005's business
   helper that returns a `Command` is read at its call sites, exactly as NC-007
   reads them. A command a helper builds whose call sites live in another file
   is read at its definition and its subcommand is `unknown`.
+- **Names resolve inside one function.** A target value is read through the
+  `let` bindings of the function that builds the command, signature included (a
+  parameter typed `TempDir` counts), so another test's binding of the same name
+  cannot change the answer. A name bound to different expressions within that
+  function is not tracked and reads `unknown`.
 - **Calls the reader cannot see through** (a handoff such as
   `configure(&mut cmd)`, an `envs(..)` list it cannot read, a conditional call)
   turn an earlier target reading into `unknown` rather than keeping it, because
@@ -192,10 +197,10 @@ purpose, to prove that Cargo honours a separate target and build directory.
 - **How long the cold build takes.** That is a measurement, and NC-005's
   timeouts are the bound. This rule asks only that preparation be declared.
 - **A target value computed in another file.** The reader follows `let` bindings
-  in the file that sets the target and does not follow a call into another
-  module; such a value is `unknown` and reported as indeterminate. Whitaker's
-  RFC 0006 made the same choice and listed ortho-config's `scenario_target_dir`
-  as the case it declines.
+  in the function that sets the target and does not follow a call into another
+  function or module; such a value is `unknown` and reported as indeterminate.
+  Whitaker's RFC 0006 made the same choice and listed ortho-config's
+  `scenario_target_dir` as the case it declines.
 - **Whether a shared target is warm.** An inherited or shared target is not a
   finding by itself; NC-010 is where an unprepared build in one is reported.
 - **Non-test sources.** A `cargo` spawn in library or binary code is outside the

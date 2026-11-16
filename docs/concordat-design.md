@@ -3109,10 +3109,12 @@ Decisions the design rests on:
   ortho-config's scenario test runs `cargo-orthohelp` with `CARGO_TARGET_DIR`
   set; it never constructs a `cargo` command. The target variable is the
   evidence that the program builds.
-- **A value computed in another file is `unknown`.** The reader follows `let`
-  bindings in the file that sets the target and does not follow a call into
-  another module. ortho-config's `scenario_target_dir` is such a call, so it is
-  reported as indeterminate, the choice RFC 0006 made for the same case.
+- **A value computed in another function is `unknown`.** The reader follows
+  `let` bindings in the function that sets the target (a name is not resolved
+  through another function's binding of it) and does not follow a call into
+  another function or module. ortho-config's `scenario_target_dir` is such a
+  call, so it is reported as indeterminate, the choice RFC 0006 made for the
+  same case.
 - **`env_remove("CARGO_TARGET_DIR")` alone is not private.** Cargo also reads
   `CARGO_BUILD_TARGET_DIR`, so a temporary working directory is private only
   when an `env_clear()` or both removals mean the command can inherit no target

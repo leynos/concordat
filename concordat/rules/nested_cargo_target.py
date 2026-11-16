@@ -38,6 +38,10 @@ from .nested_cargo_commands import (
     first_literal,
 )
 from .nested_cargo_text import argument_items, environment_slots
+from .rust_source import scan_balanced
+
+if typ.TYPE_CHECKING:
+    from .nested_cargo_source import RustSource
 
 INHERITED: typ.Final = "inherited"
 SHARED: typ.Final = "shared"
@@ -99,6 +103,36 @@ class TargetReading:
     state: str
     source: str = ""
     is_inferred: bool = False
+
+
+_FUNCTION: typ.Final = re.compile(r"\bfn\s+[A-Za-z_]\w*")
+
+
+def function_text(source: RustSource, offset: int) -> str:
+    """Return the text of the innermost function that contains *offset*.
+
+    The signature is included, because a parameter typed `TempDir` is a binding
+    too. A name bound in one function is not visible in another, so the reader
+    resolves a command's target values inside the function that builds the
+    command and not across the whole file. An offset outside any function (a
+    `static` initialiser) is read against the whole file.
+
+    Returns
+    -------
+    str
+        The function's source text from its `fn` keyword to its closing brace.
+    """
+    best: tuple[int, int] | None = None
+    for match in _FUNCTION.finditer(source.masked):
+        opening = re.compile(r"[{;]").search(source.masked, match.end())
+        if opening is None or opening.group() != "{":
+            continue
+        end = scan_balanced(source.masked, opening.start())
+        if end is None or not match.start() <= offset < end:
+            continue
+        if best is None or match.start() > best[0]:
+            best = (match.start(), end)
+    return source.text if best is None else source.text[best[0] : best[1]]
 
 
 def local_bindings(text: str) -> dict[str, str]:

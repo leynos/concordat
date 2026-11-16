@@ -63,7 +63,12 @@ from .nested_cargo_source import (
     whole_file_scope,
 )
 from .nested_cargo_spawn import COMPILES_UNKNOWN, compiles_state
-from .nested_cargo_target import builds_into_target, read_target, target_signature
+from .nested_cargo_target import (
+    builds_into_target,
+    function_text,
+    read_target,
+    target_signature,
+)
 from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
@@ -160,7 +165,7 @@ _DECLARATION: typ.Final = re.compile(r"\bfn\s*$")
 
 def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
     """Return the policy fact for one classified command."""
-    target = read_target(command.calls, source.text)
+    target = read_target(command.calls, function_text(source, command.start))
     return {
         "path": source.relative.as_posix(),
         "line": line_of(source.text, command.start),
@@ -236,7 +241,7 @@ def _direct_commands(
         if command is None:
             continue
         if command.form == PROGRAM_FORM and not builds_into_target(
-            command.program, command.calls, source.text
+            command.program, command.calls, function_text(source, command.start)
         ):
             continue
         found.append(command)

@@ -446,20 +446,43 @@ def test_a_frozen_helper_call_still_builds_into_its_target(
     assert ("NC-009", "tests/frozen.rs") in profile(tmp_path)
 
 
-def test_a_name_bound_differently_in_two_functions_is_not_guessed(
+def test_a_name_is_resolved_inside_the_function_that_builds(
     tmp_path: pathlib.Path,
 ) -> None:
     """Neither function is read through the other's binding of `target`.
 
     The shared build is not accused because a later function binds the name to a
-    temporary directory, and the private one is not excused by the earlier
-    function. Both read as unknown.
+    temporary directory, and the private one is not excused by the earlier one.
     """
     put(tmp_path, "tests/two.rs", SAME_NAME_TWO_FUNCTIONS)
-    reported = {(f.rule_id, f.verdict, f.line) for f in findings(tmp_path)}
-    assert not any(rule == "NC-009" for rule, _verdict, _line in reported)
-    assert ("EN-001", "indeterminate", 3) in reported
-    assert ("EN-001", "indeterminate", 12) in reported
+    flagged = [f.line for f in findings(tmp_path) if f.rule_id == "NC-009"]
+    assert flagged == [12]
+
+
+def test_the_order_of_the_functions_does_not_matter(tmp_path: pathlib.Path) -> None:
+    """Swapping the two functions reports the same one."""
+    shared, private = SAME_NAME_TWO_FUNCTIONS.split("\n\n")
+    put(tmp_path, "tests/two.rs", f"{private}\n\n{shared}")
+    flagged = [f.line for f in findings(tmp_path) if f.rule_id == "NC-009"]
+    assert flagged == [3]
+
+
+def test_a_name_rebound_inside_one_function_is_not_guessed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Within one function the reader does not track which binding is live."""
+    put(
+        tmp_path,
+        "tests/rebound.rs",
+        'fn rebuild() {\n    let target = std::env::var("CARGO_TARGET_DIR").unwrap();\n'
+        "    let target = tempfile::tempdir().unwrap();\n"
+        '    std::process::Command::new("cargo")\n        .arg("build")\n'
+        '        .env("CARGO_TARGET_DIR", target.path())\n'
+        "        .status()\n        .unwrap();\n}\n",
+    )
+    found = {(f.rule_id, f.verdict) for f in findings(tmp_path)}
+    assert ("NC-009", "noncompliant") not in found
+    assert ("EN-001", "indeterminate") in found
 
 
 def test_a_reused_command_is_judged_at_each_run(tmp_path: pathlib.Path) -> None:
