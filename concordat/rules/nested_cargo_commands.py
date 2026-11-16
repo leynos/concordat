@@ -234,15 +234,23 @@ class CargoCommand:
         self.words.append(None)
         self.calls.append((UNSEEN_ARGUMENTS, text))
 
-    def mark_environment_unknown(self) -> None:
+    def mark_environment_unknown(self, *, offline_unknown: bool = True) -> None:
         """Record an environment operation the reader cannot see through.
 
         A call made on only some paths may set `CARGO_NET_OFFLINE` again, and
         which path runs is exactly what the reader cannot tell. Recording an
         unknown operation is what stops an earlier assignment from being taken
         as the last word.
+
+        Parameters
+        ----------
+        offline_unknown
+            False when the call is known to name another variable. It may
+            still have set that one, so the target reading stays unknown, but
+            the offline answer an earlier assignment gave still stands.
         """
-        self._record_offline_operation(offline=None)
+        if offline_unknown:
+            self._record_offline_operation(offline=None)
         self.calls.append((UNSEEN_CALL, ""))
 
     def _record_offline_operation(self, *, offline: bool | None) -> None:
@@ -546,7 +554,35 @@ def _record_unseen(
         if method in ARGUMENT_METHODS:
             command.mark_arguments_unknown(text)
         elif method in ENVIRONMENT_METHODS or method in ENVIRONMENT_REMOVAL_METHODS:
-            command.mark_environment_unknown()
+            command.mark_environment_unknown(
+                offline_unknown=_may_name_offline_variable(method, text)
+            )
+
+
+def _may_name_offline_variable(method: str, text: str) -> bool:
+    """Report whether an environment call on some paths could touch the offline name.
+
+    `env("CARGO_TARGET_DIR", target)` and `env_remove("RUSTFLAGS")` name a
+    variable the reader can read, and it is not `CARGO_NET_OFFLINE`, so whether
+    they run says nothing about the network. Every other form may write or
+    remove the offline variable: `envs(..)` and `env_clear()` always do, and a
+    name the reader cannot read might be it.
+
+    Returns
+    -------
+    bool
+        False only when the call names one readable variable that is not the
+        offline one.
+    """
+    if method == "env":
+        pairs = _environment_pairs(text)
+        return pairs is None or any(
+            key is None or key == OFFLINE_VARIABLE for key, _value in pairs
+        )
+    if method == "env_remove":
+        names = _string_literals(text)
+        return names is None or not names or OFFLINE_VARIABLE in names
+    return True
 
 
 def construction(

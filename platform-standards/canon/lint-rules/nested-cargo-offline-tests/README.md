@@ -147,9 +147,12 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   the binding's own is recorded as an operation the reader cannot see rather
   than as evidence: an argument call appends an unreadable word, which is where
   the argument list stops being trusted, and an environment call or removal
-  records an unknown entry in the ledger. A method that changes neither, such as
-  `cmd.status()`, is stepped over, so the evidence the other calls established
-  still stands.
+  records an unknown entry in the ledger, unless it names one readable variable
+  that is not `CARGO_NET_OFFLINE` (`env("CARGO_TARGET_DIR", dir)` or
+  `env_remove("RUSTFLAGS")`), which cannot change the network setting and so
+  leaves an earlier offline assignment standing. A method that changes neither,
+  such as `cmd.status()`, is stepped over, so the evidence the other calls
+  established still stands.
 - **A handoff hides what the callee sets.** `configure(&mut cmd)` lends the
   command to another function, which may append `--frozen` or write
   `CARGO_NET_OFFLINE`, and whose body may live in another file. Both the

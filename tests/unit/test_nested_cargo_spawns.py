@@ -612,6 +612,128 @@ CASES: dict[str, Case] = {
         'fn cargo() -> Command {\n    Command::new("cargo").arg("--frozen")\n}\n',
         (),
     ),
+    # A helper that sets the offline variable and then, on some paths, sets a
+    # different one (ortho-config's `cargo_command` and `CARGO_TARGET_DIR`)
+    # still returns an offline command: the conditional call names a variable
+    # the reader can read, and it is not the offline one.
+    "helper-offline-then-conditional-other-variable": Case(
+        "fn cargo(target: Option<&Path>) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if let Some(target) = target {\n"
+        '        command.env("CARGO_TARGET_DIR", target);\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(None)\n}\n",
+        (),
+    ),
+    "helper-offline-then-conditional-removal-of-other-variable": Case(
+        "fn cargo(clean: bool) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "1");\n'
+        "    if clean {\n"
+        '        command.env_remove("RUSTFLAGS");\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(true)\n}\n",
+        (),
+    ),
+    # The same shape with the offline variable itself, a name the reader cannot
+    # read, a whole list or a clear: any of these may undo the assignment, so
+    # the helper's answer is withdrawn.
+    "helper-offline-then-conditional-offline-variable": Case(
+        "fn cargo(online: bool) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if online {\n"
+        '        command.env("CARGO_NET_OFFLINE", "0");\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(true)\n}\n",
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-conditional-removal-of-offline-variable": Case(
+        "fn cargo(online: bool) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if online {\n"
+        '        command.env_remove("CARGO_NET_OFFLINE");\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(true)\n}\n",
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-conditional-unreadable-name": Case(
+        "fn cargo(name: &str) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if !name.is_empty() {\n"
+        '        command.env(name, "0");\n'
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        'fn run() -> Command {\n    cargo("x")\n}\n',
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-conditional-environment-list": Case(
+        "fn cargo(extra: Vec<(String, String)>) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if !extra.is_empty() {\n"
+        "        command.envs(extra);\n"
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(Vec::new())\n}\n",
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-conditional-clear": Case(
+        "fn cargo(clean: bool) -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    if clean {\n"
+        "        command.env_clear();\n"
+        "    }\n"
+        "    command\n"
+        "}\n\n"
+        "fn run() -> Command {\n    cargo(true)\n}\n",
+        (("helper", "unresolved"),),
+    ),
+    # A call site that applies an environment list it cannot read after the
+    # helper returns may overwrite the helper's variable, so the site is
+    # unresolved until it says the variable again: the call site's own
+    # assignment runs last and wins.
+    "helper-offline-then-site-unreadable-environment-list": Case(
+        "fn cargo() -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    command\n"
+        "}\n\n"
+        "fn run(prepared: Prepared) -> Command {\n"
+        "    let mut command = cargo();\n"
+        "    command.envs(prepared.0);\n"
+        "    command\n"
+        "}\n",
+        (("helper", "unresolved"),),
+    ),
+    "helper-offline-then-site-restates-the-variable": Case(
+        "fn cargo() -> Command {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    command\n"
+        "}\n\n"
+        "fn run(prepared: Prepared) -> Command {\n"
+        "    let mut command = cargo();\n"
+        "    command.envs(prepared.0);\n"
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    command\n"
+        "}\n",
+        (),
+    ),
     # whitaker's `common/tests/i18n_packaging.rs` sets an unrelated variable to
     # a computed value. That says nothing about the network, so the spawn keeps
     # the literal reading it has.
