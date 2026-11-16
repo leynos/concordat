@@ -12,6 +12,7 @@ refuses, so it prepares nothing.
 from __future__ import annotations
 
 import dataclasses
+import fnmatch
 import re
 import tomllib
 import typing as typ
@@ -25,6 +26,7 @@ if typ.TYPE_CHECKING:
 
 NEXTEST_CONFIG: typ.Final = ".config/nextest.toml"
 ALL_FILTER: typ.Final = "all()"
+_MIN_REGEX: typ.Final = 2
 # The selectors the reader evaluates, and the glue of a union between them
 # (`|`, `+`, `or`, parentheses). Anything else in a filterset narrows or removes
 # what a selector picks (`&`, `and`, `not`, `!`, `-`, `test(..)`, `kind(..)`).
@@ -109,9 +111,33 @@ def _filter_of(rule: dict[str, object]) -> str:
     return selection if isinstance(selection, str) else ALL_FILTER
 
 
-def _mentions(filterset: str, name: str) -> bool:
-    """Report whether *name* occurs in *filterset* as a whole word."""
-    return re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", filterset) is not None
+def _matches(matcher: str, name: str) -> bool:
+    """Report whether a nextest matcher selects *name*.
+
+    A matcher is `=text` (equal), `~text` (contains), `/pattern/` (a regular
+    expression), `#glob` or, with no prefix, equality, which is the default for
+    `binary`, `binary_id` and `package`. A form the reader does not understand
+    selects nothing, so it can only fail to credit a preparation, never invent
+    one.
+
+    Returns
+    -------
+    bool
+        True when *name* satisfies the matcher.
+    """
+    text = matcher.strip()
+    if text.startswith("="):
+        return name == text[1:]
+    if text.startswith("~"):
+        return text[1:] in name
+    if text.startswith("#"):
+        return fnmatch.fnmatchcase(name, text[1:])
+    if len(text) > _MIN_REGEX and text.startswith("/") and text.endswith("/"):
+        try:
+            return re.search(text[1:-1], name) is not None
+        except re.error:
+            return False
+    return name == text
 
 
 def covers(rules: list[SetupRule], binary: str | None, package: str | None) -> bool:
@@ -147,10 +173,24 @@ def _selects(atoms: list[str], binary: str | None, package: str | None) -> bool:
 
 
 def _selects_one(atom: str, binary: str | None, package: str | None) -> bool:
-    """Report whether one selector names the binary (or the package, for `package`)."""
-    kind = atom.partition("(")[0]
-    name = package if kind == "package" else binary
-    return name is not None and _mentions(atom, name)
+    """Report whether one selector picks the binary (or the package, for `package`).
+
+    A `binary_id` is the package and binary joined by `::` (the package alone for
+    its unit tests), so it is compared with that form and with the binary's name.
+
+    Returns
+    -------
+    bool
+        True when the selector's matcher selects the named binary or package.
+    """
+    kind, _, rest = atom.partition("(")
+    matcher = rest.removesuffix(")")
+    if kind == "package":
+        return package is not None and _matches(matcher, package)
+    if binary is None:
+        return False
+    candidates = [binary, f"{package}::{binary}"] if kind == "binary_id" else [binary]
+    return any(_matches(matcher, candidate) for candidate in candidates)
 
 
 def _is_union_of_selectors(filterset: str) -> bool:

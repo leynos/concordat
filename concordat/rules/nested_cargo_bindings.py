@@ -48,13 +48,33 @@ def _function_spans(masked: str) -> list[tuple[int, int]]:
     """Return the `(start, end)` of every function that has a body."""
     spans: list[tuple[int, int]] = []
     for match in _FUNCTION.finditer(masked):
-        opening = _BODY_OR_END.search(masked, match.end())
+        opening = _BODY_OR_END.search(masked, _after_parameters(masked, match))
         if opening is None or opening.group() != "{":
             continue
         end = scan_balanced(masked, opening.start())
         if end is not None:
             spans.append((match.start(), end))
     return spans
+
+
+def _after_parameters(masked: str, function: re.Match[str]) -> int:
+    """Return where to look for a function's body: past its parameter list.
+
+    A destructuring parameter (`Pair { path: target }: Pair`) holds braces of its
+    own, so the first brace after the name is not necessarily the body's. A
+    signature the head pattern does not read (generics holding parentheses) is
+    searched from the name, as it always was.
+
+    Returns
+    -------
+    int
+        The offset to search for the body from.
+    """
+    head = _FUNCTION_HEAD.match(masked, function.start())
+    if head is None:
+        return function.end()
+    close = scan_balanced(masked, head.end() - 1)
+    return function.end() if close is None else close
 
 
 def function_text(source: RustSource, offset: int) -> str:

@@ -157,7 +157,10 @@ The compile is *prepared* when any one of these holds:
    `package(..)` selectors are evaluated, each against its own kind of name: a
    `binary(..)` or `binary_id(..)` selector against the test binary's name and a
    `package(..)` selector against the crate's package name, so `package(=ui)`
-   does not cover a binary called `ui` in package `app`. A filter that negates
+   does not cover a binary called `ui` in package `app`. A matcher is evaluated
+   as nextest reads it (`=text` equal, `~text` contains, `/regex/`, `#glob`,
+   and plain text equal), not searched for the name, so
+   `package(/^app[0-9]+$/)` does not cover package `app`. A filter that negates
    (`not binary(ui)`), subtracts (`all() - binary(ui)`), intersects
    (`binary(ui) & test(=one)`) or uses another predicate names a binary without
    selecting all of it, so it never counts as coverage and the reader reports

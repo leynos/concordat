@@ -624,6 +624,15 @@ def test_a_reused_command_is_judged_at_each_run(tmp_path: pathlib.Path) -> None:
         ("package(=app)", True),
         ("binary(=ui)", True),
         ("binary(=app)", False),
+        # Matchers are evaluated, not searched for the name.
+        ("package(/^app[0-9]+$/)", False),
+        ("package(/^app/)", True),
+        ("package(~pp)", True),
+        ("package(~ui)", False),
+        ("binary(#u*)", True),
+        ("binary(#x*)", False),
+        ("binary_id(app::ui)", True),
+        ("binary_id(ui::ui)", False),
     ],
 )
 def test_a_setup_selector_is_matched_to_its_own_kind_of_name(
@@ -688,6 +697,28 @@ fn build_in_shared() {
 }
 """
 
+HELPER_WITH_STRUCT_PARAMETER = """\
+struct Pair {
+    path: std::path::PathBuf,
+}
+
+fn cargo_command(Pair { path: target }: Pair) -> std::process::Command {
+    let mut cmd = std::process::Command::new(env!("CARGO"));
+    cmd.env("CARGO_TARGET_DIR", target);
+    cmd
+}
+
+fn build_in_scratch() {
+    let scratch = tempfile::tempdir().unwrap();
+    let target = scratch.path().join("t");
+    cargo_command(Pair { path: std::path::PathBuf::from("x") })
+        .arg("build")
+        .status()
+        .unwrap();
+    drop(target);
+}
+"""
+
 CONDITIONAL_TARGET_FLAG = """\
 fn build(is_isolated: bool) {
     let scratch = tempfile::tempdir().unwrap();
@@ -715,6 +746,20 @@ def test_a_helper_parameter_is_not_resolved_in_the_caller(
     reported = profile(tmp_path)
     assert ("NC-009", "tests/helper.rs") not in reported
     assert ("EN-001", "tests/helper.rs") in reported
+
+
+def test_a_destructured_helper_parameter_is_not_resolved_in_the_caller(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`Pair { path: target }: Pair` binds `target`, whatever the caller calls its own.
+
+    The caller's `target` is a temporary directory, and must not stand in for the
+    helper's, which is whatever was passed in `Pair`.
+    """
+    put(tmp_path, "tests/pair.rs", HELPER_WITH_STRUCT_PARAMETER)
+    reported = profile(tmp_path)
+    assert ("NC-009", "tests/pair.rs") not in reported
+    assert ("EN-001", "tests/pair.rs") in reported
 
 
 def test_a_conditional_target_flag_is_unknown_not_inherited(
