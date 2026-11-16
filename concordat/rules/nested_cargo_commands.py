@@ -37,7 +37,7 @@ import re
 import typing as typ
 
 from .nested_cargo_source import RustSource, enclosing_block
-from .nested_cargo_text import split_top_level
+from .nested_cargo_text import environment_slots
 from .rust_source import scan_balanced, skip_trivia
 
 OFFLINE_VARIABLE: typ.Final = "CARGO_NET_OFFLINE"
@@ -60,6 +60,16 @@ EXECUTION_METHODS: typ.Final = frozenset({"status", "output", "spawn"})
 # earlier `env` assignment, so both belong in the offline ledger.
 ENVIRONMENT_REMOVAL_METHODS: typ.Final = frozenset({"env_remove", "env_clear"})
 ENVIRONMENT_CLEAR: typ.Final = "env_clear"
+# The calls the target-directory reader replays, and the marker it reads for a
+# call the reader could not see through.
+TARGET_METHODS: typ.Final = (
+    ARGUMENT_METHODS
+    | ENVIRONMENT_METHODS
+    | ENVIRONMENT_REMOVAL_METHODS
+    | {"current_dir"}
+)
+UNSEEN_CALL: typ.Final = "unseen"
+PROGRAM_FORM: typ.Final = "program"
 _PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
 
 COMMAND_NEW: typ.Final = re.compile(r"\bCommand\s*::\s*new\s*\(")
@@ -133,6 +143,11 @@ class CargoCommand:
     # `cmd.arg("build"); cmd.status(); cmd.arg("--frozen"); cmd.status()`
     # starts one unprotected process and one protected one.
     executions: list[CargoCommand] = dataclasses.field(default_factory=list)
+    # The builder calls that can decide where cargo builds, as `(method, source
+    # text)` in source order, and `("unseen", "")` for an operation the reader
+    # cannot see through. The target-directory reader replays them, because the
+    # last write to a name wins and only the source text says what was written.
+    calls: list[tuple[str, str]] = dataclasses.field(default_factory=list)
 
     def add_arguments(self, text: str) -> None:
         """Record `.arg(..)`/`.args(..)` text; an unreadable source is unknown."""
@@ -207,6 +222,7 @@ class CargoCommand:
         list, so this is the same evidence an unparseable `.args(..)` leaves.
         """
         self.words.append(None)
+        self.calls.append((UNSEEN_CALL, ""))
 
     def mark_environment_unknown(self) -> None:
         """Record an environment operation the reader cannot see through.
@@ -217,6 +233,7 @@ class CargoCommand:
         as the last word.
         """
         self._record_offline_operation(offline=None)
+        self.calls.append((UNSEEN_CALL, ""))
 
     def _record_offline_operation(self, *, offline: bool | None) -> None:
         """Make *offline* the answer the latest environment operation gives."""
@@ -235,6 +252,7 @@ class CargoCommand:
             self,
             words=list(self.words),
             environment=list(self.environment),
+            calls=list(self.calls),
             executions=[],
         )
 
@@ -255,6 +273,7 @@ class CargoCommand:
         """Add a helper's arguments and environment to this evidence."""
         self.words[:0] = definition.words
         self.environment[:0] = definition.environment
+        self.calls[:0] = definition.calls
         if not self.has_offline_override:
             self.offline_override = definition.offline_override
             self.has_offline_override = definition.has_offline_override
@@ -322,79 +341,15 @@ def _environment_pairs(text: str) -> list[tuple[str | None, str | None]] | None:
         One pair per variable, or None when the argument list is not a readable
         list of pairs at all.
     """
-    groups = _top_level_groups(text)
-    if groups is None:
+    slots = environment_slots(text)
+    if slots is None:
         return None
     pairs: list[tuple[str | None, str | None]] = []
-    for group in groups:
-        slots = split_top_level(_unwrap(group))
-        # rustfmt adds a trailing comma when it breaks a call over several
-        # lines, so `.env(\n    "K",\n    "V",\n)` arrives as three slots with
-        # a blank last one. Counting that as a third argument rejects a pair
-        # the reader can see perfectly well, which both hides real offline
-        # evidence and reports the command `unresolved`.
-        if slots and not slots[-1].strip():
-            slots.pop()
-        if len(slots) > 2:
-            return None
-        name = _string_literals(slots[0]) if slots else None
-        value = _string_literals(slots[1]) if len(slots) == 2 else None
+    for name_slot, value_slot in slots:
+        name = _string_literals(name_slot)
+        value = _string_literals(value_slot) if value_slot is not None else None
         pairs.append((name[0] if name else None, value[0] if value else None))
     return pairs
-
-
-def _unwrap(text: str) -> str:
-    """Return *text* with one enclosing bracket pair and any `&` removed.
-
-    `("K", "V")`, `["K", "V"]` and `&("K", "V")` all describe the same pair.
-    Anything else is returned unchanged.
-
-    Returns
-    -------
-    str
-        The text inside the brackets, or *text* itself.
-    """
-    stripped = text.strip().removeprefix("&").strip()
-    if not stripped or stripped[0] not in "([":
-        return stripped
-    close = scan_balanced(stripped, 0)
-    if close is None or stripped[close - 1] != ("]" if stripped[0] == "[" else ")"):
-        return stripped
-    if stripped[close:].strip():
-        return stripped
-    return stripped[1 : close - 1]
-
-
-def _top_level_groups(text: str) -> list[str] | None:
-    """Split an argument list into its outermost name-value groups.
-
-    `"K", "V"` is one group. `[("K", "V"), ("J", "W")]` is two. A group may
-    still turn out to be unreadable, which the caller decides slot by slot.
-
-    Returns
-    -------
-    list[str] | None
-        The groups, or None when the bracket structure does not balance or the
-        list is followed by more expression.
-    """
-    stripped = text.strip().removeprefix("&").strip()
-    if not stripped:
-        return []
-    if stripped[0] != "[":
-        return [stripped]
-    close = scan_balanced(stripped, 0)
-    if close is None:
-        return None
-    # Text after the closing bracket may add pairs the reader cannot see:
-    # `.envs([("CARGO_NET_OFFLINE", "true")].into_iter().chain(extra))` runs
-    # `extra`'s pairs after the visible one, and one of them may set the
-    # variable back. Reading only the literal list would report `offline` on a
-    # guess, so the whole argument is unreadable.
-    if stripped[close:].strip():
-        return None
-    return [
-        group for group in split_top_level(stripped[1 : close - 1]) if group.strip()
-    ]
 
 
 def _record(command: CargoCommand, method: str, text: str) -> None:
@@ -408,6 +363,8 @@ def _record(command: CargoCommand, method: str, text: str) -> None:
     if method in EXECUTION_METHODS:
         command.executions.append(command.snapshot())
         return
+    if method in TARGET_METHODS:
+        command.calls.append((method, text))
     if method in ARGUMENT_METHODS:
         command.add_arguments(text)
     elif method in ENVIRONMENT_METHODS:
@@ -581,9 +538,27 @@ def _record_unseen(methods: typ.Iterable[str], command: CargoCommand) -> None:
 
 
 def construction(
-    source: RustSource, match: re.Match[str], pairs: list[tuple[int, int]]
+    source: RustSource,
+    match: re.Match[str],
+    pairs: list[tuple[int, int]],
+    *,
+    any_program: bool = False,
 ) -> CargoCommand | None:
     """Return the command one `Command::new` call builds, or None if not cargo.
+
+    Parameters
+    ----------
+    source
+        The file being read.
+    match
+        The `Command::new(` match.
+    pairs
+        The file's brace pairs.
+    any_program
+        Read a command that starts another program too, as form `program`. A
+        test that runs `cargo-orthohelp` with `CARGO_TARGET_DIR` set builds
+        through that program's own cargo, and the target it passes is the one
+        that matters.
 
     Returns
     -------
@@ -592,6 +567,8 @@ def construction(
     """
     start, end = _argument_span(source.masked, match)
     form = _cargo_form(source.masked[start:end], source.text[start:end])
+    if form is None and any_program:
+        form = PROGRAM_FORM
     if form is None:
         return None
     command = CargoCommand(start=match.start(), form=form)
@@ -653,7 +630,7 @@ def unreached_helper(definition: CargoCommand) -> CargoCommand:
         argument list so that `command_state` answers `unresolved`.
     """
     definition.form = "helper"
-    definition.words.append(None)
+    definition.mark_arguments_unknown()
     return definition
 
 

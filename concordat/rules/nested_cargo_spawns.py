@@ -34,6 +34,7 @@ from .dependency_family_discovery import cargo_tables
 from .nested_cargo import is_fixture_directory, standalone_directories
 from .nested_cargo_commands import (
     COMMAND_NEW,
+    PROGRAM_FORM,
     CargoCommand,
     bound_name,
     collect_variable,
@@ -61,6 +62,8 @@ from .nested_cargo_source import (
     read_sources,
     whole_file_scope,
 )
+from .nested_cargo_spawn import COMPILES_UNKNOWN, compiles_state
+from .nested_cargo_target import INHERITED, read_target
 from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
@@ -84,6 +87,13 @@ class SpawnFact(typ.TypedDict):
         The literal arguments that look like flags, in source order.
     environment:
         The environment variables the command sets itself, in source order.
+    compiles:
+        `yes`, `no` or `unknown`: whether the arguments start a compile.
+    target_state:
+        `inherited`, `shared`, `dedicated`, `private` or `unknown`: where the
+        command builds, as `nested_cargo_target` reads it.
+    target_source:
+        A short description of the evidence behind `target_state`.
     """
 
     path: str
@@ -92,6 +102,9 @@ class SpawnFact(typ.TypedDict):
     state: str
     flags: list[str]
     environment: list[str]
+    compiles: str
+    target_state: str
+    target_source: str
 
 
 class TrybuildFact(typ.TypedDict):
@@ -122,10 +135,18 @@ class RustEvidence:
         Every cargo construction in test scope that may resolve dependencies.
     trybuild:
         Every manifest declaration or source reference that drives trybuild.
+    macrotest:
+        Every test-scope `macrotest::expand` reference. Macrotest builds in
+        its own `<target>/tests/macrotest` tree, so it is a nested build the
+        outer build never warms, as trybuild is.
     """
 
     spawns: list[SpawnFact]
     trybuild: list[TrybuildFact]
+    macrotest: list[TrybuildFact] = dataclasses.field(default_factory=list)
+
+
+MACROTEST_USE: typ.Final = re.compile(r"\bmacrotest\s*::\s*expand\w*")
 
 
 # The package a test uses to compile its UI cases. It is named here rather than
@@ -139,6 +160,7 @@ _DECLARATION: typ.Final = re.compile(r"\bfn\s*$")
 
 def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
     """Return the policy fact for one classified command."""
+    target = read_target(command.calls, source.text)
     return {
         "path": source.relative.as_posix(),
         "line": line_of(source.text, command.start),
@@ -150,6 +172,15 @@ def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
             if isinstance(word, str) and word.startswith("-")
         ],
         "environment": list(command.environment),
+        # A program other than cargo builds through its own cargo, and nothing
+        # in its argument list says which subcommand that is.
+        "compiles": (
+            COMPILES_UNKNOWN
+            if command.form == PROGRAM_FORM
+            else compiles_state(command.calls)
+        ),
+        "target_state": target.state,
+        "target_source": target.source,
     }
 
 
@@ -181,8 +212,15 @@ def _direct_commands(
     source: RustSource,
     helpers: dict[str, tuple[int, int]],
     pairs: list[tuple[int, int]],
+    *,
+    any_program: bool = False,
 ) -> list[CargoCommand]:
     """Return the cargo commands this source builds outside a helper body.
+
+    With *any_program*, a command that starts another program is returned too
+    when its chain sets the build's target directory: the program builds
+    through its own cargo, and the target it is given decides whether that
+    build can be warm.
 
     Returns
     -------
@@ -194,9 +232,14 @@ def _direct_commands(
     for match in COMMAND_NEW.finditer(source.masked):
         if _in_ranges(match.start(), bodies):
             continue
-        command = construction(source, match, pairs)
-        if command is not None:
-            found.append(command)
+        command = construction(source, match, pairs, any_program=any_program)
+        if command is None:
+            continue
+        if command.form == PROGRAM_FORM and (
+            read_target(command.calls, source.text).state == INHERITED
+        ):
+            continue
+        found.append(command)
     return found
 
 
@@ -278,7 +321,9 @@ def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
     return found
 
 
-def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
+def _source_facts(
+    source: RustSource, scope: TestScope, *, any_program: bool = False
+) -> list[SpawnFact]:
     """Return the spawn facts of one source.
 
     A construction written in the file is recorded whatever its state, so the
@@ -303,7 +348,7 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
     helpers = _helper_names(source)
     direct = [
         command
-        for command in _direct_commands(source, helpers, pairs)
+        for command in _direct_commands(source, helpers, pairs, any_program=any_program)
         if scope.contains(command.start)
     ]
     sites: list[CargoCommand] = []
@@ -669,6 +714,8 @@ def collect_rust_evidence(
     checkout: pathlib.Path,
     manifests: typ.Mapping[pathlib.Path, Manifest],
     problems: list[str],
+    *,
+    any_program: bool = False,
 ) -> RustEvidence:
     """Return the spawn and trybuild evidence for one checkout.
 
@@ -680,6 +727,10 @@ def collect_rust_evidence(
         Each decoded `Cargo.toml` below and at the root, by absolute path.
     problems:
         The fact list; an unreadable source appends one sentence each.
+    any_program:
+        Also report a command that starts another program but sets the build's
+        target directory (see `_direct_commands`). The offline rule leaves it
+        off: such a command is not a cargo spawn, so NC-007 does not judge it.
 
     Returns
     -------
@@ -692,7 +743,9 @@ def collect_rust_evidence(
     spawns = [
         fact
         for source in sources
-        for fact in _source_facts(source, scopes[source.relative])
+        for fact in _source_facts(
+            source, scopes[source.relative], any_program=any_program
+        )
     ]
     aliases = _aliases_by_directory(checkout, manifests)
     trybuild = [
@@ -707,7 +760,13 @@ def collect_rust_evidence(
             )
         ),
     ]
+    macrotest = [
+        fact
+        for source in sources
+        for fact in _trybuild_facts(source, scopes[source.relative], MACROTEST_USE)
+    ]
     return RustEvidence(
+        macrotest=sorted(macrotest, key=operator.itemgetter("path", "line")),
         spawns=sorted(spawns, key=operator.itemgetter("path", "line")),
         trybuild=sorted(
             trybuild,

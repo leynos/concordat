@@ -1,0 +1,521 @@
+"""Audit nested builds through the real policy, fixtures and exemptions.
+
+Each case is a small synthetic checkout shaped like one the rule exists for:
+the three timed tests leynos/rstest-bdd#910 describes before and after
+leynos/rstest-bdd#916, the per-scenario temporary target in
+leynos/ortho-config#611, and the cases whitaker's RFC 0006 listed for a private
+target, including the reviewer's point that removing `CARGO_TARGET_DIR` alone
+does not prove a directory is not shared.
+"""
+
+from __future__ import annotations
+
+import pathlib
+import typing as typ
+
+import pygit2
+import pytest
+
+from concordat.rules import packages, runner
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+RULE_ID = "nested-cargo-cold-build"
+LOCK_RULE_ID = "nested-cargo-offline-tests"
+NAMESPACE = "canon.lint_rules.nested_cargo_cold_build"
+POLICY = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "platform-standards"
+    / "canon"
+    / "lint-rules"
+    / RULE_ID
+    / "policy"
+    / "nested_cargo_cold_build.rego"
+)
+
+CLI_TEST = """\
+fn run_cargo_bdd_steps() -> Result<String> {
+    let binary = locate_or_build_binary(&manifest(), BinaryName::new("cargo-bdd"))?;
+    run(binary, &["steps"])
+}
+"""
+
+TRYBUILD_TEST = """\
+#[test]
+fn step_macros_compile() {
+    let t = trybuild::TestCases::new();
+    t.pass("tests/fixtures/ok.rs");
+}
+"""
+
+REBUILD_HARNESS = """\
+use std::process::Command;
+
+pub(crate) fn cargo_command(cwd: &std::path::Path) -> Command {
+    let mut cmd = Command::new(env!("CARGO"));
+    cmd.args(["--color", "never"]);
+    cmd.current_dir(cwd);
+    cmd
+}
+"""
+
+PREPARATION = """\
+#[test]
+fn nested_fixture_preparation() {
+    ensure_prepared_with(&family(), || build_everything());
+}
+"""
+
+GATE_ONLY = """\
+#[test]
+fn timed_assertion() {
+    ensure_prepared(&family());
+}
+"""
+
+SETUP_SCRIPT = """\
+[scripts.setup.prepare-nested]
+command = "make prepare-nested-fixtures"
+
+[[profile.default.scripts]]
+filter = "{filter}"
+setup = "{setup}"
+"""
+
+TEMPDIR_TARGET = """\
+fn build_scenario() {
+    let scratch = tempfile::tempdir().unwrap();
+    std::process::Command::new("cargo")
+        .arg("build")
+        .env("CARGO_TARGET_DIR", scratch.path())
+        .status()
+        .unwrap();
+}
+"""
+
+ORTHO_SCENARIO = """\
+fn run_orthohelp(ctx: &Context) -> StepResult<()> {
+    let target_dir = scenario_target_dir(ctx)?;
+    let mut command = Command::new(exe.as_str());
+    command
+        .current_dir(workspace.as_path())
+        .env("CARGO_TARGET_DIR", target_dir.as_str());
+    command.output()?;
+    Ok(())
+}
+"""
+
+REMOVE_ONE = """\
+fn build_in_scratch() {
+    let scratch = tempfile::tempdir().unwrap();
+    std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(scratch.path())
+        .env_remove("CARGO_TARGET_DIR")
+        .status()
+        .unwrap();
+}
+"""
+
+REMOVE_BOTH = REMOVE_ONE.replace(
+    '.env_remove("CARGO_TARGET_DIR")',
+    '.env_remove("CARGO_TARGET_DIR")\n        .env_remove("CARGO_BUILD_TARGET_DIR")',
+)
+
+CLEAR_THEN_SHARED = """\
+fn build_with_harness_target(shared: &std::path::Path) {
+    let scratch = tempfile::tempdir().unwrap();
+    std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(scratch.path())
+        .env_clear()
+        .env("CARGO_TARGET_DIR", shared)
+        .status()
+        .unwrap();
+}
+"""
+
+TARGET_FLAG = """\
+fn build_flag() {
+    let scratch = tempfile::tempdir().unwrap();
+    std::process::Command::new("cargo")
+        .arg("build")
+        .arg("--target-dir")
+        .arg(scratch.path())
+        .status()
+        .unwrap();
+}
+"""
+
+BUILD_TARGET_VARIABLE = TEMPDIR_TARGET.replace(
+    "CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"
+)
+
+METADATA_PRIVATE = """\
+fn read_metadata() {
+    let scratch = tempfile::tempdir().unwrap();
+    std::process::Command::new("cargo")
+        .arg("metadata")
+        .env("CARGO_TARGET_DIR", scratch.path())
+        .output()
+        .unwrap();
+}
+"""
+
+SHARED_FROM_ENVIRONMENT = """\
+fn build_shared() {
+    let target = std::env::var("CARGO_TARGET_DIR").unwrap();
+    std::process::Command::new("cargo")
+        .arg("build")
+        .env("CARGO_TARGET_DIR", &target)
+        .status()
+        .unwrap();
+}
+"""
+
+
+def put(root: pathlib.Path, relative: str, text: str) -> None:
+    """Write one file, creating its directory."""
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def origin(root: pathlib.Path, url: str) -> None:
+    """Initialise a repository at *root* whose origin is *url*."""
+    repository = pygit2.init_repository(str(root))
+    repository.remotes.create("origin", url)
+
+
+def findings(root: pathlib.Path) -> tuple[runner.Finding, ...]:
+    """Return what the real policy reports for *root* with its shipped defaults.
+
+    Returns
+    -------
+    tuple[runner.Finding, ...]
+        The findings, in the order the policy emitted them.
+    """
+    return runner.run_rule(RULE_ID, root).findings
+
+
+def profile(root: pathlib.Path) -> set[tuple[str, str]]:
+    """Return the `(rule id, path)` pairs the policy reports for *root*."""
+    return {(found.rule_id, found.path) for found in findings(root)}
+
+
+def result_with(
+    monkeypatch: pytest.MonkeyPatch,
+    root: pathlib.Path,
+    parameters: cabc.Mapping[str, object],
+) -> runner.RuleRunResult:
+    """Run the rule as if its manifest declared *parameters*.
+
+    Returns
+    -------
+    runner.RuleRunResult
+        The result the package reports under *parameters*.
+    """
+    # The policy reads its parameters through the runner and the envelope
+    # builder reads the preparation names through the package registry, so both
+    # reads are replaced: one without the other tests half a configuration.
+    monkeypatch.setattr(runner, "_rule_parameters", lambda _rule_dir: dict(parameters))
+    monkeypatch.setattr(packages, "rule_parameters", lambda _rule_dir: dict(parameters))
+    return runner.run_rule(RULE_ID, root)
+
+
+def rstest_bdd_before(root: pathlib.Path) -> None:
+    """Write the three timed tests #910 names, as they were before #916."""
+    origin(root, "https://github.com/leynos/rstest-bdd.git")
+    for crate in ("crates/cargo-bdd", "crates/rstest-bdd"):
+        put(root, f"{crate}/Cargo.toml", f'[package]\nname = "{crate.split("/")[1]}"\n')
+    put(root, "crates/cargo-bdd/tests/cli.rs", CLI_TEST)
+    put(root, "crates/rstest-bdd/tests/trybuild_macros.rs", TRYBUILD_TEST)
+    put(
+        root,
+        "crates/rstest-bdd/tests/feature_rebuild_invalidation/harness/process.rs",
+        REBUILD_HARNESS,
+    )
+
+
+def rstest_bdd_after(root: pathlib.Path) -> None:
+    """Add #916's preparation tests and gates to each crate."""
+    rstest_bdd_before(root)
+    put(root, "crates/cargo-bdd/tests/cli/preparation.rs", PREPARATION)
+    put(root, "crates/rstest-bdd/tests/trybuild_macros/preparation.rs", PREPARATION)
+
+
+def test_the_namespace_is_the_one_the_runner_asks_conftest_for() -> None:
+    """Conftest evaluates one namespace; a policy outside it never runs."""
+    assert runner._policy_namespace(RULE_ID) == NAMESPACE
+    declared = [
+        line.split(maxsplit=1)[1].strip()
+        for line in POLICY.read_text(encoding="utf-8").splitlines()
+        if line.startswith("package ")
+    ]
+    assert declared == [NAMESPACE]
+
+
+def test_the_package_resolves_to_the_cold_build_envelope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The builder mapping and the manifest declaration must agree."""
+    envelope = packages.default_envelope_builder(RULE_ID, tmp_path)
+    assert envelope["kind"] == "policy-input/nested-cargo-cold-build"
+
+
+def test_rstest_bdd_before_916_reports_the_three_timed_tests(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The three tests of #910 each draw NC-010, and none draws NC-009.
+
+    None of the three builds into a temporary directory, so a private-target
+    check alone would have missed every one of them.
+    """
+    rstest_bdd_before(tmp_path)
+    reported = profile(tmp_path)
+    assert reported == {
+        ("NC-010", "crates/cargo-bdd/tests/cli.rs"),
+        ("NC-010", "crates/rstest-bdd/tests/trybuild_macros.rs"),
+        (
+            "NC-010",
+            "crates/rstest-bdd/tests/feature_rebuild_invalidation/harness/process.rs",
+        ),
+    }
+
+
+def test_rstest_bdd_at_916_is_compliant(tmp_path: pathlib.Path) -> None:
+    """A preparation test and a gate in each crate declare the preparation."""
+    rstest_bdd_after(tmp_path)
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert result.findings == ()
+    assert result.verdict == "compliant"
+
+
+def test_a_gate_call_alone_declares_the_preparation(tmp_path: pathlib.Path) -> None:
+    """A timed test that refuses on a missing stamp has declared its preparation."""
+    rstest_bdd_before(tmp_path)
+    put(tmp_path, "crates/cargo-bdd/tests/cli/gate.rs", GATE_ONLY)
+    assert ("NC-010", "crates/cargo-bdd/tests/cli.rs") not in profile(tmp_path)
+    assert ("NC-010", "crates/rstest-bdd/tests/trybuild_macros.rs") in profile(tmp_path)
+
+
+def test_a_preparation_in_another_crate_prepares_nothing_here(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Preparation is matched by crate, so a sibling's test does not cover this one."""
+    rstest_bdd_before(tmp_path)
+    put(tmp_path, "crates/rstest-bdd/tests/trybuild_macros/preparation.rs", PREPARATION)
+    reported = profile(tmp_path)
+    assert ("NC-010", "crates/cargo-bdd/tests/cli.rs") in reported
+    assert ("NC-010", "crates/rstest-bdd/tests/trybuild_macros.rs") not in reported
+
+
+def test_a_repository_names_its_own_gate_in_the_parameters(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another repository's preparation names go in the parameter, not an exemption."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "app"\n')
+    put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
+    put(tmp_path, "tests/warm.rs", "#[test]\nfn warm_the_cache() { warm(); }\n")
+    assert ("NC-010", "tests/ui.rs") in profile(tmp_path)
+    parameters = {
+        "severity": "warning",
+        "exemptions": [],
+        "preparation_gates": {"functions": [], "tests": ["^warm_the_cache$"]},
+    }
+    assert result_with(monkeypatch, tmp_path, parameters).findings == ()
+
+
+@pytest.mark.parametrize(
+    ("rule", "setup", "filter_text", "is_prepared"),
+    [
+        ("covers every test", "prepare-nested", "all()", True),
+        ("names the binary", "prepare-nested", "binary(ui)", True),
+        ("names another binary", "prepare-nested", "binary(other)", False),
+        ("names a script nothing defines", "missing", "all()", False),
+    ],
+    ids=lambda value: str(value),
+)
+def test_a_nextest_setup_script_prepares_the_tests_it_covers(
+    tmp_path: pathlib.Path,
+    rule: str,
+    setup: str,
+    filter_text: str,
+    *,
+    is_prepared: bool,
+) -> None:
+    """Nextest runs a covering setup script before the tests it selects."""
+    del rule
+    put(tmp_path, "Cargo.toml", '[package]\nname = "app"\n')
+    put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
+    put(
+        tmp_path,
+        ".config/nextest.toml",
+        SETUP_SCRIPT.format(filter=filter_text, setup=setup),
+    )
+    assert (("NC-010", "tests/ui.rs") in profile(tmp_path)) is not is_prepared
+
+
+def test_a_private_tempdir_target_is_noncompliant(tmp_path: pathlib.Path) -> None:
+    """A target named after a temporary directory can never be warm."""
+    put(tmp_path, "tests/scenario.rs", TEMPDIR_TARGET)
+    assert ("NC-009", "tests/scenario.rs") in profile(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [TARGET_FLAG, BUILD_TARGET_VARIABLE, REMOVE_BOTH],
+    ids=["target-dir-flag", "build-target-variable", "both-removed-in-temp-cwd"],
+)
+def test_every_route_to_a_private_target_is_read(
+    tmp_path: pathlib.Path, source: str
+) -> None:
+    """Cargo takes its target from three places, and each one is read."""
+    put(tmp_path, "tests/scenario.rs", source)
+    assert ("NC-009", "tests/scenario.rs") in profile(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [REMOVE_ONE, CLEAR_THEN_SHARED, SHARED_FROM_ENVIRONMENT, METADATA_PRIVATE],
+    ids=[
+        "one-variable-removed",
+        "clear-then-shared",
+        "read-from-environment",
+        "no-compile",
+    ],
+)
+def test_a_target_that_may_be_shared_is_not_private(
+    tmp_path: pathlib.Path, source: str
+) -> None:
+    """Whitaker's RFC 0006 review: only evidence of privacy is a finding.
+
+    Removing `CARGO_TARGET_DIR` alone leaves `CARGO_BUILD_TARGET_DIR` free to
+    name a shared directory, and a later write to the variable wins over an
+    `env_clear`. A command that compiles nothing builds nothing.
+    """
+    put(tmp_path, "tests/scenario.rs", source)
+    assert ("NC-009", "tests/scenario.rs") not in profile(tmp_path)
+
+
+def test_ortho_config_scenario_target_is_reported_as_unknown(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The per-scenario value comes from a function in another file.
+
+    The reader does not follow it, so the answer is indeterminate rather than
+    a private-target finding or a pass, which is the choice RFC 0006 made for
+    the same case.
+    """
+    put(tmp_path, "tests/steps_cmd.rs", ORTHO_SCENARIO)
+    found = {(f.rule_id, f.verdict, f.path) for f in findings(tmp_path)}
+    assert ("EN-001", "indeterminate", "tests/steps_cmd.rs") in found
+    assert not any(rule == "NC-009" for rule, _verdict, _path in found)
+
+
+def test_a_program_that_builds_through_its_own_cargo_is_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`Command::new(exe)` with a temporary target builds into that target."""
+    put(
+        tmp_path,
+        "tests/steps_cmd.rs",
+        ORTHO_SCENARIO.replace(
+            "let target_dir = scenario_target_dir(ctx)?;",
+            "let target_dir = tempfile::tempdir()?;",
+        ).replace("target_dir.as_str()", "target_dir.path()"),
+    )
+    assert ("NC-009", "tests/steps_cmd.rs") in profile(tmp_path)
+
+
+def test_a_program_that_sets_no_target_is_not_a_build(tmp_path: pathlib.Path) -> None:
+    """A command that is not cargo and names no target is ordinary test code."""
+    put(
+        tmp_path,
+        "tests/run.rs",
+        'fn go() { Command::new("echo").arg("hi").status(); }\n',
+    )
+    assert findings(tmp_path) == ()
+
+
+def test_the_default_exemption_covers_netsukes_generated_fixture(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The shipped default records one reviewed cold build."""
+    origin(tmp_path, "https://github.com/leynos/netsuke.git")
+    put(tmp_path, "tests/locale_stub_ui_tests.rs", TEMPDIR_TARGET)
+    assert findings(tmp_path) == ()
+
+
+def test_the_default_exemption_does_not_travel(tmp_path: pathlib.Path) -> None:
+    """The same file in another repository is audited."""
+    origin(tmp_path, "https://github.com/leynos/other.git")
+    put(tmp_path, "tests/locale_stub_ui_tests.rs", TEMPDIR_TARGET)
+    assert ("NC-009", "tests/locale_stub_ui_tests.rs") in profile(tmp_path)
+
+
+def test_other_nested_cargo_exemptions_do_not_reach_this_rule(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A file exempt from NC-007 is still audited for a cold build."""
+    origin(tmp_path, "https://github.com/leynos/whitaker.git")
+    put(
+        tmp_path,
+        "installer/src/builder.rs",
+        "#[cfg(test)]\nmod t {\n" + TEMPDIR_TARGET + "}\n",
+    )
+    assert ("NC-009", "installer/src/builder.rs") in profile(tmp_path)
+    assert LOCK_RULE_ID != RULE_ID
+
+
+def test_a_clean_repository_is_compliant(tmp_path: pathlib.Path) -> None:
+    """A repository that starts no nested build has nothing to report."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "plain"\n')
+    put(tmp_path, "src/lib.rs", "pub fn add(a: u32, b: u32) -> u32 { a + b }\n")
+    put(tmp_path, "tests/add.rs", "#[test]\nfn adds() { assert_eq!(1 + 1, 2); }\n")
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert result.findings == ()
+    assert result.verdict == "compliant"
+
+
+def test_a_survey_finding_is_reported_but_does_not_block(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The package ships at warning, so a gate continues while the estate is fixed."""
+    rstest_bdd_before(tmp_path)
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert {f.severity for f in result.findings} == {"warning"}
+    assert result.verdict == "noncompliant"
+    assert result.exit_code == 0
+    assert result.blocking is False
+
+
+def test_the_severity_parameter_restores_blocking(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Promotion is a parameter change, not a policy edit."""
+    rstest_bdd_before(tmp_path)
+    result = result_with(monkeypatch, tmp_path, {"severity": "error", "exemptions": []})
+    assert {f.severity for f in result.findings} == {"error"}
+    assert result.exit_code == 1
+
+
+def test_the_remedy_names_both_examples(tmp_path: pathlib.Path) -> None:
+    """A reader who has never met the rule is told what to do and shown two cases."""
+    put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
+    [found] = findings(tmp_path)
+    assert "nextest setup script" in found.message
+    assert "https://github.com/leynos/rstest-bdd/pull/916" in found.message
+    assert "https://github.com/leynos/whitaker/issues/518" in found.message
+
+
+def test_a_source_the_reader_cannot_decode_is_indeterminate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Evidence the reader cannot read is reported, never read as a pass."""
+    put(tmp_path, "tests/broken.rs", "fn open() {\n")
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert [(f.rule_id, f.verdict) for f in result.findings] == [
+        ("EN-001", "indeterminate")
+    ]

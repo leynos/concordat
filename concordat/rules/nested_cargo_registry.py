@@ -12,6 +12,11 @@ from __future__ import annotations
 import types
 import typing as typ
 
+from .nested_cargo_cold_envelope import ENVELOPE_KIND as COLD_ENVELOPE_KIND
+from .nested_cargo_cold_envelope import (
+    NestedCargoColdEnvelope,
+    build_nested_cargo_cold_envelope,
+)
 from .nested_cargo_lock_envelope import ENVELOPE_KIND as LOCK_ENVELOPE_KIND
 from .nested_cargo_lock_envelope import (
     NestedCargoLockEnvelope,
@@ -43,7 +48,8 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 type NestedCargoEnvelope = (
-    NestedCargoLockEnvelope
+    NestedCargoColdEnvelope
+    | NestedCargoLockEnvelope
     | NestedCargoOfflineEnvelope
     | NestedCargoManifestEnvelope
     | NestedCargoNextestEnvelope
@@ -108,6 +114,7 @@ def _wiring_envelope(
 
 
 BY_PACKAGE: typ.Final = types.MappingProxyType({
+    "nested-cargo-cold-build": build_nested_cargo_cold_envelope,
     "nested-cargo-fixture-lockfiles": _lock_envelope,
     "nested-cargo-offline-tests": build_nested_cargo_offline_envelope,
     "nested-cargo-fixture-manifests": _manifest_envelope,
@@ -116,6 +123,7 @@ BY_PACKAGE: typ.Final = types.MappingProxyType({
 })
 
 BY_KIND: typ.Final = types.MappingProxyType({
+    COLD_ENVELOPE_KIND: build_nested_cargo_cold_envelope,
     LOCK_ENVELOPE_KIND: _lock_envelope,
     OFFLINE_ENVELOPE_KIND: build_nested_cargo_offline_envelope,
     MANIFEST_ENVELOPE_KIND: _manifest_envelope,

@@ -3073,6 +3073,58 @@ severity through a `severity` parameter, as `nested-cargo-offline-tests` does,
 because the estate survey found configuration gaps in a dozen repositories;
 promotion to `error` follows once they are clean.
 
+##### Nested cargo cold build
+
+The audit-only `nested-cargo-cold-build` package owns NC-009 and NC-010. It
+answers the symptom the other nested-cargo packages leave: a timed test that
+compiles every dependency inside its own deadline. The first draft followed
+whitaker's RFC 0006, which wanted a lint for a temporary `CARGO_TARGET_DIR`.
+The three tests of leynos/rstest-bdd#910 showed that is only half the defect:
+none of them built into a temporary directory. Each built into a shared or
+crate-local target, or into trybuild's own `<target>/tests/trybuild` tree, that
+the timed body was the first to fill. So the package has two checks. NC-009
+reports a private target (a temporary or per-run directory), which can never be
+warm. NC-010 reports a test source that compiles in a timed test with no
+preparation declared outside it, which is the #910 shape.
+
+NC-010 is a declaration rule, not a cold-build detector. A text scan cannot
+know what an earlier step left in a target directory, so asking "is it cold?"
+would guess. Asking "where is the compile work paid for?" has an answer the
+repository can give and the reader can verify: a nextest setup script that
+covers the test, a named preparation test in the crate, or a call to a
+preparation gate in the crate. The names of the last two are parameters, with
+rstest-bdd's names (`nested_fixture_preparation`, `ensure_prepared`) as the
+defaults, so another repository names its own gate rather than taking an
+exemption. Preparation is matched by crate, because one crate's preparation
+test stamps several test binaries; a finer match would demand a stamp per file
+and report the common shape as a defect.
+
+Decisions the design rests on:
+
+- **A fixed `target/...` directory in the crate is `dedicated`, not `private`.**
+  Whitaker's RFC treated it as private. It persists, so the second run is warm;
+  the first is the preparation question. Reporting it twice would make a
+  repository that has prepared it fail NC-009.
+- **A command that starts another program is read when it sets a target.**
+  ortho-config's scenario test runs `cargo-orthohelp` with `CARGO_TARGET_DIR`
+  set; it never constructs a `cargo` command. The target variable is the
+  evidence that the program builds.
+- **A value computed in another file is `unknown`.** The reader follows `let`
+  bindings in the file that sets the target and does not follow a call into
+  another module. ortho-config's `scenario_target_dir` is such a call, so it is
+  reported as indeterminate, the choice RFC 0006 made for the same case.
+- **`env_remove("CARGO_TARGET_DIR")` alone is not private.** Cargo also reads
+  `CARGO_BUILD_TARGET_DIR`, so a temporary working directory is private only
+  when an `env_clear()` or both removals mean the command can inherit no target
+  (the review of whitaker's RFC 0006, PR 505). An `env_clear()` followed by a
+  write to a target variable reads the write, as rstest-bdd's harness does.
+- **The reader is the one NC-007 uses.** `CargoCommand` gains an ordered list
+  of the builder calls, replayed with last-write-wins semantics; the offline
+  ledger is unchanged.
+
+Both checks are `warning` in the shipped parameters and an envelope defect stays
+`error`, as in the offline package.
+
 ##### Nested cargo CI wiring
 
 NC-006 (`nested-cargo-ci-wiring`) reads the CI side of the same problem. The

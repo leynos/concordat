@@ -1,0 +1,119 @@
+"""Build the facts for the `nested-cargo-cold-build` rule (NC-009, NC-010).
+
+A test that starts a nested build inside its own deadline pays for whatever the
+target directory does not already hold. Two defects share that symptom, and the
+envelope carries the evidence for each:
+
+- a nested spawn whose target directory is *private* — derived from a temporary
+  directory or unique to the run — so no later run can find what an earlier one
+  built (NC-009, read from the spawn's recorded calls);
+- a test source that compiles in a timed test while the repository declares no
+  preparation outside it: no nextest setup script, no named preparation test and
+  no preparation gate in the crate (NC-010).
+
+Nothing here decides whether a finding is reported. Exemptions, severity and the
+verdict belong to the policy, which reads the repository slug and each fact's
+path. The builder's job is to establish the facts, and to record as a problem
+every input it could not read, so the policy answers indeterminate rather than
+treating an unreadable repository as a clean one.
+"""
+
+from __future__ import annotations
+
+import typing as typ
+
+from .nested_cargo import load_manifests, origin_slug
+from .nested_cargo_preparation import (
+    BuildFact,
+    collect_builds,
+    crate_directories,
+    read_gates,
+    read_setup_rules,
+)
+from .nested_cargo_source import read_sources
+from .nested_cargo_spawns import (
+    SpawnFact,
+    collect_rust_evidence,
+    fixture_directories,
+)
+
+if typ.TYPE_CHECKING:
+    import pathlib
+
+    from .codescene_coverage_envelope import Repository
+
+ENVELOPE_SCHEMA_VERSION: typ.Final = 1
+ENVELOPE_KIND: typ.Final = "policy-input/nested-cargo-cold-build"
+
+
+class NestedCargoColdEnvelope(typ.TypedDict):
+    """Store the evidence evaluated by the nested-cargo cold-build rule.
+
+    Attributes
+    ----------
+    schema_version:
+        The envelope's schema version, which the policy checks.
+    kind:
+        The policy-input identifier, which the policy checks.
+    repository:
+        The checkout's path and, where the origin names one, its GitHub slug,
+        which the rule's exemptions are matched against.
+    spawns:
+        Every command in test scope that builds, with where it builds.
+    builds:
+        Every test source that compiles in a timed test, with the preparation
+        the repository declares for it.
+    problems:
+        Every fact the builder could not establish, as sentences.
+    """
+
+    schema_version: int
+    kind: str
+    repository: Repository
+    spawns: list[SpawnFact]
+    builds: list[BuildFact]
+    problems: list[str]
+
+
+def build_nested_cargo_cold_envelope(
+    checkout: pathlib.Path, parameters: typ.Mapping[str, object] | None = None
+) -> NestedCargoColdEnvelope:
+    """Assemble the cold-build evidence for the nested-cargo rule.
+
+    Parameters
+    ----------
+    checkout:
+        The repository checkout to describe.
+    parameters:
+        The rule's configured parameters. The preparation and compiling-helper
+        names are read here, because they decide which facts exist; exemptions
+        and severity stay with the policy.
+
+    Returns
+    -------
+    NestedCargoColdEnvelope
+        The spawn and build facts, and every fact that could not be established.
+    """
+    problems: list[str] = []
+    manifests = load_manifests(checkout, problems)
+    evidence = collect_rust_evidence(checkout, manifests, problems, any_program=True)
+    fixtures = fixture_directories(checkout, manifests)
+    # The sources are read a second time rather than shared with the spawn
+    # reader: only the names of preparation functions are wanted from them, and
+    # the spawn reader's scope map is no use to that question.
+    sources = read_sources(checkout, fixtures, [])
+    builds = collect_builds(
+        evidence,
+        sources,
+        crate_directories(checkout, manifests),
+        read_setup_rules(checkout, problems),
+        read_gates(parameters),
+    )
+    return {
+        "schema_version": ENVELOPE_SCHEMA_VERSION,
+        "kind": ENVELOPE_KIND,
+        "repository": {"path": ".", "name": origin_slug(checkout)},
+        "spawns": evidence.spawns,
+        "builds": builds,
+        "problems": sorted(set(problems)),
+    }

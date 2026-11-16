@@ -559,6 +559,17 @@ actuators that remediate them. Each check ships as a lint rule package under
   The CI wiring check (NC-006, `nested-cargo-ci-wiring`) is the fourth: no
   workflow sets `CARGO_TARGET_DIR` to a per-run or temporary path, and a job
   that opts out of `setup-rust`'s wrapper export names `RUSTC_WRAPPER` itself.
+  The cold-build check (NC-009, NC-010, `nested-cargo-cold-build`) follows,
+  shipped at `warning` severity: a test-scope command that compiles must not
+  build into a private target directory (NC-009), and a test source that
+  compiles in a timed test must have a preparation declared outside it
+  (NC-010): a nextest setup script covering it, a named preparation test in its
+  crate, or a call to a preparation gate in its crate, with the names
+  configurable. Acceptance: rstest-bdd before and after #916 (the three tests
+  of #910 report, and the head reports none of them), the ortho-config
+  per-scenario target before its fix (reported as indeterminate, because the
+  value comes from another file), netsuke after #913 and #939 and a clean
+  repository give the expected result for every case.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for

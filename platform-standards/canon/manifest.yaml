@@ -220,6 +220,20 @@ artifacts:
     description: >-
       Rule package manifest for the nested cargo offline test audit.
     sha256: 24fa0c1172f43aaecc39e0a1059463dad3185c126553c3c43590a97011491178
+  - id: lint-rule-nested-cargo-cold-build
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/nested-cargo-cold-build/policy/nested_cargo_cold_build.rego
+    description: >-
+      Sensor requiring a test's nested build to avoid a private target
+      directory, and a test that compiles in a timed body to have its
+      preparation declared outside it.
+    sha256: 7e693145d7427a1fd2a2df62e9470a976275103e3b835a67bf803fb9856dd26f
+  - id: lint-rule-nested-cargo-cold-build-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/nested-cargo-cold-build/rule.yaml
+    description: >-
+      Rule package manifest for the nested cargo cold build audit.
+    sha256: 50a4946a482edb3d6d2a1b455bb1b84e5c033737d3f1a706618e8857e539035d
   - id: lint-rule-nested-cargo-fixture-manifests
     type: opa-policy
     path: platform-standards/canon/lint-rules/nested-cargo-fixture-manifests/policy/nested_cargo_fixture_manifests.rego

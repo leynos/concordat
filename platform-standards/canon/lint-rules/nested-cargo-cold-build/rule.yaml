@@ -1,0 +1,125 @@
+schema_version: 1
+id: nested-cargo-cold-build
+name: Nested cargo cold build
+description: >-
+  Audits the nested builds a repository's own tests start inside their timed
+  bodies. A build that cannot be warm pays for every dependency inside the
+  test's deadline, so the test times out although its assertion is sound.
+  NC-009 reports a test-scope command whose target directory is private: it
+  derives from a temporary directory or from something unique to the run, so
+  no later run can reuse what an earlier one built. NC-010 reports a test
+  source that compiles in a timed test (a compiling cargo spawn, a trybuild or
+  macrotest use, or a call to a configured harness helper that builds) in a
+  repository that declares no preparation outside the timed body: no nextest
+  setup script covering the test, no named preparation test in the crate and no
+  preparation gate called in the crate. Exemptions name a repository and an
+  exact file path, suppress only NC-009 and NC-010, and must carry a rationale
+  and a review trigger. The rule ships at `warning` severity so the estate can
+  be surveyed before it blocks; the `severity` parameter raises it to `error`
+  without a code change. Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/nested-cargo-cold-build
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every NC-009 and NC-010 finding, and of the
+          indeterminate findings that report evidence the reader could not
+          establish. An envelope defect is always `error`: it says the rule
+          could not run, not that the repository is unsafe. A `warning` finding
+          is reported but does not block; promotion to `error` is the intended
+          end state once the estate survey is clean.
+      preparation_gates:
+        type: object
+        additionalProperties: false
+        properties:
+          functions:
+            type: array
+            items:
+              type: string
+              minLength: 1
+          tests:
+            type: array
+            items:
+              type: string
+              minLength: 1
+        description: >-
+          How a repository names its preparation, beyond the nextest setup
+          scripts the reader always recognises. `functions` lists the names of
+          functions that gate a timed test on prepared artefacts (a call to one
+          anywhere in the crate declares the preparation). `tests` lists
+          regular expressions matched against test function names that prepare
+          artefacts (a match anywhere in the crate declares it). The defaults
+          are the names rstest-bdd chose for the same convention; a repository
+          with its own names adds them here rather than taking an exemption.
+      compiling_calls:
+        type: array
+        items:
+          type: string
+          minLength: 1
+        description: >-
+          Names of harness functions that start a cargo build in the caller's
+          behalf, so a test that calls one compiles inside its timed body
+          although it never constructs a `Command` itself. A call in a file
+          under a test directory counts as a compile for NC-010.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            rationale:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Files the rule does not audit, each with its repository
+          (`owner/name`, read from the `origin` remote), the exact repository-
+          relative file path, the rationale and the review trigger. Both text
+          fields must be non-blank; the policy ignores an entry that leaves
+          either blank, because an exemption nobody must revisit is not a
+          record. An exemption suppresses NC-009 and NC-010 only: evidence the
+          reader could not establish stays reported.
+  defaults:
+    severity: warning
+    preparation_gates:
+      functions:
+        - ensure_prepared
+        - ensure_prepared_with
+        - ensure_prepared_with_probe
+        - prepare_now
+        - prepare_now_with_probe
+      tests:
+        - nested_fixture_preparation$
+    compiling_calls:
+      - locate_or_build_binary
+    exemptions:
+      - repository: leynos/netsuke
+        path: tests/locale_stub_ui_tests.rs
+        rationale: >-
+          Builds a generated two-crate workspace whose only dependency is a
+          path dependency, under a temporary root, to prove that Cargo honours
+          a separate target directory and build directory. The build is cold by
+          design and has no registry dependency to warm; the nextest
+          configuration serialises it and bounds it.
+        review_trigger: >-
+          review when the generated fixture gains a registry dependency

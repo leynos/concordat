@@ -890,6 +890,53 @@ should use it (`RUSTC_WRAPPER="$SCCACHE_PATH" cargo test`) and the job passes.
 The `temporary_patterns` and `exemptions` parameters tune the check; an
 exemption names the repository, workflow and reason.
 
+### Auditing a timed test that builds cold
+
+The `nested-cargo-cold-build` rule finds timed tests that compile every
+dependency inside their own deadline:
+
+```shell
+concordat artefact rule run nested-cargo-cold-build --repo /path/to/checkout
+```
+
+A test that starts a nested build pays for whatever the target directory does
+not already hold. When nothing has filled it, the test body compiles the whole
+dependency graph, runs out of time, and fails an assertion that was sound. The
+timeout names the test and not the cold build, which makes it hard to diagnose.
+leynos/rstest-bdd hit this in three tests (issue 910, fixed by pull request
+916): none built into a temporary directory, and each was the first to fill a
+shared or crate-local target. The rule asks for the fix up front instead of
+detecting a cold build afterwards. It reports:
+
+- **NC-009**: a command in test scope that compiles builds into a private
+  target directory, one derived from a temporary directory (`tempfile::tempdir`,
+  `TempDir`, `env::temp_dir`) or unique to the run, so no later run can reuse
+  it. The target is read from `--target-dir`, `CARGO_TARGET_DIR` and
+  `CARGO_BUILD_TARGET_DIR`, last write winning, and a temporary working
+  directory counts only when the command can inherit no target (an
+  `env_clear()`, or a removal of both variables). Removing `CARGO_TARGET_DIR`
+  alone proves nothing, because `CARGO_BUILD_TARGET_DIR` may still name a
+  shared directory. A command that starts another program is read too when its
+  chain sets a target variable, since that program builds through its own cargo.
+- **NC-010**: a test source compiles in a timed test (a compiling `cargo`
+  command, a `trybuild::TestCases` or `macrotest::expand` use, or a call to a
+  helper the `compiling_calls` parameter names) and the repository declares no
+  preparation outside it. Prepare the build in a nextest setup script that a
+  `[[profile.*.scripts]]` rule selects for the test, or in a named preparation
+  test in the same crate that stamps its artefacts, with the timed test
+  refusing to run when the stamp is missing. The `preparation_gates` parameter
+  names the preparation functions and test patterns; the defaults are
+  rstest-bdd's (`ensure_prepared` and `nested_fixture_preparation`), and a
+  repository with other names lists them there rather than taking an exemption.
+- **EN-001** (indeterminate): a compiling command sets its target from a value
+  the reader cannot follow, such as a function in another file, or a file could
+  not be decoded. The rule says it does not know rather than guessing.
+
+Both checks are `warning` in the shipped parameters, so the estate is surveyed
+before the rule blocks; `severity: error` promotes them. An exemption names a
+repository, an exact file, a rationale and a review trigger, and suppresses
+NC-009 and NC-010 for that file only.
+
 ### Auditing prover tooling
 
 The `rust-prover-tooling` rule holds a repository that uses Kani or Verus to
