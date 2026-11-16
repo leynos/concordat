@@ -38,9 +38,13 @@ import typing as typ
 
 from .nested_cargo_source import RustSource, enclosing_block
 from .nested_cargo_text import environment_slots
+from .nested_cargo_variable_names import (
+    OFFLINE_VARIABLE,
+    is_other_variable,
+    may_include_offline_variable,
+)
 from .rust_source import scan_balanced, skip_trivia
 
-OFFLINE_VARIABLE: typ.Final = "CARGO_NET_OFFLINE"
 # Cargo reads this variable through its boolean parser, which accepts only `1`
 # and `true`. Measured against cargo 1.99.1: `1` reported the offline-mode
 # note that `--offline` prints, while `yes`, `on`, an empty value and `0` did
@@ -194,6 +198,10 @@ class CargoCommand:
                 # the previous answer as an unknown one.
                 self._record_offline_operation(offline=None)
                 continue
+            if key != OFFLINE_VARIABLE and not is_other_variable(key):
+                # An escape or other letter case may spell the offline name.
+                self._record_offline_operation(offline=None)
+                continue
             self.environment.append(key)
             if key != OFFLINE_VARIABLE:
                 continue
@@ -222,6 +230,8 @@ class CargoCommand:
             return
         if OFFLINE_VARIABLE in names:
             self._record_offline_operation(offline=False)
+        elif not all(is_other_variable(name) for name in names):
+            self._record_offline_operation(offline=None)
 
     def mark_arguments_unknown(self, text: str = "") -> None:
         """Record an argument call the reader cannot see through.
@@ -234,15 +244,23 @@ class CargoCommand:
         self.words.append(None)
         self.calls.append((UNSEEN_ARGUMENTS, text))
 
-    def mark_environment_unknown(self) -> None:
+    def mark_environment_unknown(self, *, offline_unknown: bool = True) -> None:
         """Record an environment operation the reader cannot see through.
 
         A call made on only some paths may set `CARGO_NET_OFFLINE` again, and
         which path runs is exactly what the reader cannot tell. Recording an
         unknown operation is what stops an earlier assignment from being taken
         as the last word.
+
+        Parameters
+        ----------
+        offline_unknown
+            False when the call is known to name another variable. It may
+            still have set that one, so the target reading stays unknown, but
+            the offline answer an earlier assignment gave still stands.
         """
-        self._record_offline_operation(offline=None)
+        if offline_unknown:
+            self._record_offline_operation(offline=None)
         self.calls.append((UNSEEN_CALL, ""))
 
     def _record_offline_operation(self, *, offline: bool | None) -> None:
@@ -546,7 +564,27 @@ def _record_unseen(
         if method in ARGUMENT_METHODS:
             command.mark_arguments_unknown(text)
         elif method in ENVIRONMENT_METHODS or method in ENVIRONMENT_REMOVAL_METHODS:
-            command.mark_environment_unknown()
+            command.mark_environment_unknown(
+                offline_unknown=_may_name_offline_variable(method, text)
+            )
+
+
+def _may_name_offline_variable(method: str, text: str) -> bool:
+    """Report whether a call on some paths could touch the offline variable.
+
+    Returns
+    -------
+    bool
+        False only for `env` or `env_remove` naming plainly another variable.
+    """
+    pairs = _environment_pairs(text) if method == "env" else None
+    if method == "env":
+        return may_include_offline_variable(
+            None if pairs is None else [key for key, _value in pairs]
+        )
+    return method != "env_remove" or may_include_offline_variable(
+        _string_literals(text)
+    )
 
 
 def construction(
