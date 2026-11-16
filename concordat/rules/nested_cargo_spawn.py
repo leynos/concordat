@@ -283,6 +283,11 @@ def _unconditional_probe(statement: str) -> bool:
 
     A flag added inside a block (`if query_only { cmd.arg("--print=cfg") }`) may
     not be there when the command runs, so it proves nothing.
+
+    Returns
+    -------
+    bool
+        True when the statement holds a probe flag outside any block.
     """
     found = RUSTC_PROBE.search(statement)
     return found is not None and "{" not in statement[: found.start()]
