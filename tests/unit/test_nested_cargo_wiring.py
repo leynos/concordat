@@ -216,6 +216,17 @@ CHECK_ONLY_CASES = {
         ),
         {"NC-006"},
     ),
+    "background-ampersand-then-a-command-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: true & make test\n"),
+        {"NC-006"},
+    ),
+    "sed-with-a-trailing-expression-option-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + "      - run: sed -n 's/a/b/p' -e '1e make test' Cargo.toml\n"
+        ),
+        {"NC-006"},
+    ),
     "sed-execute-command-is-flagged": Case(
         msrv_workflow(
             steps=MSRV_CHECK + "      - run: printf 'x' | sed '1e make test'\n"

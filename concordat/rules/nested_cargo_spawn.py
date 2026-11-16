@@ -67,12 +67,17 @@ QUERY_PRINTS: typ.Final = (
     "sysroot|target-libdir|host-tuple|cfg|target-list|target-cpus|target-features"
     "|code-models|relocation-models|tls-models"
 )
-# A version or query flag handed to the command with `.arg(..)` or `.args(..)`,
-# within one statement, so a later assertion on a "--version" string does not
-# count.
+# A version or query flag given as a plain string literal: either the sole
+# argument of `.arg("..")`, or an item of an array literal of string literals
+# passed to `.args([..])`. Anything computed (`.arg(if c { "--version" } ..)`)
+# is not a known value and is not a probe.
+_LITERAL: typ.Final = r'"[^"]*"'
+_SINGLE_FLAG: typ.Final = rf'"(?:--version|-V|-vV|-Vv|--print=(?:{QUERY_PRINTS}))"'
+_FLAG: typ.Final = rf'{_SINGLE_FLAG}|"--print"\s*,\s*"(?:{QUERY_PRINTS})"'
 RUSTC_PROBE: typ.Final = re.compile(
-    r"""\.args?\([^;]*?["'](?:--version|-V|-vV|-Vv"""
-    rf"""|--print(?:=|["']\s*,\s*["'])(?:{QUERY_PRINTS}))["']"""
+    rf"""\.arg\(\s*&?{_SINGLE_FLAG}\s*\)"""
+    rf"""|\.args\(\s*&?\[\s*(?:{_LITERAL}\s*,\s*)*(?:{_FLAG})\s*"""
+    rf"""(?:,\s*{_LITERAL}\s*)*,?\s*\]\s*\)"""
 )
 LAUNCH: typ.Final = re.compile(r"\.(?:status|output|spawn)\(")
 COMMENT: typ.Final = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
@@ -242,10 +247,13 @@ def _own_statements(text: str, start: int, window: str) -> list[str]:
     bound = BINDING.search(text[max(0, start - 120) : start])
     if bound is None:
         return statements[:1]
-    own = re.compile(rf"\s*&?(?:mut\s+)?{re.escape(bound['name'])}\b")
+    # A statement mentions the command when the name is followed by a method
+    # call, wherever it sits (an `if` body included), so a launch in control
+    # flow still ends the arguments.
+    own = re.compile(rf"\b{re.escape(bound['name'])}\s*\.")
     found: list[str] = []
     for index, statement in enumerate(statements):
-        if index == 0 or own.match(statement):
+        if index == 0 or own.search(statement):
             found.append(statement)
             # An argument added after the command has run belongs to a reuse.
             if LAUNCH.search(statement):

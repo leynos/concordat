@@ -16,6 +16,11 @@ towards "can start a nested build":
 - every `uses` step must be one of a few named set-up actions, matched by full
   identity, never by basename and never a local action.
 
+The reader guards against accident, not against a script written to defeat it:
+it fails closed on every shape it cannot place, but shell has more shapes than
+a regular expression can enumerate. The cost of a miss is a skipped warning
+about a per-run target on a job that someone has deliberately made unusual.
+
 A check-style cargo command may run a dependency's build script. Build scripts
 are production code and not a test, so this reader does not count them; that is
 a stated limit of the exemption, not a proof that no process starts.
@@ -57,7 +62,13 @@ RUSTUP_SETUP: typ.Final = re.compile(
 # GNU `sed` can run a command (`1e cmd`, `s/a/b/e`), so only one shape is read
 # as text processing: `sed -n 's/PATTERN/REPLACEMENT/FLAGS'` with no further
 # slash or quote inside it and flags limited to `p`, `g` and `I`.
-SED_SUBSTITUTE: typ.Final = re.compile(r"""[ \t]+-n[ \t]+'s/[^/']*/[^/']*/[pgI]*'""")
+# The substitution may be followed only by plain file names (none starts with a
+# dash, so no `-e` or `-f` option), and then the end of the command.
+SED_SUBSTITUTE: typ.Final = re.compile(
+    r"""[ \t]+-n[ \t]+'s/[^/']*/[^/']*/[pgI]*'"""
+    r"""(?:[ \t]+[\w./~$][^\s;&|()'"`]*)*[ \t]*(?=$|[;&|)])""",
+    re.MULTILINE,
+)
 CARGO_WORD: typ.Final = re.compile(r"(?<![\w.-])(?:[\w.~$/{}-]*/)?cargo(?![\w-])")
 # `cargo`, then an optional toolchain selector (quoted or not), then the word
 # that must be a check-style subcommand.
@@ -68,15 +79,16 @@ CARGO_SUBCOMMAND: typ.Final = re.compile(
 # substitution, a subshell or a compound-command keyword. Plain `NAME=value`
 # prefixes are skipped so the command they precede is still read.
 COMMAND_START: typ.Final = re.compile(
-    r"(?:^|;|&&|\|\||\||\(|\)|`)[ \t]*"
+    r"(?:^|;|&|\|\||\||\(|\)|`)[ \t]*"
     rf"(?:{CONTROL_WORDS})*"
     r"""(?:[A-Za-z_]\w*=[^\s"'$();&|`]*[ \t]+)*"""
     r"(?P<word>[^\s;&|()`]+)",
     re.MULTILINE,
 )
 ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_]\w*=")
-# What is left of a `case` arm (`*)`) once the parenthesis is split off.
-PATTERN_ONLY: typ.Final = re.compile(r"[*?]+")
+# What is left of a `case` arm (`*)`) once the parenthesis is split off, or the
+# descriptor of a redirection such as `>&2`.
+PATTERN_ONLY: typ.Final = re.compile(r"[*?]+|\d+")
 
 
 def _cargo_is_check_style(script: str) -> bool:

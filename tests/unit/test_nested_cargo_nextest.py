@@ -129,6 +129,23 @@ CASES = {
         None,
         {"NC-004"},
     ),
+    "a-flag-chosen-by-a-condition-is-not-a-known-probe": Case(
+        "use std::process::Command;\n#[test]\nfn chosen() {\n"
+        '    Command::new("rustc")\n'
+        '        .arg(if false { "--version" } else { "fixture.rs" })\n'
+        "        .status()\n        .unwrap();\n}\n",
+        None,
+        {"NC-004"},
+    ),
+    "a-launch-inside-control-flow-ends-the-arguments": Case(
+        "use std::process::Command;\n#[test]\nfn guarded() {\n"
+        '    let mut cmd = Command::new("rustc");\n'
+        '    cmd.arg("fixture.rs");\n'
+        "    if true { cmd.status().unwrap(); }\n"
+        '    cmd.arg("--version");\n}\n',
+        None,
+        {"NC-004"},
+    ),
     "an-argument-added-after-the-launch-does-not-excuse-the-compile": Case(
         "use std::process::Command;\n#[test]\nfn reuse() {\n"
         '    let mut command = Command::new("rustc");\n'
