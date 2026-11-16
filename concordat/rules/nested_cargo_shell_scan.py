@@ -30,6 +30,8 @@ def _double_quote_step(script: str, index: int) -> int:
         return index + 2
     if script[index : index + 2] in EXPANSIONS:
         return skip_expansion(script, index)
+    if script[index] == "`":
+        return _past(script, "`", index + 1)
     return index + 1
 
 
@@ -112,6 +114,12 @@ def _mask_quoted(script: str, masked: list[str], start: int, end: int) -> None:
         if is_double and script[inner : inner + 2] in EXPANSIONS:
             stop = skip_expansion(script, inner)
             _mask_range(script, masked, inner + 2, stop)
+            inner = stop
+            continue
+        if is_double and script[inner] == "`":
+            # A backquoted command inside double quotes runs too.
+            stop = _past(script, "`", inner + 1)
+            _mask_range(script, masked, inner + 1, stop)
             inner = stop
             continue
         if script[inner] != "\n":

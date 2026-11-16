@@ -268,6 +268,17 @@ CHECK_ONLY_CASES = {
         ),
         set(),
     ),
+    "backquoted-command-inside-double-quotes-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + '      - run: RUSTFLAGS="`make rustflags`" cargo check --locked\n'
+        ),
+        {"NC-006"},
+    ),
+    "backquoted-command-in-an-echo-argument-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + '      - run: echo "`make test`"\n'),
+        {"NC-006"},
+    ),
     "sed-script-with-brackets-in-quotes-stays-silent": Case(
         msrv_workflow(
             steps=(
