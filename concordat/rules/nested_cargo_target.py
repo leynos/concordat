@@ -56,8 +56,12 @@ _STRING: typ.Final = re.compile(r'"(?:[^"\\]|\\.)*"')
 # Constructors and accessors of a directory that is removed with its owner or
 # named for one run: a later run can never find what an earlier one built.
 _TEMPORARY: typ.Final = re.compile(
-    r"\b(?:tempdir|tempdir_in|TempDir|temp_dir|mkdtemp|NamedTempFile|tempfile)\b"
+    r"\b(?:tempdir|tempdir_in|TempDir|mkdtemp|NamedTempFile|tempfile)\b"
 )
+# The system temporary directory itself is shared by every run, so a fixed path
+# under it persists like any other: it is private only with a name unique to the
+# run, which `_UNIQUE` reads.
+_SYSTEM_TEMPORARY: typ.Final = re.compile(r"\btemp_dir\b")
 _UNIQUE: typ.Final = re.compile(
     r"\b(?:Uuid|uuid|SystemTime|fastrand|rand)\b|\bprocess\s*::\s*id\b"
 )
@@ -246,6 +250,10 @@ def classify_value(expression: str, bindings: dict[str, str]) -> TargetReading:
         return TargetReading(PRIVATE, "a temporary directory")
     if _UNIQUE.search(code):
         return TargetReading(PRIVATE, "a name unique to the run")
+    if _SYSTEM_TEMPORARY.search(code):
+        return TargetReading(
+            DEDICATED, "a fixed path under the system temporary directory"
+        )
     joined = _classify_joined(expanded)
     if joined is not None:
         return joined
@@ -324,9 +332,19 @@ class _Replay:
         """Return where the replayed command builds."""
         if self.flag is not None:
             return self.flag
-        for name in TARGET_VARIABLES:
-            if name in self.variables:
-                return self.variables[name]
+        higher, lower = TARGET_VARIABLES
+        if higher in self.variables:
+            return self.variables[higher]
+        if lower in self.variables:
+            # Cargo reads `CARGO_TARGET_DIR` first, so a value set here only
+            # decides the target when nothing can supply the higher one.
+            if self.is_opaque or higher not in self.removed:
+                return TargetReading(
+                    UNKNOWN, f"{higher} may take precedence over {lower}"
+                )
+            return self.variables[lower]
+        if self.is_opaque:
+            return TargetReading(UNKNOWN, "an environment call the reader cannot see")
         if self._is_cut_off_in_temporary_directory():
             return TargetReading(
                 PRIVATE,
@@ -352,6 +370,25 @@ class _Replay:
         if not set(TARGET_VARIABLES) <= self.removed:
             return False
         return _is_temporary(self.directory, self.bindings)
+
+
+def scoped_calls(
+    calls: typ.Iterable[tuple[str, str]], text: str
+) -> list[tuple[str, str]]:
+    """Return *calls* with each name resolved in the scope *text* describes.
+
+    A helper's calls are copied onto each call site, which lives in another
+    function. A name such as `target` in the helper means the helper's own
+    binding, so it is resolved here, before the copy, and not against whatever
+    the caller happens to call `target`.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        The calls, each payload with its locally bound names inlined.
+    """
+    bindings = local_bindings(text)
+    return [(method, _expand(payload, bindings)) for method, payload in calls]
 
 
 def sets_target_variable(calls: typ.Iterable[tuple[str, str]]) -> bool:

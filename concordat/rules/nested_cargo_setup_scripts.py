@@ -25,6 +25,9 @@ if typ.TYPE_CHECKING:
 
 NEXTEST_CONFIG: typ.Final = ".config/nextest.toml"
 ALL_FILTER: typ.Final = "all()"
+# Nextest filtersets negate with `not` or `!` and subtract with `-`. A binary
+# name may contain a hyphen, so a subtraction is a hyphen with space around it.
+_NEGATION: typ.Final = re.compile(r"(?<![\w-])not(?![\w-])|!|\s-\s")
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -82,11 +85,19 @@ def read_setup_rules(checkout: pathlib.Path, problems: list[str]) -> list[SetupR
         problems.append(f"cannot read {NEXTEST_CONFIG}: {error}")
         return []
     defined = _defined_scripts(document)
-    return [
+    rules = [
         SetupRule(_filter_of(rule))
         for rule in _profile_rules(document)
         if (listed := _setup_names(rule)) and all(name in defined for name in listed)
     ]
+    problems.extend(
+        f"{NEXTEST_CONFIG}: the setup rule filter `{rule.filter}` uses negation or "
+        "difference, which the reader does not evaluate, so it is not counted as "
+        "preparing any test"
+        for rule in rules
+        if _NEGATION.search(rule.filter)
+    )
+    return rules
 
 
 def _filter_of(rule: dict[str, object]) -> str:
@@ -103,6 +114,11 @@ def _mentions(filterset: str, name: str) -> bool:
 def covers(rules: list[SetupRule], names: list[str]) -> bool:
     """Report whether a setup rule selects every test or names one of *names*.
 
+    A filter that negates or subtracts (`not binary(ui)`, `all() - binary(ui)`)
+    names a binary in order to leave it out, so a name found in one proves
+    nothing, and an `all()` inside one does not select every test. Such a rule
+    never covers, and the reader reports it as a problem.
+
     Returns
     -------
     bool
@@ -112,4 +128,5 @@ def covers(rules: list[SetupRule], names: list[str]) -> bool:
         rule.filter.strip() == ALL_FILTER
         or any(_mentions(rule.filter, name) for name in names)
         for rule in rules
+        if not _NEGATION.search(rule.filter)
     )

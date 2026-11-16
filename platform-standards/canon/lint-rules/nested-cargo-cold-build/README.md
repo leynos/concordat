@@ -63,21 +63,27 @@ target from `--target-dir`, then `CARGO_TARGET_DIR`, then
 the workspace default. The reading is one of five states:
 
 - `private`: the value derives from `tempfile::tempdir()`, `TempDir`,
-  `tempdir_in`, `env::temp_dir()`, `mkdtemp` or a `NamedTempFile`, or from a
-  `uuid`, `SystemTime`, `process::id()` or a random source. A name bound to one
-  of those in the same file counts, followed through three levels of `let`
-  bindings; a `TempDir` parameter counts. The same applies when the command's
-  working directory is temporary and the command can inherit no target: an
-  `env_clear()`, or an `env_remove` of **both** `CARGO_TARGET_DIR` and
-  `CARGO_BUILD_TARGET_DIR`, with no target set afterwards.
+  `tempdir_in`, `mkdtemp` or a `NamedTempFile`, or from a `uuid`, `SystemTime`,
+  `process::id()` or a random source. A name bound to one of those in the same
+  function counts, followed through three levels of `let` bindings; a `TempDir`
+  parameter counts. The same applies when the command's working directory is
+  temporary and the command can inherit no target: an `env_clear()`, or an
+  `env_remove` of **both** `CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET_DIR`,
+  with no target set afterwards and no environment call the reader cannot read.
 - `unknown`: a target is set from a value the reader cannot follow, such as the
-  result of a function in another file, or it was set before a call the reader
-  cannot see through. This is reported as indeterminate, never as a pass and
-  never as a private target.
+  result of a function in another file; it was set before a call the reader
+  cannot see through; only `CARGO_BUILD_TARGET_DIR` is set while an inherited
+  `CARGO_TARGET_DIR` may take precedence (cargo reads that one first); or an
+  environment call the reader cannot read (`.envs(extra)`, `.env(key, value)`)
+  may have set a target. This is reported as indeterminate, never as a pass and
+  never as a private target. An unseen *argument* list is not read this way: it
+  may hide `--target-dir`, but the reader judges what it can see there.
 - `dedicated`: a fixed `target/...` directory inside the crate
-  (`CARGO_MANIFEST_DIR` joined with `"target/..."`). It persists between runs,
-  so it is warm the second time; whether the first time is paid for is NC-010's
-  question, not NC-009's.
+  (`CARGO_MANIFEST_DIR` joined with `"target/..."`), or a fixed path under the
+  system temporary directory (`env::temp_dir().join("scenario")`). It persists
+  between runs, so it is warm the second time; whether the first time is paid
+  for is NC-010's question, not NC-009's. The system temporary directory is
+  shared by every run, so only a unique name inside it is private.
 - `shared`: the value reads `CARGO_TARGET_DIR`, `cargo metadata`'s
   `target_directory`, or joins a relative path out of the crate to the workspace
   `target`.
@@ -131,7 +137,10 @@ The compile is *prepared* when any one of these holds:
 1. **A nextest setup script.** A `[scripts.setup.<name>]` table the file defines
    is run by a `[[profile.<p>.scripts]]` rule whose `filter` is `all()` or
    names the test binary or the crate's package. Nextest runs it before the
-   tests it covers, so the build is paid for outside any test's deadline.
+   tests it covers, so the build is paid for outside any test's deadline. A
+   filter that negates or subtracts (`not binary(ui)`, `all() - binary(ui)`)
+   names a binary in order to leave it out, so it never counts as coverage and
+   the reader reports it as indeterminate.
 2. **A named preparation test in the same crate.** A function whose name matches
    a pattern in `preparation_gates.tests`. The test compiles what the timed
    tests would otherwise compile, and the nextest configuration gives it a

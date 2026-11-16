@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 import typing as typ
 
-from .nested_cargo_commands import ARGUMENT_METHODS, UNSEEN_CALL
+from .nested_cargo_commands import ARGUMENT_METHODS, UNSEEN_ARGUMENTS
 from .nested_cargo_spawn import SUBCOMMANDS
 from .nested_cargo_text import argument_items
 
@@ -53,7 +53,7 @@ def _argument_words(calls: cabc.Iterable[tuple[str, str]]) -> list[str | None]:
     """
     words: list[str | None] = []
     for method, payload in calls:
-        if method == UNSEEN_CALL:
+        if method == UNSEEN_ARGUMENTS:
             words.append(None)
         elif method in ARGUMENT_METHODS:
             words.extend(

@@ -123,6 +123,41 @@ test_an_exemption_does_not_hide_indeterminate_evidence if {
 	count(findings_with(data.fixtures.with_problem, exemptions)) == 1
 }
 
+# An exemption suppresses NC-009 and NC-010 only, so an exempt file cannot hide
+# the rule's own uncertainty: an unreadable target and an unseen subcommand both
+# stay reported.
+test_an_exemption_does_not_hide_an_unreadable_target if {
+	exempt_steps := [{
+		"repository": "leynos/example",
+		"path": "tests/steps.rs",
+		"rationale": "the scenario builds a fresh fixture on purpose",
+		"review_trigger": "review when the fixture gains a registry dependency",
+	}]
+	found := findings_with(data.fixtures.unknown_target, exempt_steps)
+	{[f.rule_id, f.verdict] | some f in found} == {["EN-001", "indeterminate"]}
+}
+
+test_an_exemption_does_not_hide_an_unseen_subcommand if {
+	exempt_wrapper := [{
+		"repository": "leynos/example",
+		"path": "tests/wrapper.rs",
+		"rationale": "the wrapper runs cargo metadata only",
+		"review_trigger": "review when the wrapper runs another subcommand",
+	}]
+	found := findings_with(data.fixtures.unprepared_unknown_subcommand, exempt_wrapper)
+	{[f.rule_id, f.verdict] | some f in found} == {["EN-001", "indeterminate"]}
+}
+
+test_an_exemption_still_suppresses_nc_010 if {
+	exempt_cli := [{
+		"repository": "leynos/example",
+		"path": "tests/cli.rs",
+		"rationale": "the binary is built by the package's own test target",
+		"review_trigger": "review when the test builds another package",
+	}]
+	count(findings_with(data.fixtures.unprepared_build, exempt_cli)) == 0
+}
+
 test_a_reader_problem_is_indeterminate if {
 	profile(data.fixtures.with_problem) == {["EN-001", "indeterminate", ""]}
 }

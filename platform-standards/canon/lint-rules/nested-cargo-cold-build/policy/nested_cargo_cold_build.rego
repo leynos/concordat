@@ -91,7 +91,6 @@ deny contains finding("EN-001", severity, "indeterminate", spawn.path, spawn.lin
 	spawn.target_state == "unknown"
 	_builds(spawn)
 	_well_formed_spawn(spawn)
-	not is_exempt(spawn.path)
 	msg := sprintf(
 		"%s:%d starts a nested build and sets its target directory from a value the reader cannot follow (%s), so whether the directory is private is unknown",
 		[spawn.path, spawn.line, object.get(spawn, "target_source", "no source recorded")],
@@ -111,7 +110,9 @@ _unprepared(build) if {
 # A `cargo-unknown` build is a cargo command whose subcommand the reader could
 # not see, in a crate that shows no compile elsewhere. It may be `metadata` or
 # it may be `build`, so it is never a noncompliant finding on its own; it is
-# reported as indeterminate unless the same file also has a definite build.
+# reported as indeterminate unless the same file also has a definite build. An
+# exemption does not reach it: it suppresses NC-009 and NC-010 only, so an exempt
+# file cannot hide the rule's own uncertainty.
 _definite(build) if build.kind != "cargo-unknown"
 
 _cold_paths := {build.path |
@@ -127,7 +128,6 @@ _maybe_paths := {build.path |
 	_well_formed_build(build)
 	_unprepared(build)
 	not _definite(build)
-	not is_exempt(build.path)
 	not build.path in _cold_paths
 }
 

@@ -150,7 +150,31 @@ fn build_flag() {
 
 BUILD_TARGET_VARIABLE = TEMPDIR_TARGET.replace(
     "CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"
+).replace(
+    '.env("CARGO_BUILD_TARGET_DIR"',
+    '.env_remove("CARGO_TARGET_DIR")\n        .env("CARGO_BUILD_TARGET_DIR"',
 )
+
+# Cargo reads CARGO_TARGET_DIR first, and a parent may have set it, so the build
+# variable alone proves nothing about where the child builds.
+BUILD_TARGET_ALONE = TEMPDIR_TARGET.replace(
+    "CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"
+)
+
+# After the removal, an environment call the reader cannot read may put either
+# variable back.
+OPAQUE_AFTER_CLEAR = """\
+fn build_in_scratch(extra: &[(String, String)]) {
+    let scratch = tempfile::tempdir().unwrap();
+    std::process::Command::new("cargo")
+        .arg("build")
+        .env_clear()
+        .envs(extra.iter().cloned())
+        .current_dir(scratch.path())
+        .status()
+        .unwrap();
+}
+"""
 
 METADATA_PRIVATE = """\
 fn read_metadata() {
@@ -374,8 +398,26 @@ def test_a_repository_names_its_own_gate_in_the_parameters(
         (SETUP_SCRIPT.format(filter="binary(ui)", setup="prepare-nested"), True),
         (SETUP_SCRIPT.format(filter="binary(other)", setup="prepare-nested"), False),
         (SETUP_SCRIPT.format(filter="all()", setup="missing"), False),
+        # A name in a negated or subtracted filter is named to be left out.
+        (SETUP_SCRIPT.format(filter="not binary(ui)", setup="prepare-nested"), False),
+        (
+            SETUP_SCRIPT.format(filter="all() - binary(ui)", setup="prepare-nested"),
+            False,
+        ),
+        (SETUP_SCRIPT.format(filter="!binary(ui)", setup="prepare-nested"), False),
+        # A hyphen inside a binary name is not a subtraction.
+        (SETUP_SCRIPT.format(filter="binary(ui-tests)", setup="prepare-nested"), False),
     ],
-    ids=["covers-every-test", "names-the-binary", "names-another", "undefined-script"],
+    ids=[
+        "covers-every-test",
+        "names-the-binary",
+        "names-another",
+        "undefined-script",
+        "not",
+        "difference",
+        "bang",
+        "hyphenated-other-binary",
+    ],
 )
 def test_a_nextest_setup_script_prepares_the_tests_it_covers(
     tmp_path: pathlib.Path, script: str, *, is_prepared: bool
@@ -491,6 +533,77 @@ def test_a_reused_command_is_judged_at_each_run(tmp_path: pathlib.Path) -> None:
     assert ("NC-009", "tests/twice.rs") in profile(tmp_path)
 
 
+def test_a_negated_setup_filter_is_reported_as_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A filter the reader does not evaluate is said so, not silently trusted."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "app"\n')
+    put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
+    put(
+        tmp_path,
+        ".config/nextest.toml",
+        SETUP_SCRIPT.format(filter="not binary(ui)", setup="prepare-nested"),
+    )
+    messages = [f.message for f in findings(tmp_path) if f.rule_id == "EN-001"]
+    assert any("negation or difference" in message for message in messages)
+
+
+HELPER_WITH_TEMP_PARAMETER = """\
+fn cargo_command(target: &tempfile::TempDir) -> std::process::Command {
+    let mut cmd = std::process::Command::new(env!("CARGO"));
+    cmd.env("CARGO_TARGET_DIR", target.path());
+    cmd
+}
+
+fn build_in_shared() {
+    let target = std::env::var("CARGO_TARGET_DIR").unwrap();
+    cargo_command(&target).arg("build").status().unwrap();
+}
+"""
+
+
+def test_a_helper_resolves_its_names_in_its_own_scope(tmp_path: pathlib.Path) -> None:
+    """The helper's `target` is its parameter, not the caller's unrelated binding."""
+    put(tmp_path, "tests/helper.rs", HELPER_WITH_TEMP_PARAMETER)
+    assert ("NC-009", "tests/helper.rs") in profile(tmp_path)
+
+
+def test_a_fixed_path_under_the_system_temporary_directory_is_not_private(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The system temporary directory is shared, so a fixed path persists."""
+    put(
+        tmp_path,
+        "tests/fixed.rs",
+        'fn build() {\n    let dir = std::env::temp_dir().join("scenario");\n'
+        '    std::process::Command::new("cargo")\n        .arg("build")\n'
+        '        .env("CARGO_TARGET_DIR", &dir)\n'
+        "        .status()\n        .unwrap();\n}\n",
+    )
+    assert ("NC-009", "tests/fixed.rs") not in profile(tmp_path)
+
+
+def test_an_exemption_does_not_hide_an_unreadable_target(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exemptions suppress NC-009 and NC-010 only; the rule's own doubt stays."""
+    put(tmp_path, "tests/steps_cmd.rs", ORTHO_SCENARIO)
+    exemption = {
+        "repository": "leynos/ortho-config",
+        "path": "tests/steps_cmd.rs",
+        "rationale": "the scenario builds through a shared tree",
+        "review_trigger": "review when the target helper changes",
+    }
+    origin(tmp_path, "https://github.com/leynos/ortho-config.git")
+    parameters = {"severity": "warning", "exemptions": [exemption]}
+    found = {
+        (f.rule_id, f.verdict)
+        for f in result_with(monkeypatch, tmp_path, parameters).findings
+    }
+    assert ("EN-001", "indeterminate") in found
+    assert ("NC-010", "noncompliant") not in found
+
+
 def test_a_private_tempdir_target_is_noncompliant(tmp_path: pathlib.Path) -> None:
     """A target named after a temporary directory can never be warm."""
     put(tmp_path, "tests/scenario.rs", TEMPDIR_TARGET)
@@ -512,12 +625,21 @@ def test_every_route_to_a_private_target_is_read(
 
 @pytest.mark.parametrize(
     "source",
-    [REMOVE_ONE, CLEAR_THEN_SHARED, SHARED_FROM_ENVIRONMENT, METADATA_PRIVATE],
+    [
+        REMOVE_ONE,
+        CLEAR_THEN_SHARED,
+        SHARED_FROM_ENVIRONMENT,
+        METADATA_PRIVATE,
+        BUILD_TARGET_ALONE,
+        OPAQUE_AFTER_CLEAR,
+    ],
     ids=[
         "one-variable-removed",
         "clear-then-shared",
         "read-from-environment",
         "no-compile",
+        "build-variable-alone",
+        "opaque-after-clear",
     ],
 )
 def test_a_target_that_may_be_shared_is_not_private(

@@ -64,6 +64,7 @@ from .nested_cargo_target import (
     builds_into_target,
     function_text,
     read_target,
+    scoped_calls,
     target_signature,
 )
 
@@ -295,6 +296,14 @@ def _helper_commands(
         definition = helper_definition(source, body, pairs)
         if definition is None:
             continue
+        # The helper's calls are copied onto each call site, which is another
+        # function: its names mean the helper's bindings, not the caller's.
+        definition = dataclasses.replace(
+            definition,
+            calls=scoped_calls(
+                definition.calls, function_text(source, definition.start)
+            ),
+        )
         calls = [
             site
             for site in helper_call_sites(source, name, body, pairs)

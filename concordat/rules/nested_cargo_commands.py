@@ -68,7 +68,12 @@ TARGET_METHODS: typ.Final = (
     | ENVIRONMENT_REMOVAL_METHODS
     | {"current_dir"}
 )
+# The two kinds of call the reader could not see through. An unseen environment
+# operation may have set any variable, so it leaves a target unknown; an unseen
+# argument list may only have hidden a subcommand or a `--target-dir` flag, and
+# the target reader judges what it can read there.
 UNSEEN_CALL: typ.Final = "unseen"
+UNSEEN_ARGUMENTS: typ.Final = "unseen-arguments"
 PROGRAM_FORM: typ.Final = "program"
 _PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
 
@@ -225,7 +230,7 @@ class CargoCommand:
         list, so this is the same evidence an unparseable `.args(..)` leaves.
         """
         self.words.append(None)
-        self.calls.append((UNSEEN_CALL, ""))
+        self.calls.append((UNSEEN_ARGUMENTS, ""))
 
     def mark_environment_unknown(self) -> None:
         """Record an environment operation the reader cannot see through.

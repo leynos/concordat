@@ -35,7 +35,14 @@ def env(name: str, value: str) -> tuple[str, str]:
     [
         ("scratch.path()", TEMP_SOURCE, PRIVATE),
         ("&tempfile::tempdir().unwrap().path()", "", PRIVATE),
-        ('std::env::temp_dir().join("scenario")', "", PRIVATE),
+        # The system temporary directory is shared by every run, so a fixed path
+        # under it persists like any other; only a unique name makes it private.
+        ('std::env::temp_dir().join("scenario")', "", DEDICATED),
+        (
+            'std::env::temp_dir().join(format!("s-{}", std::process::id()))',
+            "",
+            PRIVATE,
+        ),
         ("dir.join(Uuid::new_v4().to_string())", "", PRIVATE),
         (
             "target.as_str()",
@@ -141,13 +148,43 @@ def test_a_temporary_working_directory_needs_both_variables_gone() -> None:
 
 
 def test_an_opaque_environment_call_after_env_clear_hides_the_directory() -> None:
-    """After the clear, `.env(key, value)` may set the target, so it is not private."""
+    """After the clear, `.env(key, value)` may set the target: it is unknown."""
     calls = [
         ("current_dir", "scratch.path()"),
         ("env_clear", ""),
         ("env", "key, value"),
     ]
-    assert read_target(calls, TEMP_SOURCE).state == INHERITED
+    assert read_target(calls, TEMP_SOURCE).state == UNKNOWN
+
+
+def test_an_opaque_environment_call_with_nothing_set_is_unknown() -> None:
+    """`.envs(extra)` may set a private target, so inheriting one is not proven."""
+    assert read_target([("envs", "extra")], "").state == UNKNOWN
+
+
+def test_an_unseen_argument_list_leaves_the_target_as_it_was() -> None:
+    """A hidden argument may carry `--target-dir`; the reader judges what it sees."""
+    assert read_target([("unseen-arguments", "")], "").state == INHERITED
+
+
+def test_the_build_target_variable_yields_to_an_inherited_target_variable() -> None:
+    """Cargo reads `CARGO_TARGET_DIR` first, and a parent may have set it."""
+    lower = [env("CARGO_BUILD_TARGET_DIR", "scratch.path()")]
+    assert read_target(lower, TEMP_SOURCE).state == UNKNOWN
+    removed = [("env_remove", '"CARGO_TARGET_DIR"'), *lower]
+    assert read_target(removed, TEMP_SOURCE).state == PRIVATE
+    cleared = [("env_clear", ""), *lower]
+    assert read_target(cleared, TEMP_SOURCE).state == PRIVATE
+
+
+def test_an_opaque_call_after_the_removal_may_restore_the_higher_variable() -> None:
+    """After `env_remove("CARGO_TARGET_DIR")`, an unseen `.env(k, v)` may set it."""
+    calls = [
+        ("env_remove", '"CARGO_TARGET_DIR"'),
+        ("env", "key, value"),
+        env("CARGO_BUILD_TARGET_DIR", "scratch.path()"),
+    ]
+    assert read_target(calls, TEMP_SOURCE).state == UNKNOWN
 
 
 @pytest.mark.parametrize(
@@ -163,7 +200,8 @@ def test_an_opaque_environment_call_after_env_clear_hides_the_directory() -> Non
         ([("args", '["package", "--allow-dirty"]')], "yes"),
         ([("args", '["--manifest-path", path, "build"]')], "unknown"),
         ([("arg", "subcommand")], "unknown"),
-        ([("unseen", "")], "unknown"),
+        ([("unseen-arguments", "")], "unknown"),
+        ([("unseen", "")], "no"),
         ([], "no"),
     ],
 )

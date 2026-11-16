@@ -910,14 +910,15 @@ detecting a cold build afterwards. It reports:
 
 - **NC-009**: a command in test scope that compiles builds into a private
   target directory, one derived from a temporary directory (`tempfile::tempdir`,
-  `TempDir`, `env::temp_dir`) or unique to the run, so no later run can reuse
-  it. The target is read from `--target-dir`, `CARGO_TARGET_DIR` and
-  `CARGO_BUILD_TARGET_DIR`, last write winning, and a temporary working
-  directory counts only when the command can inherit no target (an
-  `env_clear()`, or a removal of both variables). Removing `CARGO_TARGET_DIR`
-  alone proves nothing, because `CARGO_BUILD_TARGET_DIR` may still name a
-  shared directory. A command that starts another program is read too when its
-  chain sets a target variable, since that program builds through its own cargo.
+  `TempDir`) or unique to the run, so no later run can reuse it. A fixed path
+  under `env::temp_dir()` persists, so it is not private. The target is read
+  from `--target-dir`, `CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET_DIR`, last
+  write winning, and a temporary working directory counts only when the command
+  can inherit no target (an `env_clear()`, or a removal of both variables).
+  Removing `CARGO_TARGET_DIR` alone proves nothing, because
+  `CARGO_BUILD_TARGET_DIR` may still name a shared directory. A command that
+  starts another program is read too when its chain sets a target variable,
+  since that program builds through its own cargo.
 - **NC-010**: a test source compiles in a timed test (a compiling `cargo`
   command, a `trybuild::TestCases` or `macrotest::expand` use, or a call to a
   helper the `compiling_calls` parameter names) and the repository declares no
