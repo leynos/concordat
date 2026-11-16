@@ -237,6 +237,20 @@ CHECK_ONLY_CASES = {
         ),
         {"NC-006"},
     ),
+    "substitution-in-a-default-expansion-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + "      - run: RUSTFLAGS=${RUSTFLAGS:-$(make rustflags)} cargo check\n"
+        ),
+        {"NC-006"},
+    ),
+    "a-plain-default-expansion-stays-silent": Case(
+        msrv_workflow(
+            steps="      - run: RUSTFLAGS=${RUSTFLAGS:-x} cargo check --locked\n"
+            "        env:\n" + MSRV_TARGET
+        ),
+        set(),
+    ),
     "a-quoted-assignment-before-cargo-check-stays-silent": Case(
         msrv_workflow(
             steps='      - run: RUSTFLAGS="-D warnings" cargo check --locked\n'
