@@ -742,6 +742,44 @@ CASES: dict[str, Case] = {
         'fn run() -> Command {\n    cargo("x")\n}\n',
         (("helper", "unresolved"),),
     ),
+    # The same spellings in an unconditional call, which an unrelated
+    # conditional call after them must not hide.
+    "offline-then-escaped-name-then-unrelated-conditional": Case(
+        "fn run(flag: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        '    command.env("\\x43ARGO_NET_OFFLINE", "0");\n'
+        '    if flag { command.env("RUSTFLAGS", "x"); }\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    "offline-then-other-case-then-unrelated-conditional": Case(
+        "fn run(flag: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        '    command.env("cargo_net_offline", "0");\n'
+        '    if flag { command.env("RUSTFLAGS", "x"); }\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    "offline-then-escaped-removal-then-unrelated-conditional": Case(
+        "fn run(flag: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        '    command.env_remove("\\x43ARGO_NET_OFFLINE");\n'
+        '    if flag { command.env("RUSTFLAGS", "x"); }\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    "offline-then-other-case-removal-then-unrelated-conditional": Case(
+        "fn run(flag: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        '    command.env_remove("Cargo_Net_Offline");\n'
+        '    if flag { command.env("RUSTFLAGS", "x"); }\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
     "helper-offline-then-conditional-environment-list": Case(
         "fn cargo(extra: Vec<(String, String)>) -> Command {\n"
         '    let mut command = Command::new("cargo");\n'

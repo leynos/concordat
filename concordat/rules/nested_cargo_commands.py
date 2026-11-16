@@ -38,7 +38,11 @@ import typing as typ
 
 from .nested_cargo_source import RustSource, enclosing_block
 from .nested_cargo_text import environment_slots
-from .nested_cargo_variable_names import OFFLINE_VARIABLE, may_include_offline_variable
+from .nested_cargo_variable_names import (
+    OFFLINE_VARIABLE,
+    is_other_variable,
+    may_include_offline_variable,
+)
 from .rust_source import scan_balanced, skip_trivia
 
 # Cargo reads this variable through its boolean parser, which accepts only `1`
@@ -194,6 +198,10 @@ class CargoCommand:
                 # the previous answer as an unknown one.
                 self._record_offline_operation(offline=None)
                 continue
+            if key != OFFLINE_VARIABLE and not is_other_variable(key):
+                # An escape or other letter case may spell the offline name.
+                self._record_offline_operation(offline=None)
+                continue
             self.environment.append(key)
             if key != OFFLINE_VARIABLE:
                 continue
@@ -222,6 +230,8 @@ class CargoCommand:
             return
         if OFFLINE_VARIABLE in names:
             self._record_offline_operation(offline=False)
+        elif not all(is_other_variable(name) for name in names):
+            self._record_offline_operation(offline=None)
 
     def mark_arguments_unknown(self, text: str = "") -> None:
         """Record an argument call the reader cannot see through.
@@ -560,25 +570,21 @@ def _record_unseen(
 
 
 def _may_name_offline_variable(method: str, text: str) -> bool:
-    """Report whether an environment call on some paths could touch the offline name.
-
-    `envs(..)` and `env_clear()` always may; `env` and `env_remove` may unless
-    every name they carry is plainly another variable (see
-    `nested_cargo_variable_names`).
+    """Report whether a call on some paths could touch the offline variable.
 
     Returns
     -------
     bool
-        False only when the call names plainly another variable.
+        False only for `env` or `env_remove` naming plainly another variable.
     """
+    pairs = _environment_pairs(text) if method == "env" else None
     if method == "env":
-        pairs = _environment_pairs(text)
         return may_include_offline_variable(
             None if pairs is None else [key for key, _value in pairs]
         )
-    if method == "env_remove":
-        return may_include_offline_variable(_string_literals(text))
-    return True
+    return method != "env_remove" or may_include_offline_variable(
+        _string_literals(text)
+    )
 
 
 def construction(
