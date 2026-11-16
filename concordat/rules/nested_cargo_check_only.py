@@ -76,17 +76,17 @@ CARGO_SUBCOMMAND: typ.Final = re.compile(
     r"""[ \t]+(?:["']?\+[^\s"']+["']?[ \t]+)?(?P<subcommand>[a-z][\w-]*)"""
 )
 # A command position: the start of a line, or after a separator, a command
-# substitution, a subshell or a compound-command keyword. Plain `NAME=value`
-# prefixes are skipped so the command they precede is still read.
+# substitution, a subshell or a compound-command keyword. A `NAME=value` word
+# there is followed through to the command it precedes (`_resolve_command`).
 COMMAND_START: typ.Final = re.compile(
     r"""(?:^|;|&|\|\||\||\(|\)["']?|`)[ \t]*"""
     rf"(?:{CONTROL_WORDS})*"
-    r"""(?:[A-Za-z_]\w*="""
-    r"""(?:"[^"$`]*"|'[^']*'|\$\{[^}$`]*\}|\$\w+|[^\s"'$();&|`])*[ \t]+)*"""
     r"(?P<word>[^\s;&|()`]+)",
     re.MULTILINE,
 )
+WORD: typ.Final = re.compile(r"[ \t]*(?P<word>[^\s;&|()`]+)")
 ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_]\w*=")
+CLOSERS: typ.Final = {"(": ")", "{": "}"}
 # What is left of a `case` arm (`*)`) once the parenthesis is split off, or the
 # descriptor of a redirection such as `>&2`.
 PATTERN_ONLY: typ.Final = re.compile(r"[*?]+|\d+")
@@ -101,9 +101,84 @@ def _cargo_is_check_style(script: str) -> bool:
     return True
 
 
+def _skip_quoted(script: str, index: int) -> int:
+    """Return the index just past the quoted string that starts at *index*."""
+    quote = script[index]
+    index += 1
+    while index < len(script) and script[index] != quote:
+        if quote == '"' and script[index : index + 2] in {"$(", "${"}:
+            # An expansion inside double quotes nests its own quotes.
+            index = _skip_expansion(script, index)
+        else:
+            index += 2 if script[index] == "\\" and quote == '"' else 1
+    return index + 1
+
+
+def _skip_expansion(script: str, index: int) -> int:
+    """Return the index just past the `$(..)` or `${..}` that starts at *index*."""
+    opener = script[index + 1]
+    closer = CLOSERS[opener]
+    depth = 0
+    while index < len(script):
+        if script[index] in "\"'":
+            index = _skip_quoted(script, index)
+            continue
+        depth += (script[index] == opener) - (script[index] == closer)
+        index += 1
+        if depth == 0 and script[index - 1] == closer:
+            break
+    return index
+
+
+def _value_end(script: str, index: int) -> int:
+    """Return the index where an assignment value that starts at *index* ends.
+
+    The value runs to the next unquoted separator, skipping quoted strings,
+    command substitutions, parameter expansions and backquotes whole.
+
+    Returns
+    -------
+    int
+        The index of the first character after the value.
+    """
+    while index < len(script) and script[index] not in " \t\n;&|)":
+        char = script[index]
+        if char in "\"'":
+            index = _skip_quoted(script, index)
+        elif char == "$" and script[index + 1 : index + 2] in CLOSERS:
+            index = _skip_expansion(script, index)
+        elif char == "`":
+            index = script.find("`", index + 1) + 1 or len(script)
+        else:
+            index += 1
+    return index
+
+
+def _resolve_command(script: str, found: re.Match[str]) -> re.Match[str] | None:
+    """Return the command word a command position reaches past its assignments.
+
+    `RUST_BACKTRACE="$TRACE" make test` is the command `make`, so each leading
+    `NAME=value` word is skipped by reading its whole value.
+
+    Returns
+    -------
+    re.Match[str] | None
+        The match of the first word that is not an assignment, or None when the
+        position holds only assignments.
+    """
+    word: re.Match[str] | None = found
+    while word is not None and ASSIGNMENT.match(word["word"]):
+        value = word.start("word") + word["word"].index("=") + 1
+        word = WORD.match(script, _value_end(script, value))
+    return word
+
+
 def _commands_are_harmless(script: str) -> bool:
     """Report whether every command of *script* is cargo, an assignment or harmless."""
-    for found in COMMAND_START.finditer(script):
+    for position in COMMAND_START.finditer(script):
+        found = _resolve_command(script, position)
+        if found is None:
+            continue
         word = found["word"].strip("\"'")
         guard = {"rustup": RUSTUP_SETUP, "sed": SED_SUBSTITUTE}.get(word)
         if guard is not None:
@@ -112,7 +187,6 @@ def _commands_are_harmless(script: str) -> bool:
             return False
         if (
             not word
-            or ASSIGNMENT.match(word)
             or word in HARMLESS_WORDS
             or PATTERN_ONLY.fullmatch(word)
             or CARGO_WORD.fullmatch(word)

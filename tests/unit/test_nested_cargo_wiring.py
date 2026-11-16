@@ -237,6 +237,23 @@ CHECK_ONLY_CASES = {
         ),
         {"NC-006"},
     ),
+    "quoted-variable-assignment-then-a-command-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + '      - run: RUST_BACKTRACE="$TRACE" make test\n'
+        ),
+        {"NC-006"},
+    ),
+    "quoted-default-assignment-then-a-command-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + '      - run: RUST_BACKTRACE="${RUST_BACKTRACE:-1}" make test\n'
+        ),
+        {"NC-006"},
+    ),
+    "two-assignments-then-a-command-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + '      - run: A="x y" B=$(true) make test\n'),
+        {"NC-006"},
+    ),
     "substitution-in-a-default-expansion-is-flagged": Case(
         msrv_workflow(
             steps=MSRV_CHECK
