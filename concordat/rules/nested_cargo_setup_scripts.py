@@ -246,6 +246,25 @@ def _selects_one(atom: str, binary: str | None, package: str | None) -> bool:
 
 def _is_union_of_selectors(filterset: str) -> bool:
     """Report whether *filterset* is only `all()` and selectors joined by union."""
-    if _UNSUPPORTED_GLOB.search(filterset):
+    if any(_is_unsupported_glob(atom) for atom in _ATOM.findall(filterset)):
         return False
     return _UNION_GLUE.fullmatch(_ATOM.sub("", filterset)) is not None
+
+
+def _is_unsupported_glob(atom: str) -> bool:
+    """Report whether a selector's matcher is a glob the reader cannot evaluate.
+
+    Only a glob (`#glob`, or text with no prefix) is read with `globset`; an
+    equality, contains or regular-expression matcher may hold braces and
+    backslashes of its own (`/^app[0-9]{2}$/`).
+
+    Returns
+    -------
+    bool
+        True when the matcher is a glob that uses braces or backslash escapes.
+    """
+    matcher = atom.partition("(")[2].removesuffix(")").strip()
+    is_regex = len(matcher) > _MIN_REGEX and matcher[0] == matcher[-1] == "/"
+    if matcher[:1] in {"=", "~"} or is_regex:
+        return False
+    return _UNSUPPORTED_GLOB.search(matcher) is not None

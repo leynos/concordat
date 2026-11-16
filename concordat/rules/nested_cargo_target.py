@@ -229,7 +229,7 @@ def _may_carry_flag(payload: str) -> bool:
     for item in items:
         if "--target-dir" in item:
             return True
-        if STRING.fullmatch(item) is None and not _awaits_value(previous):
+        if not _is_plain_literal(item) and not _awaits_value(previous):
             return True
         previous = item
     return False
@@ -248,10 +248,34 @@ def _awaits_value(previous: str) -> bool:
     bool
         True when *previous* is an option that consumes the next argument.
     """
-    if STRING.fullmatch(previous) is None:
+    if not _is_plain_literal(previous):
         return False
-    option = previous[1:-1]
-    return option in _VALUE_OPTIONS
+    return previous[1:-1] in _VALUE_OPTIONS
+
+
+def _is_plain_literal(item: str) -> bool:
+    """Report whether *item* is exactly one string literal with no escapes.
+
+    The reader compares literal text, and a Rust escape (`"\\x2d"`) spells a
+    character the text does not show, so an escaped literal is not read.
+
+    Returns
+    -------
+    bool
+        True for a string literal whose text is its value.
+    """
+    return STRING.fullmatch(item) is not None and "\\" not in item
+
+
+def _is_escaped_literal(item: str) -> bool:
+    """Report whether *item* is one string literal that holds an escape.
+
+    Returns
+    -------
+    bool
+        True for a string literal whose value differs from its text.
+    """
+    return STRING.fullmatch(item) is not None and "\\" in item
 
 
 def _hidden() -> TargetReading:
@@ -350,6 +374,9 @@ class _Replay:
             self.flag = classify_value(item, self.bindings)
         elif item.startswith(_MANIFEST_PATH):
             self.has_manifest_path = True
+        elif _is_escaped_literal(item):
+            # `"\x2d\x2dtarget-dir=.."` is the flag at run time.
+            self.is_flag_unknown = True
 
     def reading(self) -> TargetReading:
         """Return where the replayed command builds."""

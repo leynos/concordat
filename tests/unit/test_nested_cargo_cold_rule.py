@@ -692,7 +692,12 @@ def test_a_platform_restricted_setup_rule_is_not_counted(
     assert ("EN-001", "") in reported
 
 
-@pytest.mark.parametrize("matcher", ["package(app{2,3})", "binary(u\\i)"])
+@pytest.mark.parametrize(
+    "matcher",
+    # The second is a TOML basic string holding one backslash: `binary(u\i)`.
+    ["package(app{2,3})", "binary(u\\\\i)"],
+    ids=["braces", "backslash"],
+)
 def test_a_glob_with_braces_or_escapes_is_not_evaluated(
     tmp_path: pathlib.Path, matcher: str
 ) -> None:
@@ -700,9 +705,24 @@ def test_a_glob_with_braces_or_escapes_is_not_evaluated(
     covered_checkout(
         tmp_path, SETUP_SCRIPT.format(filter=matcher, setup="prepare-nested")
     )
-    reported = profile(tmp_path)
-    assert ("NC-010", "tests/ui.rs") in reported
-    assert ("EN-001", "") in reported
+    found = findings(tmp_path)
+    assert ("NC-010", "tests/ui.rs") in {(f.rule_id, f.path) for f in found}
+    reasons = [f.message for f in found if f.rule_id == "EN-001"]
+    assert any("brace or escape in a glob" in reason for reason in reasons), reasons
+
+
+def test_a_regex_matcher_may_hold_braces(tmp_path: pathlib.Path) -> None:
+    """`package(/^app[0-9]{2}$/)` is a regular expression, not a glob."""
+    put(tmp_path, "app12/Cargo.toml", '[package]\nname = "app12"\n')
+    put(tmp_path, "app12/tests/ui.rs", TRYBUILD_TEST)
+    put(
+        tmp_path,
+        ".config/nextest.toml",
+        SETUP_SCRIPT.format(filter="package(/^app[0-9]{2}$/)", setup="prepare-nested"),
+    )
+    found = {(f.rule_id, f.path) for f in findings(tmp_path)}
+    assert ("NC-010", "app12/tests/ui.rs") not in found
+    assert not any(rule == "EN-001" for rule, _path in found)
 
 
 def test_a_nextest_file_that_links_outside_the_checkout_is_not_read(
@@ -846,6 +866,27 @@ def test_a_destructured_helper_parameter_is_not_resolved_in_the_caller(
     reported = profile(tmp_path)
     assert ("NC-009", "tests/pair.rs") not in reported
     assert ("EN-001", "tests/pair.rs") in reported
+
+
+ESCAPED_TARGET_FLAG = """\
+fn build(use_shared: bool) {
+    let scratch = tempfile::tempdir().unwrap();
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.arg("build").env("CARGO_TARGET_DIR", scratch.path());
+    if use_shared {
+        cmd.arg("\\x2d\\x2dtarget-dir=target/shared");
+    }
+    cmd.status().unwrap();
+}
+"""
+
+
+def test_an_escaped_target_flag_is_not_read_as_text(tmp_path: pathlib.Path) -> None:
+    """`"\\x2d\\x2dtarget-dir=.."` is the flag at run time, so the target is unknown."""
+    put(tmp_path, "tests/escaped.rs", ESCAPED_TARGET_FLAG)
+    reported = profile(tmp_path)
+    assert ("NC-009", "tests/escaped.rs") not in reported
+    assert ("EN-001", "tests/escaped.rs") in reported
 
 
 def test_a_conditional_target_flag_is_unknown_not_inherited(

@@ -168,11 +168,12 @@ The compile is *prepared* when any one of these holds:
    (`binary(ui) & test(=one)`) or uses another predicate names a binary
    without selecting all of it, so it never counts as coverage and the reader
    reports it as indeterminate. So does a glob using braces or backslash
-   escapes, which nextest reads with `globset` and the reader does not. Only a
-   rule in the `default` profile counts, because every profile inherits it and
-   a plain `cargo nextest run` selects it: a rule under `profile.ci` runs only
-   under `--profile ci`, and a rule with a `platform` restriction may not run
-   on the platform under test, so each is reported and neither counts. The
+   escapes, which nextest reads with `globset` and the reader does not (a
+   regular expression or an `=` or `~` matcher may hold both). Only a rule in
+   the `default` profile counts, because every profile inherits it and a plain
+   `cargo nextest run` selects it: a rule under `profile.ci` runs only under
+   `--profile ci`, and a rule with a `platform` restriction may not run on the
+   platform under test, so each is reported and neither counts. The
    configuration is read only when its path resolves inside the checkout; a
    symlink (to the file or to a directory above it) that leaves it is reported
    and not followed.
