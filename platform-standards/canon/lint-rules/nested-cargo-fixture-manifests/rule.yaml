@@ -114,3 +114,15 @@ parameters:
         review_trigger: >-
           review when the probe stops pinning the Verus release recorded in
           `tools/verus`, or when the verifier records stop hashing the tree
+      - repository: leynos/rust-prover-tools
+        path: tests/fixtures/kani_recipe
+        rationale: >-
+          Recorded recipe data, not a fixture crate: a verbatim copy of the
+          pinned upstream Kani release's root manifest (no sources, never
+          built), which the producer's comparison tests read as text. Its
+          dependency requirements are upstream's and move only when the recipe
+          is re-pinned, so a Dependabot entry would have nothing to build or
+          update.
+        review_trigger: >-
+          review at each Kani version bump, when the recipe is refreshed from
+          the new release
