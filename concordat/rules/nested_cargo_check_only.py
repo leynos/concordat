@@ -79,9 +79,10 @@ CARGO_SUBCOMMAND: typ.Final = re.compile(
 # substitution, a subshell or a compound-command keyword. Plain `NAME=value`
 # prefixes are skipped so the command they precede is still read.
 COMMAND_START: typ.Final = re.compile(
-    r"(?:^|;|&|\|\||\||\(|\)|`)[ \t]*"
+    r"""(?:^|;|&|\|\||\||\(|\)["']?|`)[ \t]*"""
     rf"(?:{CONTROL_WORDS})*"
-    r"""(?:[A-Za-z_]\w*=[^\s"'$();&|`]*[ \t]+)*"""
+    r"""(?:[A-Za-z_]\w*="""
+    r"""(?:"[^"]*"|'[^']*'|\$\{[^}]*\}|\$\w+|[^\s"'$();&|`])*[ \t]+)*"""
     r"(?P<word>[^\s;&|()`]+)",
     re.MULTILINE,
 )

@@ -216,6 +216,27 @@ CHECK_ONLY_CASES = {
         ),
         {"NC-006"},
     ),
+    "command-after-a-quoted-assignment-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + '      - run: RUST_BACKTRACE="1" make test\n'),
+        {"NC-006"},
+    ),
+    "command-after-an-expanded-assignment-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: RUST_BACKTRACE=$TRACE make test\n"
+        ),
+        {"NC-006"},
+    ),
+    "command-after-a-substituted-assignment-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + '      - run: X="$(true)" make test\n'),
+        {"NC-006"},
+    ),
+    "a-quoted-assignment-before-cargo-check-stays-silent": Case(
+        msrv_workflow(
+            steps='      - run: RUSTFLAGS="-D warnings" cargo check --locked\n'
+            "        env:\n" + MSRV_TARGET
+        ),
+        set(),
+    ),
     "background-ampersand-then-a-command-is-flagged": Case(
         msrv_workflow(steps=MSRV_CHECK + "      - run: true & make test\n"),
         {"NC-006"},

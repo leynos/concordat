@@ -137,6 +137,15 @@ CASES = {
         None,
         {"NC-004"},
     ),
+    "a-conditionally-added-probe-flag-is-not-proof": Case(
+        "use std::process::Command;\n#[test]\nfn maybe() {\n"
+        '    let mut cmd = Command::new("rustc");\n'
+        '    if query_only { cmd.arg("--print=cfg"); }\n'
+        '    cmd.arg("fixture.rs");\n'
+        "    cmd.status().unwrap();\n}\n",
+        None,
+        {"NC-004"},
+    ),
     "a-launch-inside-control-flow-ends-the-arguments": Case(
         "use std::process::Command;\n#[test]\nfn guarded() {\n"
         '    let mut cmd = Command::new("rustc");\n'

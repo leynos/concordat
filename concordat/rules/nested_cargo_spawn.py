@@ -273,9 +273,19 @@ def _is_probe(text: str, start: int, window: str) -> bool:
         True when an argument of the command is a version or query flag.
     """
     return any(
-        RUSTC_PROBE.search(statement)
+        _unconditional_probe(statement)
         for statement in _own_statements(text, start, window)
     )
+
+
+def _unconditional_probe(statement: str) -> bool:
+    """Report whether a statement adds a probe flag on every path through it.
+
+    A flag added inside a block (`if query_only { cmd.arg("--print=cfg") }`) may
+    not be there when the command runs, so it proves nothing.
+    """
+    found = RUSTC_PROBE.search(statement)
+    return found is not None and "{" not in statement[: found.start()]
 
 
 def _spawn_kind(relative: str, text: str) -> str | None:
