@@ -52,6 +52,9 @@ UNKNOWN: typ.Final = "unknown"
 TARGET_VARIABLES: typ.Final = ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR")
 TARGET_FLAG: typ.Final = '"--target-dir"'
 _SEPARATOR: typ.Final = '"--"'
+# A source that holds a bracketed list or a string literal spells its arguments
+# out, so the reader can tell whether it names the flag.
+_LITERAL_LIST: typ.Final = re.compile(r'[\["]')
 # Matches `"--manifest-path"` and `"--manifest-path=..."`.
 _MANIFEST_PATH: typ.Final = '"--manifest-path'
 
@@ -344,14 +347,20 @@ class _Replay:
             self.flag = _hidden()
         self.is_opaque = True
 
-    def hide_arguments(self) -> None:
+    def hide_arguments(self, payload: str) -> None:
         """Take on an argument call the reader cannot see through.
 
         It may have added `--target-dir`, unless a `--` already handed the rest
-        of the line to the program cargo runs.
+        of the line to the program cargo runs, or its source is a literal list
+        that does not name the flag. An element of such a list the reader cannot
+        read is taken to be a value and not the flag; a call with no list at all
+        (a variable, or a handoff to another function) may hold anything.
         """
-        if not self._is_after_separator:
-            self.hide()
+        if self._is_after_separator:
+            return
+        if _LITERAL_LIST.search(payload) and "--target-dir" not in payload:
+            return
+        self.hide()
 
     def environment(self, payload: str) -> None:
         """Apply one `.env`/`.envs` call."""
@@ -574,7 +583,7 @@ def read_target(calls: typ.Iterable[tuple[str, str]], text: str) -> TargetReadin
         if method == UNSEEN_CALL:
             replay.hide()
         elif method == UNSEEN_ARGUMENTS:
-            replay.hide_arguments()
+            replay.hide_arguments(payload)
         elif method in ENVIRONMENT_METHODS:
             replay.environment(payload)
         elif method in {"env_remove", ENVIRONMENT_CLEAR}:

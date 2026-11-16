@@ -223,14 +223,16 @@ class CargoCommand:
         if OFFLINE_VARIABLE in names:
             self._record_offline_operation(offline=False)
 
-    def mark_arguments_unknown(self) -> None:
+    def mark_arguments_unknown(self, text: str = "") -> None:
         """Record an argument call the reader cannot see through.
 
         An unreadable word is where `command_state` stops trusting the argument
         list, so this is the same evidence an unparseable `.args(..)` leaves.
+        *text* is the call's argument source when the reader has it (a call made
+        on only some paths); a handoff to another function has none.
         """
         self.words.append(None)
-        self.calls.append((UNSEEN_ARGUMENTS, ""))
+        self.calls.append((UNSEEN_ARGUMENTS, text))
 
     def mark_environment_unknown(self) -> None:
         """Record an environment operation the reader cannot see through.
@@ -424,7 +426,7 @@ def follow_chain(
         if close is None:
             return index
         if conditional:
-            _record_unseen([name.group()], command)
+            _record_unseen([name.group()], command, source.text[after + 1 : close - 1])
         else:
             _record(command, name.group(), source.text[after + 1 : close - 1])
         index = close
@@ -529,18 +531,20 @@ def collect_variable(
         command.mark_environment_unknown()
 
 
-def _record_unseen(methods: typ.Iterable[str], command: CargoCommand) -> None:
+def _record_unseen(
+    methods: typ.Iterable[str], command: CargoCommand, text: str = ""
+) -> None:
     """Record the calls in *methods* as operations the reader cannot see.
 
     An argument call appends an unreadable word, which is where
     `command_state` already stops trusting the argument list; an environment
     call or removal records an unknown entry in the offline ledger. A method
     that changes neither, such as `.status()`, is stepped over: the command
-    cargo runs is the same either way.
+    cargo runs is the same either way. *text* is the call's argument source.
     """
     for method in methods:
         if method in ARGUMENT_METHODS:
-            command.mark_arguments_unknown()
+            command.mark_arguments_unknown(text)
         elif method in ENVIRONMENT_METHODS or method in ENVIRONMENT_REMOVAL_METHODS:
             command.mark_environment_unknown()
 

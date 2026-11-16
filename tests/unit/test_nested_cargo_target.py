@@ -167,6 +167,26 @@ def test_an_unseen_argument_list_may_carry_a_target_flag() -> None:
     assert read_target([("unseen-arguments", "")], "").state == UNKNOWN
 
 
+@pytest.mark.parametrize(
+    ("payload", "state"),
+    [
+        # A literal list that does not name the flag cannot select a target.
+        ('["orthohelp", "--out-dir", out.path()]', PRIVATE),
+        # One that names it, a variable and a handoff may.
+        ('["--target-dir", scratch.path()]', UNKNOWN),
+        ("extra", UNKNOWN),
+        ("", UNKNOWN),
+    ],
+    ids=["literal-list", "names-the-flag", "variable", "handoff"],
+)
+def test_an_unseen_argument_call_hides_a_target_only_when_it_may_carry_the_flag(
+    payload: str, state: str
+) -> None:
+    """A conditional `.args([..])` is read for the flag; an opaque one may hold it."""
+    calls = [env("CARGO_TARGET_DIR", "scratch.path()"), ("unseen-arguments", payload)]
+    assert read_target(calls, TEMP_SOURCE).state == state
+
+
 def test_an_unseen_argument_list_after_the_separator_is_the_programs() -> None:
     """After `--` the rest of the line is not cargo's, so no hidden word is a flag."""
     calls = [("args", '["run", "--"]'), ("unseen-arguments", "")]
