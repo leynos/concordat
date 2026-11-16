@@ -25,8 +25,9 @@ import dataclasses
 import re
 import typing as typ
 
+from .nested_cargo_compiles import COMPILES_NO, COMPILES_YES
 from .nested_cargo_setup_scripts import covers
-from .nested_cargo_spawn import COMPILES_NO, COMPILES_YES, TEST_PATH
+from .nested_cargo_spawn import TEST_PATH
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc

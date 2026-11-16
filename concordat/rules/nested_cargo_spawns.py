@@ -36,15 +36,14 @@ from .nested_cargo_commands import (
     COMMAND_NEW,
     PROGRAM_FORM,
     CargoCommand,
-    bound_name,
-    collect_variable,
     command_state,
     construction,
-    follow_chain,
     has_cargo_construction,
     helper_body,
     unreached_helper,
 )
+from .nested_cargo_compiles import COMPILES_UNKNOWN, compiles_state
+from .nested_cargo_helpers import helper_call_sites, helper_definition
 from .nested_cargo_modules import (
     Reach,
     is_crate_root,
@@ -55,21 +54,18 @@ from .nested_cargo_source import (
     RustSource,
     TestScope,
     brace_pairs,
-    enclosing_block,
     in_fixture,
     line_of,
     read_source,
     read_sources,
     whole_file_scope,
 )
-from .nested_cargo_spawn import COMPILES_UNKNOWN, compiles_state
 from .nested_cargo_target import (
     builds_into_target,
     function_text,
     read_target,
     target_signature,
 )
-from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
     from .nested_cargo import Manifest
@@ -160,7 +156,6 @@ MACROTEST_USE: typ.Final = re.compile(r"\bmacrotest\s*::\s*expand\w*")
 TRYBUILD_PACKAGE: typ.Final = "trybuild"
 
 _HELPER: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)\s*\(")
-_DECLARATION: typ.Final = re.compile(r"\bfn\s*$")
 
 
 def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
@@ -248,58 +243,6 @@ def _direct_commands(
     return found
 
 
-def _definition(
-    source: RustSource, body: tuple[int, int], pairs: list[tuple[int, int]]
-) -> CargoCommand | None:
-    """Return the command a helper function itself builds, if it is readable.
-
-    Returns
-    -------
-    CargoCommand | None
-        The first cargo construction in the body, or None.
-    """
-    for match in COMMAND_NEW.finditer(source.masked, body[0], body[1]):
-        command = construction(source, match, pairs)
-        if command is not None:
-            return command
-    return None
-
-
-def _helper_sites(
-    source: RustSource,
-    name: str,
-    body: tuple[int, int],
-    pairs: list[tuple[int, int]],
-) -> list[CargoCommand]:
-    """Return the call sites of one helper and the commands they build.
-
-    Returns
-    -------
-    list[CargoCommand]
-        One command per call site outside the helper's own body.
-    """
-    pattern = re.compile(rf"\b{re.escape(name)}\s*\(")
-    found: list[CargoCommand] = []
-    for match in pattern.finditer(source.masked):
-        if body[0] < match.start() < body[1]:
-            continue
-        if _DECLARATION.search(
-            source.masked[max(0, match.start() - 8) : match.start()]
-        ):
-            continue
-        close = scan_balanced(source.masked, match.end() - 1)
-        if close is None:
-            continue
-        command = CargoCommand(start=match.start(), form="helper")
-        after = follow_chain(source, command, close)
-        block = enclosing_block(pairs, match.start())
-        bound = bound_name(source.masked, match.start())
-        if block is not None and bound is not None:
-            collect_variable(source, command, bound, after, block[1], block, pairs)
-        found.append(command)
-    return found
-
-
 def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
     """Return the evidence each process *command* starts reads, with its state.
 
@@ -328,6 +271,53 @@ def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
         seen.add(key)
         found.append((execution, state))
     return found
+
+
+def _helper_commands(
+    source: RustSource,
+    helpers: dict[str, tuple[int, int]],
+    scope: TestScope,
+    pairs: list[tuple[int, int]],
+    *,
+    cold_build: bool,
+) -> list[CargoCommand]:
+    """Return the commands the call sites of this source's cargo helpers build.
+
+    Returns
+    -------
+    list[CargoCommand]
+        Each call site that can still reach the network (every one, for the
+        cold-build rule), and each helper no call site reaches, as one
+        definition the reader cannot settle.
+    """
+    sites: list[CargoCommand] = []
+    for name, body in helpers.items():
+        definition = helper_definition(source, body, pairs)
+        if definition is None:
+            continue
+        calls = [
+            site
+            for site in helper_call_sites(source, name, body, pairs)
+            if scope.contains(site.start)
+        ]
+        # A helper with no call site in this file may be called from another,
+        # and a call proven offline does not carry the helper's other call
+        # sites with it. Either way the definition is reported once, as
+        # unreadable, so the construction never drops out of the audit.
+        #
+        # Only a definition that is itself test code is reported. A helper in
+        # library code is outside the reader's scope and stays outside it: its
+        # call sites are visible here, and library code is not something this
+        # rule judges. Reporting it would put an unsuppressable EN-001 on a
+        # file the rule promises to leave alone.
+        if not calls and scope.contains(definition.start):
+            sites.append(unreached_helper(definition))
+        # `_absorbed` runs first, because it takes the helper's evidence onto
+        # the site; the cold-build rule keeps the site whatever it returns.
+        sites.extend(
+            site for site in calls if not _absorbed(site, definition) or cold_build
+        )
+    return sites
 
 
 def _source_facts(
@@ -365,33 +355,7 @@ def _source_facts(
         for command in _direct_commands(source, helpers, pairs, cold_build=cold_build)
         if scope.contains(command.start)
     ]
-    sites: list[CargoCommand] = []
-    for name, body in helpers.items():
-        definition = _definition(source, body, pairs)
-        if definition is None:
-            continue
-        calls = [
-            site
-            for site in _helper_sites(source, name, body, pairs)
-            if scope.contains(site.start)
-        ]
-        # A helper with no call site in this file may be called from another,
-        # and a call proven offline does not carry the helper's other call
-        # sites with it. Either way the definition is reported once, as
-        # unreadable, so the construction never drops out of the audit.
-        #
-        # Only a definition that is itself test code is reported. A helper in
-        # library code is outside the reader's scope and stays outside it: its
-        # call sites are visible here, and library code is not something this
-        # rule judges. Reporting it would put an unsuppressable EN-001 on a
-        # file the rule promises to leave alone.
-        if not calls and scope.contains(definition.start):
-            sites.append(unreached_helper(definition))
-        # `_absorbed` runs first, because it takes the helper's evidence onto
-        # the site; the cold-build rule keeps the site whatever it returns.
-        sites.extend(
-            site for site in calls if not _absorbed(site, definition) or cold_build
-        )
+    sites = _helper_commands(source, helpers, scope, pairs, cold_build=cold_build)
     direct_facts = [
         _fact(source, ledger, state)
         for command in direct

@@ -693,7 +693,7 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   variable is read too, and a helper call site proven offline is kept, because
   `--frozen` stops the network and not the compile) and adds two facts to each
   spawn: `compiles` (`yes`, `no` or `unknown`, from
-  `nested_cargo_spawn.compiles_state`) and `target_state` (`inherited`,
+  `nested_cargo_compiles.compiles_state`) and `target_state` (`inherited`,
   `shared`, `dedicated`, `private` or `unknown`, from
   `nested_cargo_target.read_target`). `CargoCommand.calls` records the builder
   calls in source order so the target reader can replay them with
