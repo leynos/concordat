@@ -297,7 +297,7 @@ def test_rstest_bdd_before_916_reports_the_three_timed_tests(
     check alone would have missed every one of them.
     """
     rstest_bdd_before(tmp_path)
-    reported = profile(tmp_path)
+    reported = {(rule, path) for rule, path in profile(tmp_path) if rule != "EN-001"}
     assert reported == {
         ("NC-010", "crates/cargo-bdd/tests/cli.rs"),
         ("NC-010", "crates/rstest-bdd/tests/trybuild_macros.rs"),
@@ -308,12 +308,17 @@ def test_rstest_bdd_before_916_reports_the_three_timed_tests(
     }
 
 
-def test_rstest_bdd_at_916_is_compliant(tmp_path: pathlib.Path) -> None:
-    """A preparation test and a gate in each crate declare the preparation."""
+def test_rstest_bdd_at_916_has_no_cold_build_finding(tmp_path: pathlib.Path) -> None:
+    """A preparation test and a gate in each crate declare the preparation.
+
+    The harness helper's arguments are added at call sites in other files, so the
+    reader still cannot say where it builds and reports that as indeterminate;
+    it is no longer a cold build.
+    """
     rstest_bdd_after(tmp_path)
     result = runner.run_rule(RULE_ID, tmp_path)
-    assert result.findings == ()
-    assert result.verdict == "compliant"
+    assert {f.rule_id for f in result.findings} <= {"EN-001"}
+    assert result.exit_code == 0
 
 
 def test_an_ordinary_function_named_like_a_preparation_test_prepares_nothing(
@@ -436,6 +441,33 @@ def test_a_repository_names_its_own_gate_in_the_parameters(
         (SETUP_SCRIPT.format(filter="!binary(ui)", setup="prepare-nested"), False),
         # A hyphen inside a binary name is not a subtraction.
         (SETUP_SCRIPT.format(filter="binary(ui-tests)", setup="prepare-nested"), False),
+        # An intersection narrows what the selector picks, and a predicate the
+        # reader does not evaluate may do the same.
+        (
+            SETUP_SCRIPT.format(
+                filter="binary(ui) & test(=one)", setup="prepare-nested"
+            ),
+            False,
+        ),
+        (
+            SETUP_SCRIPT.format(
+                filter="binary(ui) and kind(test)", setup="prepare-nested"
+            ),
+            False,
+        ),
+        # A union of selectors covers what any of them names.
+        (
+            SETUP_SCRIPT.format(
+                filter="binary(ui) | binary(other)", setup="prepare-nested"
+            ),
+            True,
+        ),
+        (
+            SETUP_SCRIPT.format(
+                filter="package(app) or binary(other)", setup="prepare-nested"
+            ),
+            True,
+        ),
     ],
     ids=[
         "covers-every-test",
@@ -446,6 +478,10 @@ def test_a_repository_names_its_own_gate_in_the_parameters(
         "difference",
         "bang",
         "hyphenated-other-binary",
+        "intersection",
+        "unsupported-predicate",
+        "union-with-bar",
+        "union-with-or",
     ],
 )
 def test_a_nextest_setup_script_prepares_the_tests_it_covers(
@@ -592,7 +628,7 @@ def test_a_negated_setup_filter_is_reported_as_a_problem(
         SETUP_SCRIPT.format(filter="not binary(ui)", setup="prepare-nested"),
     )
     messages = [f.message for f in findings(tmp_path) if f.rule_id == "EN-001"]
-    assert any("negation or difference" in message for message in messages)
+    assert any("negation, difference, intersection" in message for message in messages)
 
 
 HELPER_WITH_TEMP_PARAMETER = """\
@@ -602,9 +638,40 @@ fn cargo_command(target: &tempfile::TempDir) -> std::process::Command {
     cmd
 }
 
-fn build_in_shared() {
+fn build_in_scratch() {
+    let scratch = tempfile::tempdir().unwrap();
     let target = std::env::var("CARGO_TARGET_DIR").unwrap();
-    cargo_command(&target).arg("build").status().unwrap();
+    cargo_command(&scratch).arg("build").status().unwrap();
+    drop(target);
+}
+"""
+
+# The helper's `target` is whatever the caller passes, which the reader cannot
+# see; the caller's own, unrelated `target` must not stand in for it.
+HELPER_WITH_PATH_PARAMETER = """\
+fn cargo_command(target: &std::path::Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new(env!("CARGO"));
+    cmd.env("CARGO_TARGET_DIR", target);
+    cmd
+}
+
+fn build_in_shared() {
+    let scratch = tempfile::tempdir().unwrap();
+    let target = std::env::var("CARGO_TARGET_DIR").unwrap();
+    cargo_command(scratch.path()).arg("build").status().unwrap();
+    drop(target);
+}
+"""
+
+CONDITIONAL_TARGET_FLAG = """\
+fn build(is_isolated: bool) {
+    let scratch = tempfile::tempdir().unwrap();
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.arg("build");
+    if is_isolated {
+        cmd.args(["--target-dir", scratch.path().to_str().unwrap()]);
+    }
+    cmd.status().unwrap();
 }
 """
 
@@ -613,6 +680,26 @@ def test_a_helper_resolves_its_names_in_its_own_scope(tmp_path: pathlib.Path) ->
     """The helper's `target` is its parameter, not the caller's unrelated binding."""
     put(tmp_path, "tests/helper.rs", HELPER_WITH_TEMP_PARAMETER)
     assert ("NC-009", "tests/helper.rs") in profile(tmp_path)
+
+
+def test_a_helper_parameter_is_not_resolved_in_the_caller(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An untyped-for-the-reader parameter reads as unknown, never as the caller's."""
+    put(tmp_path, "tests/helper.rs", HELPER_WITH_PATH_PARAMETER)
+    reported = profile(tmp_path)
+    assert ("NC-009", "tests/helper.rs") not in reported
+    assert ("EN-001", "tests/helper.rs") in reported
+
+
+def test_a_conditional_target_flag_is_unknown_not_inherited(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A call on some paths may select a private target, so the reader says so."""
+    put(tmp_path, "tests/conditional.rs", CONDITIONAL_TARGET_FLAG)
+    reported = profile(tmp_path)
+    assert ("EN-001", "tests/conditional.rs") in reported
+    assert ("NC-009", "tests/conditional.rs") not in reported
 
 
 def test_a_fixed_path_under_the_system_temporary_directory_is_not_private(

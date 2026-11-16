@@ -34,6 +34,7 @@ import typing as typ
 from .nested_cargo_commands import (
     ENVIRONMENT_CLEAR,
     ENVIRONMENT_METHODS,
+    UNSEEN_ARGUMENTS,
     UNSEEN_CALL,
 )
 from .nested_cargo_text import argument_items, environment_slots
@@ -81,7 +82,15 @@ _TEMPORARY_PARAMETER: typ.Final = re.compile(
 )
 _IDENTIFIER: typ.Final = re.compile(r"(?<![\w.:$])[a-z_]\w*\b(?!\s*[(:!])")
 _EXPANSION_DEPTH: typ.Final = 3
-_AMBIGUOUS: typ.Final = "<a name bound to different expressions in this file>"
+# Markers for a name the reader cannot resolve: a name bound to different
+# expressions, and a parameter of the function. They start with a capital so that
+# the identifier pattern, which reads lower-case names, cannot expand them again.
+_AMBIGUOUS: typ.Final = "<Ambiguous>"
+_PARAMETER: typ.Final = "<Parameter>"
+_FUNCTION_HEAD: typ.Final = re.compile(r"fn\s+\w+\s*(?:<[^{(]*>)?\s*\(")
+_PARAMETER_NAME: typ.Final = re.compile(
+    r"(?:^|,)\s*(?:mut\s+)?(?P<name>[A-Za-z_]\w*)\s*:"
+)
 # `let x = std::env::current_exe()?;` names the test executable.
 _TEST_EXECUTABLE: typ.Final = "current_exe"
 _SUMMARY_LENGTH: typ.Final = 60
@@ -141,6 +150,24 @@ def function_text(source: RustSource, offset: int) -> str:
     return source.text if best is None else source.text[best[0] : best[1]]
 
 
+def _signature_parameters(text: str) -> set[str]:
+    """Return the parameter names of the function *text* starts with.
+
+    Returns
+    -------
+    set[str]
+        The names, empty when *text* is not a function or takes none.
+    """
+    head = _FUNCTION_HEAD.match(text)
+    if head is None:
+        return set()
+    close = scan_balanced(text, head.end() - 1)
+    if close is None:
+        return set()
+    signature = text[head.end() : close - 1]
+    return {match["name"] for match in _PARAMETER_NAME.finditer(signature)}
+
+
 def local_bindings(text: str) -> dict[str, str]:
     """Return the expression each local name is bound to in *text*.
 
@@ -160,8 +187,14 @@ def local_bindings(text: str) -> dict[str, str]:
     seen: dict[str, set[str]] = {}
     for match in _LET.finditer(text):
         seen.setdefault(match["name"], set()).add(" ".join(match["rhs"].split()))
-    for match in _TEMPORARY_PARAMETER.finditer(text):
-        seen.setdefault(match["name"], set()).add("tempfile::TempDir")
+    temporary = {match["name"] for match in _TEMPORARY_PARAMETER.finditer(text)}
+    for name in temporary:
+        seen.setdefault(name, set()).add("tempfile::TempDir")
+    # Any other parameter holds whatever the caller passed, which the reader does
+    # not see. Binding it says so, and stops the name resolving to an unrelated
+    # binding of the same name in whichever function later reads this text.
+    for name in _signature_parameters(text) - temporary:
+        seen.setdefault(name, set()).add(_PARAMETER)
     return {
         name: next(iter(rhs)) if len(rhs) == 1 else _AMBIGUOUS
         for name, rhs in seen.items()
@@ -310,6 +343,15 @@ class _Replay:
         if self.flag is not None:
             self.flag = _hidden()
         self.is_opaque = True
+
+    def hide_arguments(self) -> None:
+        """Take on an argument call the reader cannot see through.
+
+        It may have added `--target-dir`, unless a `--` already handed the rest
+        of the line to the program cargo runs.
+        """
+        if not self._is_after_separator:
+            self.hide()
 
     def environment(self, payload: str) -> None:
         """Apply one `.env`/`.envs` call."""
@@ -531,6 +573,8 @@ def read_target(calls: typ.Iterable[tuple[str, str]], text: str) -> TargetReadin
     for method, payload in calls:
         if method == UNSEEN_CALL:
             replay.hide()
+        elif method == UNSEEN_ARGUMENTS:
+            replay.hide_arguments()
         elif method in ENVIRONMENT_METHODS:
             replay.environment(payload)
         elif method in {"env_remove", ENVIRONMENT_CLEAR}:

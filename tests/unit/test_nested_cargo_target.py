@@ -162,9 +162,15 @@ def test_an_opaque_environment_call_with_nothing_set_is_unknown() -> None:
     assert read_target([("envs", "extra")], "").state == UNKNOWN
 
 
-def test_an_unseen_argument_list_leaves_the_target_as_it_was() -> None:
-    """A hidden argument may carry `--target-dir`; the reader judges what it sees."""
-    assert read_target([("unseen-arguments", "")], "").state == INHERITED
+def test_an_unseen_argument_list_may_carry_a_target_flag() -> None:
+    """A conditional `.args(["--target-dir", dir])` may select a private target."""
+    assert read_target([("unseen-arguments", "")], "").state == UNKNOWN
+
+
+def test_an_unseen_argument_list_after_the_separator_is_the_programs() -> None:
+    """After `--` the rest of the line is not cargo's, so no hidden word is a flag."""
+    calls = [("args", '["run", "--"]'), ("unseen-arguments", "")]
+    assert read_target(calls, "").state == INHERITED
 
 
 @pytest.mark.parametrize(

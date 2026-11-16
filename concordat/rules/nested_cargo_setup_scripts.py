@@ -25,9 +25,11 @@ if typ.TYPE_CHECKING:
 
 NEXTEST_CONFIG: typ.Final = ".config/nextest.toml"
 ALL_FILTER: typ.Final = "all()"
-# Nextest filtersets negate with `not` or `!` and subtract with `-`. A binary
-# name may contain a hyphen, so a subtraction is a hyphen with space around it.
-_NEGATION: typ.Final = re.compile(r"(?<![\w-])not(?![\w-])|!|\s-\s")
+# The selectors the reader evaluates, and the glue of a union between them
+# (`|`, `+`, `or`, parentheses). Anything else in a filterset narrows or removes
+# what a selector picks (`&`, `and`, `not`, `!`, `-`, `test(..)`, `kind(..)`).
+_ATOM: typ.Final = re.compile(r"(?:binary|binary_id|package)\([^()]*\)|all\(\)")
+_UNION_GLUE: typ.Final = re.compile(r"(?:[\s|+()]|(?<![\w-])or(?![\w-]))*")
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -91,11 +93,12 @@ def read_setup_rules(checkout: pathlib.Path, problems: list[str]) -> list[SetupR
         if (listed := _setup_names(rule)) and all(name in defined for name in listed)
     ]
     problems.extend(
-        f"{NEXTEST_CONFIG}: the setup rule filter `{rule.filter}` uses negation or "
-        "difference, which the reader does not evaluate, so it is not counted as "
-        "preparing any test"
+        f"{NEXTEST_CONFIG}: the setup rule filter `{rule.filter}` uses negation, "
+        "difference, intersection or a predicate the reader does not evaluate "
+        "(it reads `all()` and unions of `binary(..)`, `binary_id(..)` and "
+        "`package(..)`), so it is not counted as preparing any test"
         for rule in rules
-        if _NEGATION.search(rule.filter)
+        if not _is_union_of_selectors(rule.filter)
     )
     return rules
 
@@ -114,10 +117,11 @@ def _mentions(filterset: str, name: str) -> bool:
 def covers(rules: list[SetupRule], names: list[str]) -> bool:
     """Report whether a setup rule selects every test or names one of *names*.
 
-    A filter that negates or subtracts (`not binary(ui)`, `all() - binary(ui)`)
-    names a binary in order to leave it out, so a name found in one proves
-    nothing, and an `all()` inside one does not select every test. Such a rule
-    never covers, and the reader reports it as a problem.
+    Only `all()` and a union of `binary(..)`, `binary_id(..)` and `package(..)`
+    selectors are evaluated. A filter that negates (`not binary(ui)`), subtracts
+    (`all() - binary(ui)`) or intersects (`binary(ui) & test(=one)`) names a
+    binary without selecting all of it, so a name found in one proves nothing.
+    Such a rule never covers, and the reader reports it as a problem.
 
     Returns
     -------
@@ -125,8 +129,19 @@ def covers(rules: list[SetupRule], names: list[str]) -> bool:
         True when nextest runs a setup script before the named binary or crate.
     """
     return any(
-        rule.filter.strip() == ALL_FILTER
-        or any(_mentions(rule.filter, name) for name in names)
+        _selects(_ATOM.findall(rule.filter), names)
         for rule in rules
-        if not _NEGATION.search(rule.filter)
+        if _is_union_of_selectors(rule.filter)
     )
+
+
+def _selects(atoms: list[str], names: list[str]) -> bool:
+    """Report whether a union of selectors includes `all()` or one of *names*."""
+    return ALL_FILTER in atoms or any(
+        _mentions(atom, name) for atom in atoms for name in names
+    )
+
+
+def _is_union_of_selectors(filterset: str) -> bool:
+    """Report whether *filterset* is only `all()` and selectors joined by union."""
+    return _UNION_GLUE.fullmatch(_ATOM.sub("", filterset)) is not None

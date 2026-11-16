@@ -80,8 +80,12 @@ not read. The reading is one of five states:
   `CARGO_TARGET_DIR` may take precedence (cargo reads that one first); or an
   environment call the reader cannot read (`.envs(extra)`, `.env(key, value)`)
   may have set a target. This is reported as indeterminate, never as a pass and
-  never as a private target. An unseen *argument* list is not read this way: it
-  may hide `--target-dir`, but the reader judges what it can see there.
+  never as a private target. An argument call the reader cannot see (one made
+  on only some paths, or handed to another function) may carry `--target-dir`,
+  so it leaves the target unknown too, unless a `--` already sent the rest of
+  the line to the program cargo runs. A helper's own parameter is unknown in
+  the same way: it holds what the caller passed, and an unrelated binding of
+  the same name in the caller is never read in its place.
 - `dedicated`: a fixed `target/...` directory inside the crate
   (`CARGO_MANIFEST_DIR` joined with `"target/..."`), or a fixed path under the
   system temporary directory (`env::temp_dir().join("scenario")`). It persists
@@ -141,10 +145,13 @@ The compile is *prepared* when any one of these holds:
 1. **A nextest setup script.** A `[scripts.setup.<name>]` table the file defines
    is run by a `[[profile.<p>.scripts]]` rule whose `filter` is `all()` or
    names the test binary or the crate's package. Nextest runs it before the
-   tests it covers, so the build is paid for outside any test's deadline. A
-   filter that negates or subtracts (`not binary(ui)`, `all() - binary(ui)`)
-   names a binary in order to leave it out, so it never counts as coverage and
-   the reader reports it as indeterminate.
+   tests it covers, so the build is paid for outside any test's deadline. Only
+   `all()` and a union (`|`, `+`, `or`) of `binary(..)`, `binary_id(..)` and
+   `package(..)` selectors are evaluated. A filter that negates
+   (`not binary(ui)`), subtracts (`all() - binary(ui)`), intersects
+   (`binary(ui) & test(=one)`) or uses another predicate names a binary without
+   selecting all of it, so it never counts as coverage and the reader reports
+   it as indeterminate.
 2. **A named preparation test in the same crate.** A test function (carrying
    `#[test]`, `#[rstest]`, `#[test_case]` or a `::test` attribute) whose name
    matches a pattern in `preparation_gates.tests`. An ordinary function of the
