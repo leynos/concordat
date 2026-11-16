@@ -224,6 +224,21 @@ def test_an_unreadable_element_is_a_value_only_after_an_option(
     assert read_target(calls, TEMP_SOURCE).state == state
 
 
+def test_a_computed_argument_is_not_an_exact_literal() -> None:
+    """`"--target-".to_owned() + &format!(..)` builds the flag at run time."""
+    payload = '["--timings".to_owned(), "--target-".to_owned() + &format!("dir={}", p)]'
+    calls = [env("CARGO_TARGET_DIR", "scratch.path()"), ("unseen-arguments", payload)]
+    assert read_target(calls, TEMP_SOURCE).state == UNKNOWN
+    option = '["--out-dir".to_owned(), other]'
+    assert (
+        read_target(
+            [env("CARGO_TARGET_DIR", "scratch.path()"), ("unseen-arguments", option)],
+            TEMP_SOURCE,
+        ).state
+        == UNKNOWN
+    )
+
+
 def test_the_environment_cannot_settle_an_unseen_flag() -> None:
     """`--target-dir` beats the variables, so `env_clear()` or a write cannot help."""
     hidden = ("unseen-arguments", "[flag, x]")

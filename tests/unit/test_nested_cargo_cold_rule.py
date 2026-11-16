@@ -657,6 +657,85 @@ def test_a_setup_selector_is_matched_to_its_own_kind_of_name(
     assert (("NC-010", "app/tests/ui.rs") in profile(tmp_path)) is not is_prepared
 
 
+def covered_checkout(root: pathlib.Path, nextest: str) -> None:
+    """Write a package whose trybuild test a nextest configuration may prepare."""
+    put(root, "Cargo.toml", '[package]\nname = "app"\n')
+    put(root, "tests/ui.rs", TRYBUILD_TEST)
+    put(root, ".config/nextest.toml", nextest)
+
+
+PREPARING_SCRIPT = SETUP_SCRIPT.format(filter="all()", setup="prepare-nested")
+
+
+def test_a_setup_script_in_another_profile_does_not_prepare_a_default_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`profile.ci` runs only under `--profile ci`, so it proves nothing by default."""
+    covered_checkout(
+        tmp_path, PREPARING_SCRIPT.replace("profile.default", "profile.ci")
+    )
+    reported = profile(tmp_path)
+    assert ("NC-010", "tests/ui.rs") in reported
+    assert ("EN-001", "") in reported
+
+
+def test_a_platform_restricted_setup_rule_is_not_counted(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A rule that runs only on one platform may not run on the one under test."""
+    script = PREPARING_SCRIPT.replace(
+        'filter = "all()"', 'filter = "all()"\nplatform = "cfg(windows)"'
+    )
+    covered_checkout(tmp_path, script)
+    reported = profile(tmp_path)
+    assert ("NC-010", "tests/ui.rs") in reported
+    assert ("EN-001", "") in reported
+
+
+@pytest.mark.parametrize("matcher", ["package(app{2,3})", "binary(u\\i)"])
+def test_a_glob_with_braces_or_escapes_is_not_evaluated(
+    tmp_path: pathlib.Path, matcher: str
+) -> None:
+    """Nextest reads globs with globset; fnmatch does not, so the reader declines."""
+    covered_checkout(
+        tmp_path, SETUP_SCRIPT.format(filter=matcher, setup="prepare-nested")
+    )
+    reported = profile(tmp_path)
+    assert ("NC-010", "tests/ui.rs") in reported
+    assert ("EN-001", "") in reported
+
+
+def test_a_nextest_file_that_links_outside_the_checkout_is_not_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A symlinked configuration is reported, never read through."""
+    outside = tmp_path / "outside"
+    put(outside, "nextest.toml", PREPARING_SCRIPT)
+    checkout = tmp_path / "checkout"
+    put(checkout, "Cargo.toml", '[package]\nname = "app"\n')
+    put(checkout, "tests/ui.rs", TRYBUILD_TEST)
+    (checkout / ".config").mkdir()
+    (checkout / ".config/nextest.toml").symlink_to(outside / "nextest.toml")
+    reported = profile(checkout)
+    assert ("NC-010", "tests/ui.rs") in reported
+    assert ("EN-001", "") in reported
+
+
+def test_a_config_directory_that_links_outside_the_checkout_is_not_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The same holds when an ancestor of the file is the link."""
+    outside = tmp_path / "outside"
+    put(outside, "nextest.toml", PREPARING_SCRIPT)
+    checkout = tmp_path / "checkout"
+    put(checkout, "Cargo.toml", '[package]\nname = "app"\n')
+    put(checkout, "tests/ui.rs", TRYBUILD_TEST)
+    (checkout / ".config").symlink_to(outside, target_is_directory=True)
+    reported = profile(checkout)
+    assert ("NC-010", "tests/ui.rs") in reported
+    assert ("EN-001", "") in reported
+
+
 def test_a_negated_setup_filter_is_reported_as_a_problem(
     tmp_path: pathlib.Path,
 ) -> None:

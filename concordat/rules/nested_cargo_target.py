@@ -229,7 +229,7 @@ def _may_carry_flag(payload: str) -> bool:
     for item in items:
         if "--target-dir" in item:
             return True
-        if not item.startswith('"') and not _awaits_value(previous):
+        if STRING.fullmatch(item) is None and not _awaits_value(previous):
             return True
         previous = item
     return False
@@ -248,9 +248,10 @@ def _awaits_value(previous: str) -> bool:
     bool
         True when *previous* is an option that consumes the next argument.
     """
-    if not previous.startswith('"-') or "=" in previous:
+    if STRING.fullmatch(previous) is None:
         return False
-    return previous.strip('"') in _VALUE_OPTIONS
+    option = previous[1:-1]
+    return option in _VALUE_OPTIONS
 
 
 def _hidden() -> TargetReading:

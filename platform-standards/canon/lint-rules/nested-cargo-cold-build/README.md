@@ -167,7 +167,15 @@ The compile is *prepared* when any one of these holds:
    that negates (`not binary(ui)`), subtracts (`all() - binary(ui)`), intersects
    (`binary(ui) & test(=one)`) or uses another predicate names a binary
    without selecting all of it, so it never counts as coverage and the reader
-   reports it as indeterminate.
+   reports it as indeterminate. So does a glob using braces or backslash
+   escapes, which nextest reads with `globset` and the reader does not. Only a
+   rule in the `default` profile counts, because every profile inherits it and
+   a plain `cargo nextest run` selects it: a rule under `profile.ci` runs only
+   under `--profile ci`, and a rule with a `platform` restriction may not run
+   on the platform under test, so each is reported and neither counts. The
+   configuration is read only when its path resolves inside the checkout; a
+   symlink (to the file or to a directory above it) that leaves it is reported
+   and not followed.
 2. **A named preparation test in the same crate.** A test function (carrying
    `#[test]`, `#[rstest]`, `#[test_case]` or a `::test` attribute) whose name
    matches a pattern in `preparation_gates.tests`. An ordinary function of the
