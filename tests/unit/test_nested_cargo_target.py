@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from concordat.rules.nested_cargo_bindings import local_bindings
 from concordat.rules.nested_cargo_compiles import compiles_state
 from concordat.rules.nested_cargo_target import (
     DEDICATED,
@@ -18,7 +19,6 @@ from concordat.rules.nested_cargo_target import (
     SHARED,
     UNKNOWN,
     classify_value,
-    local_bindings,
     read_target,
 )
 

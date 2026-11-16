@@ -695,8 +695,9 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   spawn: `compiles` (`yes`, `no` or `unknown`, from
   `nested_cargo_compiles.compiles_state`) and `target_state` (`inherited`,
   `shared`, `dedicated`, `private` or `unknown`, from
-  `nested_cargo_target.read_target`). `CargoCommand.calls` records the builder
-  calls in source order so the target reader can replay them with
+  `nested_cargo_target.read_target`, with names resolved inside the enclosing
+  function by `nested_cargo_bindings`). `CargoCommand.calls` records the
+  builder calls in source order so the target reader can replay them with
   last-write-wins semantics, as the offline ledger does for `CARGO_NET_OFFLINE`.
   `nested_cargo_preparation` joins the spawns, the trybuild and macrotest uses
   and the configured compiling helpers into `builds`, and records for each

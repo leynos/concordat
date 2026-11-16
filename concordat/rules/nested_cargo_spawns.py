@@ -32,6 +32,7 @@ import typing as typ
 from .dependency_family_coverage import mapping
 from .dependency_family_discovery import cargo_tables
 from .nested_cargo import is_fixture_directory, standalone_directories
+from .nested_cargo_bindings import function_text
 from .nested_cargo_commands import (
     COMMAND_NEW,
     PROGRAM_FORM,
@@ -62,7 +63,6 @@ from .nested_cargo_source import (
 )
 from .nested_cargo_target import (
     builds_into_target,
-    function_text,
     read_target,
     scoped_calls,
     target_signature,

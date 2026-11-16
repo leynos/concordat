@@ -31,17 +31,14 @@ import dataclasses
 import re
 import typing as typ
 
+from .nested_cargo_bindings import STRING, expand, local_bindings
 from .nested_cargo_commands import (
     ENVIRONMENT_CLEAR,
     ENVIRONMENT_METHODS,
     UNSEEN_ARGUMENTS,
     UNSEEN_CALL,
 )
-from .nested_cargo_text import argument_items, environment_slots, split_top_level
-from .rust_source import scan_balanced
-
-if typ.TYPE_CHECKING:
-    from .nested_cargo_source import RustSource
+from .nested_cargo_text import argument_items, environment_slots
 
 INHERITED: typ.Final = "inherited"
 SHARED: typ.Final = "shared"
@@ -55,7 +52,6 @@ _SEPARATOR: typ.Final = '"--"'
 # Matches `"--manifest-path"` and `"--manifest-path=..."`.
 _MANIFEST_PATH: typ.Final = '"--manifest-path'
 
-_STRING: typ.Final = re.compile(r'"(?:[^"\\]|\\.)*"')
 # Constructors and accessors of a directory that is removed with its owner or
 # named for one run: a later run can never find what an earlier one built.
 _TEMPORARY: typ.Final = re.compile(
@@ -74,25 +70,6 @@ _SHARED_SOURCE: typ.Final = re.compile(
     r"CARGO_TARGET_DIR|target_directory|\bmetadata\b|\benv::var(?:_os)?\b"
     r"|\bvar_os?\b|CARGO_LLVM_COV_TARGET_DIR"
 )
-_LET: typ.Final = re.compile(
-    r"\blet\s+(?:mut\s+)?(?P<name>[A-Za-z_]\w*)\s*(?::[^=;]*)?=\s*(?P<rhs>[^;]*);"
-)
-_TEMPORARY_PARAMETER: typ.Final = re.compile(
-    r"(?P<name>[A-Za-z_]\w*)\s*:\s*&?\s*(?:mut\s+)?(?:tempfile\s*::\s*)?TempDir\b"
-)
-_IDENTIFIER: typ.Final = re.compile(r"(?<![\w.:$])[a-z_]\w*\b(?!\s*[(:!])")
-_EXPANSION_DEPTH: typ.Final = 3
-# Markers for a name the reader cannot resolve: a name bound to different
-# expressions, and a parameter of the function. They start with a capital so that
-# the identifier pattern, which reads lower-case names, cannot expand them again.
-_AMBIGUOUS: typ.Final = "<Ambiguous>"
-_PARAMETER: typ.Final = "<Parameter>"
-_FUNCTION_HEAD: typ.Final = re.compile(r"fn\s+\w+\s*(?:<[^{(]*>)?\s*\(")
-# A parameter is `pattern: Type`; the separator is a single colon, not a path's.
-_PARAMETER_SPLIT: typ.Final = re.compile(r"(?<!:):(?!:)")
-_PATTERN_NAME: typ.Final = re.compile(r"[A-Za-z_]\w*")
-_NESTING: typ.Final = str.maketrans("{}[]", "()()")
-_PATTERN_KEYWORDS: typ.Final = frozenset({"mut", "ref", "self"})
 # `let x = std::env::current_exe()?;` names the test executable.
 _TEST_EXECUTABLE: typ.Final = "current_exe"
 _SUMMARY_LENGTH: typ.Final = 60
@@ -122,134 +99,14 @@ class TargetReading:
     is_inferred: bool = False
 
 
-_FUNCTION: typ.Final = re.compile(r"\bfn\s+[A-Za-z_]\w*")
-
-
-def function_text(source: RustSource, offset: int) -> str:
-    """Return the text of the innermost function that contains *offset*.
-
-    The signature is included, because a parameter typed `TempDir` is a binding
-    too. A name bound in one function is not visible in another, so the reader
-    resolves a command's target values inside the function that builds the
-    command and not across the whole file. An offset outside any function (a
-    `static` initialiser) is read against the whole file.
-
-    Returns
-    -------
-    str
-        The function's source text from its `fn` keyword to its closing brace.
-    """
-    best: tuple[int, int] | None = None
-    for match in _FUNCTION.finditer(source.masked):
-        opening = re.compile(r"[{;]").search(source.masked, match.end())
-        if opening is None or opening.group() != "{":
-            continue
-        end = scan_balanced(source.masked, opening.start())
-        if end is None or not match.start() <= offset < end:
-            continue
-        if best is None or match.start() > best[0]:
-            best = (match.start(), end)
-    return source.text if best is None else source.text[best[0] : best[1]]
-
-
-def _signature_parameters(text: str) -> set[str]:
-    """Return the parameter names of the function *text* starts with.
-
-    Returns
-    -------
-    set[str]
-        The names, empty when *text* is not a function or takes none.
-    """
-    head = _FUNCTION_HEAD.match(text)
-    if head is None:
-        return set()
-    close = scan_balanced(text, head.end() - 1)
-    if close is None:
-        return set()
-    names: set[str] = set()
-    # Braces and brackets nest as parentheses do, and `split_top_level` only
-    # tracks parentheses, so a struct or slice pattern would otherwise be split
-    # at the commas inside it.
-    signature = text[head.end() : close - 1].translate(_NESTING)
-    for segment in split_top_level(signature):
-        # A parameter is `pattern: Type`, and the pattern may destructure
-        # (`(target,): (&Path,)`), so every name the pattern binds counts.
-        parts = _PARAMETER_SPLIT.split(segment, maxsplit=1)
-        if len(parts) == 2:
-            names.update(_PATTERN_NAME.findall(parts[0]))
-    return names - _PATTERN_KEYWORDS
-
-
-def local_bindings(text: str) -> dict[str, str]:
-    """Return the expression each local name is bound to in *text*.
-
-    The reader does not track scope, so a name bound to different expressions in
-    different functions of one file could resolve to another function's value.
-    Such a name is answered with an ambiguous binding, which no pattern matches,
-    and the value reads `unknown` instead of a guess in either direction. A name
-    bound to the same expression everywhere is unambiguous, which is the common
-    case of one idiom repeated across a file's tests.
-
-    Returns
-    -------
-    dict[str, str]
-        Right-hand-side source text by name; a `TempDir` parameter is bound to
-        the type so that `dir.path()` reads as temporary.
-    """
-    seen: dict[str, set[str]] = {}
-    for match in _LET.finditer(text):
-        seen.setdefault(match["name"], set()).add(" ".join(match["rhs"].split()))
-    temporary = {match["name"] for match in _TEMPORARY_PARAMETER.finditer(text)}
-    for name in temporary:
-        seen.setdefault(name, set()).add("tempfile::TempDir")
-    # Any other parameter holds whatever the caller passed, which the reader does
-    # not see. Binding it says so, and stops the name resolving to an unrelated
-    # binding of the same name in whichever function later reads this text.
-    for name in _signature_parameters(text) - temporary:
-        seen.setdefault(name, set()).add(_PARAMETER)
-    return {
-        name: next(iter(rhs)) if len(rhs) == 1 else _AMBIGUOUS
-        for name, rhs in seen.items()
-    }
-
-
-def _expand(expression: str, bindings: dict[str, str]) -> str:
-    """Replace each locally bound name in *expression* by what it was bound to.
-
-    String literals are left alone, so a path component that happens to spell a
-    variable name is not substituted.
-
-    Returns
-    -------
-    str
-        The expression with up to three levels of local bindings inlined.
-    """
-
-    def replace(chunk: re.Match[str]) -> str:
-        """Return the bound expression for one identifier, parenthesised."""
-        rhs = bindings.get(chunk.group())
-        return f"({rhs})" if rhs is not None else chunk.group()
-
-    for _ in range(_EXPANSION_DEPTH):
-        pieces = re.split(f"({_STRING.pattern})", expression)
-        expanded = "".join(
-            piece if index % 2 else _IDENTIFIER.sub(replace, piece)
-            for index, piece in enumerate(pieces)
-        )
-        if expanded == expression:
-            break
-        expression = expanded
-    return expression
-
-
 def _code(expression: str) -> str:
     """Return *expression* with every string literal blanked."""
-    return _STRING.sub('""', expression)
+    return STRING.sub('""', expression)
 
 
 def _is_temporary(expression: str, bindings: dict[str, str]) -> bool:
     """Report whether *expression* visibly derives from a temporary directory."""
-    return _TEMPORARY.search(_code(_expand(expression, bindings))) is not None
+    return _TEMPORARY.search(_code(expand(expression, bindings))) is not None
 
 
 def _summary(expression: str) -> str:
@@ -291,7 +148,7 @@ def classify_value(expression: str, bindings: dict[str, str]) -> TargetReading:
         unique to the run, `dedicated` or `shared` for a path the reader can
         place, and `unknown` for anything else.
     """
-    expanded = _expand(expression, bindings)
+    expanded = expand(expression, bindings)
     code = _code(expanded)
     if _TEMPORARY.search(code):
         return TargetReading(PRIVATE, "a temporary directory")
@@ -322,7 +179,7 @@ def _literal_name(slot: str) -> str | None:
         The literal's text, or None when the slot is anything else.
     """
     stripped = slot.strip()
-    return stripped[1:-1] if _STRING.fullmatch(stripped) else None
+    return stripped[1:-1] if STRING.fullmatch(stripped) else None
 
 
 def _may_carry_flag(payload: str) -> bool:
@@ -457,17 +314,9 @@ class _Replay:
             return TargetReading(
                 UNKNOWN, "an argument call the reader cannot see may select a target"
             )
-        higher, lower = TARGET_VARIABLES
-        if higher in self.variables:
-            return self.variables[higher]
-        if lower in self.variables:
-            # Cargo reads `CARGO_TARGET_DIR` first, so a value set here only
-            # decides the target when nothing can supply the higher one.
-            if self.is_opaque or higher not in self.removed:
-                return TargetReading(
-                    UNKNOWN, f"{higher} may take precedence over {lower}"
-                )
-            return self.variables[lower]
+        variable = self._variable_reading()
+        if variable is not None:
+            return variable
         if self.is_opaque:
             return TargetReading(UNKNOWN, "an environment call the reader cannot see")
         if self._is_cut_off_in_temporary_directory():
@@ -477,6 +326,27 @@ class _Replay:
                 is_inferred=True,
             )
         return TargetReading(INHERITED)
+
+    def _variable_reading(self) -> TargetReading | None:
+        """Return what the target variables set, or None when none is set.
+
+        Cargo reads `CARGO_TARGET_DIR` first, so a value set only on
+        `CARGO_BUILD_TARGET_DIR` decides the target when nothing can supply the
+        higher one: it was removed, and no call after that is unreadable.
+
+        Returns
+        -------
+        TargetReading | None
+            The reading of the variable that decides, or None.
+        """
+        higher, lower = TARGET_VARIABLES
+        if higher in self.variables:
+            return self.variables[higher]
+        if lower not in self.variables:
+            return None
+        if self.is_opaque or higher not in self.removed:
+            return TargetReading(UNKNOWN, f"{higher} may take precedence over {lower}")
+        return self.variables[lower]
 
     def _is_cut_off_in_temporary_directory(self) -> bool:
         """Report whether cargo would build under a temporary directory by default.
@@ -517,7 +387,7 @@ def scoped_calls(
         The calls, each payload with its locally bound names inlined.
     """
     bindings = local_bindings(text)
-    return [(method, _expand(payload, bindings)) for method, payload in calls]
+    return [(method, expand(payload, bindings)) for method, payload in calls]
 
 
 def sets_target_variable(calls: typ.Iterable[tuple[str, str]]) -> bool:
