@@ -50,6 +50,9 @@ UNKNOWN: typ.Final = "unknown"
 
 TARGET_VARIABLES: typ.Final = ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR")
 TARGET_FLAG: typ.Final = '"--target-dir"'
+_SEPARATOR: typ.Final = '"--"'
+# Matches `"--manifest-path"` and `"--manifest-path=..."`.
+_MANIFEST_PATH: typ.Final = '"--manifest-path'
 
 _STRING: typ.Final = re.compile(r'"(?:[^"\\]|\\.)*"')
 # Constructors and accessors of a directory that is removed with its owner or
@@ -344,19 +347,22 @@ class _Replay:
         the default target to that workspace.
         """
         for item in argument_items(payload):
-            if self._is_after_separator:
-                continue
-            if item == '"--"':
-                self._is_after_separator = True
-            elif item == '"--manifest-path"' or item.startswith('"--manifest-path='):
-                self.has_manifest_path = True
-            elif self._is_flag_value_next:
-                self.flag = classify_value(item, self.bindings)
-                self._is_flag_value_next = False
-            elif item == TARGET_FLAG:
-                self._is_flag_value_next = True
-            elif "--target-dir" in item:
-                self.flag = classify_value(item, self.bindings)
+            if not self._is_after_separator:
+                self._read_argument(item)
+
+    def _read_argument(self, item: str) -> None:
+        """Read one argument that precedes any `--` separator."""
+        if item == _SEPARATOR:
+            self._is_after_separator = True
+        elif self._is_flag_value_next:
+            self.flag = classify_value(item, self.bindings)
+            self._is_flag_value_next = False
+        elif item == TARGET_FLAG:
+            self._is_flag_value_next = True
+        elif "--target-dir" in item:
+            self.flag = classify_value(item, self.bindings)
+        elif item.startswith(_MANIFEST_PATH):
+            self.has_manifest_path = True
 
     def reading(self) -> TargetReading:
         """Return where the replayed command builds."""
@@ -395,7 +401,11 @@ class _Replay:
         bool
             True when nothing can have given the child a target directory.
         """
-        if self.directory is None or self.is_opaque or self.has_manifest_path:
+        if self.directory is None:
+            return False
+        if self.is_opaque:
+            return False
+        if self.has_manifest_path:
             return False
         if not set(TARGET_VARIABLES) <= self.removed:
             return False
