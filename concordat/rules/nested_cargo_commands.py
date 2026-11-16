@@ -567,7 +567,9 @@ def construction(
     """
     start, end = _argument_span(source.masked, match)
     form = _cargo_form(source.masked[start:end], source.text[start:end])
-    if form is None and any_program:
+    # The test executable run again builds nothing: it is how a test reruns
+    # itself as a child with a prepared environment.
+    if form is None and any_program and "current_exe" not in source.text[start:end]:
         form = PROGRAM_FORM
     if form is None:
         return None

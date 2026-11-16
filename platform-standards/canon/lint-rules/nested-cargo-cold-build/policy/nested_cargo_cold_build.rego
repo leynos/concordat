@@ -107,11 +107,28 @@ _unprepared(build) if {
 	count(object.get(build, "prepared_by", [])) == 0
 }
 
+#
+# A `cargo-unknown` build is a cargo command whose subcommand the reader could
+# not see, in a crate that shows no compile elsewhere. It may be `metadata` or
+# it may be `build`, so it is never a noncompliant finding on its own; it is
+# reported as indeterminate unless the same file also has a definite build.
+_definite(build) if build.kind != "cargo-unknown"
+
 _cold_paths := {build.path |
 	some build in input.builds
 	_well_formed_build(build)
 	_unprepared(build)
+	_definite(build)
 	not is_exempt(build.path)
+}
+
+_maybe_paths := {build.path |
+	some build in input.builds
+	_well_formed_build(build)
+	_unprepared(build)
+	not _definite(build)
+	not is_exempt(build.path)
+	not build.path in _cold_paths
 }
 
 _cold_kinds(path) := kinds if {
@@ -120,6 +137,7 @@ _cold_kinds(path) := kinds if {
 		build.path == path
 		_well_formed_build(build)
 		_unprepared(build)
+		_definite(build)
 	}
 }
 
@@ -128,7 +146,25 @@ _cold_line(path) := min({build.line |
 	build.path == path
 	_well_formed_build(build)
 	_unprepared(build)
+	_definite(build)
 })
+
+_maybe_line(path) := min({build.line |
+	some build in input.builds
+	build.path == path
+	_well_formed_build(build)
+	_unprepared(build)
+})
+
+deny contains finding("EN-001", severity, "indeterminate", path, line, msg) if {
+	envelope_ok
+	some path in _maybe_paths
+	line := _maybe_line(path)
+	msg := sprintf(
+		"%s:%d starts cargo with a subcommand the reader cannot see, and the repository declares no preparation for it, so whether it compiles inside a timed test is unknown. If it does, prepare the build outside the timed test as NC-010 describes",
+		[path, line],
+	)
+}
 
 deny contains finding("NC-010", severity, "noncompliant", path, line, msg) if {
 	envelope_ok

@@ -63,7 +63,7 @@ from .nested_cargo_source import (
     whole_file_scope,
 )
 from .nested_cargo_spawn import COMPILES_UNKNOWN, compiles_state
-from .nested_cargo_target import INHERITED, read_target
+from .nested_cargo_target import INHERITED, read_target, sets_target_variable
 from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
@@ -209,9 +209,24 @@ def _in_ranges(offset: int, ranges: typ.Iterable[tuple[int, int]]) -> bool:
 
 
 def _sets_target(command: CargoCommand, source: RustSource) -> bool:
-    """Report whether a command's own calls pick its target directory."""
+    """Report whether a command sets a cargo target variable itself.
+
+    A `--target-dir` flag is not evidence on a program that is not cargo: it is
+    that program's own option, and whitaker's `ls --target-dir` lists a suite
+    without building anything. Only the variables cargo itself reads count.
+
+    Returns
+    -------
+    bool
+        True when the command's environment names a target variable and the
+        reading rests on that, not on an inference from its working directory.
+    """
     reading = read_target(command.calls, source.text)
-    return reading.state != INHERITED and not reading.is_inferred
+    return (
+        reading.state != INHERITED
+        and not reading.is_inferred
+        and sets_target_variable(command.calls)
+    )
 
 
 def _direct_commands(

@@ -132,6 +132,7 @@ _LEADING_VALUE_FLAGS: typ.Final = frozenset({
     "-C",
     "-Z",
 })
+_NON_COMPILING_FLAG: typ.Final = "--unit-graph"
 COMPILES_YES: typ.Final = "yes"
 COMPILES_NO: typ.Final = "no"
 COMPILES_UNKNOWN: typ.Final = "unknown"
@@ -179,6 +180,11 @@ def compiles_state(calls: cabc.Iterable[tuple[str, str]]) -> str:
         `unknown` when an unreadable word comes before the subcommand.
     """
     words = _argument_words(calls)
+    # `--unit-graph` prints the units cargo would build and builds none, so it
+    # settles the answer even behind an argument the reader cannot see.
+    cargo_words = words[: words.index("--")] if "--" in words else words
+    if _NON_COMPILING_FLAG in cargo_words:
+        return COMPILES_NO
     skip_value = False
     for index, word in enumerate(words):
         if word is None:

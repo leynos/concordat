@@ -72,6 +72,20 @@ test_one_finding_per_file_naming_every_kind if {
 	contains(f.msg, "cargo, trybuild")
 }
 
+# A cargo command whose subcommand the reader cannot see may be `metadata`, so
+# it is never a noncompliant finding on its own.
+test_an_unseen_subcommand_alone_is_indeterminate if {
+	profile(data.fixtures.unprepared_unknown_subcommand) == {["EN-001", "indeterminate", "tests/wrapper.rs"]}
+}
+
+test_an_unseen_subcommand_beside_a_definite_build_is_one_noncompliant_finding if {
+	found := findings(data.fixtures.unprepared_unknown_beside_definite)
+	count(found) == 1
+	some f in found
+	f.rule_id == "NC-010"
+	f.line == 57
+}
+
 test_the_message_names_the_remedy_and_both_examples if {
 	some f in findings(data.fixtures.unprepared_build)
 	contains(f.msg, "nextest setup script")

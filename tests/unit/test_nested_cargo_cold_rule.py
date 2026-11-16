@@ -300,6 +300,46 @@ def test_a_gate_call_alone_declares_the_preparation(tmp_path: pathlib.Path) -> N
     assert ("NC-010", "crates/rstest-bdd/tests/trybuild_macros.rs") in profile(tmp_path)
 
 
+WRAPPER = """\
+fn cargo(args: &[&str]) -> String {
+    let output = std::process::Command::new(env!("CARGO")).args(args).output().unwrap();
+    String::from_utf8(output.stdout).unwrap()
+}
+"""
+
+
+def test_a_wrapper_with_an_unseen_subcommand_alone_is_only_indeterminate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo(args)` may run `metadata`, so the reader does not call it a build."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "app"\n')
+    put(tmp_path, "tests/wrapper.rs", WRAPPER)
+    found = {(f.rule_id, f.verdict) for f in findings(tmp_path)}
+    assert found == {("EN-001", "indeterminate")}
+
+
+def test_a_wrapper_in_a_crate_that_compiles_elsewhere_is_a_build(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The crate's own trybuild use settles what the hidden subcommand is."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "app"\n')
+    put(tmp_path, "tests/wrapper.rs", WRAPPER)
+    put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
+    assert ("NC-010", "tests/wrapper.rs") in profile(tmp_path)
+
+
+def test_a_unit_graph_request_is_not_a_build(tmp_path: pathlib.Path) -> None:
+    """`cargo test --unit-graph` prints the units and compiles none."""
+    put(
+        tmp_path,
+        "tests/graph.rs",
+        'fn graph(sub: &[&str]) {\n    std::process::Command::new(env!("CARGO"))\n'
+        '        .args(sub)\n        .args(["--unit-graph", "--locked"])\n'
+        "        .output()\n        .unwrap();\n}\n",
+    )
+    assert findings(tmp_path) == ()
+
+
 def test_a_preparation_in_another_crate_prepares_nothing_here(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -453,8 +493,38 @@ def test_a_test_binary_rerun_in_a_temporary_directory_is_not_a_build(
         "#[cfg(test)]\nmod tests {\n    fn oracle() {\n"
         "        let root = tempfile::TempDir::new().unwrap();\n"
         "        std::process::Command::new(std::env::current_exe().unwrap())\n"
-        '            .env_clear()\n            .current_dir(root.path())\n'
+        "            .env_clear()\n            .current_dir(root.path())\n"
         "            .output()\n            .unwrap();\n    }\n}\n",
+    )
+    assert findings(tmp_path) == ()
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # whitaker's `ls --target-dir`: a flag of that program, not cargo's.
+        (
+            'Command::new(env!("CARGO_BIN_EXE_tool"))\n'
+            '            .args(["ls", "--target-dir"])\n'
+            "            .arg(scratch.path())"
+        ),
+        # whitaker's lock child: the test executable rerun with a target variable.
+        (
+            "Command::new(std::env::current_exe().unwrap())\n"
+            '            .env("CARGO_TARGET_DIR", scratch.path())'
+        ),
+    ],
+    ids=["program-flag", "test-executable-rerun"],
+)
+def test_a_program_that_is_not_a_build_is_not_judged(
+    tmp_path: pathlib.Path, command: str
+) -> None:
+    """Only a target *variable* on a program is evidence that it builds."""
+    put(
+        tmp_path,
+        "tests/child.rs",
+        "fn child() {\n    let scratch = tempfile::tempdir().unwrap();\n"
+        f"    {command}\n            .output()\n            .unwrap();\n}}\n",
     )
     assert findings(tmp_path) == ()
 

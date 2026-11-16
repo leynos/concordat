@@ -93,6 +93,36 @@
       ],
       "problems": []
     },
+    "unprepared_unknown_subcommand": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/wrapper.rs", "line": 31, "kind": "cargo-unknown", "binary": "wrapper",
+          "crate": ".", "prepared_by": []
+        }
+      ],
+      "problems": []
+    },
+    "unprepared_unknown_beside_definite": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/macros.rs", "line": 12, "kind": "cargo-unknown", "binary": "macros",
+          "crate": ".", "prepared_by": []
+        },
+        {
+          "path": "tests/macros.rs", "line": 57, "kind": "trybuild", "binary": "macros",
+          "crate": ".", "prepared_by": []
+        }
+      ],
+      "problems": []
+    },
     "unprepared_two_kinds": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-cold-build",

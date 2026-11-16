@@ -28,7 +28,7 @@ import typing as typ
 
 from .dependency_family_coverage import mapping, sequence
 from .fs_probe import probe_file
-from .nested_cargo_spawn import COMPILES_NO, TEST_PATH
+from .nested_cargo_spawn import COMPILES_NO, COMPILES_YES, TEST_PATH
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -43,6 +43,9 @@ SETUP_SCRIPT: typ.Final = "setup-script"
 PREPARATION_TEST: typ.Final = "preparation-test"
 GATE_CALL: typ.Final = "gate-call"
 ALL_FILTER: typ.Final = "all()"
+# A command whose subcommand the reader cannot see, until the crate it belongs
+# to is shown to compile elsewhere.
+MAYBE_KIND: typ.Final = "cargo-unknown"
 _FUNCTION: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)")
 _BINARY: typ.Final = re.compile(r"(?:^|/)tests/(?P<stem>[^/]+)\.rs$")
 
@@ -57,8 +60,10 @@ class BuildFact(typ.TypedDict):
     line:
         The line the first compile of this kind starts on.
     kind:
-        `cargo` for a compiling spawn, `trybuild`, `macrotest`, or `helper`
-        for a call to a function the repository's own harness builds through.
+        `cargo` for a compiling spawn, or a spawn whose subcommand the reader
+        cannot see in a crate that visibly compiles elsewhere; `cargo-unknown`
+        for that spawn anywhere else; `trybuild`, `macrotest`, or `helper` for
+        a call to a function the repository's own harness builds through.
     binary:
         The test binary's name for a top-level `tests/<stem>.rs`, else None.
     crate:
@@ -307,6 +312,40 @@ def _helper_facts(sources: list[RustSource], gates: Gates) -> list[tuple[str, in
     return found
 
 
+def _first_compiles(
+    evidence: RustEvidence, sources: list[RustSource], gates: Gates
+) -> dict[tuple[str, str], int]:
+    """Return the first line each file starts a build of each kind on.
+
+    Returns
+    -------
+    dict[tuple[str, str], int]
+        The line, keyed by `(path, kind)`, where kind is `cargo`, the
+        `cargo-unknown` of an unseen subcommand, `trybuild`, `macrotest` or
+        `helper`.
+    """
+    first: dict[tuple[str, str], int] = {}
+
+    def note(path: str, line: int, kind: str) -> None:
+        """Keep the earliest line a file starts a build of this kind on."""
+        key = (path, kind)
+        first[key] = min(line, first.get(key, line))
+
+    for spawn in evidence.spawns:
+        if spawn["compiles"] == COMPILES_YES:
+            note(spawn["path"], spawn["line"], "cargo")
+        elif spawn["compiles"] != COMPILES_NO:
+            note(spawn["path"], spawn["line"], MAYBE_KIND)
+    for fact in evidence.trybuild:
+        if fact["form"] == "source":
+            note(fact["path"], fact["line"], "trybuild")
+    for fact in evidence.macrotest:
+        note(fact["path"], fact["line"], "macrotest")
+    for path, line in _helper_facts(sources, gates):
+        note(path, line, "helper")
+    return first
+
+
 def collect_builds(
     evidence: RustEvidence,
     sources: list[RustSource],
@@ -335,26 +374,18 @@ def collect_builds(
         One fact per path and kind, in path order.
     """
     declared = _declared_by_crate(sources, crates, gates)
-    first: dict[tuple[str, str], int] = {}
-
-    def note(path: str, line: int, kind: str) -> None:
-        """Keep the earliest line a file starts a build of this kind on."""
-        key = (path, kind)
-        first[key] = min(line, first.get(key, line))
-
-    for spawn in evidence.spawns:
-        if spawn["compiles"] != COMPILES_NO:
-            note(spawn["path"], spawn["line"], "cargo")
-    for fact in evidence.trybuild:
-        if fact["form"] == "source":
-            note(fact["path"], fact["line"], "trybuild")
-    for fact in evidence.macrotest:
-        note(fact["path"], fact["line"], "macrotest")
-    for path, line in _helper_facts(sources, gates):
-        note(path, line, "helper")
+    first = _first_compiles(evidence, sources, gates)
+    # A command whose subcommand the reader cannot see is a build only where the
+    # same crate visibly compiles elsewhere. Anywhere else the arguments are as
+    # likely `metadata` or `--unit-graph` as `build`, and calling it a build is
+    # the guess this reader does not make; the policy reports it as unknown.
+    compiling = {
+        owning_crate(path, crates) for path, kind in first if kind != MAYBE_KIND
+    }
     builds: list[BuildFact] = []
     for (path, kind), line in sorted(first.items()):
         crate = owning_crate(path, crates)
+        settled = "cargo" if kind == MAYBE_KIND and crate in compiling else kind
         binary = _BINARY.search(path)
         stem = binary["stem"] if binary else None
         prepared = sorted(declared.get(crate, set()))
@@ -364,7 +395,7 @@ def collect_builds(
         builds.append({
             "path": path,
             "line": line,
-            "kind": kind,
+            "kind": settled,
             "binary": stem,
             "crate": crate,
             "prepared_by": prepared,

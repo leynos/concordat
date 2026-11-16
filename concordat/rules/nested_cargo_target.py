@@ -296,6 +296,15 @@ class _Replay:
         return TargetReading(INHERITED)
 
 
+def sets_target_variable(calls: typ.Iterable[tuple[str, str]]) -> bool:
+    """Report whether any environment call names a cargo target variable."""
+    return any(
+        method in ENVIRONMENT_METHODS
+        and any(name in payload for name in TARGET_VARIABLES)
+        for method, payload in calls
+    )
+
+
 def read_target(calls: typ.Iterable[tuple[str, str]], text: str) -> TargetReading:
     """Return where a command builds, given its recorded calls and its source.
 

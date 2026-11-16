@@ -921,7 +921,9 @@ detecting a cold build afterwards. It reports:
 - **NC-010**: a test source compiles in a timed test (a compiling `cargo`
   command, a `trybuild::TestCases` or `macrotest::expand` use, or a call to a
   helper the `compiling_calls` parameter names) and the repository declares no
-  preparation outside it. Prepare the build in a nextest setup script that a
+  preparation outside it. A `cargo` command whose subcommand the reader cannot
+  see counts only in a crate that visibly compiles elsewhere; otherwise it is
+  indeterminate. Prepare the build in a nextest setup script that a
   `[[profile.*.scripts]]` rule selects for the test, or in a named preparation
   test in the same crate that stamps its artefacts, with the timed test
   refusing to run when the stamp is missing. The `preparation_gates` parameter

@@ -44,8 +44,10 @@ recorded in `docs/roadmap.md` (DF12-109).
   (`cargo`, `trybuild`, `macrotest`, `helper`). The message says what to do and
   links two examples.
 - **EN-001** (same severity, indeterminate): a command that compiles sets its
-  target directory from a value the reader cannot follow, or the envelope
-  carries a problem fact (a source the reader could not decode).
+  target directory from a value the reader cannot follow; a `cargo` command
+  with an unseen subcommand has no declared preparation and no compile beside
+  it in its crate; or the envelope carries a problem fact (a source the reader
+  could not decode).
 - **EN-001** (always `error`, indeterminate): the input is not a schema-1
   `policy-input/nested-cargo-cold-build` envelope, a fact carries a target
   state this policy does not know, or a fact is missing a field its finding
@@ -109,8 +111,12 @@ test is one of:
 
 - a `cargo` command whose arguments start a compile (`build`, `check`, `test`,
   `run`, `package`, `clippy`, `doc`, `rustc`, `install`, `publish`, `bench`,
-  `miri`, `nextest`, `llvm-cov`, `rustdoc`), or whose subcommand the reader
-  cannot see;
+  `miri`, `nextest`, `llvm-cov`, `rustdoc`). `package --list` and any command
+  carrying `--unit-graph` compile nothing and are not builds. A command whose
+  subcommand the reader cannot see (`cargo(args)`, `.args(subcommand)`) is a
+  build only in a crate that visibly compiles elsewhere through one of the
+  other routes here; anywhere else it is reported as indeterminate, because the
+  arguments are as likely `metadata` as `build`;
 - a `trybuild::TestCases` reference, or a `macrotest::expand*` call. Both build
   in a directory of their own under the target (`<target>/tests/trybuild`,
   `<target>/tests/macrotest`) that the outer build never warms, so each is a
