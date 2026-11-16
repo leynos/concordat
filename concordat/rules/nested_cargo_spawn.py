@@ -36,6 +36,7 @@ import os
 import pathlib
 import re
 import typing as typ
+from itertools import starmap
 
 from .nested_cargo_source import brace_pairs
 from .rust_source import mask_literals
@@ -229,7 +230,7 @@ def _command_window(text: str, start: int) -> str:
     return f"{window}\n{_callee_text(text, window, bound['name'])}"
 
 
-def _own_statements(text: str, start: int, window: str) -> list[str]:
+def _own_statements(text: str, start: int, window: str) -> list[tuple[str, int]]:
     """Return the statements of *window* that can add arguments to the command.
 
     A command built in one chain owns only its first statement. A command bound
@@ -240,24 +241,27 @@ def _own_statements(text: str, start: int, window: str) -> list[str]:
 
     Returns
     -------
-    list[str]
-        The statements, comments removed.
+    list[tuple[str, int]]
+        Each statement, comments removed, with the number of blocks still open
+        where it starts (the window's own braces, counted from the command).
     """
     statements = COMMENT.sub("", window).split(";")
     bound = BINDING.search(text[max(0, start - 120) : start])
     if bound is None:
-        return statements[:1]
+        return [(statements[0], 0)]
     # A statement mentions the command when the name is followed by a method
     # call, wherever it sits (an `if` body included), so a launch in control
     # flow still ends the arguments.
     own = re.compile(rf"\b{re.escape(bound['name'])}\s*\.")
-    found: list[str] = []
+    found: list[tuple[str, int]] = []
+    depth = 0
     for index, statement in enumerate(statements):
         if index == 0 or own.search(statement):
-            found.append(statement)
+            found.append((statement, depth))
             # An argument added after the command has run belongs to a reuse.
             if LAUNCH.search(statement):
                 break
+        depth += statement.count("{") - statement.count("}")
     return found
 
 
@@ -272,16 +276,14 @@ def _is_probe(text: str, start: int, window: str) -> bool:
     bool
         True when an argument of the command is a version or query flag.
     """
-    return any(
-        _unconditional_probe(statement)
-        for statement in _own_statements(text, start, window)
-    )
+    return any(starmap(_unconditional_probe, _own_statements(text, start, window)))
 
 
-def _unconditional_probe(statement: str) -> bool:
+def _unconditional_probe(statement: str, depth: int) -> bool:
     """Report whether a statement adds a probe flag on every path through it.
 
-    A flag added inside a block (`if query_only { cmd.arg("--print=cfg") }`) may
+    A flag added inside a block (`if query_only { cmd.arg("--print=cfg") }`),
+    whether in the same statement or in one that follows the opening brace, may
     not be there when the command runs, so it proves nothing.
 
     Returns
@@ -290,7 +292,7 @@ def _unconditional_probe(statement: str) -> bool:
         True when the statement holds a probe flag outside any block.
     """
     found = RUSTC_PROBE.search(statement)
-    return found is not None and "{" not in statement[: found.start()]
+    return found is not None and depth == 0 and "{" not in statement[: found.start()]
 
 
 def _spawn_kind(relative: str, text: str) -> str | None:

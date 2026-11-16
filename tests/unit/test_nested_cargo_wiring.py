@@ -230,6 +230,13 @@ CHECK_ONLY_CASES = {
         msrv_workflow(steps=MSRV_CHECK + '      - run: X="$(true)" make test\n'),
         {"NC-006"},
     ),
+    "substitution-inside-an-assignment-prefix-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK
+            + '      - run: RUSTFLAGS="$(make rustflags)" cargo check --locked\n'
+        ),
+        {"NC-006"},
+    ),
     "a-quoted-assignment-before-cargo-check-stays-silent": Case(
         msrv_workflow(
             steps='      - run: RUSTFLAGS="-D warnings" cargo check --locked\n'

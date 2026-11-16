@@ -137,6 +137,18 @@ CASES = {
         None,
         {"NC-004"},
     ),
+    "a-probe-flag-after-another-statement-in-a-block-is-not-proof": Case(
+        "use std::process::Command;\n#[test]\nfn maybe() {\n"
+        '    let mut cmd = Command::new("rustc");\n'
+        "    if query_only {\n"
+        '        cmd.env("RUST_LOG", "info");\n'
+        '        cmd.arg("--print=cfg");\n'
+        "    }\n"
+        '    cmd.arg("fixture.rs");\n'
+        "    cmd.status().unwrap();\n}\n",
+        None,
+        {"NC-004"},
+    ),
     "a-conditionally-added-probe-flag-is-not-proof": Case(
         "use std::process::Command;\n#[test]\nfn maybe() {\n"
         '    let mut cmd = Command::new("rustc");\n'
