@@ -223,20 +223,45 @@ def _command_window(text: str, start: int) -> str:
     return f"{window}\n{_callee_text(text, window, bound['name'])}"
 
 
-def _is_probe(window: str) -> bool:
+def _own_statements(text: str, start: int, window: str) -> list[str]:
+    """Return the statements of *window* that can add arguments to the command.
+
+    A command built in one chain owns only its first statement. A command bound
+    to a name owns the statements that start with that name (`command.arg(..)`),
+    plus the binding itself; another command's `.arg(..)` is not its argument.
+
+    Returns
+    -------
+    list[str]
+        The statements, comments removed.
+    """
+    statements = COMMENT.sub("", window).split(";")
+    bound = BINDING.search(text[max(0, start - 120) : start])
+    if bound is None:
+        return statements[:1]
+    own = re.compile(rf"\s*&?(?:mut\s+)?{re.escape(bound['name'])}\b")
+    return [
+        statement
+        for index, statement in enumerate(statements)
+        if index == 0 or own.match(statement)
+    ]
+
+
+def _is_probe(text: str, start: int, window: str) -> bool:
     """Report whether a `rustc` command only asks a question and compiles nothing.
 
-    Comments are dropped and each statement is read alone, so an unrelated
-    `"--version"` in a comment or an assertion after the command is not an
-    argument of it.
+    Only arguments added to this command count, so a `"--version"` in a comment,
+    in an assertion after it or on another command is not its argument.
 
     Returns
     -------
     bool
         True when an argument of the command is a version or query flag.
     """
-    code = COMMENT.sub("", window)
-    return any(RUSTC_PROBE.search(statement) for statement in code.split(";"))
+    return any(
+        RUSTC_PROBE.search(statement)
+        for statement in _own_statements(text, start, window)
+    )
 
 
 def _spawn_kind(relative: str, text: str) -> str | None:
@@ -246,7 +271,7 @@ def _spawn_kind(relative: str, text: str) -> str | None:
     spans = _test_spans(text)
     for match in RUSTC_SPAWN.finditer(text):
         if _is_test_position(relative, spans, match.start()) and not _is_probe(
-            _command_window(text, match.start())
+            text, match.start(), _command_window(text, match.start())
         ):
             return "rustc"
     compiles = any(

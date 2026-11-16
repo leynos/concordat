@@ -45,10 +45,15 @@ SETUP_ACTIONS: typ.Final = frozenset({
 # text tools that start no build.
 HARMLESS_WORDS: typ.Final = frozenset({
     "echo", "printf", "test", "[", "[[", "sed", "head", "tail", "cut", "tr", "grep",
-    "awk", "cat", "export", "set", "cd", "true", "false", "exit", "pwd", "dirname",
-    "basename", "rustup", "case", "esac", "if", "then", "else", "elif", "fi", "for",
-    "do", "done", "while", "in", "read", "mkdir", ":",
+    "cat", "export", "set", "cd", "true", "false", "exit", "pwd", "dirname",
+    "basename", "case", "esac", "fi", "done", "for", "read", "mkdir", ":",
 })  # fmt: skip
+# Shell control words that are followed by a command, which is read in turn.
+CONTROL_WORDS: typ.Final = r"(?:(?:then|do|else|elif|if|while|until)\b|!)[ \t]*"
+# `rustup` sets a toolchain up; `rustup run <toolchain> <command>` runs anything.
+RUSTUP_SETUP: typ.Final = re.compile(
+    r"[ \t]+(?:toolchain|target|component|show|default|update|set)\b"
+)
 CARGO_WORD: typ.Final = re.compile(r"(?<![\w.-])(?:[\w.~$/{}-]*/)?cargo(?![\w-])")
 # `cargo`, then an optional toolchain selector (quoted or not), then the word
 # that must be a check-style subcommand.
@@ -59,12 +64,15 @@ CARGO_SUBCOMMAND: typ.Final = re.compile(
 # substitution, a subshell or a compound-command keyword. Plain `NAME=value`
 # prefixes are skipped so the command they precede is still read.
 COMMAND_START: typ.Final = re.compile(
-    r"(?:^|;|&&|\|\||\||\(|`|\b(?:then|do|else)\b)[ \t]*"
+    r"(?:^|;|&&|\|\||\||\(|`)[ \t]*"
+    rf"(?:{CONTROL_WORDS})*"
     r"""(?:[A-Za-z_]\w*=[^\s"'$();&|`]*[ \t]+)*"""
     r"(?P<word>[^\s;&|()`]+)",
     re.MULTILINE,
 )
 ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_]\w*=")
+# What is left of a `case` arm (`*)`) once the parenthesis is split off.
+PATTERN_ONLY: typ.Final = re.compile(r"[*?]+")
 
 
 def _cargo_is_check_style(script: str) -> bool:
@@ -80,10 +88,14 @@ def _commands_are_harmless(script: str) -> bool:
     """Report whether every command of *script* is cargo, an assignment or harmless."""
     for found in COMMAND_START.finditer(script):
         word = found["word"].strip("\"'")
+        if word == "rustup":
+            if RUSTUP_SETUP.match(script, found.end("word")):
+                continue
+            return False
         if (
             ASSIGNMENT.match(word)
             or word in HARMLESS_WORDS
-            or not any(char.isalnum() for char in word)
+            or PATTERN_ONLY.fullmatch(word)
             or CARGO_WORD.fullmatch(word)
         ):
             continue

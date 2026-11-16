@@ -191,6 +191,33 @@ CHECK_ONLY_CASES = {
     "unknown-interpreter-is-flagged": Case(
         msrv_workflow(steps=MSRV_CHECK + "      - run: ruby ci.rb\n"), {"NC-006"}
     ),
+    "command-after-if-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: if make test; then true; fi\n"),
+        {"NC-006"},
+    ),
+    "command-after-while-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: while make test; do break; done\n"
+        ),
+        {"NC-006"},
+    ),
+    "expression-as-the-command-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: ${{ inputs.command }}\n"),
+        {"NC-006"},
+    ),
+    "variable-as-the-command-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: $TEST_COMMAND\n"), {"NC-006"}
+    ),
+    "rustup-run-is-flagged": Case(
+        msrv_workflow(steps=MSRV_CHECK + "      - run: rustup run stable make test\n"),
+        {"NC-006"},
+    ),
+    "awk-is-flagged": Case(
+        msrv_workflow(
+            steps=MSRV_CHECK + "      - run: awk 'BEGIN { system(\"make test\") }'\n"
+        ),
+        {"NC-006"},
+    ),
     "lookalike-checkout-owner-is-flagged": Case(
         msrv_workflow(steps=MSRV_CHECK + "      - uses: acme/checkout@v1\n"),
         {"NC-006"},

@@ -121,6 +121,22 @@ CASES = {
         None,
         set(),
     ),
+    "a-version-argument-of-another-command-does-not-excuse-the-compile": Case(
+        "use std::process::Command;\n#[test]\nfn direct() {\n"
+        '    let mut other = Command::new("echo");\n'
+        '    Command::new("rustc").arg("fixture.rs").status().unwrap();\n'
+        '    other.arg("--version");\n}\n',
+        None,
+        {"NC-004"},
+    ),
+    "a-bound-command-keeps-its-own-version-argument": Case(
+        "use std::process::Command;\n#[test]\nfn probe() {\n"
+        '    let mut command = Command::new("rustc");\n'
+        '    command.arg("--version");\n'
+        "    command.status().unwrap();\n}\n",
+        None,
+        set(),
+    ),
     "a-compile-followed-by-a-version-assertion-counts": Case(
         RUSTC_TEST.replace("}\n", '    assert_eq!(actual, "--version");\n}\n'),
         None,
