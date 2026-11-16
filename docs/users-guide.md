@@ -834,13 +834,14 @@ manifest is uncovered; a configuration that cannot be decoded is indeterminate.
 
 A manifest left alone on purpose is named in the rule's `exemptions` parameter
 with its repository (`owner/name`), directory, rationale and review trigger; a
-blank rationale or trigger suppresses nothing. Four ship by default, for
+blank rationale or trigger suppresses nothing. Six ship by default, for
 rstest-bdd's derived `published-gpui-e2e` fixture, the vendored Telegram crypto
 patch (axinite), the `feldera-size-of` (lille) fork, wireframe's independently
-resolved `tests/feature_gate` package and combobulate's `verus-wiring-probe`.
-The rule ships at `warning` severity, so findings are reported and the exit
-status stays 0; set the `severity` parameter to `error` to enforce it. The
-audit reads the working tree below the root, skipping hidden, `target`,
+resolved `tests/feature_gate` package, combobulate's `verus-wiring-probe` and
+rust-prover-tools' `kani_recipe` (recipe data, a copy of the pinned Kani
+manifest). The rule ships at `warning` severity, so findings are reported and
+the exit status stays 0; set the `severity` parameter to `error` to enforce it.
+The audit reads the working tree below the root, skipping hidden, `target`,
 `vendor` and similar directories.
 
 ### Auditing the nextest configuration of compiler-spawning tests

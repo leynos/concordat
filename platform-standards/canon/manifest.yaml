@@ -232,7 +232,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/nested-cargo-fixture-manifests/rule.yaml
     description: >-
       Rule package manifest for the nested cargo fixture manifest audit.
-    sha256: dc5fdd00a911f30d386463ca7f42e012eb45a04329caf659a5ea48bc1df3d0a7
+    sha256: 2295005b3a99d3b61923d1409987ed2a14a0d1d456fd61f528f9ff3be2182b4b
   - id: lint-rule-nested-cargo-nextest
     type: opa-policy
     path: platform-standards/canon/lint-rules/nested-cargo-nextest/policy/nested_cargo_nextest.rego
