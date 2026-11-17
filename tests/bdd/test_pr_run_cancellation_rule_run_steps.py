@@ -47,14 +47,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     concurrency:
-      group: ci-${{ github.head_ref }}
+      group: ci-test-${{ github.head_ref }}
       cancel-in-progress: true
     steps:
       - run: echo ok
   lint:
     runs-on: ubuntu-latest
     concurrency:
-      group: ci-${{ github.head_ref }}
+      group: ci-lint-${{ github.head_ref }}
       cancel-in-progress: true
     steps:
       - run: echo ok

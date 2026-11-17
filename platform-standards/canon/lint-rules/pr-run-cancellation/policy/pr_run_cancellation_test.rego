@@ -204,6 +204,18 @@ test_a_parenthesized_comparison_does_not_name_the_pull_request if {
 	profile(data.fixtures.parenthesized_comparison_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# Parentheses around the operand do not change the boolean the comparison
+# produces.
+test_a_parenthesized_operand_comparison_does_not_name_the_pull_request if {
+	profile(data.fixtures.parenthesized_operand_comparison_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# One evaluated occurrence is enough: the second occurrence is a comparison,
+# but the first supplies the head ref the group carries.
+test_a_compared_second_use_does_not_disqualify_the_first if {
+	count(findings(data.fixtures.format_with_compared_second_use)) == 0
+}
+
 # The constant first branch is the one GitHub selects, so a marker that appears
 # only in the fallback is part of a constant group.
 test_a_marker_only_in_a_constant_first_fallback_is_noncompliant if {

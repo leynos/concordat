@@ -301,25 +301,25 @@ unquoted_expression_text(text) := concat("", expression_bodies(text))
 # branch, so every branch is a candidate value for the group.
 expression_branches(body) := [trim_space(branch) | some branch in split(body, "||")]
 
-# A marker that is compared, as in `github.event.pull_request.number > 0` or
-# `0 < github.event.pull_request.number`, renders as a boolean: every pull
-# request produces the same value, so the group does not carry the identity the
-# marker spells. Either side of the marker may hold the operator.
-marker_is_compared(text, marker) if {
-	some index, following in split(lower(text), marker)
-	index > 0
-	follows_comparison(following)
-}
-
-marker_is_compared(text, marker) if {
+# A marker names the pull request when at least one occurrence is evaluated as
+# its value. An occurrence used as a comparison operand, as in
+# `github.event.pull_request.number > 0` or
+# `0 < github.event.pull_request.number`, renders as a boolean instead, so that
+# occurrence carries no identity; another occurrence in the same expression
+# still can, as in `format('{0}-{1}', github.head_ref, github.head_ref == 'x')`.
+# Parentheses around the operand are transparent, so `(github.head_ref) == 'x'`
+# is a comparison too.
+mentions_pull_request(text) if {
+	some marker in PR_NUMBER_MARKERS
 	parts := split(lower(text), marker)
-	some index, preceding in parts
-	index + 1 < count(parts)
-	precedes_comparison(preceding)
+	some index, following in parts
+	index > 0
+	not follows_comparison(following)
+	not precedes_comparison(parts[index - 1])
 }
 
 follows_comparison(text) if {
-	trimmed := trim_left(text, " \t")
+	trimmed := trim_left(text, " \t)")
 	some operator in {"==", "!=", ">=", "<=", ">", "<"}
 	startswith(trimmed, operator)
 }
@@ -328,12 +328,6 @@ precedes_comparison(text) if {
 	trimmed := trim_right(text, " \t(")
 	some operator in {"==", "!=", ">=", "<=", ">", "<"}
 	endswith(trimmed, operator)
-}
-
-mentions_pull_request(text) if {
-	some marker in PR_NUMBER_MARKERS
-	contains(lower(text), marker)
-	not marker_is_compared(text, marker)
 }
 
 mentions_run_varying_value(text) if {

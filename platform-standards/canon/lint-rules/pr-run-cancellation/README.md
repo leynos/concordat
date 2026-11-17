@@ -63,15 +63,17 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   matched case-insensitively, inside a `${{ ... }}` expression. A group that
   spells the marker as literal text, such as `ci-github.head_ref`, is a
   constant and does not count, and neither does a marker inside a quoted string
-  literal, such as `${{ 'github.head_ref' }}`. A marker used as a comparison
-  operand on either side, such as `${{ github.event.pull_request.number > 0 }}`
-  or `${{ 0 < github.event.pull_request.number }}`, renders as a boolean, so
-  every pull request shares the group; the rule treats such a marker as naming
-  no pull request. Only the first `||` branch counts, because that is the one a
-  pull request selects, so a marker that appears only in a constant-first
-  fallback, as in `${{ 'ci' || github.head_ref }}`, does not count either.
-  Every cancelling block is checked on its own: the workflow-level block when
-  it cancels, and each cancelling job block whether or not the workflow block
+  literal, such as `${{ 'github.head_ref' }}`. An occurrence used as a
+  comparison operand on either side, such as
+  `${{ github.event.pull_request.number > 0 }}` or
+  `${{ 0 < github.event.pull_request.number }}`, renders as a boolean, so that
+  occurrence names no pull request; parentheses around the operand do not
+  change that, and another occurrence in the same group can still supply the
+  identity. Only the first `||` branch counts, because that is the one a pull
+  request selects, so a marker that appears only in a constant-first fallback,
+  as in `${{ 'ci' || github.head_ref }}`, does not count either. Every
+  cancelling block is checked on its own: the workflow-level block when it
+  cancels, and each cancelling job block whether or not the workflow block
   complies, because GitHub applies both concurrency levels. A block whose group
   would cancel a *different* pull request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
