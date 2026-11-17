@@ -985,11 +985,57 @@ mentions_run_varying_value(text) if {
 	)
 }
 
+# The value also has to be the one GitHub evaluates: a `||` earlier in the same
+# argument can turn the occurrence into an unreached fallback, and a `&&` guard
+# in an enclosing argument decides whether the value is rendered at all.
+# `format('{0}-{1}', github.head_ref, false && github.run_id)` renders
+# `ci-false` for every pull request, so the run id never reaches the group.
 run_varying_occurrence_counts(head, before, after) if {
 	occurrence_survives_value(head, before, after)
+	run_value_reachable(before)
+	not argument_conjunction_provably_falsy(before)
 	links := call_links(before)
 	not chain_discards_value(links)
 }
+
+argument_conjunction_provably_falsy(before) if {
+	some guard in argument_guards(before)
+	branch_provably_falsy(guard)
+}
+
+# A `||` whose own left branch always renders hides everything after it, so a
+# run value there never reaches the group. An earlier branch the rule cannot
+# prove truthy may be falsy, which leaves the run value reachable and keeps the
+# conservative reading. A separator in another argument does not reach this one.
+run_value_reachable(before) if {
+	chars := characters(before)
+	separators := [position |
+		some position in numbers.range(0, count(chars) - 1)
+		position + 1 < count(chars)
+		chars[position] == "|"
+		chars[position + 1] == "|"
+	]
+	every position in separators {
+		not separator_branch_always_truthy(before, position)
+	}
+}
+
+separator_branch_always_truthy(text, after) if {
+	depth := depth_at(text, after)
+	not comma_between_at_depth(text, after, depth)
+	not depth_drops_below(text, after, depth)
+	start := separator_branch_start(text, after, depth)
+	branch := substring(text, start, after - start)
+	branch_always_truthy(branch)
+}
+
+# A branch whose value GitHub always renders, so a `||` after it never falls
+# through: a bare marker, a non-empty literal, or a `&&` chain proven truthy.
+branch_always_truthy(branch) if branch_bare_marker(branch)
+
+branch_always_truthy(branch) if branch_constant_literal(branch)
+
+branch_always_truthy(branch) if branch_provably_truthy(branch)
 
 # A trimmed literal-false expression is the one expression that provably does
 # not cancel. Anything else written as an expression may evaluate true on the
@@ -1304,19 +1350,30 @@ branch_may_be_falsy_at(branch, event) if event_guard_excludes_at(branch, event)
 branch_may_be_falsy_at(branch, event) if {
 	event_guard_holds_at(branch, event)
 	value := event_guard(branch).value
-	not branch_bare_marker(value)
+	not branch_always_truthy(value)
 	not mentions_pull_request(value)
 }
 
 branch_may_be_falsy_at(branch, _) if {
 	not event_guard(branch)
-	not branch_bare_marker(branch)
-	not branch_constant_literal(branch)
+	not branch_always_truthy(branch)
 }
 
 branch_bare_marker(branch) if {
 	some marker in PR_NUMBER_MARKERS
 	lower(trim_space(branch)) == marker
+}
+
+# A `&&` chain whose guards all hold takes its final segment, so a chain ending
+# in a reference GitHub always resolves to a non-empty string is truthy as a
+# whole. In `github.ref && github.head_ref || 'ci'` the marker is always
+# selected, so the `ci` fallback is never reached and the group is compliant.
+branch_provably_truthy(branch) if {
+	conjunction := branch_conjunction(branch)
+	every guard in conjunction.guards {
+		guard_proven_truthy(guard)
+	}
+	branch_bare_marker(conjunction.value)
 }
 
 # An empty literal is falsy, so the chain moves past it; every other literal
@@ -1781,7 +1838,8 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 	evaluable_workflow(workflow)
 	concurrency_evaluable(workflow)
 	workflow_has_concurrency(workflow)
-	group_identity_unknown(workflow_concurrency(workflow), pr_events(workflow))
+	events := cancelling_events(workflow_concurrency(workflow), pr_events(workflow))
+	group_identity_unknown(workflow_concurrency(workflow), events)
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
@@ -1792,7 +1850,9 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 	jobs := workflow_jobs(workflow)
 	unknown := {name |
 		some name in object.keys(jobs)
-		group_identity_unknown(job_concurrency(jobs[name]), pr_events(workflow))
+		job := jobs[name]
+		events := cancelling_events(job_concurrency(job), pr_events(workflow))
+		group_identity_unknown(job_concurrency(job), events)
 	}
 	count(unknown) > 0
 	msg := sprintf("job(s) %s have a concurrency group that passes a pull-request marker to a call this rule cannot classify, so whether the group names the pull request cannot be classified", [concat(", ", sort(unknown))])
@@ -1821,7 +1881,7 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	workflow_cancels_somewhere(workflow)
 	events := cancelling_events(workflow_concurrency(workflow), pr_events(workflow))
 	not group_names_pull_request(workflow_concurrency(workflow), events)
-	not group_identity_unknown(workflow_concurrency(workflow), pr_events(workflow))
+	not group_identity_unknown(workflow_concurrency(workflow), events)
 	msg := sprintf(
 		"workflow %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
 		[workflow_path(workflow)],
@@ -1844,7 +1904,7 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	job_cancels_somewhere(job, pr_events(workflow))
 	job_events := cancelling_events(job_concurrency(job), pr_events(workflow))
 	not group_names_pull_request(job_concurrency(job), job_events)
-	not group_identity_unknown(job_concurrency(job), pr_events(workflow))
+	not group_identity_unknown(job_concurrency(job), job_events)
 	msg := sprintf(
 		"job %s of %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
 		[name, workflow_path(workflow)],

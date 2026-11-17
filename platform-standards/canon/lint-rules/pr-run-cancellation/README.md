@@ -91,14 +91,23 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   `github.ref && false && github.head_ref` leaves the marker unselected, while
   a reference GitHub always resolves to a non-empty string (such as
   `github.ref`, `github.sha` or `github.event_name`) selects the value after
-  it, as in `github.ref && github.head_ref`. A guard the rule cannot prove
-  truthy or falsy, such as `github.event.pull_request.title && github.head_ref`
-  or `github.ref == 'refs/heads/main' && github.head_ref`, leaves the group
+  it, as in `github.ref && github.head_ref`. A conjunction whose guards are all
+  proven truthy and whose value is the marker is truthy as a whole, so the
+  `'ci'` fallback in `github.ref && github.head_ref || 'ci'` can never be
+  selected. A guard the rule cannot prove truthy or falsy, such as
+  `github.event.pull_request.title && github.head_ref` or
+  `github.ref == 'refs/heads/main' && github.head_ref`, leaves the group
   indeterminate. A `||` inside a call argument is that argument's own fallback,
   not a branch of the whole group, so a run value beside it stays in the group;
   when such a nested fallback sits beside a run value the expression renders,
   whether the group varies cannot be read from the text, and the workflow is
-  reported indeterminate instead of passing or failing.
+  reported indeterminate instead of passing or failing. A run value counts only
+  where GitHub evaluates it: a provably-falsy `&&` guard in its own argument
+  turns it into a constant, so
+  `format('{0}-{1}', github.head_ref, false && github.run_id)` cancels while
+  the same expression with `true` does not, and a run value behind a
+  constant-first fallback in its own argument, as in
+  `format('{0}', 'ci' || github.run_id)`, is not selected.
 - **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
   pull request through `github.event.pull_request.number` or `github.head_ref`,
   matched case-insensitively, inside a `${{ ... }}` expression. A group that
@@ -192,9 +201,12 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   has no non-empty `jobs` mapping of job objects, has a `concurrency` block the
   rule cannot read, or has a group whose nested fallback, a `&&` guard the rule
   cannot prove truthy, or an unrecognized call in a branch a pull request can
-  reach leaves its value or its identity unclassifiable. An envelope defect is
-  `error`: it says the rule could not run. Every other indeterminate finding
-  uses the configured severity.
+  reach leaves its value or its identity unclassifiable. Identity is judged on
+  the events a block actually cancels, so a call the rule cannot classify that
+  belongs only to an event the block leaves uncancelled does not make the
+  cancelling event's group indeterminate. An envelope defect is `error`: it
+  says the rule could not run. Every other indeterminate finding uses the
+  configured severity.
 
 A workflow with no `pull_request` or `pull_request_target` trigger is not
 audited. That includes push-only, schedule-only and `workflow_call`-only

@@ -420,6 +420,18 @@ test_a_ref_guard_keeps_the_marker_selected if {
 	count(findings(data.fixtures.ref_guard_then_marker)) == 0
 }
 
+# `github.ref` is always non-empty, so the conjunction takes the marker after it
+# and the `ci` fallback can never be selected.
+test_a_proven_truthy_conjunction_makes_the_fallback_unreachable if {
+	count(findings(data.fixtures.proven_truthy_conjunction_before_fallback)) == 0
+}
+
+# The same shape behind a guard the rule cannot prove truthy may skip the
+# marker, so the fallback stays reachable and the identity is indeterminate.
+test_an_unsettled_guard_before_a_fallback_keeps_the_identity_unknown if {
+	profile(data.fixtures.unsettled_guard_before_fallback_keeps_the_identity_unknown) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
 # The guard names an event the workflow does not declare, so no pull-request run
 # reaches the run id it guards and the marker fallback is the group's value.
 test_an_event_test_that_excludes_the_declared_event_keeps_the_marker_selected if {
@@ -465,10 +477,47 @@ test_a_rendered_run_value_makes_the_group_vary if {
 	profile(data.fixtures.rendered_run_value_in_format) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# The argument is rendered, but the literal-false guard in front of the run id
+# makes it the constant `false`: every push to the pull request shares the
+# group, so the superseded run is cancelled.
+test_a_run_value_behind_a_false_argument_guard_still_cancels if {
+	count(findings(data.fixtures.run_value_behind_a_false_argument_guard)) == 0
+}
+
+# The same argument behind a proven-truthy guard does render the run id, so the
+# next push never joins the group.
+test_a_run_value_behind_a_true_argument_guard_varies_the_group if {
+	profile(data.fixtures.run_value_behind_a_true_argument_guard) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A run id behind a constant-first fallback inside its own argument is never
+# reached; the group is the constant `ci`, which every pull request shares.
+test_a_run_value_behind_a_constant_argument_fallback_leaves_a_constant_group if {
+	profile(data.fixtures.run_value_behind_a_constant_argument_fallback) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 # On a pull request the guard fails and the unknown call is the selected value,
 # so whether it still names the pull request cannot be read from the text.
 test_an_unknown_call_in_a_reachable_fallback_is_indeterminate if {
 	profile(data.fixtures.unknown_call_in_reachable_fallback) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+# The unknown `fromJSON` result belongs to `pull_request_target`, where the
+# block's event test stops it cancelling. Judging identity on every declared
+# event let that unknown value excuse the constant `ci-false` group the
+# cancelling `pull_request` run actually uses.
+test_identity_is_judged_on_the_events_that_cancel if {
+	profile(data.fixtures.identity_unknown_on_an_event_the_block_does_not_cancel) == {
+		["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"],
+		["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"],
+	}
+}
+
+test_a_job_group_is_judged_on_the_events_the_job_cancels if {
+	profile(data.fixtures.job_identity_unknown_on_an_event_the_job_does_not_cancel) == {
+		["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"],
+		["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"],
+	}
 }
 
 # A bare marker is always truthy, so the fallback after it is never selected.

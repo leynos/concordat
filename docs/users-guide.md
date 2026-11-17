@@ -990,8 +990,13 @@ value that changes between pushes, such as `github.run_id`, `github['run_id']`
 or `github.sha`, does not cancel because the next push's run never shares it.
 Such a value only counts where the expression renders it, so
 `format('ci-{0}', github.head_ref, github.run_id)` is stable, while
-`format('ci-{0}-{1}', github.head_ref, github.run_id)` is not. Every branch a
-pull request can select must name the pull request: the documented
+`format('ci-{0}-{1}', github.head_ref, github.run_id)` is not. A run value
+guarded by a `&&` in its own argument counts only when that guard can render
+it, so `format('{0}-{1}', github.head_ref, false && github.run_id)` is a
+constant group while the same expression with `true` is not, and a run value
+behind a constant-first fallback in its own argument, as in
+`format('{0}', 'ci' || github.run_id)`, is not part of the value either. Every
+branch a pull request can select must name the pull request: the documented
 `github.head_ref || github.run_id` shape is accepted because `github.head_ref`
 is non-empty on a pull request, so the fallback is never selected, and
 `github.head_ref || fromJSON(github.head_ref)` is accepted for the same reason.
@@ -1020,8 +1025,10 @@ anywhere makes the whole conjunction a constant, so
 `github.ref && false && github.head_ref` does not name the pull request, while
 a reference GitHub always resolves to a non-empty string (such as `github.ref`,
 `github.sha` or `github.event_name`) selects the value after it, as
-`github.ref && github.head_ref` does. A guard the rule cannot prove truthy or
-falsy, such as `github.event.pull_request.title && github.head_ref` or
+`github.ref && github.head_ref` does. Such a conjunction never falls through,
+so the fallback in `github.ref && github.head_ref || 'ci'` is unreachable and
+the group is compliant. A guard the rule cannot prove truthy or falsy, such as
+`github.event.pull_request.title && github.head_ref` or
 `github.ref == 'refs/heads/main' && github.head_ref`, makes the group
 indeterminate. The chain is read in full wherever it sits, including inside a
 call argument, so `format('{0}', false && github.head_ref)` names nothing, and
@@ -1036,11 +1043,13 @@ the workflow is reported indeterminate. That fallback does not reach a later
 argument, so `format('{0}-{1}', github.workflow || 'ci', github.head_ref)`
 still names the pull request. A block is judged on the events it actually
 cancels, so a conditional block with a constant group is reported even though
-RC-001 also fires for the events it leaves alone. Workflow-level and job-level
-groups are checked independently, because GitHub applies both. A job is covered
-for an event when either level cancels it, so a workflow block that cancels
-`pull_request` runs and a job block that cancels `pull_request_target` runs
-cover that job for both. The reference shape is:
+RC-001 also fires for the events it leaves alone. An unreadable identity is
+judged the same way: a call the rule cannot classify on an event the block does
+not cancel does not make the cancelling event's constant group indeterminate.
+Workflow-level and job-level groups are checked independently, because GitHub
+applies both. A job is covered for an event when either level cancels it, so a
+workflow block that cancels `pull_request` runs and a job block that cancels
+`pull_request_target` runs cover that job for both. The reference shape is:
 
 ```yaml
 concurrency:
