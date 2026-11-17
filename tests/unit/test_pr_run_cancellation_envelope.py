@@ -75,6 +75,27 @@ def test_the_origin_slug_names_the_repository(tmp_path: pathlib.Path) -> None:
     assert envelope["repository"] == {"name": "leynos/whitaker"}, envelope
 
 
+def test_a_checkout_nested_in_another_repository_has_no_slug(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A parent repository's origin is not this checkout's identity.
+
+    pygit2 discovers a repository by walking up from the supplied path. If the
+    audit is pointed at a plain directory inside another repository, taking the
+    parent's slug would let an exemption written for the parent suppress the
+    nested checkout's audit.
+    """
+    pygit2.init_repository(str(tmp_path))
+    repository = pygit2.Repository(str(tmp_path / ".git"))
+    repository.remotes.create("origin", "git@github.com:leynos/parent.git")
+    nested = tmp_path / "nested" / "checkout"
+    nested.mkdir(parents=True)
+
+    envelope = build_pr_run_cancellation_envelope(nested)
+
+    assert envelope["repository"] == {"name": None}, envelope
+
+
 def test_decodes_both_yaml_extensions_in_filename_order(
     tmp_path: pathlib.Path,
 ) -> None:
