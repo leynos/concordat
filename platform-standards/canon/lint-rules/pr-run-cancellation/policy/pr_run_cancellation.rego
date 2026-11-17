@@ -932,9 +932,9 @@ literal_false_expression(value) if {
 	lower(inner) == "false"
 }
 
-cancels_in_progress_at(value, _event) if value == true
+cancels_in_progress_at(value, _) if value == true
 
-cancels_in_progress_at(value, _event) if {
+cancels_in_progress_at(value, _) if {
 	is_string(value)
 	lower(trim_space(value)) == "true"
 }
@@ -1254,7 +1254,7 @@ branch_may_be_falsy_at(branch, event) if {
 	not mentions_pull_request(value)
 }
 
-branch_may_be_falsy_at(branch, _event) if {
+branch_may_be_falsy_at(branch, _) if {
 	not event_guard(branch)
 	not branch_bare_marker(branch)
 	not branch_constant_literal(branch)
@@ -1302,7 +1302,7 @@ branch_names_pull_request_at(branch, event) if {
 	mentions_pull_request(guard.value)
 }
 
-branch_names_pull_request_at(branch, _event) if {
+branch_names_pull_request_at(branch, _) if {
 	not event_guard(branch)
 	not branch_conjunction_falsy(branch)
 	mentions_pull_request(branch)
@@ -1349,7 +1349,7 @@ branch_conjunction_falsy(branch) if {
 # it unselected. When that value names the pull request, whether the group
 # carries it cannot be read from the text, so it is reported indeterminate
 # rather than as a pass or a defect.
-branch_guard_unsettled_at(branch, _event) if {
+branch_guard_unsettled_at(branch, _) if {
 	not event_guard(branch)
 	conjunction := branch_conjunction(branch)
 	mentions_pull_request(conjunction.value)
@@ -1689,7 +1689,7 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
-	msg := "the workflow's concurrency group nests a `||` fallback inside a call argument beside a value that changes between runs, so whether it cancels a superseded run cannot be classified"
+	msg := "the workflow's concurrency group has a `||` fallback beside a value that changes between runs, so whether it cancels a superseded run cannot be classified"
 	envelope_ok
 	some workflow in input.workflows
 	evaluable_workflow(workflow)
@@ -1704,7 +1704,7 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 	concurrency_shapes_readable(workflow)
 	names := unclassifiable_job_groups(workflow)
 	count(names) > 0
-	msg := sprintf("job(s) %s have a concurrency group that nests a `||` fallback inside a call argument beside a value that changes between runs, so whether it cancels a superseded run cannot be classified", [concat(", ", sort(names))])
+	msg := sprintf("job(s) %s have a concurrency group with a `||` fallback beside a value that changes between runs, so whether it cancels a superseded run cannot be classified", [concat(", ", sort(names))])
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
