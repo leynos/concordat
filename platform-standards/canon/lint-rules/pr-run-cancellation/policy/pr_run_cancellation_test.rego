@@ -420,6 +420,39 @@ test_a_bare_marker_names_the_pull_request_for_every_declared_event if {
 	count(findings(data.fixtures.head_ref_group_with_both_triggers)) == 0
 }
 
+# Each declared event is judged on its own, so a group can take its identity for
+# one event from one body and for the other event from a second body.
+test_each_event_may_take_its_identity_from_a_different_body if {
+	count(findings(data.fixtures.two_bodies_each_naming_one_pr_event)) == 0
+}
+
+# The run id sits in an argument the template never renders, so the group stays
+# the same across pushes to one pull request and still names it.
+test_a_discarded_run_value_does_not_make_the_group_vary if {
+	count(findings(data.fixtures.discarded_run_value_in_format)) == 0
+}
+
+test_a_rendered_run_value_makes_the_group_vary if {
+	profile(data.fixtures.rendered_run_value_in_format) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# On a pull request the guard fails and the unknown call is the selected value,
+# so whether it still names the pull request cannot be read from the text.
+test_an_unknown_call_in_a_reachable_fallback_is_indeterminate if {
+	profile(data.fixtures.unknown_call_in_reachable_fallback) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+# A bare marker is always truthy, so the fallback after it is never selected.
+test_an_unknown_call_in_an_unreachable_fallback_is_compliant if {
+	count(findings(data.fixtures.head_ref_before_unknown_fallback)) == 0
+}
+
+# The literal `false` in the middle of the chain stops it, so the marker after
+# it never becomes the group's value.
+test_a_falsy_guard_later_in_the_chain_leaves_the_marker_unselected if {
+	profile(data.fixtures.conjunction_chain_then_marker) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 # A `||` inside a call argument is that argument's own fallback, so the run id
 # beside it is part of the group however the branches are ordered. Whether it
 # is selected for a pull request cannot be read from the text, so the evidence

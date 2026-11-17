@@ -735,7 +735,11 @@ marker_occurrence_is_unclassifiable(head, before, after) if {
 	chain_unsettled(links)
 }
 
-marker_occurrence_context_holds(head, before, after) if {
+# The conditions an occurrence needs before GitHub can evaluate it as part of
+# the group's value: a complete property reference that is not compared,
+# negated or a `&&` left operand, and no enclosing call that replaces its
+# result. Selection among `||` branches is judged separately, per branch.
+occurrence_survives_value(head, before, after) if {
 	not continues_property(after)
 	not extends_property(before)
 	not follows_comparison(after)
@@ -743,6 +747,10 @@ marker_occurrence_context_holds(head, before, after) if {
 	not precedes_negation(before)
 	not follows_conjunction(after)
 	not enclosing_call_defeats(head, count(before))
+}
+
+marker_occurrence_context_holds(head, before, after) if {
+	occurrence_survives_value(head, before, after)
 	marker_is_selected(before)
 }
 
@@ -815,9 +823,29 @@ follows_conjunction(text) if {
 	startswith(trimmed, "&&")
 }
 
+# A run-varying reference only makes the group vary when GitHub evaluates it as
+# part of the group's value. The argument context is the one the marker check
+# uses, so a value the text never renders does not count:
+# `format('ci-{0}', github.head_ref, github.run_id)` builds a stable group, while
+# the same value rendered by `{1}` does make it vary. A call the rule cannot
+# classify is counted, so an unreadable argument stays conservative.
 mentions_run_varying_value(text) if {
+	head := lower(text)
 	some marker in RUN_VARYING_MARKERS
-	contains(lower(text), marker)
+	parts := split(head, marker)
+	some index, following in parts
+	index > 0
+	run_varying_occurrence_counts(
+		head,
+		occurrence_prefix(parts, marker, index),
+		following,
+	)
+}
+
+run_varying_occurrence_counts(head, before, after) if {
+	occurrence_survives_value(head, before, after)
+	links := call_links(before)
+	not chain_discards_value(links)
 }
 
 # A trimmed literal-false expression is the one expression that provably does
@@ -1110,29 +1138,47 @@ branch_names_pull_request_at(branch, _event) if {
 	mentions_pull_request(branch)
 }
 
-# The first top-level `&&`, split into the guard that decides it and the value
-# the conjunction yields when that guard is truthy.
-branch_conjunction(branch) := {"guard": guard, "value": value} if {
-	positions := top_level_conjunctions(branch)
-	count(positions) > 0
-	start := sort(positions)[0]
-	guard := trim_space(substring(branch, 0, start))
-	value := trim_space(
-		substring(branch, start + 2, count(characters(branch)) - start - 2),
-	)
+# A `&&` chain yields its last segment only when every earlier segment is
+# truthy, so the chain is kept as the guards that must hold and the value they
+# select. Splitting every top-level `&&` matters: in
+# `github.ref && false && github.head_ref` the literal `false` stops the chain,
+# and a rule that read only the first guard would call the marker selected.
+branch_conjunction(branch) := {"guards": guards, "value": value} if {
+	segments := conjunction_segments(branch)
+	count(segments) > 1
+	guards := array.slice(segments, 0, count(segments) - 1)
+	value := segments[count(segments) - 1]
 }
 
-# A literal the rule can prove falsy makes the whole conjunction falsy, so the
-# marker after it never becomes the group's value.
+conjunction_segments(text) := [trimmed |
+	bounds := array.concat(
+		[0],
+		array.concat(top_level_conjunctions(text), [count(characters(text))]),
+	)
+	some index in numbers.range(0, count(bounds) - 2)
+	trimmed := trim_space(
+		substring(text, segment_start(bounds, index), segment_length(bounds, index)),
+	)
+]
+
+segment_start(bounds, index) := 0 if index == 0
+
+segment_start(bounds, index) := bounds[index] + 2 if index > 0
+
+segment_length(bounds, index) := bounds[index + 1] - segment_start(bounds, index)
+
+# A literal the rule can prove falsy anywhere in the chain makes the whole
+# conjunction falsy, so the marker after it never becomes the group's value.
 branch_conjunction_falsy(branch) if {
 	conjunction := branch_conjunction(branch)
-	lower(conjunction.guard) in FALSY_LITERALS
+	some guard in conjunction.guards
+	lower(guard) in FALSY_LITERALS
 }
 
-# A guard the rule cannot prove truthy may leave the value after it unselected.
-# When that value names the pull request, whether the group carries it cannot
-# be read from the text, so it is reported indeterminate rather than as a pass
-# or a defect.
+# A chain with a guard the rule cannot prove truthy may leave the value after
+# it unselected. When that value names the pull request, whether the group
+# carries it cannot be read from the text, so it is reported indeterminate
+# rather than as a pass or a defect.
 branch_guard_unsettled(branch) if {
 	not event_guard(branch)
 	conjunction := branch_conjunction(branch)
@@ -1141,14 +1187,15 @@ branch_guard_unsettled(branch) if {
 	not branch_conjunction_holds(branch)
 }
 
-branch_conjunction_holds(branch) if {
-	conjunction := branch_conjunction(branch)
-	lower(conjunction.guard) in TRUTHY_GUARDS
-}
+guard_proven_truthy(guard) if lower(guard) in TRUTHY_GUARDS
+
+guard_proven_truthy(guard) if lower(guard) == "true"
 
 branch_conjunction_holds(branch) if {
 	conjunction := branch_conjunction(branch)
-	lower(conjunction.guard) == "true"
+	every guard in conjunction.guards {
+		guard_proven_truthy(guard)
+	}
 }
 
 top_level_conjunctions(text) := [position |
@@ -1196,12 +1243,15 @@ branch_list_settled_at(branches, event) if {
 # the pull request, so a marker that appears only in a constant-first fallback,
 # as in `${{ 'ci' || github.head_ref }}` or in a fallback nested inside a call
 # argument, does not name anything.
+# Every event is judged on its own, because the group text may name the pull
+# request through one body for one event and a different body for another.
 group_names_pull_request(value, events) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	some body in expression_bodies(group)
+	bodies := expression_bodies(group)
 	every event in events {
+		some body in bodies
 		branch_list_settled_at(expression_branches(body), event)
 	}
 }
@@ -1230,7 +1280,16 @@ group_identity_unknown(value, events) if {
 	not group_names_pull_request(value, events)
 	some body in expression_bodies(group)
 	branches := expression_branches(body)
-	head := lower(selected_head(branches[0]))
+	some index in numbers.range(0, count(branches) - 1)
+	some event in events
+	branch_value_reachable_at(branches, index, event)
+	branch_has_unclassifiable_marker(branches[index])
+}
+
+# An unknown transformation in any branch the pull request can select may or may
+# not reach the group, so the identity cannot be read from the text.
+branch_has_unclassifiable_marker(branch) if {
+	head := lower(branch)
 	some marker in PR_NUMBER_MARKERS
 	parts := split(head, marker)
 	some index, following in parts

@@ -987,22 +987,33 @@ depends on how many elements the array holds, or one rendered through a
 `github['head_ref']` counts as the property it names. A group built from a
 value that changes between pushes, such as `github.run_id`, `github['run_id']`
 or `github.sha`, does not cancel because the next push's run never shares it.
-Every branch a pull request can select must name the pull request: the
-documented `github.head_ref || github.run_id` shape is accepted because
-`github.head_ref` is non-empty on a pull request, so the fallback is never
-selected. A branch guarded by a `github.event_name` comparison is judged
-against every pull-request event the workflow declares, so
-`github.event_name == 'pull_request' && github.head_ref` is selected on a
-`pull_request` run, while
+Such a value only counts where the expression renders it, so
+`format('ci-{0}', github.head_ref, github.run_id)` is stable, while
+`format('ci-{0}-{1}', github.head_ref, github.run_id)` is not. Every branch a
+pull request can select must name the pull request: the documented
+`github.head_ref || github.run_id` shape is accepted because `github.head_ref`
+is non-empty on a pull request, so the fallback is never selected, and
+`github.head_ref || fromJSON(github.head_ref)` is accepted for the same reason.
+An unrecognized call in a fallback the pull request can reach, such as the
+`fromJSON` branch of
+`github.event_name == 'push' && github.head_ref || fromJSON(github.head_ref)`,
+leaves the identity unreadable and is indeterminate. Each declared event is
+judged on its own, so one expression body may name the pull request for
+`pull_request` and another for `pull_request_target`. A branch guarded by a
+`github.event_name` comparison is judged against every pull-request event the
+workflow declares, so `github.event_name == 'pull_request' && github.head_ref`
+is selected on a `pull_request` run, while
 `github.event_name == 'push' && github.head_ref || 'ci'` falls through to the
 constant `ci`, and `github.event_name == 'push' && github.head_ref` alone
 renders a boolean. A workflow that also declares `pull_request_target`
 therefore fails the `pull_request`-guarded shape, because that guard selects
-`ci` on the other event's run. Any other `&&` guard is judged by what the rule
-can prove: a literal `false` makes the conjunction a constant, a reference
-GitHub always resolves to a non-empty string (such as `github.ref`,
-`github.sha` or `github.event_name`) selects the value after it, and a guard
-the rule cannot prove truthy or falsy, such as
+`ci` on the other event's run. Any other `&&` chain is judged by what the rule
+can prove about every guard in it: a literal `false` anywhere makes the whole
+conjunction a constant, so `github.ref && false && github.head_ref` does not
+name the pull request, while a reference GitHub always resolves to a non-empty
+string (such as `github.ref`, `github.sha` or `github.event_name`) selects the
+value after it, as `github.ref && github.head_ref` does. A guard the rule
+cannot prove truthy or falsy, such as
 `github.event.pull_request.title && github.head_ref` or
 `github.ref == 'refs/heads/main' && github.head_ref`, makes the group
 indeterminate. A `||` nested inside a call argument is that argument's own
