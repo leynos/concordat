@@ -26,6 +26,12 @@ API_EVENTS := {"pull_request", "pull_request_target"}
 
 PR_NUMBER_MARKERS := {"github.event.pull_request.number", "github.head_ref"}
 
+# A quoted string may contain a brace, so the body pattern consumes quoted
+# strings whole rather than stopping at the first `}`.
+EXPRESSION_PATTERN := `\$\{\{((?:[^'}]*|'[^']*')*)\}\}`
+
+RUN_SPECIFIC_MARKERS := {"github.run_id", "github.run_number", "github.run_attempt"}
+
 finding(rule_id, severity, verdict, path, line, message) := {
 	"rule_id": rule_id,
 	"severity": severity,
@@ -269,6 +275,17 @@ is_expression(value) if {
 # A trimmed literal-false expression is the one expression that provably does
 # not cancel. Anything else written as an expression may evaluate true on the
 # run it matters for, so it is treated as cancelling.
+# The evaluated text of every `${{ ... }}` expression in a string, with
+# quoted string literals removed. Text outside an expression is not evaluated
+# and does not contribute.
+unquoted_expression_text(text) := unquoted if {
+	unquoted := concat("", [part |
+		some match in regex.find_all_string_submatch_n(EXPRESSION_PATTERN, text, -1)
+		some index, part in split(match[1], "'")
+		index % 2 == 0
+	])
+}
+
 literal_false_expression(value) if {
 	is_expression(value)
 	trimmed := trim_space(value)
@@ -288,10 +305,24 @@ cancels_in_progress(value) if {
 	not literal_false_expression(value)
 }
 
+# A group that includes a per-run value is different for every run, so no
+# later run can ever share it and superseed the earlier ones. Such a block
+# does not cancel in any useful sense, whatever `cancel-in-progress` says.
+group_is_stable(value) if {
+	is_object(value)
+	group := object.get(value, "group", null)
+	is_string(group)
+	text := lower(unquoted_expression_text(group))
+	every marker in RUN_SPECIFIC_MARKERS {
+		not contains(text, marker)
+	}
+}
+
 concurrency_cancels(value) if {
 	is_object(value)
 	"cancel-in-progress" in object.keys(value)
 	cancels_in_progress(value["cancel-in-progress"])
+	group_is_stable(value)
 }
 
 workflow_cancels(workflow) if {
@@ -312,19 +343,14 @@ job_cancels(job) if {
 #
 # GitHub expressions quote strings with single quotes, so splitting an
 # expression on `'` puts the evaluated text at even indices and the literals
-# at odd ones.
+# at odd ones. The expression pattern consumes a quoted string whole, so a
+# brace inside one, as in `format('ci-{0}', ...)`, does not end the match.
 group_names_pull_request(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	some marker in PR_NUMBER_MARKERS
-	some match in regex.find_all_string_submatch_n(`\$\{\{([^}]*)\}\}`, group, -1)
-	body := match[1]
-	unquoted := concat("", [part |
-		some index, part in split(body, "'")
-		index % 2 == 0
-	])
-	contains(lower(unquoted), marker)
+	contains(lower(unquoted_expression_text(group)), marker)
 }
 
 job_disabled(job) if {

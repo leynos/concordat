@@ -969,8 +969,10 @@ requires every cancelling block's `group` to name the pull request through
 `github.event.pull_request.number` or `github.head_ref` inside a `${{ ... }}`
 expression, so two pull requests do not cancel one another's runs. A marker
 written as literal text, including inside a quoted string literal, is part of a
-constant group and does not count. Workflow-level and job-level groups are
-checked independently, because GitHub applies both. The reference shape is:
+constant group and does not count, and a group built from a per-run value such
+as `github.run_id` does not cancel because no later run shares it.
+Workflow-level and job-level groups are checked independently, because GitHub
+applies both. The reference shape is:
 
 ```yaml
 concurrency:

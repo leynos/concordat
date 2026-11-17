@@ -148,6 +148,21 @@ test_a_quoted_literal_beside_an_evaluated_marker_is_compliant if {
 	count(findings(data.fixtures.quoted_marker_beside_reference)) == 0
 }
 
+# A brace inside a quoted string does not close the expression.
+test_a_format_expression_with_quoted_braces_is_compliant if {
+	count(findings(data.fixtures.format_group_with_braces)) == 0
+}
+
+# A group unique to each run never supersedes anything, so the block does not
+# cancel even though it sets cancel-in-progress.
+test_a_run_specific_group_is_noncompliant if {
+	profile(data.fixtures.run_id_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_quoted_run_id_literal_does_not_destabilise_the_group if {
+	count(findings(data.fixtures.quoted_run_id_literal)) == 0
+}
+
 test_a_push_only_workflow_is_not_audited if {
 	count(findings(data.fixtures.push_only)) == 0
 }

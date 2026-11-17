@@ -50,7 +50,8 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   needs no block. A reusable-workflow caller job (`uses:`) is judged by its own
   `concurrency`, not by the jobs inside the called workflow, because those jobs
   are not in this document. One finding per workflow, naming every uncovered
-  job.
+  job. A block whose group carries a per-run value, such as `github.run_id`,
+  does not cancel: no two runs ever share its group.
 - **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
   pull request through `github.event.pull_request.number` or `github.head_ref`,
   matched case-insensitively, inside a `${{ ... }}` expression. A group that
@@ -80,9 +81,10 @@ audited.
   evaluate true on the run that matters. `${{ false }}` is the one expression
   the rule treats as not cancelling.
 - **Not cancelling:** an absent value, `false`, the string `"false"`, a value
-  that is neither `true` nor an expression, and the string shorthand
+  that is neither `true` nor an expression, the string shorthand
   `concurrency: <group>`, which leaves `cancel-in-progress` at its default of
-  false.
+  false, and any group built from a per-run value (`github.run_id`,
+  `github.run_number` or `github.run_attempt`), which no later run can share.
 
 `concurrency` values that are not a non-empty string or an object with a
 non-empty string `group` and a boolean-or-string `cancel-in-progress` are not
@@ -118,6 +120,14 @@ cancellation block set inside a reusable workflow in another repository, a
 composite action, or a called workflow is outside the audited document. Whether
 a group is *unique enough* beyond naming the pull request, such as including
 the workflow name, is not judged.
+
+The marker check is syntactic: the rule confirms that the marker appears in the
+evaluated part of the group, not that the expression preserves the pull
+request's identity. An expression that transforms the marker, such as the
+comparison `${{ github.event.pull_request.number > 0 }}`, which renders as a
+boolean, is not detected. Per-run detection covers `github.run_id`,
+`github.run_number` and `github.run_attempt`; a group made unique some other
+way is not detected.
 
 ## Evidence
 
