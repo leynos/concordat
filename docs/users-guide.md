@@ -974,19 +974,26 @@ comparison operand, spelled as the prefix of a longer property name such as
 such as `contains(github.head_ref, 'release')`, is part of a constant group and
 does not count, and an outer call that returns something else defeats an inner
 one that carries the value, as in
-`contains(format('{0}', github.head_ref), 'release')`. A marker passed to a
-call the rule does not recognize, or one in the separator argument of `join`,
-whose contribution depends on how many elements the array holds, is
-indeterminate. A static index such as `github['head_ref']` counts as the
-property it names. A group built from a value that changes between pushes, such
-as `github.run_id`, `github['run_id']` or `github.sha`, does not cancel because
-the next push's run never shares it; the documented
-`github.head_ref || github.run_id` shape is accepted because GitHub selects the
-pull-request branch, and only when the marker is the whole selected head. A
-`||` nested inside a call argument is that argument's own fallback, so a value
-that changes between runs beside it leaves the group unreadable, and the
-workflow is reported indeterminate. Workflow-level and job-level groups are
-checked independently, because GitHub applies both. The reference shape is:
+`contains(format('{0}', github.head_ref), 'release')`. Negation and conjunction
+replace the value too, so `!github.head_ref` and the left operand of `&&` do
+not count. `format` counts only where its literal template renders that
+argument's replacement index: `format('ci-{0}', github.head_ref)` names the
+pull request, and `format('ci', github.head_ref)` does not. A marker passed to
+a call the rule does not recognize, one in the separator argument of `join`,
+whose contribution depends on how many elements the array holds, or one
+rendered through a `format` template the rule cannot read, is indeterminate. A
+static index such as `github['head_ref']` counts as the property it names. A
+group built from a value that changes between pushes, such as `github.run_id`,
+`github['run_id']` or `github.sha`, does not cancel because the next push's run
+never shares it; the documented `github.head_ref || github.run_id` shape is
+accepted because GitHub selects the pull-request branch, and only when the
+marker is the whole selected head. A `||` nested inside a call argument is that
+argument's own fallback, so a value that changes between runs beside it leaves
+the group unreadable, and the workflow is reported indeterminate. That fallback
+does not reach a later argument, so
+`format('{0}-{1}', github.workflow || 'ci', github.head_ref)` still names the
+pull request. Workflow-level and job-level groups are checked independently,
+because GitHub applies both. The reference shape is:
 
 ```yaml
 concurrency:

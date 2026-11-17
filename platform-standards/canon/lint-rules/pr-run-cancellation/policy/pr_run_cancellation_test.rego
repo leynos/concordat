@@ -270,6 +270,53 @@ test_nested_identity_calls_remain_transparent if {
 	count(findings(data.fixtures.nested_identity_calls_group)) == 0
 }
 
+# A template that renders no replacement index drops its arguments, so the
+# group is constant across pull requests.
+test_a_format_template_that_omits_the_marker_does_not_name_the_pull_request if {
+	profile(data.fixtures.format_omitting_the_marker) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# `{1}` renders the second replacement argument, not the marker's first one.
+test_a_placeholder_for_another_argument_does_not_name_the_pull_request if {
+	profile(data.fixtures.format_placeholder_for_another_argument) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A template the rule cannot read may or may not render the marker.
+test_a_computed_format_template_is_indeterminate if {
+	profile(data.fixtures.format_with_a_computed_template) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+# `!` renders a boolean, so the group is the same for every pull request.
+test_a_negated_marker_does_not_name_the_pull_request if {
+	profile(data.fixtures.negated_marker_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_negated_argument_of_format_does_not_name_the_pull_request if {
+	profile(data.fixtures.negated_argument_of_format) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# `&&` yields its right operand, so a marker as the left operand is not the
+# group's value, whether or not a call carries it.
+test_a_marker_as_the_left_operand_of_and_does_not_name_the_pull_request if {
+	profile(data.fixtures.conjunction_left_marker_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_carried_marker_defeated_by_and_does_not_name_the_pull_request if {
+	profile(data.fixtures.format_conjunction_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A fallback in an earlier argument does not reach a marker in a later one, so
+# the group still carries the pull request.
+test_a_fallback_in_a_previous_argument_leaves_a_later_marker_selected if {
+	count(findings(data.fixtures.fallback_in_a_previous_argument)) == 0
+}
+
+# A fallback inside a call that has already closed cannot reach the argument
+# the marker occupies.
+test_a_fallback_in_a_closed_nested_call_leaves_the_marker_selected if {
+	count(findings(data.fixtures.fallback_in_a_closed_nested_call)) == 0
+}
+
 # The `&&` head is false on a pull request, so the fallback is selected and the
 # group cannot be settled from the text.
 test_an_and_guard_before_the_marker_does_not_prove_the_fallback_is_unused if {

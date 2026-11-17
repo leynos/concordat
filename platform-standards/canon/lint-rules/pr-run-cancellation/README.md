@@ -91,22 +91,31 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   `${{ contains(format('{0}', github.head_ref), 'release') }}` renders a
   boolean. The same argument context judges every occurrence, so
   `${{ contains(github.head_ref, github.head_ref) }}` names nothing even though
-  the second occurrence is not the one directly after the call. `format` and
-  `fromJSON` carry their argument's value, so a marker inside one still names
-  the pull request. `join` is judged by argument position: a marker in its
-  array argument is joined into the result, but a marker in its separator
-  renders only between elements, so whether the group carries it depends on how
-  many elements there are and the block is reported indeterminate. A marker
-  inside any other call cannot be classified, and the block is reported
-  indeterminate rather than as a pass or a defect. Only the selected head
-  counts, because that is the value a pull request carries, so a marker that
-  appears only in a constant-first fallback, as in
-  `${{ 'ci' || github.head_ref }}`, or only in a fallback nested inside a call
-  argument, does not count either. Every cancelling block is checked on its
-  own: the workflow-level block when it cancels, and each cancelling job block
-  whether or not the workflow block complies, because GitHub applies both
-  concurrency levels. A block whose group would cancel a *different* pull
-  request's run is reported.
+  the second occurrence is not the one directly after the call. `!` renders a
+  boolean, so `${{ !github.head_ref }}` names nothing, and `&&` yields its
+  right operand, so a marker that is the left operand —
+  `${{ github.head_ref && 'ci' }}` — names nothing either. `fromJSON` carries
+  its argument's value, so a marker inside one still names the pull request.
+  `format` is judged by its template: the marker names the pull request only
+  when its argument position is rendered by a matching `{N}` placeholder, so
+  `${{ format('ci-{0}', github.head_ref) }}` counts and
+  `${{ format('ci', github.head_ref) }}` does not. `join` is judged the same
+  way: a marker in its array argument is joined into the result, but a marker
+  in its separator renders only between elements, so whether the group carries
+  it depends on how many elements there are and the block is reported
+  indeterminate. A marker inside any other call, or one rendered through a
+  template the rule cannot read, cannot be classified, and the block is
+  reported indeterminate rather than as a pass or a defect. Only the selected
+  value counts, because that is what a pull request carries, so a marker that
+  appears only in a fallback, as in `${{ 'ci' || github.head_ref }}` or
+  `${{ format('{0}', 'ci' || github.head_ref) }}`, does not count either. A
+  fallback is contained by its own argument: a marker in a later argument of
+  the same call, as in
+  `${{ format('{0}-{1}', github.workflow || 'ci', github.head_ref) }}`, still
+  counts. Every cancelling block is checked on its own: the workflow-level
+  block when it cancels, and each cancelling job block whether or not the
+  workflow block complies, because GitHub applies both concurrency levels. A
+  block whose group would cancel a *different* pull request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
   `policy-input/pr-run-cancellation` document, or a workflow could not be
   decoded, declares no trigger, has a trigger shape the rule cannot classify,
@@ -173,21 +182,24 @@ a group is *unique enough* beyond naming the pull request, such as including
 the workflow name, is not judged.
 
 The marker check is syntactic: the rule confirms that the marker is evaluated
-in the selected part of the group, unquoted, not directly compared, and not
-handed to a call that discards or replaces its value, or to an argument
-position whose effect on the value the text cannot settle, such as `join`'s
-separator. It does not evaluate the expression, so an arithmetic or string
+in the selected part of the group, unquoted, not directly compared, not
+negated, not the left operand of `&&`, and not handed to a call that discards
+or replaces its value, or to an argument position whose effect on the value the
+text cannot settle, such as `join`'s separator or a `format` template the rule
+cannot read. It does not evaluate the expression, so an arithmetic or string
 transform the rule does not recognize as a function call is not detected. It
 also does not count arguments from their contents, so a marker in a call's
 array argument is taken to survive. Selection is judged by position: the text
-before the first `||` is treated as the value GitHub takes, without evaluating
-truthiness, so a marker that appears only after one does not count. The
-fallback is ignored only when the selected head is the marker alone, which is
-non-empty on every pull request. Parentheses are counted to keep a fallback
-nested in a call argument out of the surrounding branch; a nested fallback
-beside a value that changes between runs is reported indeterminate rather than
-judged. Varying-value detection covers the five values named above; a group
-made unique some other way is not detected.
+before a `||` is treated as the value GitHub takes in that argument, without
+evaluating truthiness, so a marker that appears only after one does not count,
+and a marker that is the right operand of `&&` is taken to be the value when
+the left operand is truthy. The fallback is ignored only when the selected head
+is the marker alone, which is non-empty on every pull request. Parentheses are
+counted to keep a fallback nested in a call argument out of the surrounding
+branch and out of later arguments; a nested fallback beside a value that
+changes between runs is reported indeterminate rather than judged.
+Varying-value detection covers the five values named above; a group made unique
+some other way is not detected.
 
 ## Evidence
 

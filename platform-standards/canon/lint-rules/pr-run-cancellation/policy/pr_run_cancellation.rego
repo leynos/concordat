@@ -35,16 +35,22 @@ EXPRESSION_PATTERN := `\$\{\{((?:[^'}]*|'[^']*')*)\}\}`
 # reference looks like the empty index `github[]`.
 STATIC_INDEX_PATTERN := `\['([A-Za-z_][A-Za-z0-9_]*)'\]`
 
-# `format` and `fromJSON` pass their arguments through, so a marker inside
-# either still identifies the pull request. The rest return a boolean, a hash
-# or a constant, so a marker inside one does not.
-IDENTITY_FUNCTIONS := {"format", "fromjson"}
+# `fromJSON` passes its argument through, so a marker inside it still
+# identifies the pull request.
+IDENTITY_FUNCTIONS := {"fromjson"}
 
-# `join(array, separator)` is position-sensitive. A marker in the array is
-# joined into the result, but a marker in the separator renders only between
-# elements: with one element it never appears, and with several it appears as
-# punctuation rather than as the pull request's identity. Which applies cannot
-# be settled from the text, so such an occurrence is reported indeterminate.
+# `format(template, ...)` renders an argument only where the template names its
+# replacement index, as in `format('ci-{0}', github.head_ref)`. A template that
+# omits the index, such as `format('ci', github.head_ref)`, renders a constant
+# for every pull request, so the marker does not carry the identity there.
+TEMPLATE_FUNCTIONS := {"format"}
+
+# `join(array, separator)` is position-sensitive in the same way. A marker in
+# the array is joined into the result, but a marker in the separator renders
+# only between elements: with one element it never appears, and with several it
+# appears as punctuation rather than as the pull request's identity. Which
+# applies cannot be settled from the text, so such an occurrence is reported
+# indeterminate.
 FIRST_ARGUMENT_FUNCTIONS := {"join"}
 
 NON_IDENTITY_FUNCTIONS := {
@@ -58,7 +64,7 @@ NON_IDENTITY_FUNCTIONS := {
 	"cancelled",
 }
 
-KNOWN_FUNCTIONS := IDENTITY_FUNCTIONS | NON_IDENTITY_FUNCTIONS | FIRST_ARGUMENT_FUNCTIONS
+KNOWN_FUNCTIONS := IDENTITY_FUNCTIONS | TEMPLATE_FUNCTIONS | NON_IDENTITY_FUNCTIONS | FIRST_ARGUMENT_FUNCTIONS
 
 # Values that separate runs of the same pull request. A group built from one of
 # them does not match a run that ought to be superseded. `github.sha` is the
@@ -313,18 +319,34 @@ is_expression(value) if {
 	endswith(trimmed, "}}")
 }
 
-# The evaluated body of every `${{ ... }}` expression in a string, with quoted
-# string literals removed. Text outside an expression is not evaluated and does
-# not contribute, and a quoted string renders as its literal characters rather
-# than as the reference it spells.
+# The evaluated body of every `${{ ... }}` expression in a string. Text outside
+# an expression is not evaluated and does not contribute. A quoted string is a
+# literal, so its text is not a reference and cannot name the pull request; it
+# survives only as the `{N}` placeholders a `format` template renders, wrapped
+# in quotes so a literal template can be told from a computed one.
 expression_bodies(text) := [body |
 	some match in regex.find_all_string_submatch_n(EXPRESSION_PATTERN, text, -1)
 	normalised := regex.replace(match[1], STATIC_INDEX_PATTERN, ".$1")
-	body := concat("", [part |
+	body := concat("", [segment |
 		some index, part in split(normalised, "'")
-		index % 2 == 0
+		segment := segment_view(index, part)
 	])
 ]
+
+segment_view(index, part) := part if index % 2 == 0
+
+segment_view(index, part) := sprintf("\"%s\"", [literal_placeholders(part)]) if index % 2 == 1
+
+# Only the replacement placeholders survive, so literal text cannot look like an
+# evaluated reference. `{{` and `}}` are escaped braces, so they must go before
+# the remaining `{N}` sequences are read.
+literal_placeholders(part) := concat("", [match[0] |
+	some match in regex.find_all_string_submatch_n(
+		`\{[0-9]+(?::[^}]*)?\}`,
+		regex.replace(regex.replace(part, `\{\{`, ""), `\}\}`, ""),
+		-1,
+	)
+])
 
 # A `||` inside a call argument is that argument's own fallback, not a branch
 # of the whole expression, so only an operator outside every parenthesis
@@ -337,6 +359,24 @@ depth_before(tokens, index) := sum([delta |
 	position < index
 	delta := parenthesis_delta(tokens[position])
 ])
+
+# `split(text, "")` yields the characters, which lets the rule locate the
+# parenthesis and comma positions a call's argument list is built from.
+characters(text) := split(text, "")
+
+paren_step(char) := 1 if char == "("
+
+paren_step(char) := 0 - 1 if char == ")"
+
+paren_step(char) := 0 if not char in {"(", ")"}
+
+# The parenthesis depth before character `index`.
+depth_at(text, 0) := 0
+
+depth_at(text, index) := sum([delta |
+	some position in numbers.range(0, index - 1)
+	delta := paren_step(characters(text)[position])
+]) if index > 0
 
 branch_starts(tokens) := sort(array.concat([0], [index |
 	some index in numbers.range(0, count(tokens) - 1)
@@ -359,59 +399,151 @@ expression_branches(body) := [trim_space(branch) |
 ]
 
 # The value GitHub selects when it is truthy is the text before the first
-# `||`, so a marker that sits only after one - including a fallback nested in a
-# call argument - is not the value the group carries.
-selected_head(branch) := trim_space(split(branch, "||")[0])
+# top-level `||`. A `||` inside a call argument belongs to that argument, and
+# the arguments after it are still part of the value, so cutting there would
+# drop a later argument that does carry the pull request.
+top_level_separators(text) := [position |
+	chars := characters(text)
+	some position in numbers.range(0, count(chars) - 1)
+	position + 1 < count(chars)
+	chars[position] == "|"
+	chars[position + 1] == "|"
+	depth_at(text, position) == 0
+]
 
-# Every call whose argument list is still open at the end of the text, from
-# the outermost in. Splitting on `(` and tracking the parenthesis depth of each
-# chunk recovers that nesting: a call is still open when the depth never
-# returns to the level its own parenthesis opened from. A grouping parenthesis
-# has no name and contributes no chain entry, because it passes the value
-# through untouched.
-chunk_closes(chunk) := count(split(chunk, ")")) - 1
+selected_head(branch) := trim_space(branch) if count(top_level_separators(branch)) == 0
 
-chunk_depth_delta(chunks, 0) := 0 - chunk_closes(chunks[0])
+selected_head(branch) := trim_space(substring(branch, 0, stop)) if {
+	separators := top_level_separators(branch)
+	count(separators) > 0
+	stop := sort(separators)[0]
+}
 
-chunk_depth_delta(chunks, index) := 1 - chunk_closes(chunks[index]) if index > 0
-
-chunk_depth(chunks, index) := sum([delta |
-	some position in numbers.range(0, index)
-	delta := chunk_depth_delta(chunks, position)
-])
-
-open_call_at(chunks, index) if {
-	index < count(chunks) - 1
-	base := chunk_depth(chunks, index)
-	every position in numbers.range(index + 1, count(chunks) - 1) {
-		chunk_depth(chunks, position) > base
+# Every call whose argument list is still open at the end of the text. A call
+# is open when the depth after its `(` never returns to the level it opened
+# from, so a call that already closed before the marker is not part of the
+# expression the marker sits in. A grouping parenthesis has no name and
+# contributes no link, because it passes the value through untouched.
+call_is_open(text, position) if {
+	chars := characters(text)
+	every index in numbers.range(position + 1, count(chars)) {
+		depth_at(text, index) > depth_at(text, position)
 	}
 }
 
-trailing_call_name(chunk) := name if {
-	matches := regex.find_all_string_submatch_n(`([A-Za-z_][A-Za-z0-9_.]*)$`, chunk, -1)
+open_call_positions(text) := [position |
+	chars := characters(text)
+	some position in numbers.range(0, count(chars) - 1)
+	chars[position] == "("
+	call_is_open(text, position)
+]
+
+call_name_before(text, position) := name if {
+	prefix := trim_right(substring(text, 0, position), " \t\r\n")
+	matches := regex.find_all_string_submatch_n(`([A-Za-z_][A-Za-z0-9_.]*)$`, prefix, -1)
 	count(matches) > 0
 	name := lower(matches[count(matches) - 1][1])
 }
 
-open_call_chain(text) := [name |
-	chunks := split(text, "(")
-	count(chunks) > 1
-	some index in numbers.range(0, count(chunks) - 2)
-	open_call_at(chunks, index)
-	name := trailing_call_name(chunks[index])
+# Commas at the argument-list depth of the call opened at `position`. A comma
+# inside a nested call is deeper, so it does not separate this call's arguments.
+argument_separators(text, position) := [index |
+	chars := characters(text)
+	some index in numbers.range(0, count(chars) - 1)
+	index > position
+	chars[index] == ","
+	depth_at(text, index) == depth_at(text, position) + 1
 ]
 
-# The marker's argument position within the innermost open call, counted from
-# zero. An expression body has already lost its quoted literals, so a comma
-# left in the text separates arguments.
-innermost_argument_index(text) := index if {
-	chunks := split(text, "(")
-	arguments := chunks[count(chunks) - 1]
-	index := count(split(arguments, ",")) - 1
+call_argument_index(text, position) := count(argument_separators(text, position))
+
+call_first_argument(text, position) := trim_space(substring(text, position + 1, end - position - 1)) if {
+	ends := argument_separators(text, position)
+	count(ends) > 0
+	end := sort(ends)[0]
 }
 
-identity_chain(chain) if every name in chain { name in IDENTITY_FUNCTIONS }
+call_first_argument(text, position) := trim_space(substring(text, position + 1, count(characters(text)) - position - 1)) if {
+	count(argument_separators(text, position)) == 0
+}
+
+# Each enclosing call with the argument position the marker occupies, which is
+# what `format` and `join` need to know whether the value survives.
+call_links(text) := [link |
+	some position in open_call_positions(text)
+	link := {
+		"name": call_name_before(text, position),
+		"argument_index": call_argument_index(text, position),
+		"first_argument": call_first_argument(text, position),
+	}
+]
+
+literal_argument(text) if startswith(text, "\"")
+
+# The replacement indices a literal template renders. `{{` and `}}` are escaped
+# braces, so they are removed before the remaining `{N}` sequences are read.
+format_placeholders(template) := {number |
+	some match in regex.find_all_string_submatch_n(
+		`\{([0-9]+)(?::[^}]*)?\}`,
+		regex.replace(regex.replace(template, `\{\{`, ""), `\}\}`, ""),
+		-1,
+	)
+	number := to_number(match[1])
+}
+
+format_link_carries(link) if {
+	link.name in TEMPLATE_FUNCTIONS
+	literal_argument(link.first_argument)
+	link.argument_index > 0
+	(link.argument_index - 1) in format_placeholders(link.first_argument)
+}
+
+format_link_discards(link) if {
+	link.name in TEMPLATE_FUNCTIONS
+	literal_argument(link.first_argument)
+	link.argument_index > 0
+	not (link.argument_index - 1) in format_placeholders(link.first_argument)
+}
+
+link_carries_value(link) if link.name in IDENTITY_FUNCTIONS
+
+link_carries_value(link) if format_link_carries(link)
+
+link_carries_value(link) if {
+	link.name in FIRST_ARGUMENT_FUNCTIONS
+	link.argument_index == 0
+}
+
+link_discards_value(link) if link.name in NON_IDENTITY_FUNCTIONS
+
+link_discards_value(link) if format_link_discards(link)
+
+link_unsettled(link) if not link.name in KNOWN_FUNCTIONS
+
+link_unsettled(link) if {
+	link.name in FIRST_ARGUMENT_FUNCTIONS
+	link.argument_index != 0
+}
+
+link_unsettled(link) if {
+	link.name in TEMPLATE_FUNCTIONS
+	not literal_argument(link.first_argument)
+}
+
+chain_carries_value(links) if every link in links { link_carries_value(link) }
+
+chain_discards_value(links) if {
+	some link in links
+	link_discards_value(link)
+}
+
+# A known call that returns a boolean or a constant settles the occurrence
+# wherever it sits in the chain, so an unknown sibling cannot unsettle it.
+chain_unsettled(links) if {
+	not chain_discards_value(links)
+	some link in links
+	link_unsettled(link)
+}
 
 # A marker names the pull request when at least one occurrence is evaluated as
 # its value. An occurrence used as a comparison operand, as in
@@ -420,18 +552,26 @@ identity_chain(chain) if every name in chain { name in IDENTITY_FUNCTIONS }
 # occurrence carries no identity; another occurrence in the same expression
 # still can, as in `format('{0}-{1}', github.head_ref, github.head_ref == 'x')`.
 # Parentheses around the operand are transparent, so `(github.head_ref) == 'x'`
-# is a comparison too. The marker must be a complete reference:
-# `github.head_ref_name` is a different property, and GitHub resolves an
-# unknown property to an empty string. An occurrence handed to a function that
-# returns something else, such as `contains(github.head_ref, 'release')`,
-# carries no identity either, and an outer call that discards the value defeats
-# an inner one that carries it, as in
-# `contains(format('{0}', github.head_ref), 'release')`. An occurrence handed
-# to a call the rule does not recognise cannot be classified.
+# is a comparison too. Negation and conjunction replace the value the same way:
+# `!github.head_ref` renders a boolean, and `github.head_ref && 'ci'` renders
+# the right operand, so in both the marker is not the group's value. The marker
+# must be a complete reference: `github.head_ref_name` is a different property,
+# and GitHub resolves an unknown property to an empty string. An occurrence
+# handed to a function that returns something else, such as
+# `contains(github.head_ref, 'release')`, carries no identity either, and an
+# outer call that discards the value defeats an inner one that carries it, as
+# in `contains(format('{0}', github.head_ref), 'release')`. `format` carries
+# the occurrence only where its literal template renders that argument's
+# replacement index, and `join` only from its array argument. An occurrence
+# handed to a call the rule does not recognise cannot be classified.
 #
 # The text before an occurrence is the whole prefix, not just the text since
 # the previous occurrence: in `contains(github.head_ref, github.head_ref)` the
-# second occurrence is just as much an argument of the call as the first.
+# second occurrence is just as much an argument of the call as the first. Only
+# the value the group takes counts, so an occurrence behind a `||` in its own
+# argument is not the selected value: `format('{0}', 'ci' || github.head_ref)`
+# renders `ci` for every pull request. An occurrence in a later argument is
+# unaffected by a fallback that sits in an earlier one.
 occurrence_prefix(parts, marker, index) := concat(marker, array.slice(parts, 0, index))
 
 mentions_pull_request(text) if {
@@ -443,63 +583,64 @@ mentions_pull_request(text) if {
 }
 
 marker_occurrence_is_identity(before, after) if {
-	not continues_property(after)
-	not extends_property(before)
-	not follows_comparison(after)
-	not precedes_comparison(before)
-	count(open_call_chain(before)) == 0
-}
-
-marker_occurrence_is_identity(before, after) if {
-	not continues_property(after)
-	not extends_property(before)
-	not follows_comparison(after)
-	not precedes_comparison(before)
-	chain := open_call_chain(before)
-	count(chain) > 0
-	identity_chain(chain)
-}
-
-# `join` carries the marker only from its array argument; in the separator the
-# value it contributes depends on how many elements there are.
-marker_occurrence_is_identity(before, after) if {
-	not continues_property(after)
-	not extends_property(before)
-	not follows_comparison(after)
-	not precedes_comparison(before)
-	chain := open_call_chain(before)
-	count(chain) > 0
-	last := chain[count(chain) - 1]
-	last in FIRST_ARGUMENT_FUNCTIONS
-	identity_chain(array.slice(chain, 0, count(chain) - 1))
-	innermost_argument_index(before) == 0
+	marker_occurrence_context_holds(before, after)
+	links := call_links(before)
+	chain_carries_value(links)
 }
 
 marker_occurrence_is_unclassifiable(before, after) if {
-	not continues_property(after)
-	not extends_property(before)
-	not follows_comparison(after)
-	not precedes_comparison(before)
-	chain := open_call_chain(before)
-	some name in chain
-	not name in KNOWN_FUNCTIONS
-	# A known call that returns a boolean or a constant settles the occurrence
-	# wherever it sits in the chain, so an unknown sibling cannot unsettle it.
-	every other in chain {
-		not other in NON_IDENTITY_FUNCTIONS
-	}
+	marker_occurrence_context_holds(before, after)
+	links := call_links(before)
+	chain_unsettled(links)
 }
 
-marker_occurrence_is_unclassifiable(before, after) if {
+marker_occurrence_context_holds(before, after) if {
 	not continues_property(after)
 	not extends_property(before)
 	not follows_comparison(after)
 	not precedes_comparison(before)
-	chain := open_call_chain(before)
-	some name in chain
-	name in FIRST_ARGUMENT_FUNCTIONS
-	every other in chain {
-		not other in NON_IDENTITY_FUNCTIONS
+	not precedes_negation(before)
+	not follows_conjunction(after)
+	marker_is_selected(before)
+}
+
+# A `||` selects only the text after it, and only within its own argument: a
+# comma at the separator's depth starts a later argument, and a closing
+# parenthesis that returns the depth below it leaves the enclosing call, so
+# neither is reached by that fallback.
+comma_between_at_depth(text, after, depth) if {
+	chars := characters(text)
+	commas := [index |
+		some index in numbers.range(0, count(chars) - 1)
+		index > after
+		chars[index] == ","
+		depth_at(text, index) == depth
+	]
+	count(commas) > 0
+}
+
+depth_drops_below(text, after, depth) if {
+	chars := characters(text)
+	some index in numbers.range(0, count(chars))
+	index > after + 1
+	depth_at(text, index) < depth
+}
+
+separator_reaches_marker(text, after, depth) if {
+	not comma_between_at_depth(text, after, depth)
+	not depth_drops_below(text, after, depth)
+}
+
+marker_is_selected(text) if {
+	chars := characters(text)
+	separators := [position |
+		some position in numbers.range(0, count(chars) - 1)
+		position + 1 < count(chars)
+		chars[position] == "|"
+		chars[position + 1] == "|"
+	]
+	every position in separators {
+		not separator_reaches_marker(text, position, depth_at(text, position))
 	}
 }
 
@@ -517,6 +658,19 @@ precedes_comparison(text) if {
 	trimmed := trim_right(text, " \t\r\n(")
 	some operator in {"==", "!=", ">=", "<=", ">", "<"}
 	endswith(trimmed, operator)
+}
+
+# `!` renders a boolean, so a negated occurrence is not the group's value.
+precedes_negation(text) if {
+	trimmed := trim_right(text, " \t\r\n(")
+	endswith(trimmed, "!")
+}
+
+# `&&` yields its right operand, so an occurrence that is its left operand is
+# not the group's value.
+follows_conjunction(text) if {
+	trimmed := trim_left(text, " \t\r\n)")
+	startswith(trimmed, "&&")
 }
 
 mentions_run_varying_value(text) if {
