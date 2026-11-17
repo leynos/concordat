@@ -190,6 +190,15 @@ test_a_run_id_before_the_pull_request_branch_does_not_cancel if {
 	profile(data.fixtures.run_id_before_head_ref) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# Both branches of `github.run_id || github.sha` change between runs, so the
+# first is always selected and the second only when the first is falsy. The
+# group cannot be read as cancelling or as varying, and the unclassifiable
+# branch has to win outright: letting the unstable branch also answer made Rego
+# refuse the evaluation and the whole audit abort.
+test_two_run_varying_fallback_branches_are_indeterminate if {
+	profile(data.fixtures.two_run_varying_fallback_branches) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
 # A comparison renders as a boolean, so every pull request produces the same
 # group even though the marker is evaluated.
 test_a_compared_marker_does_not_name_the_pull_request if {

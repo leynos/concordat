@@ -3062,6 +3062,33 @@
         }
       ]
     },
+    "two_run_varying_fallback_branches": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ github.run_id || github.sha }}"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "unevaluable_guard_before_marker": {
       "kind": "policy-input/pr-run-cancellation",
       "repository": {

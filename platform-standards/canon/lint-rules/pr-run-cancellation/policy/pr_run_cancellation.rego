@@ -1166,8 +1166,17 @@ expression_stability_at(body, event) := "stable" if {
 	}
 }
 
+# An unclassifiable branch outranks an unstable one, as it does in
+# `group_stability_at`. Two run-varying branches can be unstable and
+# unclassifiable at once: in `github.run_id || github.sha` the first is always
+# selected, and the second is selected only when the first is falsy, so whether
+# it renders cannot be read from the text. Without the guard the two clauses
+# would both produce a value and Rego would fail the whole evaluation.
 expression_stability_at(body, event) := "unstable" if {
 	branches := expression_branches(body)
+	every index in numbers.range(0, count(branches) - 1) {
+		branch_stability_at(branches, index, event) != "unclassifiable"
+	}
 	some index in numbers.range(0, count(branches) - 1)
 	branch_stability_at(branches, index, event) == "unstable"
 }
