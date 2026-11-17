@@ -972,25 +972,35 @@ written as literal text, including inside a quoted string literal, used as a
 comparison operand, spelled as the prefix of a longer property name such as
 `github.head_ref_name`, or handed to a function that returns something else,
 such as `contains(github.head_ref, 'release')`, is part of a constant group and
-does not count, and an outer call that returns something else defeats an inner
-one that carries the value, as in
-`contains(format('{0}', github.head_ref), 'release')`. Negation and conjunction
-replace the value too, so `!github.head_ref` and the left operand of `&&` do
-not count. `format` counts only where its literal template renders that
-argument's replacement index: `format('ci-{0}', github.head_ref)` names the
-pull request, and `format('ci', github.head_ref)` does not. A marker passed to
-a call the rule does not recognize, one in the separator argument of `join`,
-whose contribution depends on how many elements the array holds, or one
-rendered through a `format` template the rule cannot read, is indeterminate. A
-static index such as `github['head_ref']` counts as the property it names. A
-group built from a value that changes between pushes, such as `github.run_id`,
-`github['run_id']` or `github.sha`, does not cancel because the next push's run
-never shares it; the documented `github.head_ref || github.run_id` shape is
-accepted because GitHub selects the pull-request branch, and only when the
-marker is the whole selected head. A `||` nested inside a call argument is that
-argument's own fallback, so a value that changes between runs beside it leaves
-the group unreadable, and the workflow is reported indeterminate. That fallback
-does not reach a later argument, so
+does not count, and an operator applied to any enclosing call replaces the
+value, whether the call discards it, as in
+`contains(format('{0}', github.head_ref), 'release')`, or renders it, as in
+`format('{0}', format('{0}-{1}', github.head_ref, 'ci') == 'release')`.
+Negation and conjunction replace the value too, so `!github.head_ref` and the
+left operand of `&&` do not count. `format` counts only where its literal
+template renders that argument's replacement index:
+`format('ci-{0}', github.head_ref)` names the pull request, and
+`format('ci', github.head_ref)` does not. A marker passed to a call the rule
+does not recognize, one in the separator argument of `join`, whose contribution
+depends on how many elements the array holds, or one rendered through a
+`format` template the rule cannot read, is indeterminate. A static index such as
+`github['head_ref']` counts as the property it names. A group built from a
+value that changes between pushes, such as `github.run_id`, `github['run_id']`
+or `github.sha`, does not cancel because the next push's run never shares it.
+Every branch a pull request can select must name the pull request: the
+documented `github.head_ref || github.run_id` shape is accepted because
+`github.head_ref` is non-empty on a pull request, so the fallback is never
+selected. A branch guarded by a `github.event_name` comparison is judged by
+that comparison, so `github.event_name == 'pull_request' && github.head_ref` is
+selected, while `github.event_name == 'push' && github.head_ref || 'ci'` falls
+through to the constant `ci`, and
+`github.event_name == 'push' && github.head_ref` alone renders a boolean. A
+guard the rule cannot evaluate, such as
+`github.ref == 'refs/heads/main' && github.head_ref`, makes the group
+indeterminate. A `||` nested inside a call argument is that argument's own
+fallback, so a value that changes between runs beside it leaves the group
+unreadable, and the workflow is reported indeterminate. That fallback does not
+reach a later argument, so
 `format('{0}-{1}', github.workflow || 'ci', github.head_ref)` still names the
 pull request. Workflow-level and job-level groups are checked independently,
 because GitHub applies both. The reference shape is:
@@ -1007,6 +1017,12 @@ That event test covers `pull_request`. A workflow triggered by
 ```yaml
 cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
 ```
+
+`github.head_ref` is the source branch name, not a unique pull-request
+identity: two pull requests from different forks can both use a branch called
+`feature`, and they then share a group. A repository that accepts fork pull
+requests and must not cancel one fork's run against another's should name the
+pull request by number, as the reference shape above does.
 
 `cancel-in-progress: true` or a trimmed, case-insensitive `"true"` cancels. Any
 expression cancels unless it is a trimmed literal-false expression

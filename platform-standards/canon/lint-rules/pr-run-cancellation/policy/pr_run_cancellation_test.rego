@@ -358,6 +358,40 @@ test_the_exact_marker_head_still_ignores_the_run_id_fallback if {
 	count(findings(data.fixtures.head_ref_run_id_fallback)) == 0
 }
 
+# The comparison renders a boolean and the outer `format` renders that boolean,
+# so no argument of either call carries the pull request's identity.
+test_a_comparison_on_an_inner_enclosing_call_does_not_name_the_pull_request if {
+	profile(data.fixtures.nested_enclosing_comparison_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# The guard is false on a pull-request run, so GitHub selects the constant
+# fallback instead, and every pull request shares that group.
+test_a_push_guard_makes_the_constant_fallback_the_group if {
+	profile(data.fixtures.push_event_guard_then_constant_fallback) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_reversed_push_guard_makes_the_constant_fallback_the_group if {
+	profile(data.fixtures.reversed_push_event_guard_then_constant_fallback) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# Without a fallback the expression itself renders a boolean, which every pull
+# request shares.
+test_a_push_guard_without_a_fallback_is_a_constant_group if {
+	profile(data.fixtures.push_event_guard_without_fallback) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# The guard holds on the pull-request event and `github.head_ref` is truthy, so
+# the ref fallback is never selected.
+test_a_pull_request_guard_keeps_the_fallback_unused if {
+	count(findings(data.fixtures.pull_request_event_guard_then_ref_fallback)) == 0
+}
+
+# A guard the rule cannot evaluate may or may not select the marker, so the
+# group's identity is indeterminate rather than a pass or a defect.
+test_a_guard_the_rule_cannot_evaluate_is_indeterminate if {
+	profile(data.fixtures.unevaluable_guard_before_marker) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
 # A `||` inside a call argument is that argument's own fallback, so the run id
 # beside it is part of the group however the branches are ordered. Whether it
 # is selected for a pull request cannot be read from the text, so the evidence

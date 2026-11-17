@@ -35,6 +35,22 @@ EXPRESSION_PATTERN := `\$\{\{((?:[^'}]*|'[^']*')*)\}\}`
 # reference looks like the empty index `github[]`.
 STATIC_INDEX_PATTERN := `\['([A-Za-z_][A-Za-z0-9_]*)'\]`
 
+# Whether a `&&` branch is selectable can turn on a `github.event_name`
+# comparison, as in `github.event_name == 'push' && github.head_ref`. The
+# literal operand of such a comparison is kept, encoded as `@name@`, because
+# every other literal is erased and the comparison would otherwise read
+# `github.event_name == ""`. Only a lowercase identifier is encoded, so the
+# token can never carry a dot, a quote or a `||` separator and cannot be
+# mistaken for a reference or a fallback.
+EVENT_NAME_RIGHT_PATTERN := `(github\.event_name\s*(?:==|!=)\s*)'([a-z_]+)'`
+
+EVENT_NAME_LEFT_PATTERN := `'([a-z_]+)'(\s*(?:==|!=)\s*github\.event_name)`
+
+# The guard itself, with the encoded event name, and the value it protects.
+EVENT_GUARD_RIGHT_PATTERN := `^\(?\s*github\.event_name\s*(==|!=)\s*@([a-z_]+)@\s*\)?\s*&&\s*`
+
+EVENT_GUARD_LEFT_PATTERN := `^\(?\s*@([a-z_]+)@\s*(==|!=)\s*github\.event_name\s*\)?\s*&&\s*`
+
 # `fromJSON` is deliberately left out of every set below. It parses its
 # argument, so a marker inside it may not survive: a branch name that is a JSON
 # literal changes value, and `1` and `1e0` both parse to the number 1, which
@@ -326,12 +342,19 @@ is_expression(value) if {
 # an expression is not evaluated and does not contribute. A quoted string is a
 # literal, so its text is not a reference and cannot name the pull request; it
 # survives only as the `{N}` placeholders a `format` template renders, wrapped
-# in quotes so a literal template can be told from a computed one.
+# in quotes so a literal template can be told from a computed one. The one
+# exception is the event name a `github.event_name` comparison guards on, kept
+# as `@name@` so that guard can be evaluated.
 expression_bodies(text) := [body |
 	some match in regex.find_all_string_submatch_n(EXPRESSION_PATTERN, text, -1)
 	normalised := regex.replace(match[1], STATIC_INDEX_PATTERN, ".$1")
+	scoped := regex.replace(
+		regex.replace(normalised, EVENT_NAME_RIGHT_PATTERN, "$1@$2@"),
+		EVENT_NAME_LEFT_PATTERN,
+		"@$1@$2",
+	)
 	body := concat("", [segment |
-		some index, part in split(normalised, "'")
+		some index, part in split(scoped, "'")
 		segment := segment_view(index, part)
 	])
 ]
@@ -448,16 +471,14 @@ call_name_before(text, position) := name if {
 	name := lower(matches[count(matches) - 1][1])
 }
 
-# The earliest named call still open at `offset`, ignoring grouping
-# parentheses, which have no name and pass the value through untouched.
-outermost_call_position(head, offset) := position if {
+# The named calls still open at `offset`, ignoring grouping parentheses, which
+# have no name and pass the value through untouched.
+enclosing_call_positions(head, offset) := named if {
 	positions := open_call_positions(substring(head, 0, offset))
 	named := [candidate |
 		some candidate in positions
 		call_name_before(head, candidate)
 	]
-	count(named) > 0
-	position := sort(named)[0]
 }
 
 # The `)` that closes the call opened at `position`: the first one whose depth
@@ -475,13 +496,20 @@ call_close(text, position) := end if {
 	end := sort(ends)[0]
 }
 
-# An operator applied to the outermost call that carries the occurrence
-# replaces the call's result, so the group no longer contains the pull
-# request: `format('{0}-{1}', github.head_ref, 'ci') == 'release'` renders a
-# boolean. The checks next to the marker cannot see it, because the marker's
-# own argument ends at a comma before the operator.
+# An operator applied to any call that carries the occurrence replaces that
+# call's result, so the group no longer contains the pull request:
+# `format('{0}-{1}', github.head_ref, 'ci') == 'release'` renders a boolean.
+# The checks next to the marker cannot see it, because the marker's own
+# argument ends at a comma before the operator. Every enclosing call is
+# examined, so an operator on an inner call is not hidden by an outer call that
+# merely renders it, as in
+# `format('{0}', format('{0}-{1}', github.head_ref, 'ci') == 'release')`.
 enclosing_call_defeats(head, offset) if {
-	position := outermost_call_position(head, offset)
+	some position in enclosing_call_positions(head, offset)
+	call_result_is_replaced(head, position)
+}
+
+call_result_is_replaced(head, position) if {
 	name := call_name_before(head, position)
 	trimmed := trim_right(substring(head, 0, position), " \t\r\n")
 	start := count(trimmed) - count(name)
@@ -930,6 +958,158 @@ job_cancels(job) if {
 	concurrency_cancels(job_concurrency(job))
 }
 
+# A `github.event_name` guard decides whether the `&&` branch it protects can
+# be selected. On a pull-request run the event name is one of `API_EVENTS`, so
+# `==` holds for those names and fails for any other, and `!=` inverts that.
+event_guard(branch) := {"event": event, "operator": operator, "value": value} if {
+	trimmed := trim_space(branch)
+	matches := regex.find_all_string_submatch_n(EVENT_GUARD_RIGHT_PATTERN, trimmed, 1)
+	count(matches) > 0
+	operator := matches[0][1]
+	event := matches[0][2]
+	value := trim_space(regex.replace(trimmed, EVENT_GUARD_RIGHT_PATTERN, ""))
+}
+
+event_guard(branch) := {"event": event, "operator": operator, "value": value} if {
+	trimmed := trim_space(branch)
+	matches := regex.find_all_string_submatch_n(EVENT_GUARD_LEFT_PATTERN, trimmed, 1)
+	count(matches) > 0
+	event := matches[0][1]
+	operator := matches[0][2]
+	value := trim_space(regex.replace(trimmed, EVENT_GUARD_LEFT_PATTERN, ""))
+}
+
+api_event(event) if event in API_EVENTS
+
+event_guard_holds(branch) if {
+	guard := event_guard(branch)
+	guard.operator == "=="
+	api_event(guard.event)
+}
+
+event_guard_holds(branch) if {
+	guard := event_guard(branch)
+	guard.operator == "!="
+	not api_event(guard.event)
+}
+
+event_guard_excludes(branch) if {
+	event_guard(branch)
+	not event_guard_holds(branch)
+}
+
+# GitHub takes the first truthy branch of a `||` chain, so a later branch is
+# selectable only when every earlier one can be falsy. A bare marker is never
+# empty on a pull request, and a non-empty literal is truthy, so neither lets
+# the chain move on. A guard that fails on a pull-request run is always falsy,
+# and a value the rule cannot prove non-empty may be falsy.
+branch_may_be_falsy(branch) if event_guard_excludes(branch)
+
+branch_may_be_falsy(branch) if {
+	event_guard_holds(branch)
+	value := event_guard(branch).value
+	not branch_bare_marker(value)
+	not mentions_pull_request(value)
+}
+
+branch_may_be_falsy(branch) if {
+	not event_guard(branch)
+	not branch_bare_marker(branch)
+	not branch_constant_literal(branch)
+}
+
+branch_bare_marker(branch) if {
+	some marker in PR_NUMBER_MARKERS
+	lower(trim_space(branch)) == marker
+}
+
+# An empty literal is falsy, so the chain moves past it; every other literal
+# renders the same text for every pull request.
+branch_constant_literal(branch) if {
+	trimmed := trim_space(branch)
+	literal_argument(trimmed)
+	trimmed != `""`
+}
+
+branch_reachable_at(branches, index) if {
+	every earlier in array.slice(branches, 0, index) {
+		branch_may_be_falsy(earlier)
+	}
+}
+
+# A branch excluded by its own guard supplies a falsy value, so the chain moves
+# past it and its text is never the group's value. Every other branch the chain
+# can reach is a candidate for the value GitHub selects.
+branch_value_reachable_at(branches, index) if {
+	not event_guard_excludes(branches[index])
+	branch_reachable_at(branches, index)
+}
+
+branch_value_reachable(branches) if {
+	some index in numbers.range(0, count(branches) - 1)
+	branch_value_reachable_at(branches, index)
+}
+
+# The text that decides a branch's value names the pull request only when the
+# guard selecting it holds; an excluded branch renders a boolean instead.
+branch_names_pull_request(branch) if {
+	guard := event_guard(branch)
+	event_guard_holds(branch)
+	mentions_pull_request(guard.value)
+}
+
+branch_names_pull_request(branch) if {
+	not event_guard(branch)
+	mentions_pull_request(branch)
+}
+
+# A conjunction whose left operand is a comparison decides whether the value
+# after it is selected, and the rule cannot evaluate that comparison. When the
+# value names the pull request, whether the group carries it cannot be read
+# from the text, so it is reported indeterminate rather than as a pass or a
+# defect.
+branch_guard_unsettled(branch) if {
+	not event_guard(branch)
+	positions := top_level_conjunctions(branch)
+	count(positions) > 0
+	start := sort(positions)[0]
+	regex.match(`(==|!=|>=|<=|>|<)`, substring(branch, 0, start))
+	value := substring(branch, start + 2, count(characters(branch)) - start - 2)
+	mentions_pull_request(trim_space(value))
+}
+
+top_level_conjunctions(text) := [position |
+	chars := characters(text)
+	some position in numbers.range(0, count(chars) - 1)
+	position + 1 < count(chars)
+	chars[position] == "&"
+	chars[position + 1] == "&"
+	depth_at(text, position) == 0
+]
+
+# A branch is settled when its value cannot be the one GitHub selects, or when
+# it names the pull request and carries no guard the rule cannot evaluate.
+# Every branch that can supply the value must be settled, and at least one must
+# exist: an expression whose every branch is falsy on a pull request is a
+# constant group.
+branch_settled(branches, index) if not branch_value_reachable_at(branches, index)
+
+branch_settled(branches, index) if {
+	branch := branches[index]
+	branch_value_reachable_at(branches, index)
+	branch_names_pull_request(branch)
+	not branch_guard_unsettled(branch)
+}
+
+branch_list_settled(branches) if {
+	branch_value_reachable(branches)
+	unsettled := [index |
+		some index in numbers.range(0, count(branches) - 1)
+		not branch_settled(branches, index)
+	]
+	count(unsettled) == 0
+}
+
 # The marker only names the pull request when GitHub evaluates it, and only in
 # the branch GitHub selects. A group that spells the marker as literal text,
 # such as `ci-github.head_ref`, is a constant, so every pull request shares it
@@ -937,22 +1117,34 @@ job_cancels(job) if {
 # `${{ ... }}` expression; inside quotes it is a string literal, as in
 # `${{ 'github.head_ref' }}`. A marker used as a comparison operand is also
 # excluded, because the comparison renders as a boolean rather than as the pull
-# request's identity. Finally, the selected head is the one a pull request
-# carries, so a marker that appears only in a constant-first fallback, as in
-# `${{ 'ci' || github.head_ref }}` or in a fallback nested inside a call
+# request's identity. Finally, every branch a pull request can select must name
+# the pull request, so a marker that appears only in a constant-first fallback,
+# as in `${{ 'ci' || github.head_ref }}` or in a fallback nested inside a call
 # argument, does not name anything.
 group_names_pull_request(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	some body in expression_bodies(group)
-	branches := expression_branches(body)
-	mentions_pull_request(selected_head(branches[0]))
+	branch_list_settled(expression_branches(body))
 }
 
-# A group whose only marker references feed a call the rule does not classify
-# may or may not carry the pull request, so it is reported as indeterminate
-# rather than as a pass or a defect.
+# A group whose only marker references feed a call the rule does not classify,
+# or sit behind a comparison the rule cannot evaluate, may or may not carry the
+# pull request, so it is reported as indeterminate rather than as a pass or a
+# defect.
+group_identity_unknown(value) if {
+	is_object(value)
+	group := object.get(value, "group", null)
+	is_string(group)
+	not group_names_pull_request(value)
+	some body in expression_bodies(group)
+	branches := expression_branches(body)
+	some index in numbers.range(0, count(branches) - 1)
+	branch_value_reachable_at(branches, index)
+	branch_guard_unsettled(branches[index])
+}
+
 group_identity_unknown(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)

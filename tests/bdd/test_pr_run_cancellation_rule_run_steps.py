@@ -91,6 +91,20 @@ jobs:
 
 _MALFORMED_WORKFLOW: typ.Final = "on: [pull_request\n"
 
+_PUSH_GUARD_WORKFLOW: typ.Final = """\
+name: CI
+on:
+  pull_request:
+concurrency:
+  group: ${{ github.event_name == 'push' && github.head_ref || 'ci' }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+"""
+
 
 @pytest.fixture
 def cancellation_checkout(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -127,6 +141,12 @@ def given_workflow_without_concurrency(cancellation_checkout: pathlib.Path) -> N
 def given_shared_group_workflow(cancellation_checkout: pathlib.Path) -> None:
     """Write a cancelling workflow whose group names no pull request."""
     _write_workflow(cancellation_checkout, _SHARED_GROUP_WORKFLOW)
+
+
+@given("a checkout whose push guard falls through to a constant group")
+def given_push_guard_workflow(cancellation_checkout: pathlib.Path) -> None:
+    """Write a group whose pull-request branch is a constant fallback."""
+    _write_workflow(cancellation_checkout, _PUSH_GUARD_WORKFLOW)
 
 
 @given("a checkout whose workflow is not valid YAML")
