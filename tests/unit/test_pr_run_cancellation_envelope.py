@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import pathlib
+import os
 import typing as typ
 
 import pygit2
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import pr_run_cancellation_envelope
+from concordat.rules import pr_run_cancellation_envelope, workflow_evidence
 from concordat.rules.codescene_coverage_envelope import (
     build_codescene_coverage_envelope,
 )
@@ -21,6 +21,9 @@ from concordat.rules.pr_run_cancellation_envelope import (
     WorkflowFile,
     build_pr_run_cancellation_envelope,
 )
+
+if typ.TYPE_CHECKING:
+    import pathlib
 
 
 def _workflows(envelope: PrRunCancellationEnvelope) -> list[WorkflowFile]:
@@ -140,12 +143,12 @@ def test_rejects_symlinked_workflow_without_reading_target(
 
     read_paths: list[pathlib.Path] = []
 
-    def record_read(path: pathlib.Path) -> str:
-        """Record the requested path, then fail so no target is read."""
+    def record_read(directory_fd: int, name: str, path: pathlib.Path) -> str:
+        """Record the entry a read was attempted for, then fail."""
         read_paths.append(path)
         raise AssertionError
 
-    monkeypatch.setattr(pr_run_cancellation_envelope, "_read_text", record_read)
+    monkeypatch.setattr(workflow_evidence, "_read_entry", record_read)
 
     envelope = build_pr_run_cancellation_envelope(tmp_path)
 
@@ -153,6 +156,42 @@ def test_rejects_symlinked_workflow_without_reading_target(
     assert read_paths == [], read_paths
     assert fact["parsed"] is None, fact
     assert fact["error"] == "workflow file is a symlink", fact
+    assert "do-not-leak" not in repr(envelope), envelope
+
+
+def test_a_replaced_workflow_directory_cannot_redirect_a_read(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep enumeration and reads on the directory the containment check bound.
+
+    An audit can race a checkout that is rewritten. Reopening the workflow
+    directory by pathname after the containment check would read whatever now
+    sits at that path — here, a tree outside the checkout — and record it as
+    this repository's workflows. The read must stay on the descriptor the
+    check accepted.
+    """
+    checkout = tmp_path / "checkout"
+    workflows = _workflow_dir(checkout)
+    (workflows / "ci.yml").write_text("name: original\n", encoding="utf-8")
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "ci.yml").write_text("name: do-not-leak\n", encoding="utf-8")
+
+    original_read_entry = workflow_evidence._read_entry
+
+    def swap_then_read(directory_fd: int, name: str, path: pathlib.Path) -> str:
+        """Replace the validated directory before the first file is read."""
+        workflows.rename(tmp_path / "moved")
+        workflows.symlink_to(outside, target_is_directory=True)
+        return original_read_entry(directory_fd, name, path)
+
+    monkeypatch.setattr(workflow_evidence, "_read_entry", swap_then_read)
+
+    envelope = build_pr_run_cancellation_envelope(checkout)
+
+    fact = _workflows(envelope)[0]
+    assert fact["parsed"] == {"name": "original"}, fact
     assert "do-not-leak" not in repr(envelope), envelope
 
 
@@ -195,7 +234,7 @@ def test_an_unreadable_workflow_directory_is_an_operational_error(
         """Raise the permission error the reader must surface."""
         raise PermissionError(13, "Permission denied")
 
-    monkeypatch.setattr(pathlib.Path, "iterdir", refuse)
+    monkeypatch.setattr(os, "listdir", refuse)
 
     with pytest.raises(OperationalRuleError) as excinfo:
         build_pr_run_cancellation_envelope(tmp_path)

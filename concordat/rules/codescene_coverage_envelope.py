@@ -91,11 +91,7 @@ def _load_workflow(
 
 def _load_workflows(checkout: pathlib.Path) -> list[WorkflowFile]:
     """Return every root workflow YAML file in stable filename order."""
-    return _load_root_workflows(
-        checkout,
-        read_text=_read_text,
-        json_safe=_json_safe,
-    )
+    return _load_root_workflows(checkout, json_safe=_json_safe)
 
 
 def build_codescene_coverage_envelope(checkout: pathlib.Path) -> CoverageEnvelope:

@@ -10,7 +10,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import codescene_coverage_envelope
+from concordat.rules import codescene_coverage_envelope, workflow_evidence
 from concordat.rules.codescene_coverage_envelope import (
     ENVELOPE_KIND,
     ENVELOPE_SCHEMA_VERSION,
@@ -112,12 +112,12 @@ class TestBuildCodesceneCoverageEnvelope:
 
         read_paths: list[pathlib.Path] = []
 
-        def record_read(path: pathlib.Path) -> str:
-            """Record the requested path, then fail so no target is read."""
+        def record_read(directory_fd: int, name: str, path: pathlib.Path) -> str:
+            """Record the entry a read was attempted for, then fail."""
             read_paths.append(path)
             raise AssertionError
 
-        monkeypatch.setattr(codescene_coverage_envelope, "_read_text", record_read)
+        monkeypatch.setattr(workflow_evidence, "_read_entry", record_read)
 
         envelope = build_codescene_coverage_envelope(tmp_path)
 
@@ -304,18 +304,18 @@ class TestBuildCodesceneCoverageEnvelope:
         "case",
         [
             pytest.param(
-                _DenialCase("pathlib", "iterdir", "directory", "cannot list"),
+                _DenialCase("os", "listdir", "directory", "cannot list"),
                 id="directory-enumeration",
             ),
             pytest.param(
-                _DenialCase("pathlib", "lstat", "file", "cannot stat"),
+                _DenialCase("os", "stat", "file", "cannot stat"),
                 id="entry-status",
             ),
-            # The reader opens the file itself so a swapped symlink is
-            # refused, so the denial to simulate is `os.open`, not
-            # `Path.read_text`.
+            # Enumeration and the open are bound to the directory descriptor,
+            # so the denial to simulate for a file's contents is the read that
+            # follows its open, not a path-based `Path.read_text`.
             pytest.param(
-                _DenialCase("os", "open", "file", "cannot read"),
+                _DenialCase("os", "read", "file", "cannot read"),
                 id="file-contents",
             ),
         ],

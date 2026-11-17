@@ -5,8 +5,8 @@ exemption is written against. The collector owns the decoding and the
 containment checks; this module only names the envelope contract and reads the
 `origin` remote.
 
-The reader and JSON hooks are module-level so a test can substitute either
-without changing the shared collector.
+The JSON hook is module-level so a test can substitute it without changing
+the shared collector.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from .workflow_evidence import OPERATION_READ_WORKFLOW as OPERATION_READ_WORKFLO
 from .workflow_evidence import WorkflowFile as WorkflowFile
 from .workflow_evidence import json_safe as _json_safe
 from .workflow_evidence import load_workflows as _load_root_workflows
-from .workflow_evidence import read_text as _read_text
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -68,11 +67,7 @@ class PrRunCancellationEnvelope(typ.TypedDict):
 
 def _load_workflows(checkout: pathlib.Path) -> list[WorkflowFile]:
     """Return every root workflow YAML file in stable filename order."""
-    return _load_root_workflows(
-        checkout,
-        read_text=_read_text,
-        json_safe=_json_safe,
-    )
+    return _load_root_workflows(checkout, json_safe=_json_safe)
 
 
 def build_pr_run_cancellation_envelope(

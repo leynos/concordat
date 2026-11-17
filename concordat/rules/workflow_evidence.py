@@ -8,13 +8,19 @@ document that could not be decoded as a fact carrying its reason. A policy can
 then return an indeterminate verdict for that one file instead of treating it
 as absent.
 
-The two callables that read a file and convert a decoded value to JSON are
-parameters so a caller can keep its own module-level hooks. Existing policies
-do that to substitute a reader in a test without changing the collector.
+Root workflows are enumerated and opened through a descriptor acquired once,
+so a checkout that changes while an audit runs cannot substitute another tree
+for the one the containment check accepted.
+
+The callable that reads a single workflow and the one that converts a decoded
+value to JSON are parameters so a caller can keep its own module-level hooks.
+Existing policies do that to substitute a reader in a test without changing
+the collector.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import pathlib
@@ -32,6 +38,8 @@ WORKFLOWS_DIRECTORY: typ.Final = pathlib.PurePosixPath(".github/workflows")
 WORKFLOW_SUFFIXES: typ.Final = frozenset({".yml", ".yaml"})
 OPERATION_READ_WORKFLOW: typ.Final = "read-workflow"
 _READ_CHUNK: typ.Final = 65536
+_ENTRY_FLAGS: typ.Final = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+_DIRECTORY_FLAGS: typ.Final = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 _yaml = YAML(typ="safe")
 
@@ -94,10 +102,78 @@ def read_text(path: pathlib.Path) -> str:
     records as that one file's content error rather than as an operational
     failure.
     """
-    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, _ENTRY_FLAGS)
+    except OSError as error:
+        message = f"cannot read {path}: {error}"
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_READ_WORKFLOW,
+            resource=path,
+        ) from error
+    return _read_open_entry(descriptor, path)
+
+
+def _read_entry(directory_fd: int, name: str, path: pathlib.Path) -> str:
+    """Read one workflow entry relative to its open directory descriptor.
+
+    Opening through the descriptor keeps the read inside the directory the
+    containment check accepted. Reopening the directory's pathname here would
+    let a checkout that is replaced after that check decide what is read.
+
+    Parameters
+    ----------
+    directory_fd:
+        The descriptor of the directory holding the entry.
+    name:
+        The entry's filename within that directory.
+    path:
+        The entry's checkout-relative path, for messages.
+
+    Returns
+    -------
+    str
+        The entry's decoded contents.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the entry cannot be opened or read, including when it is a symlink
+        or the opened entry is not a regular file.
+
+    Notes
+    -----
+    A file that is not UTF-8 raises `UnicodeDecodeError`, as `read_text` does.
+    """
+    try:
+        descriptor = os.open(name, _ENTRY_FLAGS, dir_fd=directory_fd)
+    except OSError as error:
+        message = f"cannot read {path}: {error}"
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_READ_WORKFLOW,
+            resource=path,
+        ) from error
+    return _read_open_entry(descriptor, path)
+
+
+def _read_open_entry(descriptor: int, path: pathlib.Path) -> str:
+    """Read an opened workflow entry, refusing a non-regular file.
+
+    The descriptor is always closed, including when the read is refused.
+
+    Returns
+    -------
+    str
+        The entry's decoded contents.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the entry cannot be read, including when it is not a regular file.
+    """
     chunks: list[bytes] = []
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         _require_regular_entry(descriptor, path)
         while chunk := os.read(descriptor, _READ_CHUNK):
             chunks.append(chunk)
@@ -109,8 +185,7 @@ def read_text(path: pathlib.Path) -> str:
             resource=path,
         ) from error
     finally:
-        if descriptor is not None:
-            os.close(descriptor)
+        os.close(descriptor)
     return b"".join(chunks).decode("utf-8")
 
 
@@ -189,6 +264,17 @@ def load_workflow(
     except UnicodeDecodeError as error:
         fact["error"] = f"not UTF-8 text: {error}"
         return fact
+    return _decode_into(fact, text, json_safe)
+
+
+def _decode_into(fact: WorkflowFile, text: str, json_safe: JsonSafe) -> WorkflowFile:
+    """Fill *fact* from decoded YAML text, recording any content failure.
+
+    Returns
+    -------
+    WorkflowFile
+        The same fact, carrying the document or the reason it was rejected.
+    """
     try:
         parsed: object = _yaml.load(text)
     except (YAMLError, ValueError) as error:
@@ -208,85 +294,26 @@ def load_workflow(
     return fact
 
 
-def _list_workflow_directory(directory: pathlib.Path) -> list[pathlib.Path]:
-    """Return the directory's entries in filename order, or raise.
+class _ContainedDirectory(typ.NamedTuple):
+    """Locate the workflow directory and the route to it from the checkout.
 
-    An absent directory is a repository with no workflows and yields an empty
-    list. Every other failure — a path that is not a directory, an
-    unreadable directory, an enumeration error, a symlink whose target is
-    gone — is operational: reporting such a repository as compliant would
-    clear the rule on the one shape it cannot see.
-
-    A missing-file error is not by itself absence. A dangling symlink at
-    `.github/workflows` raises the same error as no path at all, so the
-    directory entry is checked without following it before absence is
-    concluded.
-
-    Returns
-    -------
-    list[pathlib.Path]
-        Directory entries sorted by filename.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the directory exists but cannot be enumerated.
+    Attributes
+    ----------
+    path:
+        The directory as the checkout names it, for messages and fact paths.
+    root:
+        The checkout's resolved path, which the walk to the directory starts
+        from.
+    parts:
+        The resolved directory's components below *root*, in order.
     """
-    try:
-        return sorted(directory.iterdir(), key=lambda entry: entry.name)
-    except FileNotFoundError as error:
-        # The question here is whether anything is there, not whether it is
-        # a file, so the probe's `read_error` decides rather than `present`.
-        probe = probe_file(directory)
-        if probe.read_error is None:
-            return []
-        message = f"cannot list {directory}: {probe.read_error}"
-        raise OperationalRuleError(
-            message,
-            operation=OPERATION_READ_WORKFLOW,
-            resource=directory,
-        ) from error
-    except OSError as error:
-        message = f"cannot list {directory}: {error}"
-        raise OperationalRuleError(
-            message,
-            operation=OPERATION_READ_WORKFLOW,
-            resource=directory,
-        ) from error
+
+    path: pathlib.Path
+    root: pathlib.Path
+    parts: tuple[str, ...]
 
 
-def _workflow_entry_mode(entry: pathlib.Path) -> int | None:
-    """Return a root workflow document's `lstat` mode, or None for any other entry.
-
-    The mode is the entry's only status query: the caller reads whether it is
-    a link from it rather than asking again.
-
-    Returns
-    -------
-    int | None
-        The mode of a regular file or symlink whose suffix is a workflow
-        suffix, otherwise None.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the entry's status cannot be read.
-    """
-    if entry.suffix not in WORKFLOW_SUFFIXES:
-        return None
-    try:
-        mode = entry.lstat().st_mode
-    except OSError as error:
-        message = f"cannot stat {entry}: {error}"
-        raise OperationalRuleError(
-            message,
-            operation=OPERATION_READ_WORKFLOW,
-            resource=entry,
-        ) from error
-    return mode if stat.S_ISREG(mode) or stat.S_ISLNK(mode) else None
-
-
-def _contained_workflow_directory(checkout: pathlib.Path) -> pathlib.Path:
+def _contained_workflow_directory(checkout: pathlib.Path) -> _ContainedDirectory:
     """Return the checkout's workflow directory, refusing one outside it.
 
     A repository can ship `.github` or `.github/workflows` as a symlink. The
@@ -297,8 +324,9 @@ def _contained_workflow_directory(checkout: pathlib.Path) -> pathlib.Path:
 
     Returns
     -------
-    pathlib.Path
-        The workflow directory, unresolved, for use in messages and paths.
+    _ContainedDirectory
+        The directory's logical path, the resolved checkout, and the resolved
+        components below it.
 
     Raises
     ------
@@ -324,25 +352,211 @@ def _contained_workflow_directory(checkout: pathlib.Path) -> pathlib.Path:
             operation=OPERATION_READ_WORKFLOW,
             resource=directory,
         )
-    return directory
+    return _ContainedDirectory(directory, root, resolved.relative_to(root).parts)
+
+
+def _open_workflow_directory(location: _ContainedDirectory) -> int | None:
+    """Open the contained workflow directory, or report it as absent.
+
+    The descriptor is acquired by walking from the resolved checkout, opening
+    each component relative to the one before it. Nothing afterwards resolves
+    the directory's pathname again, so a checkout that replaces it cannot
+    redirect enumeration or a read into another tree.
+
+    Returns
+    -------
+    int | None
+        A descriptor for the directory, or None when the directory does not
+        exist. A component that cannot be opened, or a missing one that is a
+        broken link rather than absence, raises from `_absent_or_refused`.
+    """
+    try:
+        descriptor = os.open(location.root, _DIRECTORY_FLAGS)
+    except OSError as error:
+        return _absent_or_refused(location, error)
+    try:
+        for part in location.parts:
+            descriptor = _descend(descriptor, part)
+    except OSError as error:
+        os.close(descriptor)
+        return _absent_or_refused(location, error)
+    return descriptor
+
+
+def _descend(parent: int, part: str) -> int:
+    """Open *part* below *parent*, closing the parent once the child is open.
+
+    Closing the parent only after the child is open leaves the caller exactly
+    one descriptor to release when the open fails.
+
+    Returns
+    -------
+    int
+        A descriptor for the opened component.
+    """
+    child = os.open(part, _DIRECTORY_FLAGS, dir_fd=parent)
+    os.close(parent)
+    return child
+
+
+def _absent_or_refused(location: _ContainedDirectory, error: OSError) -> None:
+    """Return None for genuine absence, or raise for a directory that is there.
+
+    A missing-file error is not by itself absence. A dangling symlink at
+    `.github/workflows`, or at an ancestor, raises the same error as no path
+    at all, so the directory entry is probed without following it before
+    absence is concluded.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the directory is present but cannot be opened, or is a link that
+        does not resolve.
+    """
+    if not isinstance(error, FileNotFoundError):
+        message = f"cannot list {location.path}: {error}"
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_READ_WORKFLOW,
+            resource=location.path,
+        ) from error
+    # The question here is whether anything is there, not whether it is a
+    # file, so the probe's `read_error` decides rather than `present`.
+    probe = probe_file(location.path)
+    if probe.read_error is None:
+        return
+    message = f"cannot list {location.path}: {probe.read_error}"
+    raise OperationalRuleError(
+        message,
+        operation=OPERATION_READ_WORKFLOW,
+        resource=location.path,
+    ) from error
+
+
+@contextlib.contextmanager
+def _bound_workflow_directory(
+    location: _ContainedDirectory,
+) -> cabc.Iterator[int | None]:
+    """Yield the open workflow directory descriptor, or None when absent."""
+    descriptor = _open_workflow_directory(location)
+    try:
+        yield descriptor
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _list_entries(directory_fd: int, path: pathlib.Path) -> list[str]:
+    """Return the directory's entry names in filename order, or raise.
+
+    Returns
+    -------
+    list[str]
+        The directory's entry names, sorted.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the directory cannot be enumerated.
+    """
+    try:
+        return sorted(os.listdir(directory_fd))
+    except OSError as error:
+        message = f"cannot list {path}: {error}"
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_READ_WORKFLOW,
+            resource=path,
+        ) from error
+
+
+def _workflow_entry_mode(
+    directory_fd: int, name: str, path: pathlib.Path
+) -> int | None:
+    """Return a root workflow document's status mode, or None for any other entry.
+
+    The status is read relative to the open directory without following the
+    entry, so the mode describes the one entry the listing named. It is the
+    entry's only status query: the caller reads whether it is a link from it
+    rather than asking again.
+
+    Returns
+    -------
+    int | None
+        The mode of a regular file or symlink whose suffix is a workflow
+        suffix, otherwise None.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the entry's status cannot be read.
+    """
+    if path.suffix not in WORKFLOW_SUFFIXES:
+        return None
+    try:
+        mode = os.stat(name, dir_fd=directory_fd, follow_symlinks=False).st_mode
+    except OSError as error:
+        message = f"cannot stat {path}: {error}"
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_READ_WORKFLOW,
+            resource=path,
+        ) from error
+    return mode if stat.S_ISREG(mode) or stat.S_ISLNK(mode) else None
+
+
+def _root_workflow_fact(
+    directory_fd: int,
+    name: str,
+    path: pathlib.Path,
+    mode: int,
+    json_safe: JsonSafe,
+) -> WorkflowFile:
+    """Return one root workflow fact, retaining any content-level failure."""
+    fact: WorkflowFile = {
+        "path": str(WORKFLOWS_DIRECTORY / name),
+        "parsed": None,
+        "error": None,
+    }
+    if stat.S_ISLNK(mode):
+        fact["error"] = "workflow file is a symlink"
+        return fact
+    try:
+        text = _read_entry(directory_fd, name, path)
+    except UnicodeDecodeError as error:
+        fact["error"] = f"not UTF-8 text: {error}"
+        return fact
+    return _decode_into(fact, text, json_safe)
 
 
 def load_workflows(
     checkout: pathlib.Path,
     *,
-    read_text: ReadText = read_text,
     json_safe: JsonSafe = json_safe,
 ) -> list[WorkflowFile]:
-    """Return every root workflow YAML file in stable filename order."""
-    directory = _contained_workflow_directory(checkout)
-    return [
-        load_workflow(
-            checkout,
-            WORKFLOWS_DIRECTORY / entry.name,
-            is_link=stat.S_ISLNK(mode),
-            read_text=read_text,
-            json_safe=json_safe,
-        )
-        for entry in _list_workflow_directory(directory)
-        if (mode := _workflow_entry_mode(entry)) is not None
-    ]
+    """Return every root workflow YAML file in stable filename order.
+
+    The directory is opened once, after the containment check, and every entry
+    is then listed, classified and read relative to that descriptor. Resolving
+    or reopening the pathname later would let a checkout that changes during
+    the audit decide what the rule reads.
+
+    Returns
+    -------
+    list[WorkflowFile]
+        Every root workflow document, decoded or carrying its content error,
+        in filename order.
+    """
+    location = _contained_workflow_directory(checkout)
+    with _bound_workflow_directory(location) as directory_fd:
+        if directory_fd is None:
+            return []
+        facts: list[WorkflowFile] = []
+        for name in _list_entries(directory_fd, location.path):
+            path = location.path / name
+            mode = _workflow_entry_mode(directory_fd, name, path)
+            if mode is not None:
+                facts.append(
+                    _root_workflow_fact(directory_fd, name, path, mode, json_safe)
+                )
+        return facts
