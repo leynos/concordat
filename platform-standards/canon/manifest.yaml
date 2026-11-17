@@ -333,6 +333,20 @@ artifacts:
     description: >
       Rule package manifest for the main-owned CodeScene coverage policy.
     sha256: b46d5566d8ef87a250e337acbfef41c2967c3f8709133bee71ff24da8b47c9aa
+  - id: lint-rule-pr-run-cancellation
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/pr-run-cancellation/policy/pr_run_cancellation.rego
+    description: >-
+      Sensor requiring every pull-request-triggered workflow to cancel
+      superseded runs and to name the pull request in its concurrency group.
+    sha256: 7a30f18b90b78d2c0ec7bcc1f7801b02d4180e2e8e490e49b87318abbec82336
+  - id: lint-rule-pr-run-cancellation-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/pr-run-cancellation/rule.yaml
+    description: >-
+      Rule package manifest for the pull-request run cancellation audit.
+    sha256: 0666f22b7e187b1a44dee893c4e94e30f61ed787f998cc3d835e29c1535fe605
   - id: lint-rule-dependabot-update-shape
     type: opa-policy
     path: >-

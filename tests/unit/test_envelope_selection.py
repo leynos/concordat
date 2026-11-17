@@ -58,6 +58,9 @@ from concordat.rules.nested_cargo_offline_envelope import (
 from concordat.rules.nested_cargo_wiring_envelope import (
     ENVELOPE_KIND as NESTED_CARGO_WIRING_ENVELOPE_KIND,
 )
+from concordat.rules.pr_run_cancellation_envelope import (
+    ENVELOPE_KIND as PR_RUN_CANCELLATION_ENVELOPE_KIND,
+)
 from concordat.rules.prover_tooling_envelope import (
     ENVELOPE_KIND as PROVER_TOOLING_ENVELOPE_KIND,
 )
@@ -184,6 +187,11 @@ class TestRegisteredPackages:
                 "main-owned-codescene-coverage",
                 COVERAGE_ENVELOPE_KIND,
                 id="codescene-coverage",
+            ),
+            pytest.param(
+                "pr-run-cancellation",
+                PR_RUN_CANCELLATION_ENVELOPE_KIND,
+                id="pr-run-cancellation",
             ),
             pytest.param(
                 "dependabot-update-shape",
@@ -466,6 +474,7 @@ class TestDeclaredInputKind:
             ("rust-prover-tooling", PROVER_TOOLING_ENVELOPE_KIND),
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
+            ("pr-run-cancellation", PR_RUN_CANCELLATION_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
             ("dependency-family-contracts", FAMILY_ENVELOPE_KIND),
             ("rust-toolchain-policy", TOOLCHAIN_POLICY_ENVELOPE_KIND),

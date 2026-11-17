@@ -10,6 +10,9 @@ import pytest
 
 from concordat.errors import OperationalRuleError
 from concordat.rules import pr_run_cancellation_envelope
+from concordat.rules.codescene_coverage_envelope import (
+    build_codescene_coverage_envelope,
+)
 from concordat.rules.pr_run_cancellation_envelope import (
     ENVELOPE_KIND,
     ENVELOPE_SCHEMA_VERSION,
@@ -200,6 +203,27 @@ def test_an_unreadable_workflow_directory_is_an_operational_error(
     assert excinfo.value.operation == OPERATION_READ_WORKFLOW
     assert excinfo.value.resource == workflows
     assert "cannot list" in str(excinfo.value), str(excinfo.value)
+
+
+def test_both_workflow_consumers_read_the_same_facts(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The extraction is shared, so two rules cannot drift on workflow facts."""
+    _write_workflow(
+        tmp_path,
+        "ci.yml",
+        "on: pull_request\nconcurrency:\n  group: ci\n  cancel-in-progress: true\n",
+    )
+    _write_workflow(tmp_path, "release.yml", "on: [pull_request\n")
+
+    cancellation = build_pr_run_cancellation_envelope(tmp_path)
+    coverage = build_codescene_coverage_envelope(tmp_path)
+
+    assert cancellation["workflows"] == coverage["workflows"], cancellation
+    assert [fact["path"] for fact in cancellation["workflows"]] == [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+    ], cancellation
 
 
 def test_a_workflow_directory_outside_the_checkout_is_refused(

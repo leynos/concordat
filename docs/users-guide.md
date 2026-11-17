@@ -951,6 +951,43 @@ before the rule blocks; `severity: error` promotes them. An exemption names a
 repository, an exact file, a rationale and a review trigger, and suppresses
 NC-009 and NC-010 for that file only.
 
+### Auditing pull-request run cancellation
+
+The `pr-run-cancellation` rule keeps a pull request from paying for superseded
+runs:
+
+```shell
+concordat artefact rule run pr-run-cancellation --repo /path/to/checkout
+```
+
+Every push starts a run against the same ref. Without cancellation the earlier
+runs keep the runners busy on a commit nobody will merge, and the newest run
+queues behind them. **RC-001** requires a cancelling `concurrency` block in
+every workflow triggered by `pull_request` or `pull_request_target`, at
+workflow level or on every job not disabled with `if: false`. **RC-002**
+requires every cancelling block's `group` to name the pull request through
+`github.event.pull_request.number` or `github.head_ref`, so two pull requests
+do not cancel one another's runs. The reference shape is:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+`cancel-in-progress: true` or a trimmed, case-insensitive `"true"` cancels. Any
+expression cancels unless it is a trimmed literal-false expression
+(`${{ false }}`), because it may evaluate true on the run that matters. An
+absent value, `false`, `"false"` and the string shorthand do not cancel. A
+workflow triggered only by push, schedule or `workflow_call` is not audited. A
+workflow whose document, trigger or concurrency shape cannot be read is
+indeterminate (**EN-001**) rather than passing. Both clauses ship at `warning`
+so the estate can be surveyed first; `severity: error` promotes them. An
+exemption names a repository and an exact workflow, or a whole repository, with
+a rationale and a review trigger; a blank field suppresses nothing, and an
+exemption never suppresses indeterminate evidence. See the
+[rule reference](../platform-standards/canon/lint-rules/pr-run-cancellation/README.md).
+
 ### Auditing prover tooling
 
 The `rust-prover-tooling` rule holds a repository that uses Kani or Verus to

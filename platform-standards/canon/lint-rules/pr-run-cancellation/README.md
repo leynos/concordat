@@ -1,0 +1,112 @@
+# pr-run-cancellation
+
+Audits the workflows a repository runs for pull requests. The audit is
+read-only. It evaluates a `policy-input/pr-run-cancellation` envelope built by
+`concordat artefact rule run`; it never runs a workflow.
+
+The rule implements leynos/concordat#388. That ticket calls its clauses PR-001
+and PR-002; the canon already uses the `PR-` prefix for the priority checks, so
+the findings here are **RC-001** and **RC-002**.
+
+## Why
+
+Every push to a pull request starts a run against the same ref. Without
+concurrency cancellation the earlier runs keep the runners busy on a commit
+nobody will merge, and the newest run queues behind them. On a metered runner
+that is paid work for a superseded revision; on any runner it is latency before
+the answer the author is waiting for.
+
+The reference shape is:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+The `||` fallback keeps push runs on `main` in the same group as each other, so
+a push run supersedes the previous push run while the event test leaves push
+runs uncancelled. A group built only from `github.ref` is shared by every pull
+request targeting the same base branch, so one pull request's run cancels
+another's.
+
+## Checks
+
+- **RC-001** (warning, noncompliant): a workflow triggered by `pull_request` or
+  `pull_request_target` has no cancelling `concurrency` block, at workflow
+  level or on each job that is not disabled with `if: false`. A workflow-level
+  block covers every job. A job that sets literal `if: false` is skipped, so it
+  needs no block. A reusable-workflow caller job (`uses:`) is judged by its own
+  `concurrency`, not by the jobs inside the called workflow, because those jobs
+  are not in this document. One finding per workflow, naming every uncovered
+  job.
+- **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
+  pull request through `github.event.pull_request.number` or `github.head_ref`,
+  matched case-insensitively. The workflow-level block is checked when it
+  cancels; otherwise each cancelling job block is checked. A block whose group
+  would cancel a *different* pull request's run is reported.
+- **EN-001** (indeterminate): the envelope is not a schema-1
+  `policy-input/pr-run-cancellation` document, or a workflow could not be
+  decoded, declares no trigger, has a trigger shape the rule cannot classify,
+  has no non-empty `jobs` mapping of job objects, or has a `concurrency` block
+  the rule cannot read. An envelope defect is `error`: it says the rule could
+  not run. Every other indeterminate finding uses the configured severity.
+
+A workflow with no `pull_request` or `pull_request_target` trigger is not
+audited. That includes push-only, schedule-only and `workflow_call`-only
+workflows; a workflow that carries a PR trigger alongside another trigger is
+audited.
+
+## What counts as cancelling
+
+- `cancel-in-progress: true`, or a string that trims and folds to `true`.
+- Any expression other than a trimmed literal-false expression, because it may
+  evaluate true on the run that matters. `${{ false }}` is the one expression
+  the rule treats as not cancelling.
+- **Not cancelling:** an absent value, `false`, the string `"false"`, a value
+  that is neither `true` nor an expression, and the string shorthand
+  `concurrency: <group>`, which leaves `cancel-in-progress` at its default of
+  false.
+
+`concurrency` values that are not a non-empty string or an object with a
+non-empty string `group` and a boolean-or-string `cancel-in-progress` are not
+guessed at: the workflow is reported indeterminate and RC-001/RC-002 are not
+stated from it. If any concurrency block in a workflow is unreadable, the whole
+workflow's substantive judgement waits.
+
+## Exemptions
+
+`exemptions` lists exact workflows, each with its `repository` (`owner/name`,
+read from the `origin` remote), its `path` (`.github/workflows/<file>`), a
+`rationale` and a `review_trigger` (the event after which the exemption is
+revisited). `repository_exemptions` does the same for a whole repository, each
+with a `repository`, `rationale` and `review_trigger`. Both text fields must be
+non-blank and the repository identity must be usable; an entry that leaves one
+blank suppresses nothing, because an exemption nobody must revisit is not a
+record.
+
+An exemption suppresses RC-001 and RC-002 only. Indeterminate evidence stays
+reported, since an exemption is an agreement about a known noncompliance, not
+about evidence the reader could not establish.
+
+## Severity
+
+The package ships at `warning`, so the estate can be surveyed before it blocks.
+Set the `severity` parameter to `error` to make RC-001 and RC-002 block without
+a code change. Promotion is a separate decision made once the survey is clean.
+
+## What the rule declines to judge
+
+Only root workflows (`.github/workflows/*.yml` and `*.yaml`) are read. A
+cancellation block set inside a reusable workflow in another repository, a
+composite action, or a called workflow is outside the audited document. Whether
+a group is *unique enough* beyond naming the pull request, such as including
+the workflow name, is not judged.
+
+## Evidence
+
+The package's own suite is the specification: `fixtures/data.json` carries the
+reference shape, job-level and reusable-caller shapes, every trigger spelling,
+each indeterminate shape, each non-cancelling value, and both exemption kinds.
+`policy/pr_run_cancellation_test.rego` compares the exact finding profile for
+each fixture and patches the reference shape to derive variants.
