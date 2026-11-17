@@ -634,6 +634,46 @@ test_a_job_event_guard_is_judged_against_the_declared_events if {
 	profile(data.fixtures.job_push_guard_does_not_cancel) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# `github.event_name == 'pull_request' && false && github.head_ref` renders
+# `false`, so the marker behind the falsy guard never reaches the group.
+test_a_falsy_conjunction_behind_an_event_guard_names_nothing if {
+	profile(data.fixtures.event_guard_then_falsy_conjunction) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_an_unreadable_conjunction_behind_an_event_guard_is_indeterminate if {
+	profile(data.fixtures.event_guard_then_unreadable_conjunction) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+# The branch-level conjunction checks split only at the top level, so an
+# argument of its own is judged by the same rules.
+test_a_falsy_conjunction_inside_a_call_argument_names_nothing if {
+	profile(data.fixtures.falsy_conjunction_in_argument) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_an_unreadable_conjunction_inside_a_call_argument_is_indeterminate if {
+	profile(data.fixtures.unreadable_conjunction_in_argument) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+test_a_truthy_guard_inside_a_call_argument_still_names_the_pull_request if {
+	count(findings(data.fixtures.truthy_guard_in_argument)) == 0
+}
+
+# A block that cancels only one declared event still applies to that event's
+# runs, so a constant group is reported even though RC-001 also fires.
+test_a_conditional_workflow_block_names_the_pull_request_on_the_events_it_cancels if {
+	profile(data.fixtures.conditional_cancel_with_constant_group) == {
+		["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"],
+		["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"],
+	}
+}
+
+test_a_conditional_job_block_names_the_pull_request_on_the_events_it_cancels if {
+	profile(data.fixtures.job_conditional_cancel_with_constant_group) == {
+		["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"],
+		["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"],
+	}
+}
+
 test_a_disabled_job_needs_no_concurrency if {
 	count(findings(data.fixtures.disabled_job_only)) == 0
 }

@@ -731,8 +731,14 @@ mentions_pull_request(text) if {
 
 marker_occurrence_is_identity(head, before, after) if {
 	marker_occurrence_context_holds(head, before, after)
+	argument_conjunction_holds(before)
 	links := call_links(before)
 	chain_carries_value(links)
+}
+
+marker_occurrence_is_unclassifiable(head, before, after) if {
+	marker_occurrence_context_holds(head, before, after)
+	argument_conjunction_unsettled(before)
 }
 
 marker_occurrence_is_unclassifiable(head, before, after) if {
@@ -797,6 +803,68 @@ marker_is_selected(text) if {
 	]
 	every position in separators {
 		not separator_reaches_marker(text, position, depth_at(text, position))
+	}
+}
+
+# A `&&` chain inside a call argument is not reached by the branch-level
+# conjunction checks, because those split only at the top level. The guards in
+# the occurrence's own argument still decide whether the marker is the value
+# GitHub takes: `format('{0}', false && github.head_ref)` renders `false`, so
+# the marker names nothing. Top-level guards are left to the branch rules,
+# which judge them against each declared event.
+argument_guards(before) := guards if {
+	chars := characters(before)
+	depth_at(before, count(chars)) > 0
+	segments := conjunction_segments(argument_prefix(before))
+	count(segments) > 1
+	guards := array.slice(segments, 0, count(segments) - 1)
+}
+
+argument_has_guards(before) if argument_guards(before)
+
+argument_conjunction_holds(before) if not argument_has_guards(before)
+
+argument_conjunction_holds(before) if {
+	guards := argument_guards(before)
+	every guard in guards {
+		guard_proven_truthy(guard)
+	}
+}
+
+argument_conjunction_falsy(before) if {
+	some guard in argument_guards(before)
+	lower(guard) in FALSY_LITERALS
+}
+
+argument_conjunction_unsettled(before) if {
+	some guard in argument_guards(before)
+	not guard_proven_truthy(guard)
+	not lower(guard) in FALSY_LITERALS
+}
+
+# The text of the argument the occurrence sits in, from its opening boundary to
+# the occurrence, so that a `&&` in a nested call or in another argument is not
+# read as a guard on this one.
+argument_prefix(before) := substring(before, start, count(before) - start) if {
+	start := argument_start(before)
+}
+
+argument_start(before) := start if {
+	boundaries := argument_boundaries(before)
+	count(boundaries) > 0
+	start := max(boundaries)
+}
+
+argument_start(before) := 0 if count(argument_boundaries(before)) == 0
+
+argument_boundaries(before) := boundaries if {
+	chars := characters(before)
+	depth := depth_at(before, count(chars))
+	boundaries := {start |
+		some index in numbers.range(0, count(chars) - 1)
+		chars[index] in {"(", ","}
+		depth_at(before, index + 1) == depth
+		start := index + 1
 	}
 }
 
@@ -1102,6 +1170,35 @@ job_cancels(job, events) if {
 	concurrency_cancels(job_concurrency(job), events)
 }
 
+# The events on which a block cancels. A block whose event test excludes an
+# event leaves that event's runs alone, so its group identity is judged only on
+# the events it does cancel; a block that never cancels is left to RC-001.
+cancelling_events(value, events) := {event |
+	some event in events
+	cancels_in_progress_at(value["cancel-in-progress"], event)
+} if {
+	is_object(value)
+	"cancel-in-progress" in object.keys(value)
+}
+
+concurrency_cancels_somewhere(value, events) if {
+	is_object(value)
+	"cancel-in-progress" in object.keys(value)
+	some event in events
+	cancels_in_progress_at(value["cancel-in-progress"], event)
+	group_stability(value) == "stable"
+}
+
+workflow_cancels_somewhere(workflow) if {
+	workflow_has_concurrency(workflow)
+	concurrency_cancels_somewhere(workflow_concurrency(workflow), pr_events(workflow))
+}
+
+job_cancels_somewhere(job, events) if {
+	job_has_concurrency(job)
+	concurrency_cancels_somewhere(job_concurrency(job), events)
+}
+
 # A `github.event_name` guard decides whether the `&&` branch it protects can
 # be selected. The guard is judged against each pull-request event the workflow
 # declares, so `== 'pull_request'` selects the branch for a `pull_request` run
@@ -1201,6 +1298,7 @@ branch_value_reachable(branches, event) if {
 branch_names_pull_request_at(branch, event) if {
 	guard := event_guard(branch)
 	event_guard_holds_at(branch, event)
+	not branch_conjunction_falsy(guard.value)
 	mentions_pull_request(guard.value)
 }
 
@@ -1251,12 +1349,25 @@ branch_conjunction_falsy(branch) if {
 # it unselected. When that value names the pull request, whether the group
 # carries it cannot be read from the text, so it is reported indeterminate
 # rather than as a pass or a defect.
-branch_guard_unsettled(branch) if {
+branch_guard_unsettled_at(branch, _event) if {
 	not event_guard(branch)
 	conjunction := branch_conjunction(branch)
 	mentions_pull_request(conjunction.value)
 	not branch_conjunction_falsy(branch)
 	not branch_conjunction_holds(branch)
+}
+
+# The value an event guard protects is a conjunction in its own right: in
+# `github.event_name == 'pull_request' && github.ref == 'refs/heads/main' &&
+# github.head_ref` the marker is selected only when the second guard is also
+# truthy, which the rule cannot prove from the text.
+branch_guard_unsettled_at(branch, event) if {
+	guard := event_guard(branch)
+	event_guard_holds_at(branch, event)
+	conjunction := branch_conjunction(guard.value)
+	mentions_pull_request(conjunction.value)
+	not branch_conjunction_falsy(guard.value)
+	not branch_conjunction_holds(guard.value)
 }
 
 guard_proven_truthy(guard) if lower(guard) in TRUTHY_GUARDS
@@ -1292,7 +1403,7 @@ branch_settled_at(branches, index, event) if {
 	branch := branches[index]
 	branch_value_reachable_at(branches, index, event)
 	branch_names_pull_request_at(branch, event)
-	not branch_guard_unsettled(branch)
+	not branch_guard_unsettled_at(branch, event)
 }
 
 branch_list_settled_at(branches, event) if {
@@ -1342,7 +1453,7 @@ group_identity_unknown(value, events) if {
 	some index in numbers.range(0, count(branches) - 1)
 	some event in events
 	branch_value_reachable_at(branches, index, event)
-	branch_guard_unsettled(branches[index])
+	branch_guard_unsettled_at(branches[index], event)
 }
 
 group_identity_unknown(value, events) if {
@@ -1640,8 +1751,9 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	evaluable_workflow(workflow)
 	concurrency_evaluable(workflow)
 	rc_audited(workflow)
-	workflow_cancels(workflow)
-	not group_names_pull_request(workflow_concurrency(workflow), pr_events(workflow))
+	workflow_cancels_somewhere(workflow)
+	events := cancelling_events(workflow_concurrency(workflow), pr_events(workflow))
+	not group_names_pull_request(workflow_concurrency(workflow), events)
 	not group_identity_unknown(workflow_concurrency(workflow), pr_events(workflow))
 	msg := sprintf(
 		"workflow %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
@@ -1662,8 +1774,9 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	jobs := workflow_jobs(workflow)
 	some name in object.keys(jobs)
 	job := jobs[name]
-	job_cancels(job, pr_events(workflow))
-	not group_names_pull_request(job_concurrency(job), pr_events(workflow))
+	job_cancels_somewhere(job, pr_events(workflow))
+	job_events := cancelling_events(job_concurrency(job), pr_events(workflow))
+	not group_names_pull_request(job_concurrency(job), job_events)
 	not group_identity_unknown(job_concurrency(job), pr_events(workflow))
 	msg := sprintf(
 		"job %s of %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",

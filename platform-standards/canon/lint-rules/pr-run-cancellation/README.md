@@ -124,13 +124,19 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   the second occurrence is not the one directly after the call. `!` renders a
   boolean, so `${{ !github.head_ref }}` names nothing, and `&&` yields its
   right operand, so a marker that is the left operand —
-  `${{ github.head_ref && 'ci' }}` — names nothing either. `fromJSON` parses
-  its argument rather than passing it through, so a marker inside one does not
-  establish the identity: a branch name that is a JSON literal changes value,
-  and `1` and `1e0` both parse to the number `1`, which would put two pull
-  requests in one group. `format` is judged by its template: the marker names
-  the pull request only when its argument position is rendered by a matching
-  `{N}` placeholder, so `${{ format('ci-{0}', github.head_ref) }}` counts and
+  `${{ github.head_ref && 'ci' }}` — names nothing either. A `&&` chain is read
+  in full wherever it sits, including inside a call argument and behind an
+  event guard: `${{ format('{0}', false && github.head_ref) }}` and
+  `${{ github.event_name == 'pull_request' && false && github.head_ref }}` both
+  render `false`, so neither names the pull request, while a guard the rule
+  cannot prove truthy, such as `github.event.pull_request.title`, makes the
+  value behind it indeterminate. `fromJSON` parses its argument rather than
+  passing it through, so a marker inside one does not establish the identity: a
+  branch name that is a JSON literal changes value, and `1` and `1e0` both
+  parse to the number `1`, which would put two pull requests in one group.
+  `format` is judged by its template: the marker names the pull request only
+  when its argument position is rendered by a matching `{N}` placeholder, so
+  `${{ format('ci-{0}', github.head_ref) }}` counts and
   `${{ format('ci', github.head_ref) }}` does not. `join` is judged the same
   way: a marker in its array argument is joined into the result, but a marker
   in its separator renders only between elements, so whether the group carries
@@ -158,15 +164,20 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   counts. Every cancelling block is checked on its own: the workflow-level
   block when it cancels, and each cancelling job block whether or not the
   workflow block complies, because GitHub applies both concurrency levels. A
-  block whose group would cancel a *different* pull request's run is reported.
+  block is judged on the events it actually cancels: one whose
+  `cancel-in-progress` guard selects only `pull_request` is reported for that
+  event's runs even though RC-001 also fires, while a block that cancels
+  nothing is left to RC-001. A block whose group would cancel a *different*
+  pull request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
   `policy-input/pr-run-cancellation` document, or a workflow could not be
   decoded, declares no trigger, has a trigger shape the rule cannot classify,
   has no non-empty `jobs` mapping of job objects, has a `concurrency` block the
-  rule cannot read, or has a group whose nested fallback, or an unrecognized
-  call in a branch a pull request can reach, leaves its value or its identity
-  unclassifiable. An envelope defect is `error`: it says the rule could not
-  run. Every other indeterminate finding uses the configured severity.
+  rule cannot read, or has a group whose nested fallback, a `&&` guard the rule
+  cannot prove truthy, or an unrecognized call in a branch a pull request can
+  reach leaves its value or its identity unclassifiable. An envelope defect is
+  `error`: it says the rule could not run. Every other indeterminate finding
+  uses the configured severity.
 
 A workflow with no `pull_request` or `pull_request_target` trigger is not
 audited. That includes push-only, schedule-only and `workflow_call`-only

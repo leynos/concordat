@@ -312,6 +312,34 @@
         }
       ]
     },
+    "conditional_cancel_with_constant_group": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+              "group": "ci"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": [
+              "pull_request",
+              "pull_request_target"
+            ]
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "conjunction_chain_then_marker": {
       "kind": "policy-input/pr-run-cancellation",
       "repository": {
@@ -536,6 +564,60 @@
         }
       ]
     },
+    "event_guard_then_falsy_conjunction": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ github.event_name == 'pull_request' && false && github.head_ref }}"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "event_guard_then_unreadable_conjunction": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ github.event_name == 'pull_request' && github.event.pull_request.title && github.head_ref }}"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "fallback_in_a_closed_nested_call": {
       "kind": "policy-input/pr-run-cancellation",
       "repository": {
@@ -576,6 +658,33 @@
             "concurrency": {
               "cancel-in-progress": true,
               "group": "ci-${{ format('{0}-{1}', github.workflow || 'ci', github.head_ref) }}"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "falsy_conjunction_in_argument": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ format('{0}', false && github.head_ref) }}"
             },
             "jobs": {
               "test": {
@@ -1173,6 +1282,34 @@
             "on": {
               "pull_request": null
             }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "job_conditional_cancel_with_constant_group": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "test": {
+                "concurrency": {
+                  "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+                  "group": "ci"
+                },
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": [
+              "pull_request",
+              "pull_request_target"
+            ]
           },
           "path": ".github/workflows/ci.yml"
         }
@@ -2648,6 +2785,33 @@
         }
       ]
     },
+    "truthy_guard_in_argument": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ format('{0}', github.ref && github.head_ref) }}"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "two_bodies_each_naming_one_pr_event": {
       "kind": "policy-input/pr-run-cancellation",
       "repository": {
@@ -2833,6 +2997,33 @@
             "concurrency": {
               "cancel-in-progress": true,
               "group": "${{ github.event.pull_request.title && github.head_ref }}"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "unreadable_conjunction_in_argument": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ format('{0}', github.event.pull_request.title && github.head_ref) }}"
             },
             "jobs": {
               "test": {

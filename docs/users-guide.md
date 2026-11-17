@@ -1017,13 +1017,19 @@ value after it, as `github.ref && github.head_ref` does. A guard the rule
 cannot prove truthy or falsy, such as
 `github.event.pull_request.title && github.head_ref` or
 `github.ref == 'refs/heads/main' && github.head_ref`, makes the group
-indeterminate. A `||` nested inside a call argument is that argument's own
-fallback, so a value that changes between runs beside it leaves the group
-unreadable, and the workflow is reported indeterminate. That fallback does not
-reach a later argument, so
-`format('{0}-{1}', github.workflow || 'ci', github.head_ref)` still names the
-pull request. Workflow-level and job-level groups are checked independently,
-because GitHub applies both. The reference shape is:
+indeterminate. The chain is read in full wherever it sits, including inside a
+call argument, so `format('{0}', false && github.head_ref)` names nothing, and
+behind an event guard, so
+`github.event_name == 'pull_request' && false && github.head_ref` names nothing
+either. A `||` nested inside a call argument is that argument's own fallback,
+so a value that changes between runs beside it leaves the group unreadable, and
+the workflow is reported indeterminate. That fallback does not reach a later
+argument, so `format('{0}-{1}', github.workflow || 'ci', github.head_ref)`
+still names the pull request. A block is judged on the events it actually
+cancels, so a conditional block with a constant group is reported even though
+RC-001 also fires for the events it leaves alone. Workflow-level and job-level
+groups are checked independently, because GitHub applies both. The reference
+shape is:
 
 ```yaml
 concurrency:
