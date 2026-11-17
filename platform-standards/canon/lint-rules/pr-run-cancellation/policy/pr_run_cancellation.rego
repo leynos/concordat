@@ -544,10 +544,10 @@ deny contains finding("EN-001", "error", "indeterminate", ".github/workflows", 0
 }
 
 deny contains finding("EN-001", severity, "indeterminate", ".github/workflows", 0, msg) if {
+	msg := "a workflow entry is not an object"
 	envelope_ok
 	some workflow in input.workflows
 	not is_object(workflow)
-	msg := "a workflow entry is not an object"
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
@@ -560,45 +560,45 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	msg := "the workflow document is not a mapping"
 	envelope_ok
 	some workflow in input.workflows
 	is_object(workflow)
 	object.get(workflow, "error", null) == null
 	not is_object(object.get(workflow, "parsed", null))
-	msg := "the workflow document is not a mapping"
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	msg := "the workflow declares no triggers"
 	envelope_ok
 	some workflow in input.workflows
 	workflow_parsed(workflow)
 	not workflow_trigger_key(workflow)
-	msg := "the workflow declares no triggers"
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	msg := "the workflow's triggers have a shape this rule cannot classify"
 	envelope_ok
 	some workflow in input.workflows
 	workflow_parsed(workflow)
 	workflow_trigger_key(workflow)
 	not valid_trigger(workflow)
-	msg := "the workflow's triggers have a shape this rule cannot classify"
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	msg := "the workflow does not declare a non-empty jobs mapping of job objects, so its pull-request jobs cannot be evaluated"
 	envelope_ok
 	some workflow in input.workflows
 	evaluable_workflow(workflow)
 	not valid_jobs(workflow)
-	msg := "the workflow does not declare a non-empty jobs mapping of job objects, so its pull-request jobs cannot be evaluated"
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	msg := "the workflow's concurrency block is not a non-empty string or an object with a string group and a boolean or string cancel-in-progress"
 	envelope_ok
 	some workflow in input.workflows
 	evaluable_workflow(workflow)
 	invalid_workflow_concurrency(workflow)
-	msg := "the workflow's concurrency block is not a non-empty string or an object with a string group and a boolean or string cancel-in-progress"
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
