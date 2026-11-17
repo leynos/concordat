@@ -71,6 +71,12 @@ EVENT_GUARD_RIGHT_PATTERN := `^\(?\s*github\.event_name\s*(==|!=)\s*@([a-z_]+)@\
 
 EVENT_GUARD_LEFT_PATTERN := `^\(?\s*@([a-z_]+)@\s*(==|!=)\s*github\.event_name\s*\)?\s*&&\s*`
 
+# A bare event test: the same comparison with nothing after it. This is what a
+# `cancel-in-progress` guard looks like when it is the whole expression.
+EVENT_TEST_RIGHT_PATTERN := `^\(*\s*github\.event_name\s*(==|!=)\s*@([a-z_]+)@\s*\)*$`
+
+EVENT_TEST_LEFT_PATTERN := `^\(*\s*@([a-z_]+)@\s*(==|!=)\s*github\.event_name\s*\)*$`
+
 # `fromJSON` is deliberately left out of every set below. It parses its
 # argument, so a marker inside it may not survive: a branch name that is a JSON
 # literal changes value, and `1` and `1e0` both parse to the number 1, which
@@ -858,16 +864,80 @@ literal_false_expression(value) if {
 	lower(inner) == "false"
 }
 
-cancels_in_progress(value) if value == true
+cancels_in_progress_at(value, _event) if value == true
 
-cancels_in_progress(value) if {
+cancels_in_progress_at(value, _event) if {
 	is_string(value)
 	lower(trim_space(value)) == "true"
 }
 
-cancels_in_progress(value) if {
+cancels_in_progress_at(value, event) if {
 	is_expression(value)
 	not literal_false_expression(value)
+	expression_cancels_at(value, event)
+}
+
+# A `cancel-in-progress` value that is nothing but `github.event_name` tests
+# cancels only for the events those tests select: `${{ github.event_name ==
+# 'pull_request' }}` evaluates false on a `pull_request_target` run and never
+# cancels it. Any other expression may evaluate true on the run that matters,
+# so it stays conservatively cancelling.
+expression_cancels_at(value, event) if {
+	some body in expression_bodies(value)
+	not body_is_event_test(body)
+}
+
+expression_cancels_at(value, event) if {
+	bodies := expression_bodies(value)
+	count(bodies) > 0
+	every body in bodies {
+		body_is_event_test(body)
+	}
+	every body in bodies {
+		body_cancels_at(body, event)
+	}
+}
+
+body_is_event_test(body) if {
+	branches := expression_branches(body)
+	count(branches) > 0
+	every branch in branches {
+		event_test(branch)
+	}
+}
+
+body_cancels_at(body, event) if {
+	some branch in expression_branches(body)
+	test := event_test(branch)
+	event_test_holds_at(test, event)
+}
+
+# The event name a comparison guards on survives as `@name@`, so a bare test —
+# one with no `&&` tail — can be read straight off the evaluated body.
+event_test(branch) := {"event": event, "operator": operator} if {
+	trimmed := trim_space(branch)
+	matches := regex.find_all_string_submatch_n(EVENT_TEST_RIGHT_PATTERN, trimmed, 1)
+	count(matches) > 0
+	operator := matches[0][1]
+	event := matches[0][2]
+}
+
+event_test(branch) := {"event": event, "operator": operator} if {
+	trimmed := trim_space(branch)
+	matches := regex.find_all_string_submatch_n(EVENT_TEST_LEFT_PATTERN, trimmed, 1)
+	count(matches) > 0
+	event := matches[0][1]
+	operator := matches[0][2]
+}
+
+event_test_holds_at(test, event) if {
+	test.operator == "=="
+	test.event == event
+}
+
+event_test_holds_at(test, event) if {
+	test.operator == "!="
+	test.event != event
 }
 
 # A branch is stable when it carries no value that changes between pushes to
@@ -1013,21 +1083,23 @@ group_stability(value) := "unstable" if {
 	expression_stability(body) == "unstable"
 }
 
-concurrency_cancels(value) if {
+concurrency_cancels(value, events) if {
 	is_object(value)
 	"cancel-in-progress" in object.keys(value)
-	cancels_in_progress(value["cancel-in-progress"])
+	every event in events {
+		cancels_in_progress_at(value["cancel-in-progress"], event)
+	}
 	group_stability(value) == "stable"
 }
 
 workflow_cancels(workflow) if {
 	workflow_has_concurrency(workflow)
-	concurrency_cancels(workflow_concurrency(workflow))
+	concurrency_cancels(workflow_concurrency(workflow), pr_events(workflow))
 }
 
-job_cancels(job) if {
+job_cancels(job, events) if {
 	job_has_concurrency(job)
-	concurrency_cancels(job_concurrency(job))
+	concurrency_cancels(job_concurrency(job), events)
 }
 
 # A `github.event_name` guard decides whether the `&&` branch it protects can
@@ -1372,7 +1444,7 @@ uncovered_jobs(workflow) := {name |
 	job := workflow_jobs(workflow)[name]
 	not job_disabled(job)
 	not workflow_cancels(workflow)
-	not job_cancels(job)
+	not job_cancels(job, pr_events(workflow))
 } if {
 	concurrency_evaluable(workflow)
 }
@@ -1557,7 +1629,7 @@ deny contains finding("RC-001", severity, "noncompliant", workflow_path(workflow
 	names := uncovered_jobs(workflow)
 	count(names) > 0
 	msg := sprintf(
-		"workflow %s runs on pull requests but neither it nor job(s) %s cancel superseded runs. Add a cancelling concurrency block at workflow level, or to every job that is not disabled with `if: false`",
+		"workflow %s runs on pull requests but neither it nor job(s) %s cancel superseded runs for every pull-request event it declares. Add a cancelling concurrency block at workflow level, or to every job that is not disabled with `if: false`",
 		[workflow_path(workflow), concat(", ", sort(names))],
 	)
 }
@@ -1590,7 +1662,7 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	jobs := workflow_jobs(workflow)
 	some name in object.keys(jobs)
 	job := jobs[name]
-	job_cancels(job)
+	job_cancels(job, pr_events(workflow))
 	not group_names_pull_request(job_concurrency(job), pr_events(workflow))
 	not group_identity_unknown(job_concurrency(job), pr_events(workflow))
 	msg := sprintf(

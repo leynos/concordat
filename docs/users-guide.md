@@ -964,8 +964,9 @@ Every push starts a run against the same ref. Without cancellation the earlier
 runs keep the runners busy on a commit nobody will merge, and the newest run
 queues behind them. **RC-001** requires a cancelling `concurrency` block in
 every workflow triggered by `pull_request` or `pull_request_target`, at
-workflow level or on every job not disabled with `if: false`. **RC-002**
-requires every cancelling block's `group` to name the pull request through
+workflow level or on every job not disabled with `if: false`, for every
+pull-request event the workflow declares. **RC-002** requires every cancelling
+block's `group` to name the pull request through
 `github.event.pull_request.number` or `github.head_ref` inside a `${{ ... }}`
 expression, so two pull requests do not cancel one another's runs. A marker
 written as literal text, including inside a quoted string literal, used as a
@@ -1031,7 +1032,8 @@ concurrency:
 ```
 
 That event test covers `pull_request`. A workflow triggered by
-`pull_request_target` evaluates it false, so test that event too:
+`pull_request_target` evaluates it false there, so the rule does not count it
+as cancelling that event's runs. Test that event too:
 
 ```yaml
 cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
@@ -1045,16 +1047,21 @@ pull request by number, as the reference shape above does.
 
 `cancel-in-progress: true` or a trimmed, case-insensitive `"true"` cancels. Any
 expression cancels unless it is a trimmed literal-false expression
-(`${{ false }}`), because it may evaluate true on the run that matters. An
-absent value, `false`, `"false"` and the string shorthand do not cancel. A
-workflow triggered only by push, schedule or `workflow_call` is not audited. A
-workflow whose document, trigger, concurrency shape, nested-fallback group or
-unrecognized call cannot be read is indeterminate (**EN-001**) rather than
-passing. Both clauses ship at `warning` so the estate can be surveyed first;
-`severity: error` promotes them. An exemption names a repository and an exact
-workflow, or a whole repository, with a rationale and a review trigger; a blank
-field suppresses nothing, and an exemption never suppresses indeterminate
-evidence. See the
+(`${{ false }}`), because it may evaluate true on the run that matters. The
+exception is an expression that is nothing but `github.event_name` tests: each
+declared pull-request event is evaluated against them, so
+`${{ github.event_name == 'pull_request' }}` cancels a `pull_request` run and
+not a `pull_request_target` run, while the two-event guard above cancels both.
+Any comparison, operator or reference beyond a bare event test keeps the
+conservative reading. An absent value, `false`, `"false"` and the string
+shorthand do not cancel. A workflow triggered only by push, schedule or
+`workflow_call` is not audited. A workflow whose document, trigger, concurrency
+shape, nested-fallback group or unrecognized call cannot be read is
+indeterminate (**EN-001**) rather than passing. Both clauses ship at `warning`
+so the estate can be surveyed first; `severity: error` promotes them. An
+exemption names a repository and an exact workflow, or a whole repository, with
+a rationale and a review trigger; a blank field suppresses nothing, and an
+exemption never suppresses indeterminate evidence. See the
 [rule reference](../platform-standards/canon/lint-rules/pr-run-cancellation/README.md).
 
 ### Auditing prover tooling

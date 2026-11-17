@@ -45,9 +45,13 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
 
 - **RC-001** (warning, noncompliant): a workflow triggered by `pull_request` or
   `pull_request_target` has no cancelling `concurrency` block, at workflow
-  level or on each job that is not disabled with `if: false`. A workflow-level
-  block covers every job. A job that sets literal `if: false` is skipped, so it
-  needs no block. A reusable-workflow caller job (`uses:`) is judged by its own
+  level or on each job that is not disabled with `if: false`, for every
+  pull-request event it declares. A block whose `cancel-in-progress` is only a
+  `github.event_name` test cancels for the events that test selects and leaves
+  the others running, so a `pull_request_target`-only workflow guarded with
+  `github.event_name == 'pull_request'` is reported. A workflow-level block
+  covers every job. A job that sets literal `if: false` is skipped, so it needs
+  no block. A reusable-workflow caller job (`uses:`) is judged by its own
   `concurrency`, not by the jobs inside the called workflow, because those jobs
   are not in this document. One finding per workflow, naming every uncovered
   job. A block whose group carries a value that separates runs of the same pull
@@ -174,14 +178,21 @@ audited.
 - `cancel-in-progress: true`, or a string that trims and folds to `true`.
 - Any expression other than a trimmed literal-false expression, because it may
   evaluate true on the run that matters. `${{ false }}` is the one expression
-  the rule treats as not cancelling.
+  the rule treats as not cancelling, unless the expression is nothing but
+  `github.event_name` tests: those are evaluated on each declared pull-request
+  event, so `${{ github.event_name == 'pull_request' }}` cancels a
+  `pull_request` run and does not cancel a `pull_request_target` run of the
+  same workflow. A `||` chain of such tests covers the events it selects, so
+  the two-event guard above cancels both. Any comparison, operator or reference
+  beyond a bare event test keeps the conservative reading.
 - **Not cancelling:** an absent value, `false`, the string `"false"`, a value
-  that is neither `true` nor an expression, the string shorthand
-  `concurrency: <group>`, which leaves `cancel-in-progress` at its default of
-  false, and any group built from a value that separates runs of the same pull
-  request (`github.run_id`, `github.run_number`, `github.run_attempt`,
-  `github.sha` or `github.event.pull_request.head.sha`), which the run that
-  ought to be superseded never shares, unless the expression never renders it:
+  that is neither `true` nor an expression, an event test that excludes a
+  declared event, the string shorthand `concurrency: <group>`, which leaves
+  `cancel-in-progress` at its default of false, and any group built from a
+  value that separates runs of the same pull request (`github.run_id`,
+  `github.run_number`, `github.run_attempt`, `github.sha` or
+  `github.event.pull_request.head.sha`), which the run that ought to be
+  superseded never shares, unless the expression never renders it:
   `format('ci-{0}', github.head_ref, github.run_id)` cancels and
   `format('ci-{0}-{1}', github.head_ref, github.run_id)` does not. A `||` chain
   is judged by the branch GitHub selects: `github.head_ref || github.run_id`

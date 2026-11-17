@@ -611,6 +611,29 @@ test_a_trimmed_case_insensitive_true_cancels if {
 	count(findings(data.fixtures.case_insensitive_true)) == 0
 }
 
+# A `cancel-in-progress` guard is evaluated on the run GitHub sends, so a guard
+# that selects only `pull_request` never cancels a `pull_request_target` run of
+# the same workflow.
+test_an_event_guard_that_excludes_a_declared_event_does_not_cancel if {
+	profile(data.fixtures.target_only_with_pull_request_guard) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_an_event_guard_covering_every_declared_event_cancels if {
+	count(findings(data.fixtures.two_event_guard_with_both_triggers)) == 0
+}
+
+test_a_guard_on_an_undeclared_event_does_not_cancel if {
+	profile(data.fixtures.push_guard_on_pull_request_workflow) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_an_event_test_with_the_event_name_first_cancels if {
+	count(findings(data.fixtures.reversed_event_test_cancels)) == 0
+}
+
+test_a_job_event_guard_is_judged_against_the_declared_events if {
+	profile(data.fixtures.job_push_guard_does_not_cancel) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 test_a_disabled_job_needs_no_concurrency if {
 	count(findings(data.fixtures.disabled_job_only)) == 0
 }
