@@ -30,15 +30,15 @@ PR_NUMBER_MARKERS := {"github.event.pull_request.number", "github.head_ref"}
 # strings whole rather than stopping at the first `}`.
 EXPRESSION_PATTERN := `\$\{\{((?:[^'}]*|'[^']*')*)\}\}`
 
-# Values that change between pushes to the same pull request. A group built
-# from one of them never matches the previous push's run, so nothing is
-# superseded. `github.run_attempt` is deliberately absent: it is 1 on the first
-# attempt of every run, so a group carrying it still matches the previous
-# push's run. `github.sha` is the merge commit for a `pull_request` run, which
-# changes with every push.
+# Values that separate runs of the same pull request. A group built from one of
+# them does not match a run that ought to be superseded. `github.sha` is the
+# merge commit of a `pull_request` run, which changes with every push.
+# `github.run_attempt` separates a re-run from the next push's first attempt,
+# so an older run that was re-run is left holding a slot nobody will use.
 RUN_VARYING_MARKERS := {
 	"github.run_id",
 	"github.run_number",
+	"github.run_attempt",
 	"github.sha",
 	"github.event.pull_request.head.sha",
 }
@@ -301,19 +301,33 @@ unquoted_expression_text(text) := concat("", expression_bodies(text))
 # branch, so every branch is a candidate value for the group.
 expression_branches(body) := [trim_space(branch) | some branch in split(body, "||")]
 
-# A marker that is compared, as in `github.event.pull_request.number > 0`,
-# renders as a boolean: every pull request produces the same value, so the
-# group does not carry the identity the marker spells.
+# A marker that is compared, as in `github.event.pull_request.number > 0` or
+# `0 < github.event.pull_request.number`, renders as a boolean: every pull
+# request produces the same value, so the group does not carry the identity the
+# marker spells. Either side of the marker may hold the operator.
 marker_is_compared(text, marker) if {
 	some index, following in split(lower(text), marker)
 	index > 0
 	follows_comparison(following)
 }
 
+marker_is_compared(text, marker) if {
+	parts := split(lower(text), marker)
+	some index, preceding in parts
+	index + 1 < count(parts)
+	precedes_comparison(preceding)
+}
+
 follows_comparison(text) if {
 	trimmed := trim_left(text, " \t")
 	some operator in {"==", "!=", ">=", "<=", ">", "<"}
 	startswith(trimmed, operator)
+}
+
+precedes_comparison(text) if {
+	trimmed := trim_right(text, " \t(")
+	some operator in {"==", "!=", ">=", "<=", ">", "<"}
+	endswith(trimmed, operator)
 }
 
 mentions_pull_request(text) if {
@@ -408,18 +422,23 @@ job_cancels(job) if {
 	concurrency_cancels(job_concurrency(job))
 }
 
-# The marker only names the pull request when GitHub evaluates it. A group
-# that spells the marker as literal text, such as `ci-github.head_ref`, is a
-# constant, so every pull request shares it and cancels the others. Match the
-# marker only inside the unquoted part of a `${{ ... }}` expression; inside
-# quotes it is a string literal, as in `${{ 'github.head_ref' }}`. A marker
-# used as a comparison operand is also excluded, because the comparison
-# renders as a boolean rather than as the pull request's identity.
+# The marker only names the pull request when GitHub evaluates it, and only in
+# the branch GitHub selects. A group that spells the marker as literal text,
+# such as `ci-github.head_ref`, is a constant, so every pull request shares it
+# and cancels the others. Match the marker only inside the unquoted part of a
+# `${{ ... }}` expression; inside quotes it is a string literal, as in
+# `${{ 'github.head_ref' }}`. A marker used as a comparison operand is also
+# excluded, because the comparison renders as a boolean rather than as the pull
+# request's identity. Finally, the first `||` branch is the one a pull request
+# selects, so a marker that appears only in a constant-first fallback, as in
+# `${{ 'ci' || github.head_ref }}`, does not name anything.
 group_names_pull_request(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	mentions_pull_request(unquoted_expression_text(group))
+	some body in expression_bodies(group)
+	branches := expression_branches(body)
+	mentions_pull_request(branches[0])
 }
 
 # A missing `if` key is undefined rather than null, and an undefined

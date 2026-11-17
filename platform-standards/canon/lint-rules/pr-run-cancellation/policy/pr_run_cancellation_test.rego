@@ -173,10 +173,10 @@ test_a_head_sha_group_is_noncompliant if {
 	profile(data.fixtures.head_sha_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
-# `github.run_attempt` is 1 on the first attempt of every run, so a group
-# carrying it still matches the previous push's run.
-test_a_run_attempt_group_still_cancels if {
-	count(findings(data.fixtures.run_attempt_group)) == 0
+# A re-run's attempt number differs from the next push's first attempt, so a
+# superseded re-run is left holding a slot.
+test_a_run_attempt_group_does_not_cancel_a_superseded_rerun if {
+	profile(data.fixtures.run_attempt_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
 # GitHub documents this shape for cancelling pull-request runs without
@@ -194,6 +194,20 @@ test_a_run_id_before_the_pull_request_branch_does_not_cancel if {
 # group even though the marker is evaluated.
 test_a_compared_marker_does_not_name_the_pull_request if {
 	profile(data.fixtures.compared_marker_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_reversed_comparison_does_not_name_the_pull_request if {
+	profile(data.fixtures.reversed_comparison_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_parenthesized_comparison_does_not_name_the_pull_request if {
+	profile(data.fixtures.parenthesized_comparison_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# The constant first branch is the one GitHub selects, so a marker that appears
+# only in the fallback is part of a constant group.
+test_a_marker_only_in_a_constant_first_fallback_is_noncompliant if {
+	profile(data.fixtures.constant_first_fallback) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
 test_a_push_only_workflow_is_not_audited if {

@@ -434,7 +434,11 @@ def _load_workflow(
         return fact
     try:
         parsed: object = _yaml.load(text)
-    except YAMLError as error:
+    except (YAMLError, ValueError) as error:
+        # An out-of-range timestamp scalar, such as `2026-02-30`, raises
+        # `ValueError` from the safe loader's constructor rather than a
+        # `YAMLError`. It is still a defect in this file's content, so it is
+        # reported for this workflow instead of aborting the whole audit.
         fact["error"] = f"invalid YAML: {error}"
         return fact
     if not isinstance(parsed, dict):
