@@ -1206,7 +1206,7 @@
           "parsed": {
             "concurrency": {
               "cancel-in-progress": true,
-              "group": "ci-${{ format('{0}', format('{1}', github.head_ref)) }}"
+              "group": "ci-${{ format('{0}', format('{0}', github.head_ref)) }}"
             },
             "jobs": {
               "test": {
