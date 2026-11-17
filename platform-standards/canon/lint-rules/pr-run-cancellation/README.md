@@ -50,17 +50,20 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   `github.event_name` test cancels for the events that test selects and leaves
   the others running, so a `pull_request_target`-only workflow guarded with
   `github.event_name == 'pull_request'` is reported. A workflow-level block
-  covers every job. A job that sets literal `if: false` is skipped, so it needs
-  no block. A reusable-workflow caller job (`uses:`) is judged by its own
-  `concurrency`, not by the jobs inside the called workflow, because those jobs
-  are not in this document. One finding per workflow, naming every uncovered
-  job. A block whose group carries a value that separates runs of the same pull
-  request — `github.run_id`, `github.run_number`, `github.run_attempt`,
-  `github.sha` or `github.event.pull_request.head.sha` — does not cancel the
-  run that ought to be superseded. The next push's first attempt never shares a
-  group containing a per-run value, and a group containing the attempt number
-  leaves an older run that was re-run untouched. Such a value only counts where
-  the expression renders it: the third argument of
+  covers every job, and covering every declared event may be split between the
+  levels: a workflow block that cancels `pull_request` runs and a job block
+  that cancels `pull_request_target` runs cover that job for both. A job that
+  sets literal `if: false` is skipped, so it needs no block. A
+  reusable-workflow caller job (`uses:`) is judged by its own `concurrency`,
+  not by the jobs inside the called workflow, because those jobs are not in
+  this document. One finding per workflow, naming every uncovered job. A block
+  whose group carries a value that separates runs of the same pull request —
+  `github.run_id`, `github.run_number`, `github.run_attempt`, `github.sha` or
+  `github.event.pull_request.head.sha` — does not cancel the run that ought to
+  be superseded. The next push's first attempt never shares a group containing
+  a per-run value, and a group containing the attempt number leaves an older
+  run that was re-run untouched. Such a value only counts where the expression
+  renders it: the third argument of
   `format('ci-{0}', github.head_ref, github.run_id)` never reaches the group,
   so that group is stable, while the `{1}` in
   `format('ci-{0}-{1}', github.head_ref, github.run_id)` renders it and the
@@ -68,23 +71,29 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   `github['run_id']` is `github.run_id`. The documented
   `github.head_ref || github.run_id` shape is accepted, because a bare
   `github.head_ref` is non-empty on every pull request and so the fallback is
-  never selected. A branch guarded by a `github.event_name` comparison is
-  judged against every pull-request event the workflow declares:
+  never selected. A left branch that is provably falsy is skipped the same way,
+  so `false || github.head_ref` and `'' || github.head_ref` still select the
+  marker, while a non-empty literal such as `'ci'` does not. A branch guarded
+  by a `github.event_name` comparison is judged against every pull-request
+  event the workflow declares:
   `github.event_name == 'pull_request' && github.head_ref` is selected on a
   `pull_request` run, while
   `github.event_name == 'push' && github.head_ref || 'ci'` falls through to the
   constant `ci`, and `github.event_name == 'push' && github.head_ref` alone
   renders a boolean. A workflow that also declares `pull_request_target`
   therefore fails the `pull_request`-guarded shape, because that guard selects
-  `ci` on the other event's run. Any other `&&` chain is judged by what the
-  rule can prove about every guard in it: a literal `false` anywhere makes the
-  whole conjunction a constant, so `github.ref && false && github.head_ref`
-  leaves the marker unselected, while a reference GitHub always resolves to a
-  non-empty string (such as `github.ref`, `github.sha` or `github.event_name`)
-  selects the value after it, as in `github.ref && github.head_ref`. A guard
-  the rule cannot prove truthy or falsy, such as
-  `github.event.pull_request.title && github.head_ref` or
-  `github.ref == 'refs/heads/main' && github.head_ref`, leaves the group
+  `ci` on the other event's run. A guard that excludes every declared event
+  skips the branch it protects, so
+  `github.event_name == 'push' && github.head_ref || github.run_id` on a
+  `pull_request` workflow selects the run id and the group varies. Any other
+  `&&` chain is judged by what the rule can prove about every guard in it: a
+  literal `false` anywhere makes the whole conjunction a constant, so
+  `github.ref && false && github.head_ref` leaves the marker unselected, while
+  a reference GitHub always resolves to a non-empty string (such as
+  `github.ref`, `github.sha` or `github.event_name`) selects the value after
+  it, as in `github.ref && github.head_ref`. A guard the rule cannot prove
+  truthy or falsy, such as `github.event.pull_request.title && github.head_ref`
+  or `github.ref == 'refs/heads/main' && github.head_ref`, leaves the group
   indeterminate. A `||` inside a call argument is that argument's own fallback,
   not a branch of the whole group, so a run value beside it stays in the group;
   when such a nested fallback sits beside a run value the expression renders,
@@ -130,12 +139,17 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   `${{ github.event_name == 'pull_request' && false && github.head_ref }}` both
   render `false`, so neither names the pull request, while a guard the rule
   cannot prove truthy, such as `github.event.pull_request.title`, makes the
-  value behind it indeterminate. `fromJSON` parses its argument rather than
-  passing it through, so a marker inside one does not establish the identity: a
-  branch name that is a JSON literal changes value, and `1` and `1e0` both
-  parse to the number `1`, which would put two pull requests in one group.
-  `format` is judged by its template: the marker names the pull request only
-  when its argument position is rendered by a matching `{N}` placeholder, so
+  value behind it indeterminate. Every argument enclosing the marker is read,
+  so an outer guard also decides an inner call:
+  `${{ format('{0}', false && format('{0}', github.head_ref)) }}` renders
+  `false`, while
+  `${{ format('{0}', github.ref && format('{0}', github.head_ref)) }}` renders
+  the marker. `fromJSON` parses its argument rather than passing it through, so
+  a marker inside one does not establish the identity: a branch name that is a
+  JSON literal changes value, and `1` and `1e0` both parse to the number `1`,
+  which would put two pull requests in one group. `format` is judged by its
+  template: the marker names the pull request only when its argument position
+  is rendered by a matching `{N}` placeholder, so
   `${{ format('ci-{0}', github.head_ref) }}` counts and
   `${{ format('ci', github.head_ref) }}` does not. `join` is judged the same
   way: a marker in its array argument is joined into the result, but a marker
@@ -146,7 +160,10 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   reported indeterminate rather than as a pass or a defect. Every branch a pull
   request can select must name it, so a marker that appears only in a fallback,
   as in `${{ 'ci' || github.head_ref }}` or
-  `${{ format('{0}', 'ci' || github.head_ref) }}`, does not count, and a
+  `${{ format('{0}', 'ci' || github.head_ref) }}`, does not count, and a branch
+  whose value is provably falsy is skipped, so
+  `${{ false || github.head_ref }}`, `${{ '' || github.head_ref }}` and
+  `${{ format('{0}', false || github.head_ref) }}` name the pull request. A
   fallback the pull request can reach, such as the `'ci'` branch of
   `${{ github.event_name == 'push' && github.head_ref || 'ci' }}`, is a defect.
   A branch after one the pull request always supplies cannot be selected, which
@@ -260,22 +277,23 @@ rule does not recognize as a function call is not detected. It also does not
 count arguments from their contents, so a marker in a call's array argument is
 taken to survive. Selection is judged by position and by the guards the rule
 can evaluate: the text before a `||` is treated as the value GitHub takes in
-that argument, a branch is reachable while an earlier branch may be falsy, and
-an `github.event_name` comparison on a branch is decided against each
-pull-request event the workflow declares. A fallback is ignored when it cannot
-be reached, as in `github.head_ref || github.run_id`, or when the guard
-protecting it holds; a guard the rule cannot evaluate, such as a comparison
-against `github.ref`, is reported indeterminate. A marker that is the value of a
-`&&` chain is taken to be selected when every guard before it is truthy: a
-literal `false` anywhere makes the conjunction a constant, the literal `true`
-and the references GitHub always resolves to a non-empty string select the
-value, and any other guard is reported indeterminate. Parentheses are counted
-to keep a fallback nested in a call argument out of the surrounding branch and
-out of later arguments; a nested fallback beside a value that changes between
-runs, and that the expression renders, is reported indeterminate rather than
-judged. Varying-value detection covers the five values named above, and only
-where an enclosing call does not discard them; a group made unique some other
-way is not detected.
+that argument unless it is provably falsy, a branch is reachable while an
+earlier branch may be falsy, and an `github.event_name` comparison on a branch
+is decided against each pull-request event the workflow declares. Guards in
+every call argument enclosing the marker are read, not only top-level ones. A
+fallback is ignored when it cannot be reached, as in
+`github.head_ref || github.run_id`, or when the guard protecting it holds; a
+guard the rule cannot evaluate, such as a comparison against `github.ref`, is
+reported indeterminate. A marker that is the value of a `&&` chain is taken to
+be selected when every guard before it is truthy: a literal `false` anywhere
+makes the conjunction a constant, the literal `true` and the references GitHub
+always resolves to a non-empty string select the value, and any other guard is
+reported indeterminate. Parentheses are counted to keep a fallback nested in a
+call argument out of the surrounding branch and out of later arguments; a
+nested fallback beside a value that changes between runs, and that the
+expression renders, is reported indeterminate rather than judged. Varying-value
+detection covers the five values named above, and only where an enclosing call
+does not discard them; a group made unique some other way is not detected.
 
 ## Evidence
 

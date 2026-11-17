@@ -392,9 +392,11 @@ is_expression(value) if {
 # an expression is not evaluated and does not contribute. A quoted string is a
 # literal, so its text is not a reference and cannot name the pull request; it
 # survives only as the `{N}` placeholders a `format` template renders, wrapped
-# in quotes so a literal template can be told from a computed one. The one
-# exception is the event name a `github.event_name` comparison guards on, kept
-# as `@name@` so that guard can be evaluated.
+# in quotes so a literal template can be told from a computed one. A literal
+# with no placeholders keeps a marker of its own so it stays distinct from the
+# empty literal, which is falsy. The one exception is the event name a
+# `github.event_name` comparison guards on, kept as `@name@` so that guard can
+# be evaluated.
 expression_bodies(text) := [body |
 	some match in regex.find_all_string_submatch_n(EXPRESSION_PATTERN, text, -1)
 	normalised := regex.replace(match[1], STATIC_INDEX_PATTERN, ".$1")
@@ -411,7 +413,28 @@ expression_bodies(text) := [body |
 
 segment_view(index, part) := part if index % 2 == 0
 
-segment_view(index, part) := sprintf("\"%s\"", [literal_placeholders(part)]) if index % 2 == 1
+segment_view(index, part) := sprintf("\"%s\"", [literal_placeholders(part)]) if {
+	index % 2 == 1
+	literal_placeholders(part) != ""
+}
+
+# A span with no placeholders still has to stay distinct from the empty
+# literal: `'ci' || github.head_ref` renders `ci` for every pull request, while
+# `'' || github.head_ref` always reaches the fallback. Erasing both to `""`
+# would make the rule read a constant branch as falsy and accept a group that
+# shares one value across every pull request.
+ERASED_LITERAL := "*"
+
+segment_view(index, part) := sprintf("\"%s\"", [ERASED_LITERAL]) if {
+	index % 2 == 1
+	literal_placeholders(part) == ""
+	part != ""
+}
+
+segment_view(index, part) := `""` if {
+	index % 2 == 1
+	part == ""
+}
 
 # Only the replacement placeholders survive, so literal text cannot look like an
 # evaluated reference. `{{` and `}}` are escaped braces, so they must go before
@@ -791,6 +814,48 @@ depth_drops_below(text, after, depth) if {
 separator_reaches_marker(text, after, depth) if {
 	not comma_between_at_depth(text, after, depth)
 	not depth_drops_below(text, after, depth)
+	not separator_branch_provably_falsy(text, after, depth)
+}
+
+# A `||` whose own left branch is provably falsy does not cut the marker off:
+# GitHub moves on to the next branch, so `false || github.head_ref` renders the
+# marker while `'ci' || github.head_ref` renders `ci` for every pull request.
+separator_branch_provably_falsy(text, after, depth) if {
+	start := separator_branch_start(text, after, depth)
+	branch := substring(text, start, after - start)
+	branch_provably_falsy(branch)
+}
+
+separator_branch_start(text, position, depth) := start if {
+	starts := separator_branch_starts(text, position, depth)
+	count(starts) > 0
+	start := max(starts)
+}
+
+separator_branch_start(text, position, depth) := 0 if {
+	count(separator_branch_starts(text, position, depth)) == 0
+}
+
+# Where the branch immediately left of a separator begins: after the previous
+# separator, comma or opening parenthesis at that separator's own depth, so a
+# nested call's argument list is not read as part of the branch.
+separator_branch_starts(text, position, depth) := starts if {
+	chars := characters(text)
+	boundaries := {start |
+		some index in numbers.range(0, position - 1)
+		chars[index] in {"(", ","}
+		depth_at(text, index + 1) == depth
+		start := index + 1
+	}
+	separators := {start |
+		some index in numbers.range(0, position - 1)
+		index + 1 < position
+		chars[index] == "|"
+		chars[index + 1] == "|"
+		depth_at(text, index) == depth
+		start := index + 2
+	}
+	starts := boundaries | separators
 }
 
 marker_is_selected(text) if {
@@ -807,15 +872,25 @@ marker_is_selected(text) if {
 }
 
 # A `&&` chain inside a call argument is not reached by the branch-level
-# conjunction checks, because those split only at the top level. The guards in
-# the occurrence's own argument still decide whether the marker is the value
-# GitHub takes: `format('{0}', false && github.head_ref)` renders `false`, so
-# the marker names nothing. Top-level guards are left to the branch rules,
-# which judge them against each declared event.
+# conjunction checks, because those split only at the top level. The guards of
+# every argument the occurrence sits in decide whether the marker is the value
+# GitHub takes: `format('{0}', false && github.head_ref)` renders `false`, and
+# so does the outer argument of
+# `format('{0}', false && format('{0}', github.head_ref))`. Top-level guards are
+# left to the branch rules, which judge them against each declared event.
 argument_guards(before) := guards if {
 	chars := characters(before)
-	depth_at(before, count(chars)) > 0
-	segments := conjunction_segments(argument_prefix(before))
+	depth := depth_at(before, count(chars))
+	depth > 0
+	guards := [guard |
+		some level in numbers.range(1, depth)
+		some guard in argument_guards_at(before, level)
+	]
+	count(guards) > 0
+}
+
+argument_guards_at(before, depth) := guards if {
+	segments := conjunction_segments(argument_prefix_at(before, depth))
 	count(segments) > 1
 	guards := array.slice(segments, 0, count(segments) - 1)
 }
@@ -831,35 +906,29 @@ argument_conjunction_holds(before) if {
 	}
 }
 
-argument_conjunction_falsy(before) if {
-	some guard in argument_guards(before)
-	lower(guard) in FALSY_LITERALS
-}
-
 argument_conjunction_unsettled(before) if {
 	some guard in argument_guards(before)
 	not guard_proven_truthy(guard)
 	not lower(guard) in FALSY_LITERALS
 }
 
-# The text of the argument the occurrence sits in, from its opening boundary to
-# the occurrence, so that a `&&` in a nested call or in another argument is not
-# read as a guard on this one.
-argument_prefix(before) := substring(before, start, count(before) - start) if {
-	start := argument_start(before)
+# The text of one argument the occurrence sits in, from that argument's opening
+# boundary to the occurrence, so that a `&&` in a nested call or in another
+# argument is not read as a guard on this one.
+argument_prefix_at(before, depth) := substring(before, start, count(before) - start) if {
+	start := argument_start_at(before, depth)
 }
 
-argument_start(before) := start if {
-	boundaries := argument_boundaries(before)
+argument_start_at(before, depth) := start if {
+	boundaries := argument_boundaries_at(before, depth)
 	count(boundaries) > 0
 	start := max(boundaries)
 }
 
-argument_start(before) := 0 if count(argument_boundaries(before)) == 0
+argument_start_at(before, depth) := 0 if count(argument_boundaries_at(before, depth)) == 0
 
-argument_boundaries(before) := boundaries if {
+argument_boundaries_at(before, depth) := boundaries if {
 	chars := characters(before)
-	depth := depth_at(before, count(chars))
 	boundaries := {start |
 		some index in numbers.range(0, count(chars) - 1)
 		chars[index] in {"(", ","}
@@ -1031,90 +1100,76 @@ branch_stability(branch) := "unstable" if {
 	not branch_is_unclassifiable(branch)
 }
 
-# The shortcut that ignores fallbacks is only sound when the selected head is
-# the marker itself: `github.head_ref` is non-empty for every pull request, so
-# the fallback never renders. A head that merely contains the marker, such as
-# `github.event_name == 'push' && github.head_ref`, can be falsy for a pull
-# request, and then the fallback is what the group carries.
-head_is_marker_reference(text) if lower(trim_space(text)) in PR_NUMBER_MARKERS
-
-# A single expression has no fallback to weigh, so the branch decides alone.
-expression_stability(body) := outcome if {
-	branches := expression_branches(body)
-	count(branches) == 1
-	outcome := branch_stability(branches[0])
-}
-
-# In the documented `github.head_ref || github.run_id` shape the pull-request
-# branch is selected, and the run-id fallback only applies to pushes, which
-# this rule does not audit.
-expression_stability(body) := outcome if {
-	branches := expression_branches(body)
-	count(branches) > 1
-	head := selected_head(branches[0])
-	head_is_marker_reference(head)
-	outcome := branch_stability(branches[0])
-}
-
-# A head that carries the pull request inside a larger expression does not
-# prove the fallbacks go unused, so every branch is examined. When one of them
-# varies between runs the group cannot be settled from the text; it is reported
-# as unclassifiable rather than called a defect or a pass.
-expression_stability(body) := "stable" if {
-	branches := expression_branches(body)
-	count(branches) > 1
-	head := selected_head(branches[0])
-	not head_is_marker_reference(head)
-	mentions_pull_request(head)
-	every branch in branches {
-		branch_is_stable(branch)
+# A `||` branch the declared event can reach is a candidate for the value
+# GitHub selects. One whose own event test excludes the event renders a
+# constant instead, and one whose value is provably falsy is skipped, so
+# neither carries anything into the group.
+branch_selected_at(branches, index, event) if {
+	not event_guard_excludes_at(branches[index], event)
+	not branch_provably_falsy(branches[index])
+	every earlier in array.slice(branches, 0, index) {
+		branch_may_be_falsy_at(earlier, event)
 	}
 }
 
-expression_stability(body) := "unclassifiable" if {
-	branches := expression_branches(body)
-	count(branches) > 1
-	head := selected_head(branches[0])
-	not head_is_marker_reference(head)
-	mentions_pull_request(head)
-	some branch in branches
-	not branch_is_stable(branch)
+# An earlier branch whose guard the rule cannot decide may or may not supply a
+# value first, so this branch may or may not render. A varying value there
+# could reach the group, which the text alone cannot settle.
+branch_conditionally_selected_at(branches, index, event) if {
+	branch_selected_at(branches, index, event)
+	some earlier in array.slice(branches, 0, index)
+	not branch_definitely_falsy_at(earlier, event)
 }
 
-# With no pull request in the head, any branch may be selected, so every one
-# must be stable.
-expression_stability(body) := "stable" if {
+branch_definitely_falsy_at(branch, event) if event_guard_excludes_at(branch, event)
+
+branch_definitely_falsy_at(branch, _) if branch_provably_falsy(branch)
+
+# What a branch contributes for one event: a branch the event cannot select is
+# stable because it renders nothing, a conditionally selected branch is stable
+# only when its own text carries nothing that varies between runs, and a
+# definitely selected branch is judged on its text.
+branch_stability_at(branches, index, event) := "stable" if {
+	not branch_selected_at(branches, index, event)
+}
+
+branch_stability_at(branches, index, event) := outcome if {
+	branch_selected_at(branches, index, event)
+	not branch_conditionally_selected_at(branches, index, event)
+	outcome := branch_stability(branches[index])
+}
+
+branch_stability_at(branches, index, event) := "stable" if {
+	branch_conditionally_selected_at(branches, index, event)
+	branch_is_stable(branches[index])
+}
+
+branch_stability_at(branches, index, event) := "unclassifiable" if {
+	branch_conditionally_selected_at(branches, index, event)
+	not branch_is_stable(branches[index])
+}
+
+# Each expression is judged on its branches for the event at hand:
+# `github.event_name == 'push' && github.run_id` renders a constant on a
+# `pull_request` run, and a value that changes every time on a run the test
+# selects.
+expression_stability_at(body, event) := "unclassifiable" if {
 	branches := expression_branches(body)
-	count(branches) > 1
-	head := selected_head(branches[0])
-	not head_is_marker_reference(head)
-	not mentions_pull_request(head)
-	every branch in branches {
-		branch_is_stable(branch)
+	some index in numbers.range(0, count(branches) - 1)
+	branch_stability_at(branches, index, event) == "unclassifiable"
+}
+
+expression_stability_at(body, event) := "stable" if {
+	branches := expression_branches(body)
+	every index in numbers.range(0, count(branches) - 1) {
+		branch_stability_at(branches, index, event) == "stable"
 	}
 }
 
-expression_stability(body) := "unclassifiable" if {
+expression_stability_at(body, event) := "unstable" if {
 	branches := expression_branches(body)
-	count(branches) > 1
-	head := selected_head(branches[0])
-	not head_is_marker_reference(head)
-	not mentions_pull_request(head)
-	some branch in branches
-	branch_is_unclassifiable(branch)
-}
-
-expression_stability(body) := "unstable" if {
-	branches := expression_branches(body)
-	count(branches) > 1
-	head := selected_head(branches[0])
-	not head_is_marker_reference(head)
-	not mentions_pull_request(head)
-	some branch in branches
-	not branch_is_stable(branch)
-	every branch in branches {
-		not branch_is_unclassifiable(branch)
-	}
+	some index in numbers.range(0, count(branches) - 1)
+	branch_stability_at(branches, index, event) == "unstable"
 }
 
 # A group whose expressions all keep their value between pushes to one pull
@@ -1123,51 +1178,54 @@ expression_stability(body) := "unstable" if {
 # previous push's run, so it does not cancel in any useful sense, whatever
 # `cancel-in-progress` says. A plain string is a constant group: it never
 # varies, so RC-002 judges whether it names the pull request.
-group_stability(value) := "stable" if {
+group_stability_at(value, event) := "stable" if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	every body in expression_bodies(group) {
-		expression_stability(body) == "stable"
+		expression_stability_at(body, event) == "stable"
 	}
 }
 
-group_stability(value) := "unclassifiable" if {
+group_stability_at(value, event) := "unclassifiable" if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	some body in expression_bodies(group)
-	expression_stability(body) == "unclassifiable"
+	expression_stability_at(body, event) == "unclassifiable"
 }
 
-group_stability(value) := "unstable" if {
+group_stability_at(value, event) := "unstable" if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	every body in expression_bodies(group) {
-		expression_stability(body) != "unclassifiable"
+		expression_stability_at(body, event) != "unclassifiable"
 	}
 	some body in expression_bodies(group)
-	expression_stability(body) == "unstable"
+	expression_stability_at(body, event) == "unstable"
 }
 
-concurrency_cancels(value, events) if {
+# GitHub applies workflow-level and job-level concurrency as separate
+# controls, so a job is covered for an event when either level cancels that
+# event's superseded run. Coverage is still counted per event: a workflow
+# block that cancels only `pull_request` says nothing about a
+# `pull_request_target` run of the same workflow.
+concurrency_cancels_at(value, event) if {
 	is_object(value)
 	"cancel-in-progress" in object.keys(value)
-	every event in events {
-		cancels_in_progress_at(value["cancel-in-progress"], event)
-	}
-	group_stability(value) == "stable"
+	cancels_in_progress_at(value["cancel-in-progress"], event)
+	group_stability_at(value, event) == "stable"
 }
 
-workflow_cancels(workflow) if {
+workflow_cancels_at(workflow, event) if {
 	workflow_has_concurrency(workflow)
-	concurrency_cancels(workflow_concurrency(workflow), pr_events(workflow))
+	concurrency_cancels_at(workflow_concurrency(workflow), event)
 }
 
-job_cancels(job, events) if {
+job_cancels_at(job, event) if {
 	job_has_concurrency(job)
-	concurrency_cancels(job_concurrency(job), events)
+	concurrency_cancels_at(job_concurrency(job), event)
 }
 
 # The events on which a block cancels. A block whose event test excludes an
@@ -1175,28 +1233,15 @@ job_cancels(job, events) if {
 # the events it does cancel; a block that never cancels is left to RC-001.
 cancelling_events(value, events) := {event |
 	some event in events
-	cancels_in_progress_at(value["cancel-in-progress"], event)
-} if {
-	is_object(value)
-	"cancel-in-progress" in object.keys(value)
-}
-
-concurrency_cancels_somewhere(value, events) if {
-	is_object(value)
-	"cancel-in-progress" in object.keys(value)
-	some event in events
-	cancels_in_progress_at(value["cancel-in-progress"], event)
-	group_stability(value) == "stable"
+	concurrency_cancels_at(value, event)
 }
 
 workflow_cancels_somewhere(workflow) if {
-	workflow_has_concurrency(workflow)
-	concurrency_cancels_somewhere(workflow_concurrency(workflow), pr_events(workflow))
+	count(cancelling_events(workflow_concurrency(workflow), pr_events(workflow))) > 0
 }
 
 job_cancels_somewhere(job, events) if {
-	job_has_concurrency(job)
-	concurrency_cancels_somewhere(job_concurrency(job), events)
+	count(cancelling_events(job_concurrency(job), events)) > 0
 }
 
 # A `github.event_name` guard decides whether the `&&` branch it protects can
@@ -1273,18 +1318,12 @@ branch_constant_literal(branch) if {
 	trimmed != `""`
 }
 
-branch_reachable_at(branches, index, event) if {
-	every earlier in array.slice(branches, 0, index) {
-		branch_may_be_falsy_at(earlier, event)
-	}
-}
-
 # A branch excluded by its own guard supplies a falsy value, so the chain moves
 # past it and its text is never the group's value. Every other branch the chain
-# can reach is a candidate for the value GitHub selects.
+# can reach is a candidate for the value GitHub selects, which is the same
+# question stability asks of a branch.
 branch_value_reachable_at(branches, index, event) if {
-	not event_guard_excludes_at(branches[index], event)
-	branch_reachable_at(branches, index, event)
+	branch_selected_at(branches, index, event)
 }
 
 branch_value_reachable(branches, event) if {
@@ -1344,6 +1383,16 @@ branch_conjunction_falsy(branch) if {
 	some guard in conjunction.guards
 	lower(guard) in FALSY_LITERALS
 }
+
+# A value GitHub is known to treat as falsy, so a `||` carrying it moves on to
+# the next branch instead of rendering it.
+branch_provably_falsy(branch) if {
+	lower(trim_space(branch)) in FALSY_LITERALS
+}
+
+branch_provably_falsy(branch) if trim_space(branch) == `""`
+
+branch_provably_falsy(branch) if branch_conjunction_falsy(branch)
 
 # A chain with a guard the rule cannot prove truthy may leave the value after
 # it unselected. When that value names the pull request, whether the group
@@ -1527,12 +1576,15 @@ concurrency_shapes_readable(workflow) if {
 
 workflow_group_unclassifiable(workflow) if {
 	workflow_has_concurrency(workflow)
-	group_stability(workflow_concurrency(workflow)) == "unclassifiable"
+	some event in pr_events(workflow)
+	group_stability_at(workflow_concurrency(workflow), event) == "unclassifiable"
 }
 
 unclassifiable_job_groups(workflow) := {name |
 	some name in object.keys(workflow_jobs(workflow))
-	group_stability(job_concurrency(workflow_jobs(workflow)[name])) == "unclassifiable"
+	job := workflow_jobs(workflow)[name]
+	some event in pr_events(workflow)
+	group_stability_at(job_concurrency(job), event) == "unclassifiable"
 } if {
 	concurrency_shapes_readable(workflow)
 }
@@ -1550,12 +1602,18 @@ concurrency_evaluable(workflow) if {
 	not concurrency_unclassifiable(workflow)
 }
 
+# A job is covered when the workflow block or the job's own block cancels a
+# given event's superseded run, because GitHub applies both levels and either
+# one stops the work. The two levels are not interchangeable across events: a
+# workflow block that cancels only `pull_request` leaves the job uncovered on
+# a `pull_request_target` run unless the job block cancels that event too.
 uncovered_jobs(workflow) := {name |
 	some name in object.keys(workflow_jobs(workflow))
 	job := workflow_jobs(workflow)[name]
 	not job_disabled(job)
-	not workflow_cancels(workflow)
-	not job_cancels(job, pr_events(workflow))
+	some event in pr_events(workflow)
+	not workflow_cancels_at(workflow, event)
+	not job_cancels_at(job, event)
 } if {
 	concurrency_evaluable(workflow)
 }

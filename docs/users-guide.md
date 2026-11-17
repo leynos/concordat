@@ -995,7 +995,10 @@ pull request can select must name the pull request: the documented
 `github.head_ref || github.run_id` shape is accepted because `github.head_ref`
 is non-empty on a pull request, so the fallback is never selected, and
 `github.head_ref || fromJSON(github.head_ref)` is accepted for the same reason.
-An unrecognized call in a fallback the pull request can reach, such as the
+A branch that is provably falsy is skipped too, so `false || github.head_ref`,
+`'' || github.head_ref` and `format('{0}', false || github.head_ref)` still
+name the pull request, while `'ci' || github.head_ref` does not. An
+unrecognized call in a fallback the pull request can reach, such as the
 `fromJSON` branch of
 `github.event_name == 'push' && github.head_ref || fromJSON(github.head_ref)`,
 leaves the identity unreadable and is indeterminate. Each declared event is
@@ -1008,28 +1011,36 @@ is selected on a `pull_request` run, while
 constant `ci`, and `github.event_name == 'push' && github.head_ref` alone
 renders a boolean. A workflow that also declares `pull_request_target`
 therefore fails the `pull_request`-guarded shape, because that guard selects
-`ci` on the other event's run. Any other `&&` chain is judged by what the rule
-can prove about every guard in it: a literal `false` anywhere makes the whole
-conjunction a constant, so `github.ref && false && github.head_ref` does not
-name the pull request, while a reference GitHub always resolves to a non-empty
-string (such as `github.ref`, `github.sha` or `github.event_name`) selects the
-value after it, as `github.ref && github.head_ref` does. A guard the rule
-cannot prove truthy or falsy, such as
-`github.event.pull_request.title && github.head_ref` or
+`ci` on the other event's run. A guard that excludes every declared event skips
+the branch it protects, so
+`github.event_name == 'push' && github.head_ref || github.run_id` selects the
+run id on a `pull_request` workflow and the group varies. Any other `&&` chain
+is judged by what the rule can prove about every guard in it: a literal `false`
+anywhere makes the whole conjunction a constant, so
+`github.ref && false && github.head_ref` does not name the pull request, while
+a reference GitHub always resolves to a non-empty string (such as `github.ref`,
+`github.sha` or `github.event_name`) selects the value after it, as
+`github.ref && github.head_ref` does. A guard the rule cannot prove truthy or
+falsy, such as `github.event.pull_request.title && github.head_ref` or
 `github.ref == 'refs/heads/main' && github.head_ref`, makes the group
 indeterminate. The chain is read in full wherever it sits, including inside a
 call argument, so `format('{0}', false && github.head_ref)` names nothing, and
 behind an event guard, so
 `github.event_name == 'pull_request' && false && github.head_ref` names nothing
-either. A `||` nested inside a call argument is that argument's own fallback,
-so a value that changes between runs beside it leaves the group unreadable, and
+either. Every enclosing argument is read, so an outer guard also decides an
+inner call: `format('{0}', false && format('{0}', github.head_ref))` names
+nothing, while `format('{0}', github.ref && format('{0}', github.head_ref))`
+does. A `||` nested inside a call argument is that argument's own fallback, so
+a value that changes between runs beside it leaves the group unreadable, and
 the workflow is reported indeterminate. That fallback does not reach a later
 argument, so `format('{0}-{1}', github.workflow || 'ci', github.head_ref)`
 still names the pull request. A block is judged on the events it actually
 cancels, so a conditional block with a constant group is reported even though
 RC-001 also fires for the events it leaves alone. Workflow-level and job-level
-groups are checked independently, because GitHub applies both. The reference
-shape is:
+groups are checked independently, because GitHub applies both. A job is covered
+for an event when either level cancels it, so a workflow block that cancels
+`pull_request` runs and a job block that cancels `pull_request_target` runs
+cover that job for both. The reference shape is:
 
 ```yaml
 concurrency:

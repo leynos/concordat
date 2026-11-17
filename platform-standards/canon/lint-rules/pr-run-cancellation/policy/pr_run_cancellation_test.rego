@@ -348,10 +348,11 @@ test_a_fallback_in_a_closed_nested_call_leaves_the_marker_selected if {
 	count(findings(data.fixtures.fallback_in_a_closed_nested_call)) == 0
 }
 
-# The `&&` head is false on a pull request, so the fallback is selected and the
-# group cannot be settled from the text.
-test_an_and_guard_before_the_marker_does_not_prove_the_fallback_is_unused if {
-	profile(data.fixtures.and_guard_then_run_id_fallback) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+# The guard names `push`, which the workflow's only declared event is not, so
+# every pull-request run takes the run-id fallback. A group that changes on
+# every run never shares a value across the runs it should cancel.
+test_an_event_test_that_excludes_every_declared_event_selects_the_fallback if {
+	profile(data.fixtures.and_guard_then_run_id_fallback) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
 test_the_exact_marker_head_still_ignores_the_run_id_fallback if {
@@ -410,6 +411,18 @@ test_a_ref_guard_keeps_the_marker_selected if {
 	count(findings(data.fixtures.ref_guard_then_marker)) == 0
 }
 
+# The guard names an event the workflow does not declare, so no pull-request run
+# reaches the run id it guards and the marker fallback is the group's value.
+test_an_event_test_that_excludes_the_declared_event_keeps_the_marker_selected if {
+	count(findings(data.fixtures.run_id_branch_the_declared_event_excludes)) == 0
+}
+
+# The guard names the declared event, so every pull-request run takes the run id
+# it guards and the next push never joins the group.
+test_an_event_test_that_selects_the_run_id_leaves_the_group_varying if {
+	profile(data.fixtures.run_id_branch_the_declared_event_selects) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 # The workflow also runs on `pull_request_target`, where the `pull_request`
 # guard fails and the constant fallback is selected instead.
 test_a_guard_is_judged_against_each_declared_pull_request_event if {
@@ -418,6 +431,13 @@ test_a_guard_is_judged_against_each_declared_pull_request_event if {
 
 test_a_bare_marker_names_the_pull_request_for_every_declared_event if {
 	count(findings(data.fixtures.head_ref_group_with_both_triggers)) == 0
+}
+
+# GitHub applies the two levels as separate controls, so covering each declared
+# event can be split between them: the workflow block cancels `pull_request`
+# runs and the job block cancels `pull_request_target` runs.
+test_each_level_may_cover_a_different_declared_event if {
+	count(findings(data.fixtures.combined_levels_cover_each_event)) == 0
 }
 
 # Each declared event is judged on its own, so a group can take its identity for
@@ -483,6 +503,19 @@ test_a_run_value_in_an_unselected_fallback_is_compliant if {
 	count(findings(data.fixtures.nested_run_value_in_unselected_fallback)) == 0
 }
 
+# A `||` whose own left branch is provably falsy does not cut the marker off:
+# GitHub moves on to the next branch, so the group still names the pull request.
+test_a_provably_falsy_branch_does_not_cut_the_marker_off if {
+	count(findings(data.fixtures.falsy_branch_before_marker_in_argument)) == 0
+}
+
+# An empty literal is falsy too, and it renders nothing, so the marker after it
+# is the group's value. Erasing every literal to the same text would read this
+# fallback as a constant that the marker never reaches.
+test_an_empty_literal_branch_lets_the_marker_through if {
+	count(findings(data.fixtures.empty_literal_branch_before_marker)) == 0
+}
+
 # `github.head_ref_name` is a different property; GitHub resolves an unknown
 # property to an empty string.
 test_a_property_with_a_marker_prefix_does_not_name_the_pull_request if {
@@ -502,6 +535,19 @@ test_a_reversed_multiline_comparison_does_not_name_the_pull_request if {
 # only in the fallback is part of a constant group.
 test_a_marker_only_in_a_constant_first_fallback_is_noncompliant if {
 	profile(data.fixtures.constant_first_fallback) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A guard in an enclosing argument decides whether the inner call is evaluated,
+# so a literal `false` there leaves the marker unrendered however deeply it is
+# nested.
+test_an_enclosing_argument_guard_with_a_literal_false_leaves_the_marker_unrendered if {
+	profile(data.fixtures.outer_falsy_guard_around_inner_format) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# `github.ref` is non-empty on a pull-request run, so the enclosing guard always
+# selects the inner call and the marker it renders.
+test_an_enclosing_argument_guard_with_a_truthy_value_keeps_the_marker if {
+	count(findings(data.fixtures.outer_truthy_guard_around_inner_format)) == 0
 }
 
 test_a_push_only_workflow_is_not_audited if {
