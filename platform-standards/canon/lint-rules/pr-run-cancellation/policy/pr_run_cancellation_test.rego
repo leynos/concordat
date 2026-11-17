@@ -270,6 +270,13 @@ test_nested_identity_calls_remain_transparent if {
 	count(findings(data.fixtures.nested_identity_calls_group)) == 0
 }
 
+# `fromJSON` parses its argument instead of passing it through, so a
+# JSON-literal branch name such as `1` or `1e0` changes value and two pull
+# requests could share the group. The identity cannot be settled from the text.
+test_a_group_parsed_by_fromjson_is_indeterminate if {
+	profile(data.fixtures.fromjson_group) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
 # A template that renders no replacement index drops its arguments, so the
 # group is constant across pull requests.
 test_a_format_template_that_omits_the_marker_does_not_name_the_pull_request if {

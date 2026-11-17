@@ -35,9 +35,12 @@ EXPRESSION_PATTERN := `\$\{\{((?:[^'}]*|'[^']*')*)\}\}`
 # reference looks like the empty index `github[]`.
 STATIC_INDEX_PATTERN := `\['([A-Za-z_][A-Za-z0-9_]*)'\]`
 
-# `fromJSON` passes its argument through, so a marker inside it still
-# identifies the pull request.
-IDENTITY_FUNCTIONS := {"fromjson"}
+# `fromJSON` is deliberately left out of every set below. It parses its
+# argument, so a marker inside it may not survive: a branch name that is a JSON
+# literal changes value, and `1` and `1e0` both parse to the number 1, which
+# puts two pull requests in one group. Whether the parsed value still names the
+# pull request cannot be read from the text, so an occurrence inside it is
+# reported indeterminate rather than as a pass.
 
 # `format(template, ...)` renders an argument only where the template names its
 # replacement index, as in `format('ci-{0}', github.head_ref)`. A template that
@@ -64,7 +67,7 @@ NON_IDENTITY_FUNCTIONS := {
 	"cancelled",
 }
 
-KNOWN_FUNCTIONS := IDENTITY_FUNCTIONS | TEMPLATE_FUNCTIONS | NON_IDENTITY_FUNCTIONS | FIRST_ARGUMENT_FUNCTIONS
+KNOWN_FUNCTIONS := TEMPLATE_FUNCTIONS | NON_IDENTITY_FUNCTIONS | FIRST_ARGUMENT_FUNCTIONS
 
 # Values that separate runs of the same pull request. A group built from one of
 # them does not match a run that ought to be superseded. `github.sha` is the
@@ -504,8 +507,6 @@ format_link_discards(link) if {
 	link.argument_index > 0
 	not (link.argument_index - 1) in format_placeholders(link.first_argument)
 }
-
-link_carries_value(link) if link.name in IDENTITY_FUNCTIONS
 
 link_carries_value(link) if format_link_carries(link)
 

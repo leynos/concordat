@@ -617,6 +617,33 @@
         }
       ]
     },
+    "fromjson_group": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "ci-${{ fromJSON(github.head_ref) }}"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "head_ref_run_id_fallback": {
       "kind": "policy-input/pr-run-cancellation",
       "repository": {

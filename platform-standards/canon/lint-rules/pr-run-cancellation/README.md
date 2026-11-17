@@ -94,11 +94,13 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   the second occurrence is not the one directly after the call. `!` renders a
   boolean, so `${{ !github.head_ref }}` names nothing, and `&&` yields its
   right operand, so a marker that is the left operand —
-  `${{ github.head_ref && 'ci' }}` — names nothing either. `fromJSON` carries
-  its argument's value, so a marker inside one still names the pull request.
-  `format` is judged by its template: the marker names the pull request only
-  when its argument position is rendered by a matching `{N}` placeholder, so
-  `${{ format('ci-{0}', github.head_ref) }}` counts and
+  `${{ github.head_ref && 'ci' }}` — names nothing either. `fromJSON` parses
+  its argument rather than passing it through, so a marker inside one does not
+  establish the identity: a branch name that is a JSON literal changes value,
+  and `1` and `1e0` both parse to the number `1`, which would put two pull
+  requests in one group. `format` is judged by its template: the marker names
+  the pull request only when its argument position is rendered by a matching
+  `{N}` placeholder, so `${{ format('ci-{0}', github.head_ref) }}` counts and
   `${{ format('ci', github.head_ref) }}` does not. `join` is judged the same
   way: a marker in its array argument is joined into the result, but a marker
   in its separator renders only between elements, so whether the group carries
