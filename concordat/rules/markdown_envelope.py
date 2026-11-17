@@ -445,7 +445,13 @@ def _load_workflow(
     if not isinstance(parsed, dict):
         fact["error"] = "workflow document is not a mapping"
         return fact
-    fact["parsed"] = json_safe(parsed)
+    try:
+        fact["parsed"] = json_safe(parsed)
+    except (TypeError, ValueError) as error:
+        # A key JSON cannot represent, such as a YAML date, raises `TypeError`.
+        # It is a defect in this file's content, so it stays this file's
+        # evidence instead of aborting the envelope.
+        fact["error"] = f"workflow document is not JSON-safe: {error}"
     return fact
 
 

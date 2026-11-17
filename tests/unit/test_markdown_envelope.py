@@ -278,6 +278,25 @@ class TestWorkflows:
             "2026-01-01"
         ), envelope
 
+    def test_a_document_json_cannot_carry_is_a_content_error(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A key JSON cannot represent is this file's error, not the audit's.
+
+        A YAML date key decodes to a `datetime.date`, which `json.dumps`
+        refuses with `TypeError`. The shared workflow reader records that as
+        the file's indeterminate evidence, so this reader must too rather
+        than letting one workflow abort the whole envelope.
+        """
+        workflows = tmp_path / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "ci.yml").write_text("on: pull_request\n2026-01-01: value\n")
+        fact = _workflows(
+            typ.cast("dict[str, object]", build_markdown_envelope(tmp_path))
+        )[0]
+        assert fact["parsed"] is None, fact
+        assert "not JSON-safe" in str(fact["error"]), fact
+
     @pytest.mark.parametrize(
         ("content", "fragment"),
         [
