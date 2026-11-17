@@ -494,17 +494,22 @@ format_placeholders(template) := {number |
 	number := to_number(match[1])
 }
 
-format_link_carries(link) if {
+# The conditions a `format` argument needs before its placeholders can decide
+# anything: the call renders, its template is readable, and the marker is a
+# replacement argument rather than the template itself.
+format_argument_settled(link) if {
 	link.name in TEMPLATE_FUNCTIONS
 	literal_argument(link.first_argument)
 	link.argument_index > 0
+}
+
+format_link_carries(link) if {
+	format_argument_settled(link)
 	(link.argument_index - 1) in format_placeholders(link.first_argument)
 }
 
 format_link_discards(link) if {
-	link.name in TEMPLATE_FUNCTIONS
-	literal_argument(link.first_argument)
-	link.argument_index > 0
+	format_argument_settled(link)
 	not (link.argument_index - 1) in format_placeholders(link.first_argument)
 }
 
