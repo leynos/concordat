@@ -966,13 +966,23 @@ queues behind them. **RC-001** requires a cancelling `concurrency` block in
 every workflow triggered by `pull_request` or `pull_request_target`, at
 workflow level or on every job not disabled with `if: false`. **RC-002**
 requires every cancelling block's `group` to name the pull request through
-`github.event.pull_request.number` or `github.head_ref`, so two pull requests
-do not cancel one another's runs. The reference shape is:
+`github.event.pull_request.number` or `github.head_ref` inside a `${{ ... }}`
+expression, so two pull requests do not cancel one another's runs. A marker
+written as literal text is part of a constant group and does not count.
+Workflow-level and job-level groups are checked independently, because GitHub
+applies both. The reference shape is:
 
 ```yaml
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+That event test covers `pull_request`. A workflow triggered by
+`pull_request_target` evaluates it false, so test that event too:
+
+```yaml
+cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
 ```
 
 `cancel-in-progress: true` or a trimmed, case-insensitive `"true"` cancels. Any

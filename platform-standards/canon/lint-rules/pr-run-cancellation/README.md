@@ -30,6 +30,13 @@ runs uncancelled. A group built only from `github.ref` is shared by every pull
 request targeting the same base branch, so one pull request's run cancels
 another's.
 
+The event test in this shape covers `pull_request`. A workflow triggered by
+`pull_request_target` evaluates it false, so test that event too:
+
+```yaml
+cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
+```
+
 ## Checks
 
 - **RC-001** (warning, noncompliant): a workflow triggered by `pull_request` or
@@ -42,9 +49,13 @@ another's.
   job.
 - **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
   pull request through `github.event.pull_request.number` or `github.head_ref`,
-  matched case-insensitively. The workflow-level block is checked when it
-  cancels; otherwise each cancelling job block is checked. A block whose group
-  would cancel a *different* pull request's run is reported.
+  matched case-insensitively, inside a `${{ ... }}` expression. A group that
+  spells the marker as literal text, such as `ci-github.head_ref`, is a
+  constant and does not count. Every cancelling block is checked on its own:
+  the workflow-level block when it cancels, and each cancelling job block
+  whether or not the workflow block complies, because GitHub applies both
+  concurrency levels. A block whose group would cancel a *different* pull
+  request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
   `policy-input/pr-run-cancellation` document, or a workflow could not be
   decoded, declares no trigger, has a trigger shape the rule cannot classify,

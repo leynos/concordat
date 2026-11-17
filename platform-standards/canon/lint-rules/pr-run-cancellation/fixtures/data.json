@@ -146,6 +146,37 @@
         }
       ]
     },
+    "compliant_workflow_and_job": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+            },
+            "jobs": {
+              "test": {
+                "concurrency": {
+                  "cancel-in-progress": true,
+                  "group": "ci-${{ github.head_ref }}"
+                },
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "disabled_job_only": {
       "kind": "policy-input/pr-run-cancellation",
       "repository": {
@@ -509,6 +540,33 @@
         }
       ]
     },
+    "literal_marker_group": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "ci-github.head_ref"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
     "malformed_yaml": {
       "kind": "policy-input/pr-run-cancellation",
       "repository": {
@@ -519,6 +577,33 @@
         {
           "error": "invalid YAML: mapping values are not allowed here",
           "parsed": null,
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "marker_outside_expression": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ github.workflow }}-github.head_ref"
+            },
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
           "path": ".github/workflows/ci.yml"
         }
       ]
@@ -826,6 +911,37 @@
             },
             "jobs": {
               "test": {
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "workflow_and_job_group_missing_pull_request": {
+      "kind": "policy-input/pr-run-cancellation",
+      "repository": {
+        "name": "leynos/example"
+      },
+      "schema_version": 1,
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "concurrency": {
+              "cancel-in-progress": true,
+              "group": "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+            },
+            "jobs": {
+              "test": {
+                "concurrency": {
+                  "cancel-in-progress": true,
+                  "group": "integration"
+                },
                 "runs-on": "ubuntu-latest"
               }
             },

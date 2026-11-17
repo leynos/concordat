@@ -117,6 +117,27 @@ test_a_job_group_without_the_pull_request_is_noncompliant if {
 	profile(data.fixtures.job_group_missing_pull_request) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# GitHub applies workflow-level and job-level concurrency independently, so a
+# compliant workflow group cannot excuse a job group shared across pull
+# requests.
+test_a_job_group_is_checked_even_when_the_workflow_group_names_the_pull_request if {
+	profile(data.fixtures.workflow_and_job_group_missing_pull_request) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_compliant_group_at_both_levels_is_compliant if {
+	count(findings(data.fixtures.compliant_workflow_and_job)) == 0
+}
+
+# The marker only refers to the pull request when it sits inside an
+# expression; as literal text it is part of a constant group.
+test_a_literal_marker_outside_an_expression_is_noncompliant if {
+	profile(data.fixtures.literal_marker_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_marker_outside_the_expression_is_noncompliant if {
+	profile(data.fixtures.marker_outside_expression) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 test_a_push_only_workflow_is_not_audited if {
 	count(findings(data.fixtures.push_only)) == 0
 }

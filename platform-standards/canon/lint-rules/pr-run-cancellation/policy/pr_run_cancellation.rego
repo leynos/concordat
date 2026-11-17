@@ -304,13 +304,18 @@ job_cancels(job) if {
 	concurrency_cancels(job_concurrency(job))
 }
 
+# The marker only names the pull request when GitHub evaluates it. A group
+# that spells the marker as literal text, such as `ci-github.head_ref`, is a
+# constant, so every pull request shares it and cancels the others. Match the
+# marker only inside a `${{ ... }}` expression.
 group_names_pull_request(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	normalized := lower(group)
 	some marker in PR_NUMBER_MARKERS
-	contains(normalized, marker)
+	escaped := replace(marker, ".", "\\.")
+	pattern := sprintf(`(?i)\$\{\{[^}]*%s[^}]*\}\}`, [escaped])
+	regex.match(pattern, group)
 }
 
 job_disabled(job) if {
@@ -518,13 +523,16 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	)
 }
 
+# GitHub applies workflow-level and job-level concurrency as separate controls,
+# so a workflow group that names the pull request does not stop a job group
+# from cancelling another pull request's run. Every cancelling job block is
+# therefore checked on its own.
 deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow), 0, msg) if {
 	envelope_ok
 	some workflow in input.workflows
 	evaluable_workflow(workflow)
 	concurrency_evaluable(workflow)
 	rc_audited(workflow)
-	not workflow_cancels(workflow)
 	jobs := workflow_jobs(workflow)
 	some name in object.keys(jobs)
 	job := jobs[name]
