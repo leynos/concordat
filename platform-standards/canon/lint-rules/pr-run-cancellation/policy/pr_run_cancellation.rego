@@ -448,6 +448,58 @@ call_name_before(text, position) := name if {
 	name := lower(matches[count(matches) - 1][1])
 }
 
+# The earliest named call still open at `offset`, ignoring grouping
+# parentheses, which have no name and pass the value through untouched.
+outermost_call_position(head, offset) := position if {
+	positions := open_call_positions(substring(head, 0, offset))
+	named := [candidate |
+		some candidate in positions
+		call_name_before(head, candidate)
+	]
+	count(named) > 0
+	position := sort(named)[0]
+}
+
+# The `)` that closes the call opened at `position`: the first one whose depth
+# returns to the level the `(` opened from, so a nested call's `)` is skipped.
+call_close_positions(text, position) := [index |
+	chars := characters(text)
+	some index in numbers.range(position, count(chars) - 1)
+	chars[index] == ")"
+	depth_at(text, index) == depth_at(text, position) + 1
+]
+
+call_close(text, position) := end if {
+	ends := call_close_positions(text, position)
+	count(ends) > 0
+	end := sort(ends)[0]
+}
+
+# An operator applied to the outermost call that carries the occurrence
+# replaces the call's result, so the group no longer contains the pull
+# request: `format('{0}-{1}', github.head_ref, 'ci') == 'release'` renders a
+# boolean. The checks next to the marker cannot see it, because the marker's
+# own argument ends at a comma before the operator.
+enclosing_call_defeats(head, offset) if {
+	position := outermost_call_position(head, offset)
+	name := call_name_before(head, position)
+	trimmed := trim_right(substring(head, 0, position), " \t\r\n")
+	start := count(trimmed) - count(name)
+	end := call_close(head, position)
+	operator_defeats(
+		substring(head, 0, start),
+		substring(head, end + 1, count(characters(head)) - end - 1),
+	)
+}
+
+operator_defeats(before_call, after_call) if precedes_negation(before_call)
+
+operator_defeats(before_call, after_call) if precedes_comparison(before_call)
+
+operator_defeats(before_call, after_call) if follows_comparison(after_call)
+
+operator_defeats(before_call, after_call) if follows_conjunction(after_call)
+
 # Commas at the argument-list depth of the call opened at `position`. A comma
 # inside a nested call is deeper, so it does not separate this call's arguments.
 argument_separators(text, position) := [index |
@@ -481,7 +533,13 @@ call_links(text) := [link |
 	}
 ]
 
-literal_argument(text) if startswith(text, "\"")
+# A template is literal only when the whole argument is one quoted span. The
+# body reader quotes each literal it keeps, so a compound such as
+# `'{0}' && '{1}'` becomes `"{0}" && "{1}"`: a leading quote alone would accept
+# it, and GitHub selects the second literal, not the template the rule read.
+LITERAL_ARGUMENT_PATTERN := `^"([^"]|"")*"$`
+
+literal_argument(text) if regex.match(LITERAL_ARGUMENT_PATTERN, text)
 
 # The replacement indices a literal template renders. `{{` and `}}` are escaped
 # braces, so they are removed before the remaining `{N}` sequences are read.
@@ -581,32 +639,38 @@ chain_unsettled(links) if {
 occurrence_prefix(parts, marker, index) := concat(marker, array.slice(parts, 0, index))
 
 mentions_pull_request(text) if {
+	head := lower(text)
 	some marker in PR_NUMBER_MARKERS
-	parts := split(lower(text), marker)
+	parts := split(head, marker)
 	some index, following in parts
 	index > 0
-	marker_occurrence_is_identity(occurrence_prefix(parts, marker, index), following)
+	marker_occurrence_is_identity(
+		head,
+		occurrence_prefix(parts, marker, index),
+		following,
+	)
 }
 
-marker_occurrence_is_identity(before, after) if {
-	marker_occurrence_context_holds(before, after)
+marker_occurrence_is_identity(head, before, after) if {
+	marker_occurrence_context_holds(head, before, after)
 	links := call_links(before)
 	chain_carries_value(links)
 }
 
-marker_occurrence_is_unclassifiable(before, after) if {
-	marker_occurrence_context_holds(before, after)
+marker_occurrence_is_unclassifiable(head, before, after) if {
+	marker_occurrence_context_holds(head, before, after)
 	links := call_links(before)
 	chain_unsettled(links)
 }
 
-marker_occurrence_context_holds(before, after) if {
+marker_occurrence_context_holds(head, before, after) if {
 	not continues_property(after)
 	not extends_property(before)
 	not follows_comparison(after)
 	not precedes_comparison(before)
 	not precedes_negation(before)
 	not follows_conjunction(after)
+	not enclosing_call_defeats(head, count(before))
 	marker_is_selected(before)
 }
 
@@ -896,12 +960,16 @@ group_identity_unknown(value) if {
 	not group_names_pull_request(value)
 	some body in expression_bodies(group)
 	branches := expression_branches(body)
-	head := selected_head(branches[0])
+	head := lower(selected_head(branches[0]))
 	some marker in PR_NUMBER_MARKERS
-	parts := split(lower(head), marker)
+	parts := split(head, marker)
 	some index, following in parts
 	index > 0
-	marker_occurrence_is_unclassifiable(occurrence_prefix(parts, marker, index), following)
+	marker_occurrence_is_unclassifiable(
+		head,
+		occurrence_prefix(parts, marker, index),
+		following,
+	)
 }
 
 # A missing `if` key is undefined rather than null, and an undefined

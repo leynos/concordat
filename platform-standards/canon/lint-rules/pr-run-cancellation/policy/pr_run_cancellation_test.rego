@@ -277,6 +277,30 @@ test_a_group_parsed_by_fromjson_is_indeterminate if {
 	profile(data.fixtures.fromjson_group) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
 }
 
+# A template joined with `&&` is not one literal, and GitHub selects the right
+# operand, so the placeholders the rule read are not the ones rendered.
+test_a_compound_template_is_indeterminate if {
+	profile(data.fixtures.compound_format_template) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+# An operator applied to the call replaces its result even when the marker's
+# own argument is followed by another argument's comma.
+test_a_comparison_of_the_call_result_does_not_name_the_pull_request if {
+	profile(data.fixtures.compared_format_result) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_the_call_result_compared_from_the_left_does_not_name_the_pull_request if {
+	profile(data.fixtures.format_compared_from_the_left) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_negated_call_does_not_name_the_pull_request if {
+	profile(data.fixtures.negated_format_call) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_call_as_the_left_operand_of_a_conjunction_does_not_name_the_pull_request if {
+	profile(data.fixtures.conjunctive_format_call) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 # A template that renders no replacement index drops its arguments, so the
 # group is constant across pull requests.
 test_a_format_template_that_omits_the_marker_does_not_name_the_pull_request if {
