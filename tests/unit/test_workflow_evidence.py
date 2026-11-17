@@ -10,10 +10,31 @@ from __future__ import annotations
 
 import typing as typ
 
-from concordat.rules.workflow_evidence import load_workflows
+import pytest
+
+from concordat.errors import OperationalRuleError
+from concordat.rules.workflow_evidence import load_workflows, read_text
 
 if typ.TYPE_CHECKING:
     import pathlib
+
+
+def test_a_symlink_is_refused_when_the_workflow_is_opened(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A link swapped in after the mode check is not followed.
+
+    The collector rejects a link it saw while listing the directory, but a
+    checkout another process can write to may change between that check and
+    the read. `O_NOFOLLOW` keeps the second case from reading another file's
+    content as this repository's workflow.
+    """
+    target = tmp_path / "outside.yml"
+    target.write_text("on: push\n", encoding="utf-8")
+    link = tmp_path / "ci.yml"
+    link.symlink_to(target)
+    with pytest.raises(OperationalRuleError):
+        read_text(link)
 
 
 def test_an_out_of_range_timestamp_is_a_content_error(

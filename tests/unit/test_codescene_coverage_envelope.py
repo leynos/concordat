@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 import pathlib
 import typing as typ
 
@@ -41,8 +42,11 @@ class _DenialCase:
 
     Attributes
     ----------
+    owner:
+        Module holding the call that refuses: `pathlib` for a directory or
+        status query, `os` for the read that opens the file.
     method:
-        `pathlib.Path` method that refuses.
+        Name of the call that refuses.
     resource:
         Whether the error must name the workflow directory or the file.
     detail:
@@ -50,6 +54,7 @@ class _DenialCase:
 
     """
 
+    owner: str
     method: str
     resource: str
     detail: str
@@ -299,14 +304,19 @@ class TestBuildCodesceneCoverageEnvelope:
         "case",
         [
             pytest.param(
-                _DenialCase("iterdir", "directory", "cannot list"),
+                _DenialCase("pathlib", "iterdir", "directory", "cannot list"),
                 id="directory-enumeration",
             ),
             pytest.param(
-                _DenialCase("lstat", "file", "cannot stat"), id="entry-status"
+                _DenialCase("pathlib", "lstat", "file", "cannot stat"),
+                id="entry-status",
             ),
+            # The reader opens the file itself so a swapped symlink is
+            # refused, so the denial to simulate is `os.open`, not
+            # `Path.read_text`.
             pytest.param(
-                _DenialCase("read_text", "file", "cannot read"), id="file-contents"
+                _DenialCase("os", "open", "file", "cannot read"),
+                id="file-contents",
             ),
         ],
     )
@@ -330,7 +340,8 @@ class TestBuildCodesceneCoverageEnvelope:
             """Raise a permission error for whichever filesystem call is patched."""
             raise PermissionError(13, "Permission denied")
 
-        monkeypatch.setattr(pathlib.Path, case.method, refuse)
+        owner = pathlib.Path if case.owner == "pathlib" else os
+        monkeypatch.setattr(owner, case.method, refuse)
 
         with pytest.raises(OperationalRuleError) as excinfo:
             build_codescene_coverage_envelope(tmp_path)

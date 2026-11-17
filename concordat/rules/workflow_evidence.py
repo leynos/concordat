@@ -16,6 +16,7 @@ do that to substitute a reader in a test without changing the collector.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import stat
 import typing as typ
@@ -30,6 +31,7 @@ from .fs_probe import probe_file
 WORKFLOWS_DIRECTORY: typ.Final = pathlib.PurePosixPath(".github/workflows")
 WORKFLOW_SUFFIXES: typ.Final = frozenset({".yml", ".yaml"})
 OPERATION_READ_WORKFLOW: typ.Final = "read-workflow"
+_READ_CHUNK: typ.Final = 65536
 
 _yaml = YAML(typ="safe")
 
@@ -65,9 +67,36 @@ if typ.TYPE_CHECKING:
 
 
 def read_text(path: pathlib.Path) -> str:
-    """Read a workflow as UTF-8 text, or raise an operational error."""
+    """Read a workflow as UTF-8 text without following a symlink, or raise.
+
+    The entry's mode was checked before this read, but a checkout another
+    process can write to may change between the check and the open.
+    `O_NOFOLLOW` makes a swapped entry fail the read instead of contributing
+    another file's content to the workflow evidence.
+
+    Returns
+    -------
+    str
+        The file's decoded contents.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the file cannot be opened or read, including when the final path
+        component is a symlink.
+
+    Notes
+    -----
+    A file that is not UTF-8 raises `UnicodeDecodeError`, which the caller
+    records as that one file's content error rather than as an operational
+    failure.
+    """
+    descriptor: int | None = None
+    chunks: list[bytes] = []
     try:
-        return path.read_text(encoding="utf-8")
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        while chunk := os.read(descriptor, _READ_CHUNK):
+            chunks.append(chunk)
     except OSError as error:
         message = f"cannot read {path}: {error}"
         raise OperationalRuleError(
@@ -75,6 +104,10 @@ def read_text(path: pathlib.Path) -> str:
             operation=OPERATION_READ_WORKFLOW,
             resource=path,
         ) from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    return b"".join(chunks).decode("utf-8")
 
 
 def json_safe(value: object) -> object:

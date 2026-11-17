@@ -245,6 +245,31 @@ test_an_unknown_function_on_a_job_is_reported_once_per_workflow if {
 	contains(f.msg, "test")
 }
 
+# `join`'s separator only renders between elements, so whether the marker
+# reaches the group depends on the array's length.
+test_a_marker_in_a_join_separator_is_indeterminate if {
+	profile(data.fixtures.join_separator_group) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+test_a_marker_in_a_join_array_names_the_pull_request if {
+	count(findings(data.fixtures.join_array_group)) == 0
+}
+
+# Both occurrences are arguments of the same call, so the second one is just as
+# much the compared value as the first.
+test_a_repeated_marker_in_a_boolean_call_does_not_name_the_pull_request if {
+	profile(data.fixtures.repeated_marker_in_boolean_call) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# The inner call carries the value, but the outer call discards it.
+test_an_outer_boolean_call_defeats_an_inner_identity_call if {
+	profile(data.fixtures.boolean_call_around_format) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_nested_identity_calls_remain_transparent if {
+	count(findings(data.fixtures.nested_identity_calls_group)) == 0
+}
+
 # The `&&` head is false on a pull request, so the fallback is selected and the
 # group cannot be settled from the text.
 test_an_and_guard_before_the_marker_does_not_prove_the_fallback_is_unused if {

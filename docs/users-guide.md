@@ -972,7 +972,11 @@ written as literal text, including inside a quoted string literal, used as a
 comparison operand, spelled as the prefix of a longer property name such as
 `github.head_ref_name`, or handed to a function that returns something else,
 such as `contains(github.head_ref, 'release')`, is part of a constant group and
-does not count; a marker passed to a call the rule does not recognize is
+does not count, and an outer call that returns something else defeats an inner
+one that carries the value, as in
+`contains(format('{0}', github.head_ref), 'release')`. A marker passed to a
+call the rule does not recognize, or one in the separator argument of `join`,
+whose contribution depends on how many elements the array holds, is
 indeterminate. A static index such as `github['head_ref']` counts as the
 property it names. A group built from a value that changes between pushes, such
 as `github.run_id`, `github['run_id']` or `github.sha`, does not cancel because
