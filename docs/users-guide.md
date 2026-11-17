@@ -968,9 +968,9 @@ workflow level or on every job not disabled with `if: false`. **RC-002**
 requires every cancelling block's `group` to name the pull request through
 `github.event.pull_request.number` or `github.head_ref` inside a `${{ ... }}`
 expression, so two pull requests do not cancel one another's runs. A marker
-written as literal text is part of a constant group and does not count.
-Workflow-level and job-level groups are checked independently, because GitHub
-applies both. The reference shape is:
+written as literal text, including inside a quoted string literal, is part of a
+constant group and does not count. Workflow-level and job-level groups are
+checked independently, because GitHub applies both. The reference shape is:
 
 ```yaml
 concurrency:

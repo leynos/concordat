@@ -138,6 +138,16 @@ test_a_marker_outside_the_expression_is_noncompliant if {
 	profile(data.fixtures.marker_outside_expression) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# A marker inside a quoted string literal is not evaluated, so the group is
+# constant however the expression is shaped.
+test_a_quoted_marker_literal_is_noncompliant if {
+	profile(data.fixtures.quoted_marker_literal) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_quoted_literal_beside_an_evaluated_marker_is_compliant if {
+	count(findings(data.fixtures.quoted_marker_beside_reference)) == 0
+}
+
 test_a_push_only_workflow_is_not_audited if {
 	count(findings(data.fixtures.push_only)) == 0
 }

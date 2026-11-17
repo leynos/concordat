@@ -26,9 +26,13 @@ concurrency:
 
 The `||` fallback keeps push runs on `main` in the same group as each other, so
 a push run supersedes the previous push run while the event test leaves push
-runs uncancelled. A group built only from `github.ref` is shared by every pull
-request targeting the same base branch, so one pull request's run cancels
-another's.
+runs uncancelled. The group must still name the pull request explicitly: what
+`github.ref` holds depends on the event. An ordinary `pull_request` run has
+`refs/pull/<number>/merge`, which already separates pull requests, but a
+`pull_request_target` run has the base branch ref, which every pull request
+targeting that branch shares, so a group built only from `github.ref` there
+lets one pull request's run cancel another's. Requiring the marker makes the
+intent explicit and holds for both events.
 
 The event test in this shape covers `pull_request`. A workflow triggered by
 `pull_request_target` evaluates it false, so test that event too:
@@ -51,11 +55,12 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   pull request through `github.event.pull_request.number` or `github.head_ref`,
   matched case-insensitively, inside a `${{ ... }}` expression. A group that
   spells the marker as literal text, such as `ci-github.head_ref`, is a
-  constant and does not count. Every cancelling block is checked on its own:
-  the workflow-level block when it cancels, and each cancelling job block
-  whether or not the workflow block complies, because GitHub applies both
-  concurrency levels. A block whose group would cancel a *different* pull
-  request's run is reported.
+  constant and does not count, and neither does a marker inside a quoted string
+  literal, such as `${{ 'github.head_ref' }}`. Every cancelling block is
+  checked on its own: the workflow-level block when it cancels, and each
+  cancelling job block whether or not the workflow block complies, because
+  GitHub applies both concurrency levels. A block whose group would cancel a
+  *different* pull request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
   `policy-input/pr-run-cancellation` document, or a workflow could not be
   decoded, declares no trigger, has a trigger shape the rule cannot classify,

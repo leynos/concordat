@@ -307,15 +307,24 @@ job_cancels(job) if {
 # The marker only names the pull request when GitHub evaluates it. A group
 # that spells the marker as literal text, such as `ci-github.head_ref`, is a
 # constant, so every pull request shares it and cancels the others. Match the
-# marker only inside a `${{ ... }}` expression.
+# marker only inside the unquoted part of a `${{ ... }}` expression; inside
+# quotes it is a string literal, as in `${{ 'github.head_ref' }}`.
+#
+# GitHub expressions quote strings with single quotes, so splitting an
+# expression on `'` puts the evaluated text at even indices and the literals
+# at odd ones.
 group_names_pull_request(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	some marker in PR_NUMBER_MARKERS
-	escaped := replace(marker, ".", "\\.")
-	pattern := sprintf(`(?i)\$\{\{[^}]*%s[^}]*\}\}`, [escaped])
-	regex.match(pattern, group)
+	some match in regex.find_all_string_submatch_n(`\$\{\{([^}]*)\}\}`, group, -1)
+	body := match[1]
+	unquoted := concat("", [part |
+		some index, part in split(body, "'")
+		index % 2 == 0
+	])
+	contains(lower(unquoted), marker)
 }
 
 job_disabled(job) if {
