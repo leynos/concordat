@@ -9,6 +9,7 @@ command delivers them, and that an advisory finding does not fail the run.
 
 from __future__ import annotations
 
+import re
 import typing as typ
 
 import pytest
@@ -179,9 +180,12 @@ def then_audit_exit_status(cli_invocation: dict[str, RunResult], code: int) -> N
 def then_audit_clean(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the table names the compliant verdict and no findings."""
     stdout = cli_invocation["result"].stdout
-    assert "compliant" in stdout, stdout
+    # `noncompliant` contains `compliant`, so the verdict must match as a whole
+    # word or a noncompliant row would satisfy this step.
+    assert re.search(r"\bcompliant\b", stdout), stdout
     assert "RC-001" not in stdout, stdout
     assert "RC-002" not in stdout, stdout
+    assert "EN-001" not in stdout, stdout
 
 
 @then(parsers.cfparse('the audit output reports "{rule_id}" for "{workflow}"'))
@@ -209,7 +213,7 @@ def then_audit_reports_verdict(
 ) -> None:
     """Assert the finding states the verdict the policy assigned."""
     stdout = cli_invocation["result"].stdout
-    assert verdict in stdout, stdout
+    assert re.search(rf"\b{re.escape(verdict)}\b", stdout), stdout
 
 
 @then("the audit stderr explains that the directory resolves outside the checkout")

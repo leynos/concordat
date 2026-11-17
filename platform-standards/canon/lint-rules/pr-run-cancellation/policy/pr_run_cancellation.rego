@@ -272,9 +272,6 @@ is_expression(value) if {
 	endswith(trimmed, "}}")
 }
 
-# A trimmed literal-false expression is the one expression that provably does
-# not cancel. Anything else written as an expression may evaluate true on the
-# run it matters for, so it is treated as cancelling.
 # The evaluated text of every `${{ ... }}` expression in a string, with
 # quoted string literals removed. Text outside an expression is not evaluated
 # and does not contribute.
@@ -286,6 +283,9 @@ unquoted_expression_text(text) := unquoted if {
 	])
 }
 
+# A trimmed literal-false expression is the one expression that provably does
+# not cancel. Anything else written as an expression may evaluate true on the
+# run it matters for, so it is treated as cancelling.
 literal_false_expression(value) if {
 	is_expression(value)
 	trimmed := trim_space(value)
@@ -306,7 +306,7 @@ cancels_in_progress(value) if {
 }
 
 # A group that includes a per-run value is different for every run, so no
-# later run can ever share it and superseed the earlier ones. Such a block
+# later run can ever share it and supersede the earlier ones. Such a block
 # does not cancel in any useful sense, whatever `cancel-in-progress` says.
 group_is_stable(value) if {
 	is_object(value)
@@ -353,9 +353,11 @@ group_names_pull_request(value) if {
 	contains(lower(unquoted_expression_text(group)), marker)
 }
 
+# A missing `if` key is undefined rather than null, and an undefined
+# comparison fails, so this tests only the literal false.
 job_disabled(job) if {
 	is_object(job)
-	object.get(job, "if", null) == false
+	job["if"] == false
 }
 
 job_disabled(job) if {
