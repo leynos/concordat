@@ -71,8 +71,11 @@ def read_text(path: pathlib.Path) -> str:
 
     The entry's mode was checked before this read, but a checkout another
     process can write to may change between the check and the open.
-    `O_NOFOLLOW` makes a swapped entry fail the read instead of contributing
-    another file's content to the workflow evidence.
+    `O_NOFOLLOW` makes a swapped symlink fail the read instead of contributing
+    another file's content to the workflow evidence. `O_NONBLOCK` keeps a
+    swapped-in FIFO from waiting for a writer, and the opened descriptor is
+    checked before any read so every other non-regular replacement is refused
+    the same way.
 
     Returns
     -------
@@ -83,7 +86,7 @@ def read_text(path: pathlib.Path) -> str:
     ------
     OperationalRuleError
         If the file cannot be opened or read, including when the final path
-        component is a symlink.
+        component is a symlink or the opened entry is not a regular file.
 
     Notes
     -----
@@ -94,7 +97,8 @@ def read_text(path: pathlib.Path) -> str:
     descriptor: int | None = None
     chunks: list[bytes] = []
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        _require_regular_entry(descriptor, path)
         while chunk := os.read(descriptor, _READ_CHUNK):
             chunks.append(chunk)
     except OSError as error:
@@ -108,6 +112,28 @@ def read_text(path: pathlib.Path) -> str:
         if descriptor is not None:
             os.close(descriptor)
     return b"".join(chunks).decode("utf-8")
+
+
+def _require_regular_entry(descriptor: int, path: pathlib.Path) -> None:
+    """Refuse an opened entry that is not a regular file.
+
+    The read is read-only, so a FIFO would block until a writer appeared and
+    stall the whole audit. Checking the descriptor rather than the path also
+    closes the window between the open and the check.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the descriptor does not refer to a regular file.
+    """
+    if stat.S_ISREG(os.fstat(descriptor).st_mode):
+        return
+    message = f"cannot read {path}: not a regular file"
+    raise OperationalRuleError(
+        message,
+        operation=OPERATION_READ_WORKFLOW,
+        resource=path,
+    )
 
 
 def json_safe(value: object) -> object:

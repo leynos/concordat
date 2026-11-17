@@ -8,6 +8,7 @@ abort of the whole audit.
 
 from __future__ import annotations
 
+import os
 import typing as typ
 
 import pytest
@@ -35,6 +36,22 @@ def test_a_symlink_is_refused_when_the_workflow_is_opened(
     link.symlink_to(target)
     with pytest.raises(OperationalRuleError):
         read_text(link)
+
+
+def test_a_fifo_replaced_before_the_read_is_refused(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A FIFO that replaced the entry is rejected before it is read.
+
+    `O_NOFOLLOW` refuses a link but not a FIFO, and a read-only open of a
+    FIFO waits for a writer, which would stall the audit indefinitely. The
+    open is non-blocking and the descriptor's type is checked before any
+    read, so the replacement becomes this file's operational failure.
+    """
+    fifo = tmp_path / "ci.yml"
+    os.mkfifo(fifo)
+    with pytest.raises(OperationalRuleError):
+        read_text(fifo)
 
 
 def test_an_out_of_range_timestamp_is_a_content_error(
