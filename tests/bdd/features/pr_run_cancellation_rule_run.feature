@@ -35,6 +35,12 @@ Feature: Pull-request run cancellation rule run
     Then the audit exit status is 0
     And the audit output reports "RC-002" for "ci.yml"
 
+  Scenario: a guard covering one pull-request event leaves the other uncovered
+    Given a checkout whose guard covers only the first pull-request event
+    When I audit the checkout for pull-request run cancellation
+    Then the audit exit status is 0
+    And the audit output reports "RC-002" for "ci.yml"
+
   Scenario: a malformed workflow is indeterminate
     Given a checkout whose workflow is not valid YAML
     When I audit the checkout for pull-request run cancellation

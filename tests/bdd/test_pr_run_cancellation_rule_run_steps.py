@@ -89,6 +89,19 @@ jobs:
       - run: echo ok
 """
 
+_ONE_EVENT_GUARD_WORKFLOW: typ.Final = """\
+name: CI
+on: [pull_request, pull_request_target]
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && github.head_ref || 'ci' }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+"""
+
 _MALFORMED_WORKFLOW: typ.Final = "on: [pull_request\n"
 
 _PUSH_GUARD_WORKFLOW: typ.Final = """\
@@ -147,6 +160,12 @@ def given_shared_group_workflow(cancellation_checkout: pathlib.Path) -> None:
 def given_push_guard_workflow(cancellation_checkout: pathlib.Path) -> None:
     """Write a group whose pull-request branch is a constant fallback."""
     _write_workflow(cancellation_checkout, _PUSH_GUARD_WORKFLOW)
+
+
+@given("a checkout whose guard covers only the first pull-request event")
+def given_one_event_guard_workflow(cancellation_checkout: pathlib.Path) -> None:
+    """Write a group whose guard holds for one of the workflow's PR events."""
+    _write_workflow(cancellation_checkout, _ONE_EVENT_GUARD_WORKFLOW)
 
 
 @given("a checkout whose workflow is not valid YAML")

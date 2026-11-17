@@ -392,6 +392,34 @@ test_a_guard_the_rule_cannot_evaluate_is_indeterminate if {
 	profile(data.fixtures.unevaluable_guard_before_marker) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
 }
 
+# A literal-false guard makes the conjunction falsy, so the marker after it is
+# never the group's value and every pull request shares the group.
+test_a_literal_false_guard_leaves_the_marker_unselected if {
+	profile(data.fixtures.literal_false_guard_then_marker) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A guard the rule cannot prove truthy may skip its right operand, so whether
+# the group names the pull request cannot be read from the text.
+test_a_guard_that_cannot_be_proved_truthy_is_indeterminate if {
+	profile(data.fixtures.unknown_value_guard_then_marker) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+# `github.ref` is non-empty on a pull-request run, so it always selects the
+# marker after it.
+test_a_ref_guard_keeps_the_marker_selected if {
+	count(findings(data.fixtures.ref_guard_then_marker)) == 0
+}
+
+# The workflow also runs on `pull_request_target`, where the `pull_request`
+# guard fails and the constant fallback is selected instead.
+test_a_guard_is_judged_against_each_declared_pull_request_event if {
+	profile(data.fixtures.pull_request_guard_with_both_triggers) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_bare_marker_names_the_pull_request_for_every_declared_event if {
+	count(findings(data.fixtures.head_ref_group_with_both_triggers)) == 0
+}
+
 # A `||` inside a call argument is that argument's own fallback, so the run id
 # beside it is part of the group however the branches are ordered. Whether it
 # is selected for a pull request cannot be read from the text, so the evidence

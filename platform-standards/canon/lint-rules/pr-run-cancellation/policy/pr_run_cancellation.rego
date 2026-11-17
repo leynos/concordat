@@ -26,6 +26,26 @@ API_EVENTS := {"pull_request", "pull_request_target"}
 
 PR_NUMBER_MARKERS := {"github.event.pull_request.number", "github.head_ref"}
 
+# Literals the rule can prove falsy as a `&&` guard. Quoted strings have already
+# lost their content by the time a guard is read, so an empty string cannot be
+# told from a non-empty one and is not treated as provably falsy here.
+FALSY_LITERALS := {"false", "null", "0"}
+
+# References GitHub resolves to a non-empty string, so a `&&` guard that is one
+# of them selects its right operand on every pull-request run.
+TRUTHY_GUARDS := {
+	"github.event.pull_request.number",
+	"github.event_name",
+	"github.head_ref",
+	"github.ref",
+	"github.repository",
+	"github.run_attempt",
+	"github.run_id",
+	"github.run_number",
+	"github.sha",
+	"github.workflow",
+}
+
 # A quoted string may contain a brace, so the body pattern consumes quoted
 # strings whole rather than stopping at the first `}`.
 EXPRESSION_PATTERN := `\$\{\{((?:[^'}]*|'[^']*')*)\}\}`
@@ -233,6 +253,30 @@ has_pr_trigger(workflow) if {
 	is_object(on)
 	some event in API_EVENTS
 	event in object.keys(on)
+}
+
+# The pull-request events the workflow declares. A group is judged against each
+# of them, because a guard that holds for one event may select a constant for
+# another that the same workflow also triggers on.
+pr_events(workflow) := {event} if {
+	on := workflow_on(workflow)
+	is_string(on)
+	api_event(on)
+	event := on
+}
+
+pr_events(workflow) := events if {
+	on := workflow_on(workflow)
+	is_array(on)
+	events := {event | some event in on; api_event(event)}
+	count(events) > 0
+}
+
+pr_events(workflow) := events if {
+	on := workflow_on(workflow)
+	is_object(on)
+	events := {event | some event in object.keys(on); api_event(event)}
+	count(events) > 0
 }
 
 unsupported_workflow(workflow) if not is_object(workflow)
@@ -959,8 +1003,9 @@ job_cancels(job) if {
 }
 
 # A `github.event_name` guard decides whether the `&&` branch it protects can
-# be selected. On a pull-request run the event name is one of `API_EVENTS`, so
-# `==` holds for those names and fails for any other, and `!=` inverts that.
+# be selected. The guard is judged against each pull-request event the workflow
+# declares, so `== 'pull_request'` selects the branch for a `pull_request` run
+# and excludes it for a `pull_request_target` run of the same workflow.
 event_guard(branch) := {"event": event, "operator": operator, "value": value} if {
 	trimmed := trim_space(branch)
 	matches := regex.find_all_string_submatch_n(EVENT_GUARD_RIGHT_PATTERN, trimmed, 1)
@@ -981,38 +1026,38 @@ event_guard(branch) := {"event": event, "operator": operator, "value": value} if
 
 api_event(event) if event in API_EVENTS
 
-event_guard_holds(branch) if {
+event_guard_holds_at(branch, event) if {
 	guard := event_guard(branch)
 	guard.operator == "=="
-	api_event(guard.event)
+	guard.event == event
 }
 
-event_guard_holds(branch) if {
+event_guard_holds_at(branch, event) if {
 	guard := event_guard(branch)
 	guard.operator == "!="
-	not api_event(guard.event)
+	guard.event != event
 }
 
-event_guard_excludes(branch) if {
+event_guard_excludes_at(branch, event) if {
 	event_guard(branch)
-	not event_guard_holds(branch)
+	not event_guard_holds_at(branch, event)
 }
 
 # GitHub takes the first truthy branch of a `||` chain, so a later branch is
 # selectable only when every earlier one can be falsy. A bare marker is never
 # empty on a pull request, and a non-empty literal is truthy, so neither lets
-# the chain move on. A guard that fails on a pull-request run is always falsy,
-# and a value the rule cannot prove non-empty may be falsy.
-branch_may_be_falsy(branch) if event_guard_excludes(branch)
+# the chain move on. A guard that fails for this event is always falsy, and a
+# value the rule cannot prove non-empty may be falsy.
+branch_may_be_falsy_at(branch, event) if event_guard_excludes_at(branch, event)
 
-branch_may_be_falsy(branch) if {
-	event_guard_holds(branch)
+branch_may_be_falsy_at(branch, event) if {
+	event_guard_holds_at(branch, event)
 	value := event_guard(branch).value
 	not branch_bare_marker(value)
 	not mentions_pull_request(value)
 }
 
-branch_may_be_falsy(branch) if {
+branch_may_be_falsy_at(branch, _event) if {
 	not event_guard(branch)
 	not branch_bare_marker(branch)
 	not branch_constant_literal(branch)
@@ -1031,51 +1076,79 @@ branch_constant_literal(branch) if {
 	trimmed != `""`
 }
 
-branch_reachable_at(branches, index) if {
+branch_reachable_at(branches, index, event) if {
 	every earlier in array.slice(branches, 0, index) {
-		branch_may_be_falsy(earlier)
+		branch_may_be_falsy_at(earlier, event)
 	}
 }
 
 # A branch excluded by its own guard supplies a falsy value, so the chain moves
 # past it and its text is never the group's value. Every other branch the chain
 # can reach is a candidate for the value GitHub selects.
-branch_value_reachable_at(branches, index) if {
-	not event_guard_excludes(branches[index])
-	branch_reachable_at(branches, index)
+branch_value_reachable_at(branches, index, event) if {
+	not event_guard_excludes_at(branches[index], event)
+	branch_reachable_at(branches, index, event)
 }
 
-branch_value_reachable(branches) if {
+branch_value_reachable(branches, event) if {
 	some index in numbers.range(0, count(branches) - 1)
-	branch_value_reachable_at(branches, index)
+	branch_value_reachable_at(branches, index, event)
 }
 
 # The text that decides a branch's value names the pull request only when the
-# guard selecting it holds; an excluded branch renders a boolean instead.
-branch_names_pull_request(branch) if {
+# guard selecting it holds for this event; an excluded branch renders a boolean
+# instead.
+branch_names_pull_request_at(branch, event) if {
 	guard := event_guard(branch)
-	event_guard_holds(branch)
+	event_guard_holds_at(branch, event)
 	mentions_pull_request(guard.value)
 }
 
-branch_names_pull_request(branch) if {
+branch_names_pull_request_at(branch, _event) if {
 	not event_guard(branch)
+	not branch_conjunction_falsy(branch)
 	mentions_pull_request(branch)
 }
 
-# A conjunction whose left operand is a comparison decides whether the value
-# after it is selected, and the rule cannot evaluate that comparison. When the
-# value names the pull request, whether the group carries it cannot be read
-# from the text, so it is reported indeterminate rather than as a pass or a
-# defect.
-branch_guard_unsettled(branch) if {
-	not event_guard(branch)
+# The first top-level `&&`, split into the guard that decides it and the value
+# the conjunction yields when that guard is truthy.
+branch_conjunction(branch) := {"guard": guard, "value": value} if {
 	positions := top_level_conjunctions(branch)
 	count(positions) > 0
 	start := sort(positions)[0]
-	regex.match(`(==|!=|>=|<=|>|<)`, substring(branch, 0, start))
-	value := substring(branch, start + 2, count(characters(branch)) - start - 2)
-	mentions_pull_request(trim_space(value))
+	guard := trim_space(substring(branch, 0, start))
+	value := trim_space(
+		substring(branch, start + 2, count(characters(branch)) - start - 2),
+	)
+}
+
+# A literal the rule can prove falsy makes the whole conjunction falsy, so the
+# marker after it never becomes the group's value.
+branch_conjunction_falsy(branch) if {
+	conjunction := branch_conjunction(branch)
+	lower(conjunction.guard) in FALSY_LITERALS
+}
+
+# A guard the rule cannot prove truthy may leave the value after it unselected.
+# When that value names the pull request, whether the group carries it cannot
+# be read from the text, so it is reported indeterminate rather than as a pass
+# or a defect.
+branch_guard_unsettled(branch) if {
+	not event_guard(branch)
+	conjunction := branch_conjunction(branch)
+	mentions_pull_request(conjunction.value)
+	not branch_conjunction_falsy(branch)
+	not branch_conjunction_holds(branch)
+}
+
+branch_conjunction_holds(branch) if {
+	conjunction := branch_conjunction(branch)
+	lower(conjunction.guard) in TRUTHY_GUARDS
+}
+
+branch_conjunction_holds(branch) if {
+	conjunction := branch_conjunction(branch)
+	lower(conjunction.guard) == "true"
 }
 
 top_level_conjunctions(text) := [position |
@@ -1087,25 +1160,27 @@ top_level_conjunctions(text) := [position |
 	depth_at(text, position) == 0
 ]
 
-# A branch is settled when its value cannot be the one GitHub selects, or when
-# it names the pull request and carries no guard the rule cannot evaluate.
-# Every branch that can supply the value must be settled, and at least one must
-# exist: an expression whose every branch is falsy on a pull request is a
-# constant group.
-branch_settled(branches, index) if not branch_value_reachable_at(branches, index)
+# A branch is settled when its value cannot be the one GitHub selects for this
+# event, or when it names the pull request and carries no guard the rule cannot
+# evaluate. Every branch that can supply the value must be settled, and at
+# least one must exist: an expression whose every branch is falsy on a pull
+# request is a constant group.
+branch_settled_at(branches, index, event) if {
+	not branch_value_reachable_at(branches, index, event)
+}
 
-branch_settled(branches, index) if {
+branch_settled_at(branches, index, event) if {
 	branch := branches[index]
-	branch_value_reachable_at(branches, index)
-	branch_names_pull_request(branch)
+	branch_value_reachable_at(branches, index, event)
+	branch_names_pull_request_at(branch, event)
 	not branch_guard_unsettled(branch)
 }
 
-branch_list_settled(branches) if {
-	branch_value_reachable(branches)
+branch_list_settled_at(branches, event) if {
+	branch_value_reachable(branches, event)
 	unsettled := [index |
 		some index in numbers.range(0, count(branches) - 1)
-		not branch_settled(branches, index)
+		not branch_settled_at(branches, index, event)
 	]
 	count(unsettled) == 0
 }
@@ -1121,35 +1196,38 @@ branch_list_settled(branches) if {
 # the pull request, so a marker that appears only in a constant-first fallback,
 # as in `${{ 'ci' || github.head_ref }}` or in a fallback nested inside a call
 # argument, does not name anything.
-group_names_pull_request(value) if {
+group_names_pull_request(value, events) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	some body in expression_bodies(group)
-	branch_list_settled(expression_branches(body))
+	every event in events {
+		branch_list_settled_at(expression_branches(body), event)
+	}
 }
 
 # A group whose only marker references feed a call the rule does not classify,
-# or sit behind a comparison the rule cannot evaluate, may or may not carry the
-# pull request, so it is reported as indeterminate rather than as a pass or a
-# defect.
-group_identity_unknown(value) if {
+# or sit behind a comparison or guard the rule cannot evaluate, may or may not
+# carry the pull request, so it is reported as indeterminate rather than as a
+# pass or a defect.
+group_identity_unknown(value, events) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	not group_names_pull_request(value)
+	not group_names_pull_request(value, events)
 	some body in expression_bodies(group)
 	branches := expression_branches(body)
 	some index in numbers.range(0, count(branches) - 1)
-	branch_value_reachable_at(branches, index)
+	some event in events
+	branch_value_reachable_at(branches, index, event)
 	branch_guard_unsettled(branches[index])
 }
 
-group_identity_unknown(value) if {
+group_identity_unknown(value, events) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	not group_names_pull_request(value)
+	not group_names_pull_request(value, events)
 	some body in expression_bodies(group)
 	branches := expression_branches(body)
 	head := lower(selected_head(branches[0]))
@@ -1394,7 +1472,7 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 	evaluable_workflow(workflow)
 	concurrency_evaluable(workflow)
 	workflow_has_concurrency(workflow)
-	group_identity_unknown(workflow_concurrency(workflow))
+	group_identity_unknown(workflow_concurrency(workflow), pr_events(workflow))
 }
 
 deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
@@ -1405,7 +1483,7 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 	jobs := workflow_jobs(workflow)
 	unknown := {name |
 		some name in object.keys(jobs)
-		group_identity_unknown(job_concurrency(jobs[name]))
+		group_identity_unknown(job_concurrency(jobs[name]), pr_events(workflow))
 	}
 	count(unknown) > 0
 	msg := sprintf("job(s) %s have a concurrency group that passes a pull-request marker to a call this rule cannot classify, so whether the group names the pull request cannot be classified", [concat(", ", sort(unknown))])
@@ -1432,8 +1510,8 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	concurrency_evaluable(workflow)
 	rc_audited(workflow)
 	workflow_cancels(workflow)
-	not group_names_pull_request(workflow_concurrency(workflow))
-	not group_identity_unknown(workflow_concurrency(workflow))
+	not group_names_pull_request(workflow_concurrency(workflow), pr_events(workflow))
+	not group_identity_unknown(workflow_concurrency(workflow), pr_events(workflow))
 	msg := sprintf(
 		"workflow %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
 		[workflow_path(workflow)],
@@ -1454,8 +1532,8 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	some name in object.keys(jobs)
 	job := jobs[name]
 	job_cancels(job)
-	not group_names_pull_request(job_concurrency(job))
-	not group_identity_unknown(job_concurrency(job))
+	not group_names_pull_request(job_concurrency(job), pr_events(workflow))
+	not group_identity_unknown(job_concurrency(job), pr_events(workflow))
 	msg := sprintf(
 		"job %s of %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
 		[name, workflow_path(workflow)],
