@@ -216,6 +216,45 @@ test_a_compared_second_use_does_not_disqualify_the_first if {
 	count(findings(data.fixtures.format_with_compared_second_use)) == 0
 }
 
+# `github['run_id']` resolves to the same property as `github.run_id`, so the
+# group is per-run however the reference is spelled.
+test_an_indexed_run_id_group_is_noncompliant if {
+	profile(data.fixtures.indexed_run_id_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_an_indexed_pull_request_reference_is_compliant if {
+	count(findings(data.fixtures.indexed_reference_group)) == 0
+}
+
+# `contains` returns a boolean rather than the ref, so the group is constant
+# across pull requests.
+test_a_marker_passed_to_a_boolean_function_does_not_name_the_pull_request if {
+	profile(data.fixtures.contains_marker_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A call the rule does not know may or may not preserve the identity.
+test_a_marker_passed_to_an_unknown_function_is_indeterminate if {
+	profile(data.fixtures.unknown_function_group) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+test_an_unknown_function_on_a_job_is_reported_once_per_workflow if {
+	found := findings(data.fixtures.unknown_function_jobs)
+	count(found) == 1
+	some f in found
+	f.rule_id == "EN-001"
+	contains(f.msg, "test")
+}
+
+# The `&&` head is false on a pull request, so the fallback is selected and the
+# group cannot be settled from the text.
+test_an_and_guard_before_the_marker_does_not_prove_the_fallback_is_unused if {
+	profile(data.fixtures.and_guard_then_run_id_fallback) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+test_the_exact_marker_head_still_ignores_the_run_id_fallback if {
+	count(findings(data.fixtures.head_ref_run_id_fallback)) == 0
+}
+
 # A `||` inside a call argument is that argument's own fallback, so the run id
 # beside it is part of the group however the branches are ordered. Whether it
 # is selected for a pull request cannot be read from the text, so the evidence

@@ -30,6 +30,34 @@ PR_NUMBER_MARKERS := {"github.event.pull_request.number", "github.head_ref"}
 # strings whole rather than stopping at the first `}`.
 EXPRESSION_PATTERN := `\$\{\{((?:[^'}]*|'[^']*')*)\}\}`
 
+# GitHub resolves a static index such as `github['run_id']` to the same value
+# as the dotted form. Normalise it before quoted literals are removed, or the
+# reference looks like the empty index `github[]`.
+STATIC_INDEX_PATTERN := `\['([A-Za-z_][A-Za-z0-9_]*)'\]`
+
+# The call whose argument list the marker sits in, if any. The pattern allows
+# no parenthesis between the call and the marker, so it finds the innermost
+# call still open at that point.
+CALL_PATTERN := `([A-Za-z_][A-Za-z0-9_.]*)\([^()]*$`
+
+# `format`, `join` and `fromJSON` carry their argument's value into the result,
+# so a marker inside one still identifies the pull request. The rest return a
+# boolean, a hash or a constant, so a marker inside one does not.
+IDENTITY_FUNCTIONS := {"format", "join", "fromjson"}
+
+NON_IDENTITY_FUNCTIONS := {
+	"contains",
+	"startswith",
+	"endswith",
+	"hashfiles",
+	"success",
+	"failure",
+	"always",
+	"cancelled",
+}
+
+KNOWN_FUNCTIONS := IDENTITY_FUNCTIONS | NON_IDENTITY_FUNCTIONS
+
 # Values that separate runs of the same pull request. A group built from one of
 # them does not match a run that ought to be superseded. `github.sha` is the
 # merge commit of a `pull_request` run, which changes with every push.
@@ -289,8 +317,9 @@ is_expression(value) if {
 # than as the reference it spells.
 expression_bodies(text) := [body |
 	some match in regex.find_all_string_submatch_n(EXPRESSION_PATTERN, text, -1)
+	normalised := regex.replace(match[1], STATIC_INDEX_PATTERN, ".$1")
 	body := concat("", [part |
-		some index, part in split(match[1], "'")
+		some index, part in split(normalised, "'")
 		index % 2 == 0
 	])
 ]
@@ -332,6 +361,13 @@ expression_branches(body) := [trim_space(branch) |
 # call argument - is not the value the group carries.
 selected_head(branch) := trim_space(split(branch, "||")[0])
 
+# The innermost call whose argument list the text is still inside, if any.
+enclosing_call(text) := name if {
+	matches := regex.find_all_string_submatch_n(CALL_PATTERN, text, -1)
+	count(matches) > 0
+	name := lower(matches[count(matches) - 1][1])
+}
+
 # A marker names the pull request when at least one occurrence is evaluated as
 # its value. An occurrence used as a comparison operand, as in
 # `github.event.pull_request.number > 0` or
@@ -339,18 +375,43 @@ selected_head(branch) := trim_space(split(branch, "||")[0])
 # occurrence carries no identity; another occurrence in the same expression
 # still can, as in `format('{0}-{1}', github.head_ref, github.head_ref == 'x')`.
 # Parentheses around the operand are transparent, so `(github.head_ref) == 'x'`
-# is a comparison too. Finally, the marker must be a complete reference:
+# is a comparison too. The marker must be a complete reference:
 # `github.head_ref_name` is a different property, and GitHub resolves an
-# unknown property to an empty string.
+# unknown property to an empty string. An occurrence handed to a function that
+# returns something else, such as `contains(github.head_ref, 'release')`,
+# carries no identity either; one handed to a call the rule does not recognise
+# cannot be classified.
 mentions_pull_request(text) if {
 	some marker in PR_NUMBER_MARKERS
 	parts := split(lower(text), marker)
 	some index, following in parts
 	index > 0
-	not continues_property(following)
-	not extends_property(parts[index - 1])
-	not follows_comparison(following)
-	not precedes_comparison(parts[index - 1])
+	marker_occurrence_is_identity(parts[index - 1], following)
+}
+
+marker_occurrence_is_identity(before, after) if {
+	not continues_property(after)
+	not extends_property(before)
+	not follows_comparison(after)
+	not precedes_comparison(before)
+	not enclosing_call(before)
+}
+
+marker_occurrence_is_identity(before, after) if {
+	not continues_property(after)
+	not extends_property(before)
+	not follows_comparison(after)
+	not precedes_comparison(before)
+	enclosing_call(before) in IDENTITY_FUNCTIONS
+}
+
+marker_occurrence_is_unclassifiable(before, after) if {
+	not continues_property(after)
+	not extends_property(before)
+	not follows_comparison(after)
+	not precedes_comparison(before)
+	name := enclosing_call(before)
+	not name in KNOWN_FUNCTIONS
 }
 
 continues_property(text) if regex.match(`^[A-Za-z0-9_.]`, text)
@@ -410,30 +471,50 @@ branch_is_unclassifiable(branch) if {
 	mentions_run_varying_value(branch)
 }
 
-# The branch GitHub selects for a pull request decides the group. In the
-# documented `github.head_ref || github.run_id` shape the pull-request branch
-# is selected, and the run-id fallback only applies to pushes, which this rule
-# does not audit. When the selected head names no pull request, any branch may
-# be selected, so every one must be stable. A branch whose stability cannot be
-# read is reported as indeterminate rather than guessed at.
-expression_stability(body) := "stable" if {
-	branches := expression_branches(body)
-	first := branches[0]
-	mentions_pull_request(selected_head(first))
-	branch_is_stable(first)
+branch_stability(branch) := "stable" if branch_is_stable(branch)
+
+branch_stability(branch) := "unclassifiable" if branch_is_unclassifiable(branch)
+
+branch_stability(branch) := "unstable" if {
+	not branch_is_stable(branch)
+	not branch_is_unclassifiable(branch)
 }
 
-expression_stability(body) := "unclassifiable" if {
+# The shortcut that ignores fallbacks is only sound when the selected head is
+# the marker itself: `github.head_ref` is non-empty for every pull request, so
+# the fallback never renders. A head that merely contains the marker, such as
+# `github.event_name == 'push' && github.head_ref`, can be falsy for a pull
+# request, and then the fallback is what the group carries.
+head_is_marker_reference(text) if lower(trim_space(text)) in PR_NUMBER_MARKERS
+
+# A single expression has no fallback to weigh, so the branch decides alone.
+expression_stability(body) := outcome if {
 	branches := expression_branches(body)
-	first := branches[0]
-	mentions_pull_request(selected_head(first))
-	branch_is_unclassifiable(first)
+	count(branches) == 1
+	outcome := branch_stability(branches[0])
 }
 
+# In the documented `github.head_ref || github.run_id` shape the pull-request
+# branch is selected, and the run-id fallback only applies to pushes, which
+# this rule does not audit.
+expression_stability(body) := outcome if {
+	branches := expression_branches(body)
+	count(branches) > 1
+	head := selected_head(branches[0])
+	head_is_marker_reference(head)
+	outcome := branch_stability(branches[0])
+}
+
+# A head that carries the pull request inside a larger expression does not
+# prove the fallbacks go unused, so every branch is examined. When one of them
+# varies between runs the group cannot be settled from the text; it is reported
+# as unclassifiable rather than called a defect or a pass.
 expression_stability(body) := "stable" if {
 	branches := expression_branches(body)
-	first := branches[0]
-	not mentions_pull_request(selected_head(first))
+	count(branches) > 1
+	head := selected_head(branches[0])
+	not head_is_marker_reference(head)
+	mentions_pull_request(head)
 	every branch in branches {
 		branch_is_stable(branch)
 	}
@@ -441,24 +522,43 @@ expression_stability(body) := "stable" if {
 
 expression_stability(body) := "unclassifiable" if {
 	branches := expression_branches(body)
-	first := branches[0]
-	not mentions_pull_request(selected_head(first))
+	count(branches) > 1
+	head := selected_head(branches[0])
+	not head_is_marker_reference(head)
+	mentions_pull_request(head)
+	some branch in branches
+	not branch_is_stable(branch)
+}
+
+# With no pull request in the head, any branch may be selected, so every one
+# must be stable.
+expression_stability(body) := "stable" if {
+	branches := expression_branches(body)
+	count(branches) > 1
+	head := selected_head(branches[0])
+	not head_is_marker_reference(head)
+	not mentions_pull_request(head)
+	every branch in branches {
+		branch_is_stable(branch)
+	}
+}
+
+expression_stability(body) := "unclassifiable" if {
+	branches := expression_branches(body)
+	count(branches) > 1
+	head := selected_head(branches[0])
+	not head_is_marker_reference(head)
+	not mentions_pull_request(head)
 	some branch in branches
 	branch_is_unclassifiable(branch)
 }
 
 expression_stability(body) := "unstable" if {
 	branches := expression_branches(body)
-	first := branches[0]
-	mentions_pull_request(selected_head(first))
-	not branch_is_stable(first)
-	not branch_is_unclassifiable(first)
-}
-
-expression_stability(body) := "unstable" if {
-	branches := expression_branches(body)
-	first := branches[0]
-	not mentions_pull_request(selected_head(first))
+	count(branches) > 1
+	head := selected_head(branches[0])
+	not head_is_marker_reference(head)
+	not mentions_pull_request(head)
 	some branch in branches
 	not branch_is_stable(branch)
 	every branch in branches {
@@ -535,6 +635,24 @@ group_names_pull_request(value) if {
 	some body in expression_bodies(group)
 	branches := expression_branches(body)
 	mentions_pull_request(selected_head(branches[0]))
+}
+
+# A group whose only marker references feed a call the rule does not classify
+# may or may not carry the pull request, so it is reported as indeterminate
+# rather than as a pass or a defect.
+group_identity_unknown(value) if {
+	is_object(value)
+	group := object.get(value, "group", null)
+	is_string(group)
+	not group_names_pull_request(value)
+	some body in expression_bodies(group)
+	branches := expression_branches(body)
+	head := selected_head(branches[0])
+	some marker in PR_NUMBER_MARKERS
+	parts := split(lower(head), marker)
+	some index, following in parts
+	index > 0
+	marker_occurrence_is_unclassifiable(parts[index - 1], following)
 }
 
 # A missing `if` key is undefined rather than null, and an undefined
@@ -760,6 +878,30 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 	msg := sprintf("job(s) %s have a concurrency group that nests a `||` fallback inside a call argument beside a value that changes between runs, so whether it cancels a superseded run cannot be classified", [concat(", ", sort(names))])
 }
 
+deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	msg := "the workflow's concurrency group passes a pull-request marker to a call this rule cannot classify, so whether the group names the pull request cannot be classified"
+	envelope_ok
+	some workflow in input.workflows
+	evaluable_workflow(workflow)
+	concurrency_evaluable(workflow)
+	workflow_has_concurrency(workflow)
+	group_identity_unknown(workflow_concurrency(workflow))
+}
+
+deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	envelope_ok
+	some workflow in input.workflows
+	evaluable_workflow(workflow)
+	concurrency_evaluable(workflow)
+	jobs := workflow_jobs(workflow)
+	unknown := {name |
+		some name in object.keys(jobs)
+		group_identity_unknown(job_concurrency(jobs[name]))
+	}
+	count(unknown) > 0
+	msg := sprintf("job(s) %s have a concurrency group that passes a pull-request marker to a call this rule cannot classify, so whether the group names the pull request cannot be classified", [concat(", ", sort(unknown))])
+}
+
 deny contains finding("RC-001", severity, "noncompliant", workflow_path(workflow), 0, msg) if {
 	envelope_ok
 	some workflow in input.workflows
@@ -782,6 +924,7 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	rc_audited(workflow)
 	workflow_cancels(workflow)
 	not group_names_pull_request(workflow_concurrency(workflow))
+	not group_identity_unknown(workflow_concurrency(workflow))
 	msg := sprintf(
 		"workflow %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
 		[workflow_path(workflow)],
@@ -803,6 +946,7 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	job := jobs[name]
 	job_cancels(job)
 	not group_names_pull_request(job_concurrency(job))
+	not group_identity_unknown(job_concurrency(job))
 	msg := sprintf(
 		"job %s of %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
 		[name, workflow_path(workflow)],

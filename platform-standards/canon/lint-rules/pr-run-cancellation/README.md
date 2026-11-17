@@ -55,13 +55,18 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   `github.sha` or `github.event.pull_request.head.sha` — does not cancel the
   run that ought to be superseded. The next push's first attempt never shares a
   group containing a per-run value, and a group containing the attempt number
-  leaves an older run that was re-run untouched. The documented
-  `github.head_ref || github.run_id` shape is accepted, because the
-  pull-request branch is the one GitHub selects. A `||` inside a call argument
-  is that argument's own fallback, not a branch of the whole group, so a run
-  value beside it stays in the group; when such a nested fallback sits beside a
-  run value, whether the group varies cannot be read from the text, and the
-  workflow is reported indeterminate instead of passing or failing.
+  leaves an older run that was re-run untouched. The static index form counts
+  the same as the dotted one: `github['run_id']` is `github.run_id`. The
+  documented `github.head_ref || github.run_id` shape is accepted, because the
+  marker is the whole selected head and so is non-empty on every pull request.
+  A head that merely contains the marker, such as
+  `github.event_name == 'push' && github.head_ref`, can be false on a pull
+  request, so the fallback is examined and an unsettled group is reported
+  indeterminate. A `||` inside a call argument is that argument's own fallback,
+  not a branch of the whole group, so a run value beside it stays in the group;
+  when such a nested fallback sits beside a run value, whether the group varies
+  cannot be read from the text, and the workflow is reported indeterminate
+  instead of passing or failing.
 - **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
   pull request through `github.event.pull_request.number` or `github.head_ref`,
   matched case-insensitively, inside a `${{ ... }}` expression. A group that
@@ -75,21 +80,31 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   change that, and another occurrence in the same group can still supply the
   identity. The marker must be the whole property name: `github.head_ref_name`
   is a different property, which GitHub resolves to an empty string, so a
-  longer name that merely starts with the marker does not count. Only the
-  selected head counts, because that is the value a pull request carries, so a
-  marker that appears only in a constant-first fallback, as in
-  `${{ 'ci' || github.head_ref }}`, or only in a fallback nested inside a call
-  argument, does not count either. Every cancelling block is checked on its
-  own: the workflow-level block when it cancels, and each cancelling job block
-  whether or not the workflow block complies, because GitHub applies both
-  concurrency levels. A block whose group would cancel a *different* pull
-  request's run is reported.
+  longer name that merely starts with the marker does not count, and a static
+  index such as `github['head_ref']` counts as the property it names. A marker
+  handed to a function that returns something else does not count either:
+  `contains`, `startsWith`, `endsWith`, `hashFiles`, `success`, `failure`,
+  `always` and `cancelled` return a boolean or a constant, so
+  `${{ contains(github.head_ref, 'release') }}` is a group every pull request
+  shares. `format`, `join` and `fromJSON` carry their argument's value, so a
+  marker inside one still names the pull request. A marker inside any other
+  call cannot be classified, and the block is reported indeterminate rather
+  than as a pass or a defect. Only the selected head counts, because that is
+  the value a pull request carries, so a marker that appears only in a
+  constant-first fallback, as in `${{ 'ci' || github.head_ref }}`, or only in a
+  fallback nested inside a call argument, does not count either. Every
+  cancelling block is checked on its own: the workflow-level block when it
+  cancels, and each cancelling job block whether or not the workflow block
+  complies, because GitHub applies both concurrency levels. A block whose group
+  would cancel a *different* pull request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
   `policy-input/pr-run-cancellation` document, or a workflow could not be
   decoded, declares no trigger, has a trigger shape the rule cannot classify,
-  has no non-empty `jobs` mapping of job objects, or has a `concurrency` block
-  the rule cannot read. An envelope defect is `error`: it says the rule could
-  not run. Every other indeterminate finding uses the configured severity.
+  has no non-empty `jobs` mapping of job objects, has a `concurrency` block the
+  rule cannot read, or has a group whose nested fallback or unrecognized call
+  leaves its value or its identity unclassifiable. An envelope defect is
+  `error`: it says the rule could not run. Every other indeterminate finding
+  uses the configured severity.
 
 A workflow with no `pull_request` or `pull_request_target` trigger is not
 audited. That includes push-only, schedule-only and `workflow_call`-only
@@ -147,18 +162,19 @@ composite action, or a called workflow is outside the audited document. Whether
 a group is *unique enough* beyond naming the pull request, such as including
 the workflow name, is not judged.
 
-The marker check is syntactic: the rule confirms that the marker appears in the
-selected part of the group, unquoted and not directly compared, not that the
-expression preserves the pull request's identity. Passing the marker to a
-function that returns something else, such as
-`contains(github.head_ref, 'release')`, is not detected. Selection is judged by
-position: the text before the first `||` is treated as the value GitHub takes,
-without evaluating truthiness, so a marker that appears only after one does not
-count. Parentheses are counted to keep a fallback nested in a call argument out
-of the surrounding branch; a nested fallback beside a value that changes
-between runs is reported indeterminate rather than judged. Varying-value
-detection covers the five values named above; a group made unique some other
-way is not detected.
+The marker check is syntactic: the rule confirms that the marker is evaluated
+in the selected part of the group, unquoted, not directly compared, and not
+handed to a call that discards or replaces its value. It does not evaluate the
+expression, so an arithmetic or string transform the rule does not recognize as
+a function call is not detected. Selection is judged by position: the text
+before the first `||` is treated as the value GitHub takes, without evaluating
+truthiness, so a marker that appears only after one does not count. The
+fallback is ignored only when the selected head is the marker alone, which is
+non-empty on every pull request. Parentheses are counted to keep a fallback
+nested in a call argument out of the surrounding branch; a nested fallback
+beside a value that changes between runs is reported indeterminate rather than
+judged. Varying-value detection covers the five values named above; a group
+made unique some other way is not detected.
 
 ## Evidence
 

@@ -969,16 +969,20 @@ requires every cancelling block's `group` to name the pull request through
 `github.event.pull_request.number` or `github.head_ref` inside a `${{ ... }}`
 expression, so two pull requests do not cancel one another's runs. A marker
 written as literal text, including inside a quoted string literal, used as a
-comparison operand, or spelled as the prefix of a longer property name such as
-`github.head_ref_name` is part of a constant group and does not count. A group
-built from a value that changes between pushes, such as `github.run_id` or
-`github.sha`, does not cancel because the next push's run never shares it; the
-documented `github.head_ref || github.run_id` shape is accepted because GitHub
-selects the pull-request branch. A `||` nested inside a call argument is that
-argument's own fallback, so a value that changes between runs beside it leaves
-the group unreadable, and the workflow is reported indeterminate.
-Workflow-level and job-level groups are checked independently, because GitHub
-applies both. The reference shape is:
+comparison operand, spelled as the prefix of a longer property name such as
+`github.head_ref_name`, or handed to a function that returns something else,
+such as `contains(github.head_ref, 'release')`, is part of a constant group and
+does not count; a marker passed to a call the rule does not recognize is
+indeterminate. A static index such as `github['head_ref']` counts as the
+property it names. A group built from a value that changes between pushes, such
+as `github.run_id`, `github['run_id']` or `github.sha`, does not cancel because
+the next push's run never shares it; the documented
+`github.head_ref || github.run_id` shape is accepted because GitHub selects the
+pull-request branch, and only when the marker is the whole selected head. A
+`||` nested inside a call argument is that argument's own fallback, so a value
+that changes between runs beside it leaves the group unreadable, and the
+workflow is reported indeterminate. Workflow-level and job-level groups are
+checked independently, because GitHub applies both. The reference shape is:
 
 ```yaml
 concurrency:
@@ -998,13 +1002,13 @@ expression cancels unless it is a trimmed literal-false expression
 (`${{ false }}`), because it may evaluate true on the run that matters. An
 absent value, `false`, `"false"` and the string shorthand do not cancel. A
 workflow triggered only by push, schedule or `workflow_call` is not audited. A
-workflow whose document, trigger, concurrency shape or nested-fallback group
-cannot be read is indeterminate (**EN-001**) rather than passing. Both clauses
-ship at `warning` so the estate can be surveyed first; `severity: error`
-promotes them. An exemption names a repository and an exact workflow, or a
-whole repository, with a rationale and a review trigger; a blank field
-suppresses nothing, and an exemption never suppresses indeterminate evidence.
-See the
+workflow whose document, trigger, concurrency shape, nested-fallback group or
+unrecognized call cannot be read is indeterminate (**EN-001**) rather than
+passing. Both clauses ship at `warning` so the estate can be surveyed first;
+`severity: error` promotes them. An exemption names a repository and an exact
+workflow, or a whole repository, with a rationale and a review trigger; a blank
+field suppresses nothing, and an exemption never suppresses indeterminate
+evidence. See the
 [rule reference](../platform-standards/canon/lint-rules/pr-run-cancellation/README.md).
 
 ### Auditing prover tooling
