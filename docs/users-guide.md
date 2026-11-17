@@ -968,8 +968,9 @@ workflow level or on every job not disabled with `if: false`. **RC-002**
 requires every cancelling block's `group` to name the pull request through
 `github.event.pull_request.number` or `github.head_ref` inside a `${{ ... }}`
 expression, so two pull requests do not cancel one another's runs. A marker
-written as literal text, including inside a quoted string literal, or used as a
-comparison operand is part of a constant group and does not count. A group
+written as literal text, including inside a quoted string literal, used as a
+comparison operand, or spelled as the prefix of a longer property name such as
+`github.head_ref_name` is part of a constant group and does not count. A group
 built from a value that changes between pushes, such as `github.run_id` or
 `github.sha`, does not cancel because the next push's run never shares it; the
 documented `github.head_ref || github.run_id` shape is accepted because GitHub
