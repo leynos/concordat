@@ -216,6 +216,21 @@ test_a_compared_second_use_does_not_disqualify_the_first if {
 	count(findings(data.fixtures.format_with_compared_second_use)) == 0
 }
 
+# `github.head_ref_name` is a different property; GitHub resolves an unknown
+# property to an empty string.
+test_a_property_with_a_marker_prefix_does_not_name_the_pull_request if {
+	profile(data.fixtures.marker_prefix_property_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# Expression whitespace may include newlines, on either side of the operator.
+test_a_multiline_comparison_does_not_name_the_pull_request if {
+	profile(data.fixtures.multiline_comparison_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_reversed_multiline_comparison_does_not_name_the_pull_request if {
+	profile(data.fixtures.reversed_multiline_comparison_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 # The constant first branch is the one GitHub selects, so a marker that appears
 # only in the fallback is part of a constant group.
 test_a_marker_only_in_a_constant_first_fallback_is_noncompliant if {

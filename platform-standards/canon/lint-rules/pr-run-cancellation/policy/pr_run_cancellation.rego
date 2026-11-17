@@ -295,8 +295,6 @@ expression_bodies(text) := [body |
 	])
 ]
 
-unquoted_expression_text(text) := concat("", expression_bodies(text))
-
 # GitHub evaluates a `||` chain from the left and takes the first truthy
 # branch, so every branch is a candidate value for the group.
 expression_branches(body) := [trim_space(branch) | some branch in split(body, "||")]
@@ -308,24 +306,32 @@ expression_branches(body) := [trim_space(branch) | some branch in split(body, "|
 # occurrence carries no identity; another occurrence in the same expression
 # still can, as in `format('{0}-{1}', github.head_ref, github.head_ref == 'x')`.
 # Parentheses around the operand are transparent, so `(github.head_ref) == 'x'`
-# is a comparison too.
+# is a comparison too. Finally, the marker must be a complete reference:
+# `github.head_ref_name` is a different property, and GitHub resolves an
+# unknown property to an empty string.
 mentions_pull_request(text) if {
 	some marker in PR_NUMBER_MARKERS
 	parts := split(lower(text), marker)
 	some index, following in parts
 	index > 0
+	not continues_property(following)
+	not extends_property(parts[index - 1])
 	not follows_comparison(following)
 	not precedes_comparison(parts[index - 1])
 }
 
+continues_property(text) if regex.match(`^[A-Za-z0-9_.]`, text)
+
+extends_property(text) if regex.match(`[A-Za-z0-9_.]$`, text)
+
 follows_comparison(text) if {
-	trimmed := trim_left(text, " \t)")
+	trimmed := trim_left(text, " \t\r\n)")
 	some operator in {"==", "!=", ">=", "<=", ">", "<"}
 	startswith(trimmed, operator)
 }
 
 precedes_comparison(text) if {
-	trimmed := trim_right(text, " \t(")
+	trimmed := trim_right(text, " \t\r\n(")
 	some operator in {"==", "!=", ">=", "<=", ">", "<"}
 	endswith(trimmed, operator)
 }

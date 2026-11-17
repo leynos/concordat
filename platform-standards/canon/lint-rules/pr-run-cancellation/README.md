@@ -69,13 +69,16 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   `${{ 0 < github.event.pull_request.number }}`, renders as a boolean, so that
   occurrence names no pull request; parentheses around the operand do not
   change that, and another occurrence in the same group can still supply the
-  identity. Only the first `||` branch counts, because that is the one a pull
-  request selects, so a marker that appears only in a constant-first fallback,
-  as in `${{ 'ci' || github.head_ref }}`, does not count either. Every
-  cancelling block is checked on its own: the workflow-level block when it
-  cancels, and each cancelling job block whether or not the workflow block
-  complies, because GitHub applies both concurrency levels. A block whose group
-  would cancel a *different* pull request's run is reported.
+  identity. The marker must be the whole property name: `github.head_ref_name`
+  is a different property, which GitHub resolves to an empty string, so a
+  longer name that merely starts with the marker does not count. Only the first
+  `||` branch counts, because that is the one a pull request selects, so a
+  marker that appears only in a constant-first fallback, as in
+  `${{ 'ci' || github.head_ref }}`, does not count either. Every cancelling
+  block is checked on its own: the workflow-level block when it cancels, and
+  each cancelling job block whether or not the workflow block complies, because
+  GitHub applies both concurrency levels. A block whose group would cancel a
+  *different* pull request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
   `policy-input/pr-run-cancellation` document, or a workflow could not be
   decoded, declares no trigger, has a trigger shape the rule cannot classify,
