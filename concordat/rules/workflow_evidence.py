@@ -32,7 +32,7 @@ from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
 
-from .fs_probe import probe_file
+from .fs_probe import probe_any
 
 WORKFLOWS_DIRECTORY: typ.Final = pathlib.PurePosixPath(".github/workflows")
 WORKFLOW_SUFFIXES: typ.Final = frozenset({".yml", ".yaml"})
@@ -406,13 +406,15 @@ def _absent_or_refused(location: _ContainedDirectory, error: OSError) -> None:
     A missing-file error is not by itself absence. A dangling symlink at
     `.github/workflows`, or at an ancestor, raises the same error as no path
     at all, so the directory entry is probed without following it before
-    absence is concluded.
+    absence is concluded. The probe runs after the open failed, so a checkout
+    another process can write to may have occupied the path in between; only
+    a probe that finds nothing at all is an absence.
 
     Raises
     ------
     OperationalRuleError
-        If the directory is present but cannot be opened, or is a link that
-        does not resolve.
+        If the directory is present but cannot be opened, is a link that does
+        not resolve, or was occupied after the open failed.
     """
     if not isinstance(error, FileNotFoundError):
         message = f"cannot list {location.path}: {error}"
@@ -422,11 +424,15 @@ def _absent_or_refused(location: _ContainedDirectory, error: OSError) -> None:
             resource=location.path,
         ) from error
     # The question here is whether anything is there, not whether it is a
-    # file, so the probe's `read_error` decides rather than `present`.
-    probe = probe_file(location.path)
-    if probe.read_error is None:
+    # directory, so `probe_any` answers it: absence is the case where nothing
+    # is present and nothing refused to be described. A regular file that
+    # appeared after the open failed is present, and reporting it as absence
+    # would call a repository with unreadable workflows compliant.
+    probe = probe_any(location.path)
+    if probe.read_error is None and not probe.present:
         return
-    message = f"cannot list {location.path}: {probe.read_error}"
+    reason = probe.read_error or f"{location.path}: an entry is present"
+    message = f"cannot list {location.path}: {reason}"
     raise OperationalRuleError(
         message,
         operation=OPERATION_READ_WORKFLOW,

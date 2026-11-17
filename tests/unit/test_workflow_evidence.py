@@ -103,3 +103,30 @@ def test_an_out_of_range_timestamp_is_a_content_error(
     assert len(facts) == 1, facts
     assert facts[0]["parsed"] is None, facts
     assert "invalid YAML" in (facts[0]["error"] or ""), facts
+
+
+def test_an_entry_that_appears_after_the_open_failure_is_refused(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A path occupied after the directory open failed is not an absence.
+
+    The open reports a missing directory, and the probe that decides whether
+    that meant absence runs afterwards. A checkout another process can write
+    to may occupy the path in between; reporting the repository as having no
+    workflows would turn that race into a compliant verdict.
+    """
+    checkout = tmp_path / "repo"
+    workflow_directory = checkout / ".github" / "workflows"
+    workflow_directory.parent.mkdir(parents=True)
+    descend = workflow_evidence._descend
+
+    def descend_then_occupy(parent: int, part: str) -> int:
+        """Occupy the workflow path, then raise the error the open raced with."""
+        if part != "workflows":
+            return descend(parent, part)
+        workflow_directory.write_text("occupied\n", encoding="utf-8")
+        raise FileNotFoundError(2, "No such file or directory", str(workflow_directory))
+
+    monkeypatch.setattr(workflow_evidence, "_descend", descend_then_occupy)
+    with pytest.raises(OperationalRuleError):
+        load_workflows(checkout)
