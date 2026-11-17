@@ -74,8 +74,6 @@ OPERATION_LIST_WORKFLOWS: typ.Final = "list-workflows"
 OPERATION_PROBE_PATH: typ.Final = "probe-path"
 OPERATION_READ_MAKEFILE: typ.Final = "read-makefile"
 
-_yaml = YAML(typ="safe")
-
 
 class MarkdownlintConfig(typ.TypedDict):
     """The `.markdownlint-cli2.jsonc` file, decoded or carrying its error."""
@@ -433,7 +431,10 @@ def _load_workflow(
         fact["error"] = f"not UTF-8 text: {error}"
         return fact
     try:
-        parsed: object = _yaml.load(text)
+        # ruamel does not guarantee that a loader which raised can handle
+        # further input, so each document gets its own rather than sharing
+        # module state across an audit.
+        parsed: object = YAML(typ="safe").load(text)
     except (YAMLError, ValueError) as error:
         # An out-of-range timestamp scalar, such as `2026-02-30`, raises
         # `ValueError` from the safe loader's constructor rather than a

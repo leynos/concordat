@@ -41,8 +41,6 @@ _READ_CHUNK: typ.Final = 65536
 _ENTRY_FLAGS: typ.Final = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 _DIRECTORY_FLAGS: typ.Final = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
-_yaml = YAML(typ="safe")
-
 
 class WorkflowFile(typ.TypedDict):
     """Store one workflow document or the reason it could not be decoded.
@@ -276,7 +274,10 @@ def _decode_into(fact: WorkflowFile, text: str, json_safe: JsonSafe) -> Workflow
         The same fact, carrying the document or the reason it was rejected.
     """
     try:
-        parsed: object = _yaml.load(text)
+        # ruamel does not guarantee that a loader which raised can handle
+        # further input, so each document gets its own. A shared instance would
+        # let the first malformed file decide every later file's verdict.
+        parsed: object = YAML(typ="safe").load(text)
     except (YAMLError, ValueError) as error:
         # An out-of-range timestamp scalar, such as `2026-02-30`, raises
         # `ValueError` from the safe loader's constructor rather than a

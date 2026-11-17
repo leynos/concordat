@@ -7,8 +7,11 @@ the workflow as absent.
 
 The collector itself lives in `workflow_evidence`, shared with the other rule
 packages that read workflows. The wrappers below keep this module's historical
-private names, which other envelopes import, and route them through the
-module-level reader and JSON hooks so a test can substitute either here.
+private names, which other envelopes import. `_load_workflow` passes this
+module's reader and JSON hooks, so a test can substitute either here for a
+single named workflow. `_load_workflows` passes only the JSON hook: the shared
+collector enumerates and opens every entry through one directory descriptor,
+so there is no per-file reader seam to substitute.
 """
 
 from __future__ import annotations

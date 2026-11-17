@@ -16,6 +16,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
+from concordat.rules import markdown_envelope
 from concordat.rules.markdown_envelope import (
     ENVELOPE_KIND,
     MarkdownlintConfig,
@@ -676,6 +677,34 @@ class TestPublicWorkflowReaders:
         assert len(facts) == 1, facts
         assert facts[0]["parsed"] is None, facts
         assert "invalid YAML" in (facts[0]["error"] or ""), facts
+
+    def test_each_document_is_decoded_by_its_own_loader(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failed parse must not decide every later document's verdict.
+
+        ruamel does not guarantee that a `YAML` instance which raised can
+        handle further input, so the envelope builds a loader per document
+        rather than sharing module state across an audit.
+        """
+        directory = tmp_path / ".github" / "workflows"
+        directory.mkdir(parents=True)
+        (directory / "ci.yml").write_text("on: push\n", encoding="utf-8")
+        (directory / "release.yml").write_text("on: push\n", encoding="utf-8")
+        loaders: list[object] = []
+        yaml_type = markdown_envelope.YAML
+
+        def recording_yaml(*, typ: str | None = None) -> object:
+            """Record the loader the envelope builds, then delegate to ruamel."""
+            loader = yaml_type(typ=typ)
+            loaders.append(loader)
+            return loader
+
+        monkeypatch.setattr(markdown_envelope, "YAML", recording_yaml)
+        facts = load_workflows(tmp_path, resolved_root(tmp_path))
+        assert len(facts) == 2, facts
+        assert len(loaders) == 2, loaders
+        assert loaders[0] is not loaders[1], loaders
 
     def test_within_checkout_refuses_a_link_that_leaves_the_checkout(
         self, tmp_path: pathlib.Path
