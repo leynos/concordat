@@ -50,18 +50,24 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   needs no block. A reusable-workflow caller job (`uses:`) is judged by its own
   `concurrency`, not by the jobs inside the called workflow, because those jobs
   are not in this document. One finding per workflow, naming every uncovered
-  job. A block whose group carries a per-run value, such as `github.run_id`,
-  does not cancel: no two runs ever share its group.
+  job. A block whose group carries a value that changes between pushes to the
+  same pull request — `github.run_id`, `github.run_number`, `github.sha` or
+  `github.event.pull_request.head.sha` — does not cancel: the next push's run
+  never shares its group. The documented `github.head_ref || github.run_id`
+  shape is accepted, because the pull-request branch is the one GitHub selects.
 - **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
   pull request through `github.event.pull_request.number` or `github.head_ref`,
   matched case-insensitively, inside a `${{ ... }}` expression. A group that
   spells the marker as literal text, such as `ci-github.head_ref`, is a
   constant and does not count, and neither does a marker inside a quoted string
-  literal, such as `${{ 'github.head_ref' }}`. Every cancelling block is
-  checked on its own: the workflow-level block when it cancels, and each
-  cancelling job block whether or not the workflow block complies, because
-  GitHub applies both concurrency levels. A block whose group would cancel a
-  *different* pull request's run is reported.
+  literal, such as `${{ 'github.head_ref' }}`. A marker used as a comparison
+  operand, such as `${{ github.event.pull_request.number > 0 }}`, renders as a
+  boolean, so every pull request shares the group; the rule treats such a
+  marker as naming no pull request. Every cancelling block is checked on its
+  own: the workflow-level block when it cancels, and each cancelling job block
+  whether or not the workflow block complies, because GitHub applies both
+  concurrency levels. A block whose group would cancel a *different* pull
+  request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
   `policy-input/pr-run-cancellation` document, or a workflow could not be
   decoded, declares no trigger, has a trigger shape the rule cannot classify,
@@ -83,8 +89,13 @@ audited.
 - **Not cancelling:** an absent value, `false`, the string `"false"`, a value
   that is neither `true` nor an expression, the string shorthand
   `concurrency: <group>`, which leaves `cancel-in-progress` at its default of
-  false, and any group built from a per-run value (`github.run_id`,
-  `github.run_number` or `github.run_attempt`), which no later run can share.
+  false, and any group built from a value that changes between pushes
+  (`github.run_id`, `github.run_number`, `github.sha` or
+  `github.event.pull_request.head.sha`), which the next push's run never
+  shares. A `||` chain is judged by the branch GitHub selects:
+  `github.head_ref || github.run_id` keeps its pull-request branch, while
+  `github.run_id || github.head_ref` does not. `github.run_attempt` is not
+  treated as varying, because it is 1 on the first attempt of every run.
 
 `concurrency` values that are not a non-empty string or an object with a
 non-empty string `group` and a boolean-or-string `cancel-in-progress` are not
@@ -122,11 +133,13 @@ a group is *unique enough* beyond naming the pull request, such as including
 the workflow name, is not judged.
 
 The marker check is syntactic: the rule confirms that the marker appears in the
-evaluated part of the group, not that the expression preserves the pull
-request's identity. An expression that transforms the marker, such as the
-comparison `${{ github.event.pull_request.number > 0 }}`, which renders as a
-boolean, is not detected. Per-run detection covers `github.run_id`,
-`github.run_number` and `github.run_attempt`; a group made unique some other
+evaluated part of the group, unquoted and not directly compared, not that the
+expression preserves the pull request's identity. Passing the marker to a
+function that returns something else, such as
+`contains(github.head_ref, 'release')`, is not detected. Branch selection is
+judged the same way: the rule assumes a first branch that names the pull
+request is the one GitHub selects, without evaluating truthiness. Varying-value
+detection covers the four values named above; a group made unique some other
 way is not detected.
 
 ## Evidence

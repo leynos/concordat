@@ -30,7 +30,18 @@ PR_NUMBER_MARKERS := {"github.event.pull_request.number", "github.head_ref"}
 # strings whole rather than stopping at the first `}`.
 EXPRESSION_PATTERN := `\$\{\{((?:[^'}]*|'[^']*')*)\}\}`
 
-RUN_SPECIFIC_MARKERS := {"github.run_id", "github.run_number", "github.run_attempt"}
+# Values that change between pushes to the same pull request. A group built
+# from one of them never matches the previous push's run, so nothing is
+# superseded. `github.run_attempt` is deliberately absent: it is 1 on the first
+# attempt of every run, so a group carrying it still matches the previous
+# push's run. `github.sha` is the merge commit for a `pull_request` run, which
+# changes with every push.
+RUN_VARYING_MARKERS := {
+	"github.run_id",
+	"github.run_number",
+	"github.sha",
+	"github.event.pull_request.head.sha",
+}
 
 finding(rule_id, severity, verdict, path, line, message) := {
 	"rule_id": rule_id,
@@ -272,15 +283,48 @@ is_expression(value) if {
 	endswith(trimmed, "}}")
 }
 
-# The evaluated text of every `${{ ... }}` expression in a string, with
-# quoted string literals removed. Text outside an expression is not evaluated
-# and does not contribute.
-unquoted_expression_text(text) := unquoted if {
-	unquoted := concat("", [part |
-		some match in regex.find_all_string_submatch_n(EXPRESSION_PATTERN, text, -1)
+# The evaluated body of every `${{ ... }}` expression in a string, with quoted
+# string literals removed. Text outside an expression is not evaluated and does
+# not contribute, and a quoted string renders as its literal characters rather
+# than as the reference it spells.
+expression_bodies(text) := [body |
+	some match in regex.find_all_string_submatch_n(EXPRESSION_PATTERN, text, -1)
+	body := concat("", [part |
 		some index, part in split(match[1], "'")
 		index % 2 == 0
 	])
+]
+
+unquoted_expression_text(text) := concat("", expression_bodies(text))
+
+# GitHub evaluates a `||` chain from the left and takes the first truthy
+# branch, so every branch is a candidate value for the group.
+expression_branches(body) := [trim_space(branch) | some branch in split(body, "||")]
+
+# A marker that is compared, as in `github.event.pull_request.number > 0`,
+# renders as a boolean: every pull request produces the same value, so the
+# group does not carry the identity the marker spells.
+marker_is_compared(text, marker) if {
+	some index, following in split(lower(text), marker)
+	index > 0
+	follows_comparison(following)
+}
+
+follows_comparison(text) if {
+	trimmed := trim_left(text, " \t")
+	some operator in {"==", "!=", ">=", "<=", ">", "<"}
+	startswith(trimmed, operator)
+}
+
+mentions_pull_request(text) if {
+	some marker in PR_NUMBER_MARKERS
+	contains(lower(text), marker)
+	not marker_is_compared(text, marker)
+}
+
+mentions_run_varying_value(text) if {
+	some marker in RUN_VARYING_MARKERS
+	contains(lower(text), marker)
 }
 
 # A trimmed literal-false expression is the one expression that provably does
@@ -305,16 +349,45 @@ cancels_in_progress(value) if {
 	not literal_false_expression(value)
 }
 
-# A group that includes a per-run value is different for every run, so no
-# later run can ever share it and supersede the earlier ones. Such a block
-# does not cancel in any useful sense, whatever `cancel-in-progress` says.
+# A branch is stable when it carries no value that changes between pushes to
+# the same pull request.
+branch_is_stable(branch) if {
+	not mentions_run_varying_value(branch)
+}
+
+# The branch GitHub selects for a pull request decides the group. In the
+# documented `github.head_ref || github.run_id` shape the pull-request branch
+# is selected, and the run-id fallback only applies to pushes, which this rule
+# does not audit. When the first branch names no pull request, any branch may
+# be selected, so every one must be stable.
+expression_is_stable(body) if {
+	branches := expression_branches(body)
+	first := branches[0]
+	mentions_pull_request(first)
+	branch_is_stable(first)
+}
+
+expression_is_stable(body) if {
+	branches := expression_branches(body)
+	first := branches[0]
+	not mentions_pull_request(first)
+	every branch in branches {
+		branch_is_stable(branch)
+	}
+}
+
+# A group whose expressions all keep their value between pushes to one pull
+# request is stable: the next push's run joins it and cancels the superseded
+# one. A group built from a value that changes instead never matches the
+# previous push's run, so it does not cancel in any useful sense, whatever
+# `cancel-in-progress` says. A plain string is a constant group: it never
+# varies, so RC-002 judges whether it names the pull request.
 group_is_stable(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	text := lower(unquoted_expression_text(group))
-	every marker in RUN_SPECIFIC_MARKERS {
-		not contains(text, marker)
+	every body in expression_bodies(group) {
+		expression_is_stable(body)
 	}
 }
 
@@ -339,18 +412,14 @@ job_cancels(job) if {
 # that spells the marker as literal text, such as `ci-github.head_ref`, is a
 # constant, so every pull request shares it and cancels the others. Match the
 # marker only inside the unquoted part of a `${{ ... }}` expression; inside
-# quotes it is a string literal, as in `${{ 'github.head_ref' }}`.
-#
-# GitHub expressions quote strings with single quotes, so splitting an
-# expression on `'` puts the evaluated text at even indices and the literals
-# at odd ones. The expression pattern consumes a quoted string whole, so a
-# brace inside one, as in `format('ci-{0}', ...)`, does not end the match.
+# quotes it is a string literal, as in `${{ 'github.head_ref' }}`. A marker
+# used as a comparison operand is also excluded, because the comparison
+# renders as a boolean rather than as the pull request's identity.
 group_names_pull_request(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	some marker in PR_NUMBER_MARKERS
-	contains(lower(unquoted_expression_text(group)), marker)
+	mentions_pull_request(unquoted_expression_text(group))
 }
 
 # A missing `if` key is undefined rather than null, and an undefined

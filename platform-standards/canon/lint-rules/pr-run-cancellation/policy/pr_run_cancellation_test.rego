@@ -163,6 +163,39 @@ test_a_quoted_run_id_literal_does_not_destabilise_the_group if {
 	count(findings(data.fixtures.quoted_run_id_literal)) == 0
 }
 
+# The merge commit of a pull-request run changes with every push, so the next
+# push's run never joins the previous group.
+test_a_sha_group_is_noncompliant if {
+	profile(data.fixtures.sha_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_head_sha_group_is_noncompliant if {
+	profile(data.fixtures.head_sha_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# `github.run_attempt` is 1 on the first attempt of every run, so a group
+# carrying it still matches the previous push's run.
+test_a_run_attempt_group_still_cancels if {
+	count(findings(data.fixtures.run_attempt_group)) == 0
+}
+
+# GitHub documents this shape for cancelling pull-request runs without
+# cancelling push runs: the pull-request branch is selected, and the run-id
+# fallback applies only to pushes, which the rule does not audit.
+test_a_run_id_fallback_after_the_pull_request_branch_is_compliant if {
+	count(findings(data.fixtures.head_ref_run_id_fallback)) == 0
+}
+
+test_a_run_id_before_the_pull_request_branch_does_not_cancel if {
+	profile(data.fixtures.run_id_before_head_ref) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A comparison renders as a boolean, so every pull request produces the same
+# group even though the marker is evaluated.
+test_a_compared_marker_does_not_name_the_pull_request if {
+	profile(data.fixtures.compared_marker_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 test_a_push_only_workflow_is_not_audited if {
 	count(findings(data.fixtures.push_only)) == 0
 }
