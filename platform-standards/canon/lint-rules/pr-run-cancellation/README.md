@@ -57,7 +57,11 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   group containing a per-run value, and a group containing the attempt number
   leaves an older run that was re-run untouched. The documented
   `github.head_ref || github.run_id` shape is accepted, because the
-  pull-request branch is the one GitHub selects.
+  pull-request branch is the one GitHub selects. A `||` inside a call argument
+  is that argument's own fallback, not a branch of the whole group, so a run
+  value beside it stays in the group; when such a nested fallback sits beside a
+  run value, whether the group varies cannot be read from the text, and the
+  workflow is reported indeterminate instead of passing or failing.
 - **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
   pull request through `github.event.pull_request.number` or `github.head_ref`,
   matched case-insensitively, inside a `${{ ... }}` expression. A group that
@@ -71,14 +75,15 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   change that, and another occurrence in the same group can still supply the
   identity. The marker must be the whole property name: `github.head_ref_name`
   is a different property, which GitHub resolves to an empty string, so a
-  longer name that merely starts with the marker does not count. Only the first
-  `||` branch counts, because that is the one a pull request selects, so a
+  longer name that merely starts with the marker does not count. Only the
+  selected head counts, because that is the value a pull request carries, so a
   marker that appears only in a constant-first fallback, as in
-  `${{ 'ci' || github.head_ref }}`, does not count either. Every cancelling
-  block is checked on its own: the workflow-level block when it cancels, and
-  each cancelling job block whether or not the workflow block complies, because
-  GitHub applies both concurrency levels. A block whose group would cancel a
-  *different* pull request's run is reported.
+  `${{ 'ci' || github.head_ref }}`, or only in a fallback nested inside a call
+  argument, does not count either. Every cancelling block is checked on its
+  own: the workflow-level block when it cancels, and each cancelling job block
+  whether or not the workflow block complies, because GitHub applies both
+  concurrency levels. A block whose group would cancel a *different* pull
+  request's run is reported.
 - **EN-001** (indeterminate): the envelope is not a schema-1
   `policy-input/pr-run-cancellation` document, or a workflow could not be
   decoded, declares no trigger, has a trigger shape the rule cannot classify,
@@ -146,11 +151,14 @@ The marker check is syntactic: the rule confirms that the marker appears in the
 selected part of the group, unquoted and not directly compared, not that the
 expression preserves the pull request's identity. Passing the marker to a
 function that returns something else, such as
-`contains(github.head_ref, 'release')`, is not detected. Branch selection is
-judged by position: the first `||` branch is treated as the one GitHub selects,
-without evaluating truthiness, so a marker that appears only in a later branch
-does not count. Varying-value detection covers the five values named above; a
-group made unique some other way is not detected.
+`contains(github.head_ref, 'release')`, is not detected. Selection is judged by
+position: the text before the first `||` is treated as the value GitHub takes,
+without evaluating truthiness, so a marker that appears only after one does not
+count. Parentheses are counted to keep a fallback nested in a call argument out
+of the surrounding branch; a nested fallback beside a value that changes
+between runs is reported indeterminate rather than judged. Varying-value
+detection covers the five values named above; a group made unique some other
+way is not detected.
 
 ## Evidence
 

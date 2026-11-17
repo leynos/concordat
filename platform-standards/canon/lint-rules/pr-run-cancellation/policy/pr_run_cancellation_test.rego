@@ -216,6 +216,36 @@ test_a_compared_second_use_does_not_disqualify_the_first if {
 	count(findings(data.fixtures.format_with_compared_second_use)) == 0
 }
 
+# A `||` inside a call argument is that argument's own fallback, so the run id
+# beside it is part of the group however the branches are ordered. Whether it
+# is selected for a pull request cannot be read from the text, so the evidence
+# is indeterminate rather than a pass or a defect.
+test_a_run_value_beside_a_nested_fallback_is_indeterminate if {
+	profile(data.fixtures.nested_format_fallback_group) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
+test_a_nested_fallback_on_a_job_is_reported_once_per_workflow if {
+	found := findings(data.fixtures.nested_format_fallback_jobs)
+	count(found) == 1
+	some f in found
+	f.rule_id == "EN-001"
+	contains(f.msg, "test")
+}
+
+test_a_nested_fallback_is_fine_when_nothing_beside_it_varies if {
+	count(findings(data.fixtures.nested_fallback_without_run_value)) == 0
+}
+
+# The nested fallback is only reached when the constant is falsy, which a pull
+# request never supplies, so the group is constant.
+test_a_marker_only_in_a_nested_fallback_does_not_name_the_pull_request if {
+	profile(data.fixtures.marker_only_in_nested_fallback) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_run_value_in_an_unselected_fallback_is_compliant if {
+	count(findings(data.fixtures.nested_run_value_in_unselected_fallback)) == 0
+}
+
 # `github.head_ref_name` is a different property; GitHub resolves an unknown
 # property to an empty string.
 test_a_property_with_a_marker_prefix_does_not_name_the_pull_request if {

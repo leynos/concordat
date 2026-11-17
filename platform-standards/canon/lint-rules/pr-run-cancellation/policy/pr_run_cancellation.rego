@@ -295,9 +295,42 @@ expression_bodies(text) := [body |
 	])
 ]
 
+# A `||` inside a call argument is that argument's own fallback, not a branch
+# of the whole expression, so only an operator outside every parenthesis
+# separates branches. Counting parentheses is enough here because the body has
+# already lost its quoted literals, and `{0}` placeholders carry none.
+parenthesis_delta(text) := count(split(text, "(")) - count(split(text, ")"))
+
+depth_before(tokens, index) := sum([delta |
+	some position in numbers.range(0, count(tokens) - 1)
+	position < index
+	delta := parenthesis_delta(tokens[position])
+])
+
+branch_starts(tokens) := sort(array.concat([0], [index |
+	some index in numbers.range(0, count(tokens) - 1)
+	index > 0
+	depth_before(tokens, index) == 0
+]))
+
+next_start(starts, index, fallback) := starts[index + 1] if index + 1 < count(starts)
+
+next_start(starts, index, fallback) := fallback if index + 1 >= count(starts)
+
 # GitHub evaluates a `||` chain from the left and takes the first truthy
 # branch, so every branch is a candidate value for the group.
-expression_branches(body) := [trim_space(branch) | some branch in split(body, "||")]
+expression_branches(body) := [trim_space(branch) |
+	tokens := split(body, "||")
+	starts := branch_starts(tokens)
+	some index, start in starts
+	end := next_start(starts, index, count(tokens))
+	branch := concat("||", array.slice(tokens, start, end))
+]
+
+# The value GitHub selects when it is truthy is the text before the first
+# `||`, so a marker that sits only after one - including a fallback nested in a
+# call argument - is not the value the group carries.
+selected_head(branch) := trim_space(split(branch, "||")[0])
 
 # A marker names the pull request when at least one occurrence is evaluated as
 # its value. An occurrence used as a comparison operand, as in
@@ -369,24 +402,67 @@ branch_is_stable(branch) if {
 	not mentions_run_varying_value(branch)
 }
 
+# A branch that keeps a nested fallback carries a value whose selection the
+# text alone cannot settle: the varying value may sit in the surrounding
+# argument list, or only in a fallback a pull request never selects.
+branch_is_unclassifiable(branch) if {
+	contains(branch, "||")
+	mentions_run_varying_value(branch)
+}
+
 # The branch GitHub selects for a pull request decides the group. In the
 # documented `github.head_ref || github.run_id` shape the pull-request branch
 # is selected, and the run-id fallback only applies to pushes, which this rule
-# does not audit. When the first branch names no pull request, any branch may
-# be selected, so every one must be stable.
-expression_is_stable(body) if {
+# does not audit. When the selected head names no pull request, any branch may
+# be selected, so every one must be stable. A branch whose stability cannot be
+# read is reported as indeterminate rather than guessed at.
+expression_stability(body) := "stable" if {
 	branches := expression_branches(body)
 	first := branches[0]
-	mentions_pull_request(first)
+	mentions_pull_request(selected_head(first))
 	branch_is_stable(first)
 }
 
-expression_is_stable(body) if {
+expression_stability(body) := "unclassifiable" if {
 	branches := expression_branches(body)
 	first := branches[0]
-	not mentions_pull_request(first)
+	mentions_pull_request(selected_head(first))
+	branch_is_unclassifiable(first)
+}
+
+expression_stability(body) := "stable" if {
+	branches := expression_branches(body)
+	first := branches[0]
+	not mentions_pull_request(selected_head(first))
 	every branch in branches {
 		branch_is_stable(branch)
+	}
+}
+
+expression_stability(body) := "unclassifiable" if {
+	branches := expression_branches(body)
+	first := branches[0]
+	not mentions_pull_request(selected_head(first))
+	some branch in branches
+	branch_is_unclassifiable(branch)
+}
+
+expression_stability(body) := "unstable" if {
+	branches := expression_branches(body)
+	first := branches[0]
+	mentions_pull_request(selected_head(first))
+	not branch_is_stable(first)
+	not branch_is_unclassifiable(first)
+}
+
+expression_stability(body) := "unstable" if {
+	branches := expression_branches(body)
+	first := branches[0]
+	not mentions_pull_request(selected_head(first))
+	some branch in branches
+	not branch_is_stable(branch)
+	every branch in branches {
+		not branch_is_unclassifiable(branch)
 	}
 }
 
@@ -396,20 +472,39 @@ expression_is_stable(body) if {
 # previous push's run, so it does not cancel in any useful sense, whatever
 # `cancel-in-progress` says. A plain string is a constant group: it never
 # varies, so RC-002 judges whether it names the pull request.
-group_is_stable(value) if {
+group_stability(value) := "stable" if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	every body in expression_bodies(group) {
-		expression_is_stable(body)
+		expression_stability(body) == "stable"
 	}
+}
+
+group_stability(value) := "unclassifiable" if {
+	is_object(value)
+	group := object.get(value, "group", null)
+	is_string(group)
+	some body in expression_bodies(group)
+	expression_stability(body) == "unclassifiable"
+}
+
+group_stability(value) := "unstable" if {
+	is_object(value)
+	group := object.get(value, "group", null)
+	is_string(group)
+	every body in expression_bodies(group) {
+		expression_stability(body) != "unclassifiable"
+	}
+	some body in expression_bodies(group)
+	expression_stability(body) == "unstable"
 }
 
 concurrency_cancels(value) if {
 	is_object(value)
 	"cancel-in-progress" in object.keys(value)
 	cancels_in_progress(value["cancel-in-progress"])
-	group_is_stable(value)
+	group_stability(value) == "stable"
 }
 
 workflow_cancels(workflow) if {
@@ -429,16 +524,17 @@ job_cancels(job) if {
 # `${{ ... }}` expression; inside quotes it is a string literal, as in
 # `${{ 'github.head_ref' }}`. A marker used as a comparison operand is also
 # excluded, because the comparison renders as a boolean rather than as the pull
-# request's identity. Finally, the first `||` branch is the one a pull request
-# selects, so a marker that appears only in a constant-first fallback, as in
-# `${{ 'ci' || github.head_ref }}`, does not name anything.
+# request's identity. Finally, the selected head is the one a pull request
+# carries, so a marker that appears only in a constant-first fallback, as in
+# `${{ 'ci' || github.head_ref }}` or in a fallback nested inside a call
+# argument, does not name anything.
 group_names_pull_request(value) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
 	some body in expression_bodies(group)
 	branches := expression_branches(body)
-	mentions_pull_request(branches[0])
+	mentions_pull_request(selected_head(branches[0]))
 }
 
 # A missing `if` key is undefined rather than null, and an undefined
@@ -473,13 +569,38 @@ invalid_job_concurrency(job) if {
 # RC-001 and RC-002 are only stated when every concurrency block in the
 # workflow can be classified. Reporting noncompliance from a shape the policy
 # could not read would turn an unknown into a defect.
-concurrency_evaluable(workflow) if {
+concurrency_shapes_readable(workflow) if {
 	valid_jobs(workflow)
 	not invalid_workflow_concurrency(workflow)
 	jobs := workflow_jobs(workflow)
 	every name in object.keys(jobs) {
 		not invalid_job_concurrency(jobs[name])
 	}
+}
+
+workflow_group_unclassifiable(workflow) if {
+	workflow_has_concurrency(workflow)
+	group_stability(workflow_concurrency(workflow)) == "unclassifiable"
+}
+
+unclassifiable_job_groups(workflow) := {name |
+	some name in object.keys(workflow_jobs(workflow))
+	group_stability(job_concurrency(workflow_jobs(workflow)[name])) == "unclassifiable"
+} if {
+	concurrency_shapes_readable(workflow)
+}
+
+# A group whose value cannot be read leaves the workflow's substantive
+# judgement waiting, exactly as an unreadable concurrency shape does.
+concurrency_unclassifiable(workflow) if workflow_group_unclassifiable(workflow)
+
+concurrency_unclassifiable(workflow) if {
+	count(unclassifiable_job_groups(workflow)) > 0
+}
+
+concurrency_evaluable(workflow) if {
+	concurrency_shapes_readable(workflow)
+	not concurrency_unclassifiable(workflow)
 }
 
 uncovered_jobs(workflow) := {name |
@@ -618,6 +739,25 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 	}
 	count(invalid) > 0
 	msg := sprintf("job(s) %s have a concurrency block that is not a non-empty string or an object with a string group and a boolean or string cancel-in-progress", [concat(", ", sort(invalid))])
+}
+
+deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	msg := "the workflow's concurrency group nests a `||` fallback inside a call argument beside a value that changes between runs, so whether it cancels a superseded run cannot be classified"
+	envelope_ok
+	some workflow in input.workflows
+	evaluable_workflow(workflow)
+	concurrency_shapes_readable(workflow)
+	workflow_group_unclassifiable(workflow)
+}
+
+deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflow), 0, msg) if {
+	envelope_ok
+	some workflow in input.workflows
+	evaluable_workflow(workflow)
+	concurrency_shapes_readable(workflow)
+	names := unclassifiable_job_groups(workflow)
+	count(names) > 0
+	msg := sprintf("job(s) %s have a concurrency group that nests a `||` fallback inside a call argument beside a value that changes between runs, so whether it cancels a superseded run cannot be classified", [concat(", ", sort(names))])
 }
 
 deny contains finding("RC-001", severity, "noncompliant", workflow_path(workflow), 0, msg) if {
