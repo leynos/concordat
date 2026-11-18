@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools as it
+import re
 import typing as typ
 import unicodedata as ud
 
@@ -120,6 +121,11 @@ def _makeutil_revisions(records: dict[str, LedgerRecord]) -> str:
 # a finding message from the policy — is free text that may contain either.
 _CELL_ESCAPES: typ.Final = str.maketrans({"\\": "\\\\", "|": "\\|"})
 
+# A bare URL trips markdownlint's MD034. Angle brackets are Markdown's syntax
+# for a literal URL, which still renders as a link, and the trailing
+# punctuation class keeps a sentence-ending `.` or `;` outside the brackets.
+_URL_PATTERN: typ.Final = re.compile(r"https?://[^\s<>|]*[^\s<>|.,;:)\]]")
+
 
 def _cell(value: str) -> str:
     """Return *value* rendered safely inside a Markdown table cell."""
@@ -127,7 +133,8 @@ def _cell(value: str) -> str:
     # included, so a multi-line detail becomes one line rather than breaking
     # the table. Backslash is escaped in the same pass as the pipe, so an
     # already-escaped pipe cannot be produced by escaping twice.
-    return " ".join(value.split()).translate(_CELL_ESCAPES)
+    text = " ".join(value.split()).translate(_CELL_ESCAPES)
+    return _URL_PATTERN.sub(lambda match: f"<{match.group(0)}>", text)
 
 
 def _findings_summary(findings: list[FindingRecord]) -> str:
