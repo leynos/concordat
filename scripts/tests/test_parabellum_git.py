@@ -166,9 +166,78 @@ class TestCloneAndAuditPackage:
         assert result.rule_package == "nested-cargo-offline-tests", result
 
 
+_PIN: typ.Final = "0123456789abcdef0123456789abcdef01234567"
+
+
+class TestRevisionCheckout:
+    """A manifest revision is audited without trusting a moving branch head."""
+
+    def test_a_pinned_revision_needs_no_head_lookup(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The pin is the answer, so a pinned entry makes no network call."""
+        monkeypatch.setattr(
+            sweep,
+            "_git",
+            lambda *_args, **_kwargs: pytest.fail("git must not run for a pin"),
+        )
+
+        assert sweep.resolve_head("leynos", "cuprum", _PIN) == _PIN
+
+    def test_a_pinned_revision_is_fetched_exactly(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The checkout fetches the pinned SHA rather than a branch tip."""
+        calls: list[list[str]] = []
+        working_dirs: list[object] = []
+
+        def fake_git(args: list[str], *, cwd: object = None, **_: object) -> str:
+            calls.append(list(args))
+            working_dirs.append(cwd)
+            return f"{_PIN}\n" if args[0] == "rev-parse" else ""
+
+        audited: list[str] = []
+
+        def fake_run_rule(rule_package: str, _checkout: object) -> sweep.RuleRunResult:
+            audited.append(rule_package)
+            return sweep.RuleRunResult(
+                rule_package=rule_package,
+                verdict="compliant",
+                findings=(),
+            )
+
+        monkeypatch.setattr(sweep, "_git", fake_git)
+        monkeypatch.setattr(sweep, "run_rule", fake_run_rule)
+
+        sha, result = sweep.clone_and_audit(
+            "leynos",
+            "cuprum",
+            package="dependency-family-contracts",
+            revision=_PIN,
+        )
+
+        assert sha == _PIN, sha
+        assert result.verdict == "compliant", result
+        assert audited == ["dependency-family-contracts"], audited
+        assert all(cwd is not None for cwd in working_dirs), working_dirs
+        assert "clone" not in [args[0] for args in calls], calls
+        assert [
+            "fetch",
+            "--depth",
+            "1",
+            "--quiet",
+            "https://github.com/leynos/cuprum",
+            _PIN,
+        ] in calls, calls
+
+
 def _result(package: str) -> sweep.RuleRunResult:
     """Return a clean result for *package*."""
     return sweep.RuleRunResult(rule_package=package, verdict="compliant", findings=())
+
+
 
 
 class TestCloneDestination:

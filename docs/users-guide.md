@@ -1683,7 +1683,8 @@ append-only campaign ledger `docs/parabellum/ledger.jsonl`:
 
 ```shell
 uv run python -m scripts.parabellum_sweep \
-  [--only a,b] [--limit N] [--force] [--package PACKAGE]
+  [--only a,b] [--limit N] [--force] [--package PACKAGE] \
+  [--estate PATH] [--ledger PATH]
 uv run python -m scripts.parabellum_sweep report [--package PACKAGE] [--output PATH]
 ```
 
@@ -1716,6 +1717,26 @@ repository's latest record. It reports both occurrence counts and, per rule,
 the number of distinct repositories with noncompliant evidence, the number with
 indeterminate-only evidence, and how many would fail if the package's findings
 were promoted to error severity.
+
+`--estate` and `--ledger` point the sweep at another manifest and ledger. Each
+ledger record names the evaluated package and the version read from that
+package's `rule.yaml`, so records from different rule packages never
+masquerade as one campaign.
+
+A manifest entry may pin a full forty-character commit SHA with `revision:`. A
+pinned entry is fetched at exactly that commit rather than at the
+default-branch head, which is what makes a report-only pilot reproducible after
+the branch has moved:
+
+```shell
+uv run python -m scripts.parabellum_sweep \
+  --estate docs/parabellum/dependency-family-pilot/estate.yaml \
+  --ledger docs/parabellum/dependency-family-pilot/ledger.jsonl \
+  --package dependency-family-contracts
+```
+
+The dependency-family pilot is documented in
+`docs/parabellum/dependency-family-pilot/assessment.md`.
 
 ## Previewing and applying estate changes
 

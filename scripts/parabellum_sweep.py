@@ -1,7 +1,8 @@
 """Operation Parabellum estate sweep driver.
 
 Clones each Rust repository named in ``docs/parabellum/estate.yaml`` at its
-current default-branch head, audits it with the selected rule package, and
+current default-branch head, or at the full forty-character `revision` that
+entry pins, audits it with the selected rule package, and
 appends one JSON record per repository to the append-only campaign ledger
 ``docs/parabellum/ledger.jsonl``. The default package is
 ``rust-makefile-baseline``; ``--package`` selects another installed package,
@@ -266,8 +267,34 @@ def _git(
     return completed.stdout
 
 
-def resolve_head(owner: str, name: str) -> str:
-    """Return the default-branch head SHA without cloning."""
+def resolve_head(owner: str, name: str, revision: str | None = None) -> str:
+    """Return the revision to audit, resolving the head only when unpinned.
+
+    A manifest pin is already the answer; returning it without a remote lookup
+    keeps a pilot run reproducible even if the default branch moved since the
+    pin was chosen.
+
+    Parameters
+    ----------
+    owner:
+        The GitHub owner.
+    name:
+        The repository name.
+    revision:
+        The full commit SHA to audit, or None to resolve the head.
+
+    Returns
+    -------
+    str
+        The revision the audit should check out.
+
+    Raises
+    ------
+    OperationalRuleError
+        If an unpinned head cannot be resolved from the remote.
+    """
+    if revision is not None:
+        return revision
     repository = f"{owner}/{name}"
     output = _git(
         ["ls-remote", f"https://github.com/{owner}/{name}", "HEAD"],
@@ -286,12 +313,47 @@ def resolve_head(owner: str, name: str) -> str:
         ) from error
 
 
+def _checkout_revision(
+    checkout: pathlib.Path,
+    owner: str,
+    name: str,
+    revision: str,
+    repository: str,
+) -> None:
+    """Create *checkout* at exactly *revision* without downloading history."""
+    checkout.mkdir()
+    for args in (
+        ["init", "--quiet"],
+        [
+            "fetch",
+            "--depth",
+            "1",
+            "--quiet",
+            f"https://github.com/{owner}/{name}",
+            revision,
+        ],
+        ["checkout", "--quiet", "--detach", "FETCH_HEAD"],
+    ):
+        _git(
+            args,
+            cwd=checkout,
+            operation="checkout-revision",
+            resource=repository,
+        )
+
+
 def clone_and_audit(
     owner: str,
     name: str,
+    *,
     package: str = RULE_PACKAGE,
+    revision: str | None = None,
 ) -> tuple[str, RuleRunResult]:
-    """Shallow-clone the repository, audit it, and return (sha, result).
+    """Clone or fetch the repository, audit it, and return (sha, result).
+
+    An unpinned entry audits the default-branch head. A pinned entry fetches
+    just that commit, so a pilot can name the exact tree it audited even after
+    the branch has moved.
 
     Parameters
     ----------
@@ -299,6 +361,8 @@ def clone_and_audit(
         The repository to audit.
     package:
         Rule package to evaluate, defaulting to the campaign package.
+    revision:
+        The full commit SHA to audit, or None for the default-branch head.
 
     Returns
     -------
@@ -309,7 +373,8 @@ def clone_and_audit(
     ------
     OperationalRuleError
         If an identifier is invalid, the clone destination escapes the scratch
-        root, or a git invocation fails.
+        root, the pinned commit does not match the checkout, or a git
+        invocation fails.
     """
     repository = f"{owner}/{name}"
     _validated_identifier(owner, _OWNER_PATTERN, "owner", repository)
@@ -327,24 +392,36 @@ def clone_and_audit(
                 operation="clone-repository",
                 resource=repository,
             )
-        _git(
-            [
-                "clone",
-                "--depth",
-                "1",
-                "--quiet",
-                f"https://github.com/{owner}/{name}",
-                str(checkout),
-            ],
-            operation="clone-repository",
-            resource=repository,
-        )
+        if revision is None:
+            _git(
+                [
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--quiet",
+                    f"https://github.com/{owner}/{name}",
+                    str(checkout),
+                ],
+                operation="clone-repository",
+                resource=repository,
+            )
+        else:
+            _checkout_revision(checkout, owner, name, revision, repository)
         sha = _git(
             ["rev-parse", "HEAD"],
             cwd=checkout,
             operation="clone-repository",
             resource=repository,
         ).strip()
+        if revision is not None and sha != revision:
+            message = (
+                f"checkout for {repository} is at {sha}, not the pinned {revision}"
+            )
+            raise OperationalRuleError(
+                message,
+                operation="checkout-revision",
+                resource=repository,
+            )
         result = run_rule(package, checkout)
         return sha, result
 
@@ -359,7 +436,12 @@ def _audit_record(
     repository = f"{owner}/{entry.name}"
     record = _base_record(repository, package=package, version=version)
     try:
-        sha, result = clone_and_audit(owner, entry.name, package=package)
+        sha, result = clone_and_audit(
+            owner,
+            entry.name,
+            package=package,
+            revision=entry.revision,
+        )
     except OperationalRuleError as error:
         record["error_detail"] = str(error)
         return record
@@ -450,7 +532,7 @@ class _SweepSession:
         """Process one auditable entry and report whether it consumed an audit slot."""
         repository = f"{self.owner}/{entry.name}"
         try:
-            head = resolve_head(self.owner, entry.name)
+            head = resolve_head(self.owner, entry.name, entry.revision)
         except OperationalRuleError as error:
             record = _base_record(
                 repository, package=self.package, version=self.package_version

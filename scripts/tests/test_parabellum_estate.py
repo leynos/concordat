@@ -22,6 +22,14 @@ def _repository_manifest(name: str) -> str:
     return f"schema_version: 1\nowner: leynos\nrepositories:\n  - name: {name}\n"
 
 
+def _revision_manifest(revision: str) -> str:
+    """Return a manifest whose only questionable value is a revision pin."""
+    return (
+        "schema_version: 1\nowner: leynos\nrepositories:\n"
+        f"  - name: cuprum\n    revision: {revision}\n"
+    )
+
+
 class TestLoadEstate:
     """Parsing of the estate inventory."""
 
@@ -39,6 +47,19 @@ class TestLoadEstate:
         assert estate.repositories[0].excluded is None, (
             "wireframe should have no exclusion reason"
         )
+        assert estate.repositories[0].revision is None, (
+            "an unpinned repository should carry no revision"
+        )
+
+    def test_parses_a_full_revision_pin(self, tmp_path: pathlib.Path) -> None:
+        """A pinned entry records the full commit SHA the sweep must audit."""
+        pin = "0123456789abcdef0123456789abcdef01234567"
+        manifest = tmp_path / "estate.yaml"
+        manifest.write_text(_revision_manifest(pin))
+
+        estate = sweep.load_estate(manifest)
+
+        assert estate.repositories[0].revision == pin, estate.repositories[0]
 
 
 class TestManifestIdentifiers:
@@ -225,6 +246,26 @@ class TestManifestIdentifiers:
                 "owner: leynos\nrepositories:\n  - {name: gauss, excluded: 7}\n",
                 "non-string exclusion reason",
                 id="non-string-exclusion-reason",
+            ),
+            pytest.param(
+                _revision_manifest("7"),
+                "invalid revision",
+                id="revision-not-a-string",
+            ),
+            pytest.param(
+                _revision_manifest("abc"),
+                "invalid revision",
+                id="revision-too-short",
+            ),
+            pytest.param(
+                _revision_manifest("'0123456789ABCDEF0123456789ABCDEF01234567'"),
+                "invalid revision",
+                id="revision-uppercase",
+            ),
+            pytest.param(
+                _revision_manifest("'0123456789abcdef0123456789abcdef0123456'"),
+                "invalid revision",
+                id="revision-thirty-nine",
             ),
         ],
     )

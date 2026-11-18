@@ -89,6 +89,8 @@ class TestSweepCommand:
             str(estate_path),
             "--ledger",
             str(ledger_path),
+            "--package",
+            "dependency-family-contracts",
         ])
 
         assert exit_code == 0, exit_code
@@ -100,6 +102,7 @@ class TestSweepCommand:
             only=frozenset({"statelet"}),
             limit=1,
             force=True,
+            package="dependency-family-contracts",
         ), call["options"]
 
     @pytest.mark.parametrize(
@@ -420,3 +423,4 @@ class TestReportCommandPackageFlag:
         assert status == 0, error
         assert rendered == [sweep.RULE_PACKAGE], rendered
         assert (tmp_path / "baseline.md").read_text(encoding="utf-8") == "baseline\n"
+# weave: run 'weave explain scripts/tests/test_parabellum_cli.py' for per-hunk detail, 'weave check' to verify your resolution

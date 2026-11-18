@@ -37,13 +37,21 @@ def _fake_result(
     )
 
 
+# A full commit SHA, the only form an estate entry may pin.
+_PIN: typ.Final = "b" * 40
+
+
 class TestSweep:
     """Behaviour of the sweep loop with patched git and audit calls."""
 
     @pytest.fixture(autouse=True)
     def patch_externals(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Replace network and audit boundaries with deterministic fakes."""
-        monkeypatch.setattr(sweep, "resolve_head", lambda owner, name: "a" * 40)
+        monkeypatch.setattr(
+            sweep,
+            "resolve_head",
+            lambda owner, name, revision=None: revision or "a" * 40,
+        )
         monkeypatch.setattr(
             sweep,
             "clone_and_audit",
@@ -114,7 +122,11 @@ class TestSweep:
             calls.append((owner, name))
             return head, _fake_result("compliant")
 
-        monkeypatch.setattr(sweep, "resolve_head", lambda owner, name: head)
+        monkeypatch.setattr(
+            sweep,
+            "resolve_head",
+            lambda owner, name, revision=None: head,
+        )
         monkeypatch.setattr(sweep, "clone_and_audit", fake_clone_and_audit)
 
         estate_path = tmp_path / "estate.yaml"
@@ -298,7 +310,9 @@ class TestSweep:
     ) -> None:
         """A resolve_head failure is ledgered without cloning or auditing."""
 
-        def raise_resolve(owner: str, name: str) -> typ.NoReturn:
+        def raise_resolve(
+            owner: str, name: str, _revision: str | None = None
+        ) -> typ.NoReturn:
             """Fail head resolution with an operational error."""
             message = "gh api head resolution failed"
             raise sweep.OperationalRuleError(
@@ -336,7 +350,9 @@ class TestSweep:
     ) -> None:
         """A head-resolution failure spends one audit slot under --limit."""
 
-        def raise_resolve(owner: str, name: str) -> typ.NoReturn:
+        def raise_resolve(
+            owner: str, name: str, _revision: str | None = None
+        ) -> typ.NoReturn:
             """Fail head resolution with an operational error for any repository."""
             message = "boom"
             raise sweep.OperationalRuleError(
@@ -395,6 +411,40 @@ class TestSweep:
         )
 
 
+    def test_a_pinned_entry_is_audited_at_its_revision(
+        self,
+        tmp_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A manifest revision is audited as-is and ledgered as the commit."""
+        calls: list[tuple[str, str, str | None]] = []
+
+        def fake_clone(
+            owner: str,
+            name: str,
+            package: str = sweep.RULE_PACKAGE,
+            revision: str | None = None,
+            **_kwargs: object,
+        ) -> tuple[str, sweep.RuleRunResult]:
+            """Record the revision handed to the audit and return its result."""
+            calls.append((owner, name, revision))
+            return revision or "", _fake_result("noncompliant")
+
+        monkeypatch.setattr(sweep, "clone_and_audit", fake_clone)
+        estate_path = tmp_path / "pinned.yaml"
+        estate_path.write_text(
+            "schema_version: 1\nowner: leynos\nrepositories:\n"
+            f"  - name: cuprum\n    revision: {_PIN}\n",
+            encoding="utf-8",
+        )
+
+        appended = sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
+
+        assert calls == [("leynos", "cuprum", _PIN)], calls
+        assert appended[0]["commit_sha"] == _PIN, appended[0]
+
+
 class TestPackageSelection:
     """The sweep audits one selectable package and keys records on it.
 
@@ -411,11 +461,15 @@ class TestPackageSelection:
         The fakes honour the package they are handed so a record's provenance
         comes from the same path the real audit takes, without a clone.
         """
-        monkeypatch.setattr(sweep, "resolve_head", lambda owner, name: "a" * 40)
+        monkeypatch.setattr(
+            sweep,
+            "resolve_head",
+            lambda owner, name, revision=None: revision or "a" * 40,
+        )
         monkeypatch.setattr(
             sweep,
             "clone_and_audit",
-            lambda owner, name, package=sweep.RULE_PACKAGE: (
+            lambda owner, name, package=sweep.RULE_PACKAGE, **_kwargs: (
                 "a" * 40,
                 _fake_result("compliant", package),
             ),
@@ -439,12 +493,17 @@ class TestPackageSelection:
             owner: str,
             name: str,
             package: str = sweep.RULE_PACKAGE,
+            **_kwargs: object,
         ) -> tuple[str, sweep.RuleRunResult]:
             """Record the package handed to the audit and return a compliant result."""
             audited.append(package)
             return "a" * 40, _fake_result("compliant", package)
 
-        monkeypatch.setattr(sweep, "resolve_head", lambda owner, name: "a" * 40)
+        monkeypatch.setattr(
+            sweep,
+            "resolve_head",
+            lambda owner, name, revision=None: revision or "a" * 40,
+        )
         monkeypatch.setattr(sweep, "clone_and_audit", fake_clone_and_audit)
 
         sweep.run_sweep(

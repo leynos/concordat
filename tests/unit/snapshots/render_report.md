@@ -1,6 +1,6 @@
 # Operation Parabellum baseline report
 
-Generated from `docs/parabellum/ledger.jsonl` by
+Generated from the campaign ledger by
 `python -m scripts.parabellum_sweep report`. Do not edit by hand.
 
 Rule package: `rust-makefile-baseline` v0.3.2; makeutil `<makeutil-revision>`.
