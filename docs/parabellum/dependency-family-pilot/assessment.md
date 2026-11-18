@@ -67,7 +67,7 @@ head, so the result can be reproduced after the branches move.
 - Evidence kind: static rule run plus generator mutation fixtures.
 - cuprum's `rust/cuprum-rust/Cargo.toml` and netsuke's
   `build_slice_fixture/Cargo.toml` and `test_support/Cargo.toml` are real
-  nested manifests that declare catalog members (`pyo3`, `ortho_config`,
+  nested manifests that declare catalogue members (`pyo3`, `ortho_config`,
   `sha2`) but lie outside the repository's declared Rust surfaces. Each
   produced DF-006 instead of a pass, so the escape is safe: missing evidence is
   indeterminate.

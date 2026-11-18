@@ -539,9 +539,10 @@ actuators that remediate them. Each check ships as a lint rule package under
   entries, a multi-ecosystem group, an unreviewed action pin and missing
   evidence (all indeterminate); negative fixtures for unrelated duplicate
   versions and a pure-Python template; and a report-only pilot over cuprum,
-  femtologging, tei-rapporteur and netsuke. Runtime compatibility remains a
-  matter for each consumer's canary; this work collects facts and evaluates
-  static policy only.
+  femtologging, tei-rapporteur and netsuke, recorded in
+  `docs/parabellum/dependency-family-pilot/assessment.md`. Runtime
+  compatibility remains a matter for each consumer's canary; this work collects
+  facts and evaluates static policy only.
 - [ ] Ship the nested-cargo guard rails (DF12-109): checks that keep nested and
   fixture `cargo` builds on a warm, shared cache. The first, fixture lockfile
   alignment (NC-001, NC-002, `nested-cargo-fixture-lockfiles`), is shipped: a
