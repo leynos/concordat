@@ -14,14 +14,18 @@ the unconditional `build` still compiling. A word the reader cannot see leaves
 the subcommand open, and then any compiling word before the launch is enough.
 
 `-h` or `--help` makes the command compile nothing at all when it is given on
-every path. A `--print` query asks the compiler what it is only when its two
-halves are adjacent: an unreadable or conditional word between `--print` and
-`cfg` may be `link-args`, which builds the crate, so the query is not read as
-a probe. A probe flag in a block counts only when every block open at the flag
-is also open at the launch; a flag in a sibling block that has already closed
-does not. A choice whose arms are fully paired can still cover every path: a
-`-vV` in the `if` arm and a `-V` in its `else` arm reach the shared launch as
-a probe either way.
+every path, and each arm of a fully paired choice is read for its own
+subcommand and its own help flag, so one arm's `metadata` does not hide the
+other arm's `build`. A `--print` query asks the compiler what it is only when
+its two halves are adjacent: an unreadable or conditional word between
+`--print` and `cfg` may be `link-args`, which builds the crate, so the query is
+not read as a probe. A probe flag in a block counts only when every block open
+at the flag is also open at the launch; a flag in a sibling block that has
+already closed does not. A choice whose arms are fully paired can still cover
+every path, whether it is written across statements or on one line: a `-vV` in
+the `if` arm and a `-V` in its `else` arm reach the shared launch as a probe
+either way. A short circuit inside an arm (`query && command.arg("-V")`) can
+still skip that arm's word, so the arm does not cover its path.
 
 A shape the scan cannot attribute -- a helper defined twice, a call reached
 through a path or method, a name a `use` item could import (a glob import names
@@ -102,10 +106,13 @@ class ConditionalWord(typ.NamedTuple):
     *blocks* holds the offsets of the opening braces still open at the call,
     so the arm a word belongs to is known even when two arms sit at the same
     depth. *word* is the literal text, or None when it cannot be read.
+    *guarded* says a `&&` or `||` between the arm's opening brace and the call
+    can skip it, so the arm does not certainly give the word on its path.
     """
 
     blocks: tuple[int, ...]
     word: str | None
+    guarded: bool
 
 
 def _argument_words(
@@ -168,22 +175,23 @@ def _first_positional(words: typ.Iterable[str | ConditionalWord | None]) -> str 
     return ""
 
 
-def _cargo_options(
-    words: typ.Iterable[str | ConditionalWord | None],
-) -> list[str | ConditionalWord | None]:
+def _cargo_options[Word: str | ConditionalWord | None](
+    words: typ.Iterable[Word],
+) -> list[Word]:
     """Return the words cargo itself reads, in order.
 
     A word after a `--` goes to the program the command runs (`cargo test --
     --help` passes `--help` to the test binary), so it is not an option or a
-    subcommand of cargo and is not read here.
+    subcommand of cargo and is not read here. The word type is kept, so a
+    plain path stays plain while a run keeps its conditional words.
 
     Returns
     -------
-    list[str | None | ConditionalWord]
+    list[Word]
         The words before the first `--`, unreadable and conditional ones
         included.
     """
-    options: list[str | ConditionalWord | None] = []
+    options: list[Word] = []
     for word in words:
         if word == "--":
             break
@@ -215,10 +223,12 @@ def _probe_words(
     closed earlier does not; comparing the opening offsets rather than their
     number is what tells the two apart. A word behind a `&&` or `||` short
     circuit may be skipped on the path that runs the command, so it is
-    conditional too. Conditional words are yielded with the blocks open at
-    them rather than dropped, so a choice between arms can still be read. A
-    word behind an unrelated command's call is not this command's. Braces are
-    counted in the masked text.
+    conditional too, and a short circuit between an arm's opening brace and
+    the call leaves the word guarded: the arm itself may not give it.
+    Conditional words are yielded with the blocks open at them rather than
+    dropped, so a choice between arms can still be read. A word behind an
+    unrelated command's call is not this command's. Braces are counted in the
+    masked text.
 
     Yields
     ------
@@ -245,6 +255,13 @@ def _probe_words(
                 SHORT_CIRCUIT.search(before) is not None
                 or tuple(open_blocks) != launch[: len(open_blocks)]
             )
+            # A short circuit that sits inside the word's own block can skip
+            # it on the path through that block, so the block does not
+            # certainly give the word.
+            inner = 0
+            if open_blocks and open_blocks[-1] >= statement.start:
+                inner = open_blocks[-1] - statement.start + 1
+            guarded = conditional and SHORT_CIRCUIT.search(before, inner) is not None
             open_at = found.end() - 1
             close = scan_balanced(statement.masked, open_at)
             if close is None:
@@ -255,7 +272,7 @@ def _probe_words(
             ]
             if conditional:
                 blocks = tuple(open_blocks)
-                yield from (ConditionalWord(blocks, word) for word in words)
+                yield from (ConditionalWord(blocks, word, guarded) for word in words)
             else:
                 yield from words
 
@@ -315,6 +332,92 @@ def _arm_chain(
     return order
 
 
+def _plain_path(
+    words: list[str | ConditionalWord | None], arm: int
+) -> list[str | None]:
+    """Return the words on the path that enters *arm*.
+
+    The unconditional words are on every path, and the conditional words of
+    the other arms are not; the arm's own words keep their place in the
+    sequence, so the positional read sees the order cargo would.
+
+    Returns
+    -------
+    list[str | None]
+        The unconditional words in order, with this arm's conditional words in
+        the place they were written; the other arms' words are omitted.
+    """
+    path: list[str | None] = []
+    for word in words:
+        if isinstance(word, ConditionalWord):
+            if word.blocks[-1] == arm:
+                path.append(word.word)
+        else:
+            path.append(word)
+    return path
+
+
+def _arm_paths(
+    words: list[str | ConditionalWord | None],
+    launch: tuple[int, ...],
+    arms: ArmChoices,
+) -> dict[int, list[str | None]] | None:
+    """Return the cargo words on each path through one exhaustive choice.
+
+    The paths are known only when every conditional word sits in an arm one
+    block below the launch and those arms are the whole of one fully paired
+    `if`/`else` chain: then each path's words are the unconditional ones plus
+    that arm's. A guarded word, or one nested deeper, leaves a path's words
+    uncertain, so no path is returned and the caller falls back to reading the
+    unconditional sequence.
+
+    Returns
+    -------
+    dict[int, list[str | None]] | None
+        Each arm's opening brace with the words cargo reads on that path, or
+        None when the words do not cover one exhaustive choice.
+    """
+    depth = len(launch)
+    by_arm: dict[int, list[str | None]] = {}
+    for word in words:
+        if not isinstance(word, ConditionalWord):
+            continue
+        if (
+            word.guarded
+            or len(word.blocks) != depth + 1
+            or word.blocks[:depth] != launch
+        ):
+            return None
+        by_arm.setdefault(word.blocks[depth], []).append(word.word)
+    order = _arm_chain(by_arm, arms)
+    if order is None:
+        return None
+    return {arm: _cargo_options(_plain_path(words, arm)) for arm in order}
+
+
+def _path_compiles(path: list[str | None]) -> bool:
+    """Report whether one path's words start compiling work.
+
+    The subcommand is the first word that is neither an option nor an option's
+    value. A word the reader cannot see may be the subcommand, and then any
+    compiling word on the path is enough, as it is for a whole run.
+
+    Returns
+    -------
+    bool
+        True when the path's subcommand compiles the crate.
+    """
+    first = _first_positional(path)
+    if first is None:
+        return any(word in _COMPILING for word in path if word is not None)
+    return first in _COMPILING
+
+
+def _asks_for_help(path: list[str | None]) -> bool:
+    """Report whether one path is given a help flag."""
+    return any(word in _HELP_FLAGS for word in path if word is not None)
+
+
 def _every_arm_asks(
     words: list[str | ConditionalWord | None],
     launch: tuple[int, ...],
@@ -326,6 +429,8 @@ def _every_arm_asks(
     the arms must be the whole of one fully paired `if`/`else` chain. A word
     outside such a choice -- behind a short circuit, or nested in a block
     inside an arm -- leaves a path with no answer, so the run is not a probe.
+    So does a guarded word: the arm gives it only when the short circuit
+    beside it does not skip it.
 
     Returns
     -------
@@ -337,7 +442,11 @@ def _every_arm_asks(
     for word in words:
         if not isinstance(word, ConditionalWord):
             continue
-        if len(word.blocks) != depth + 1 or word.blocks[:depth] != launch:
+        if (
+            word.guarded
+            or len(word.blocks) != depth + 1
+            or word.blocks[:depth] != launch
+        ):
             return False
         by_arm.setdefault(word.blocks[depth], []).append(word.word)
     order = _arm_chain(by_arm, arms)
@@ -407,7 +516,7 @@ def is_probe(text: str, start: int, window: Window) -> bool:
     return True
 
 
-def _run_compiles(run: list[Statement], name: str | None) -> bool:
+def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> bool:
     """Report whether one run of the command adds compiling work before it launches.
 
     A help flag makes cargo print its help and exit, so a run that is given one
@@ -421,6 +530,11 @@ def _run_compiles(run: list[Statement], name: str | None) -> bool:
     word the reader cannot see leaves the subcommand open, and then any
     compiling word before the launch is enough.
 
+    When the conditional words cover one fully paired choice, each path is
+    read for its own subcommand and its own help flag, so a `metadata` in one
+    arm does not hide the `build` in the other, and a `-h` in the `if` arm with
+    a `--help` in its `else` arm still prints help on every path.
+
     Returns
     -------
     bool
@@ -431,7 +545,15 @@ def _run_compiles(run: list[Statement], name: str | None) -> bool:
         for statement in run
         for word in _argument_words(statement.text, statement.masked, name)
     )
-    unconditional = _cargo_options(_probe_words(run, name, _launch_of(run)))
+    launch = _launch_of(run)
+    plain = list(_probe_words(run, name, launch))
+    if launch is not None:
+        paths = _arm_paths(plain, launch, arms)
+        if paths is not None:
+            if all(_asks_for_help(path) for path in paths.values()):
+                return False
+            return any(_path_compiles(path) for path in paths.values())
+    unconditional = _cargo_options(plain)
     if any(isinstance(word, str) and word in _HELP_FLAGS for word in unconditional):
         return False
     first = _first_positional(words)
@@ -468,6 +590,5 @@ def compiles(
     """
     window = command_window(text, masked, closers, start, index)
     name = _bound_name(text, start)
-    return any(
-        _run_compiles(run, name) for run in own_statements(text, start, window).runs
-    )
+    read = own_statements(text, start, window)
+    return any(_run_compiles(run, name, read.arms) for run in read.runs)

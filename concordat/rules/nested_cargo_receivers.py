@@ -16,7 +16,10 @@ is a field initializer whose value is the command, so the binding keeps its
 arguments there. So is a receiver that is not a plain name
 (`(&command).arg(..)`, `build().arg(..)`). `Command::new(..)` is the one chain
 a command that is never bound to a name can be called on, so the constructor
-counts as the command's own receiver.
+counts as the command's own receiver -- but only when `Command` is reached
+through `::`. A bare `Command` receiver is an ordinary name the caller may have
+bound (`fn probe(Command: &mut Command)`), so its calls are declined like any
+other name's.
 
 A launch is the command's `.status()`, `.output()` or `.spawn()`, with or
 without whitespace on either side of the dot or before the parenthesis, since
@@ -91,10 +94,13 @@ def _receiver_of(masked: str, at: int) -> str | None:
     item rather than the command's binding, so it is declined: the flag or
     launch belongs to some other value. A path root is declined too, unless it
     is the `Command` namespace itself, because `command::factory().arg(..)`
-    calls a function on a type or module rather than on the binding. Rust
-    allows whitespace around `.` and `::`, so `holder . command` is read the
-    same way as `holder.command`; a single colon is a field initializer, not a
-    separator, so `Settings { status: command }` keeps the binding.
+    calls a function on a type or module rather than on the binding. Only a
+    `Command` reached through `::` is that namespace: a bare `Command` receiver
+    is an ordinary name the caller may have bound (`fn probe(Command: &mut
+    Command)`), so it is declined like any other name. Rust allows whitespace
+    around `.` and `::`, so `holder . command` is read the same way as
+    `holder.command`; a single colon is a field initializer, not a separator,
+    so `Settings { status: command }` keeps the binding.
 
     Returns
     -------
@@ -145,9 +151,13 @@ def _receiver_of(masked: str, at: int) -> str | None:
         if field or qualified:
             return None
         name = masked[index + 1 : end + 1]
-        if through_path and name != "Command":
-            return None
-        return name
+        if through_path:
+            # `std::process::Command::new(..)` is the constructor, and it is
+            # the only path root that is this command's own receiver.
+            return name if name == "Command" else None
+        # A bare `Command` is a name like any other, and the caller may have
+        # bound a value to it, so it is not the constructor's namespace.
+        return None if name == "Command" else name
     return None
 
 
@@ -214,7 +224,9 @@ def owns_chain(chain: re.Match[str], name: str | None) -> bool:
     through a `.` or a `::` (`support::command.arg(..)`, `holder . command`) is
     declined here too, even when it spells the binding's own name. A single
     colon is a field initializer, so `Settings { status: command.arg(..) }`
-    keeps the binding.
+    keeps the binding. A `Command` root is only the constructor when the method
+    is `new`: `Command.anything(..)` names whatever the caller bound to
+    `Command`, not the command under study.
 
     Returns
     -------
@@ -224,7 +236,9 @@ def owns_chain(chain: re.Match[str], name: str | None) -> bool:
     """
     if _reached_through_separator(chain["before"]):
         return False
-    return chain["name"] == "Command" or chain["name"] == name
+    if chain["name"] == "Command":
+        return chain["method"] == "new"
+    return chain["name"] == name
 
 
 def reaches_through(masked: str, at: int) -> bool:

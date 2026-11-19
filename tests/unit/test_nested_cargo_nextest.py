@@ -15,6 +15,7 @@ import pygit2
 import pytest
 
 from concordat.rules import packages, runner
+from concordat.rules.nested_cargo_handoffs import file_index
 from concordat.rules.nested_cargo_nextest_envelope import (
     build_nested_cargo_nextest_envelope,
 )
@@ -2397,4 +2398,219 @@ def test_a_ref_rebinding_ends_the_argument_read(tmp_path: pathlib.Path) -> None:
     """`let ref command = ..` makes the later launch another value's run."""
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", REF_REBOUND_AFTER_A_RUN)
+    assert ids(tmp_path) == set()
+
+
+SAME_LINE_FUNCTION_AFTER_A_COMMAND = (
+    "use std::process::Command;\n"
+    'fn construct() { let mut command = Command::new("cargo"); } '
+    'fn later(command: &mut Command) { command.arg("build"); }\n'
+)
+
+
+def test_a_function_may_begin_on_the_same_line_as_the_last(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `fn` item ends the window even when the previous one closed on its line."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SAME_LINE_FUNCTION_AFTER_A_COMMAND)
+    assert ids(tmp_path) == set()
+
+
+def test_the_file_index_sees_a_function_that_shares_a_line() -> None:
+    """Two items written on one line are two boundaries, not one."""
+    masked = (
+        'fn first() { let mut command = Command::new("cargo"); } '
+        'fn later(command: &mut Command) { command.arg("build"); }'
+    )
+    index = file_index(masked)
+    assert len(index.boundaries) == 2
+    assert masked[index.boundaries[1] :].startswith("fn later")
+
+
+CONDITION_ARGUMENTS_ARE_ON_EVERY_PATH = (
+    "use std::process::Command;\n"
+    "fn probe() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    if command.arg("--version").get_program().is_some() {\n'
+    '        command.arg("input.rs").status().unwrap();\n'
+    "    } else {\n"
+    '        command.arg("input.rs").status().unwrap();\n'
+    "    }\n"
+    "}\n"
+)
+
+
+def test_a_condition_gives_its_arguments_to_every_run(tmp_path: pathlib.Path) -> None:
+    """The `--version` added by the condition runs before either arm."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITION_ARGUMENTS_ARE_ON_EVERY_PATH)
+    assert ids(tmp_path) == set()
+
+
+INLINE_ARMS_WITH_A_PROBE = (
+    "use std::process::Command;\n"
+    "fn probe(choice: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    let _ = if choice { command.arg("-V") } else { command.arg("-vV") };\n'
+    '    command.arg("input.rs").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_an_inline_choice_pairs_its_arms(tmp_path: pathlib.Path) -> None:
+    """Both arms of `let _ = if c { .. } else { .. }` cover the shared launch."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", INLINE_ARMS_WITH_A_PROBE)
+    assert ids(tmp_path) == set()
+
+
+GUARDED_PROBE_IN_ONE_ARM = (
+    "use std::process::Command;\n"
+    "fn probe(query: bool, choice: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    if choice {\n"
+    '        query && command.arg("-V").get_program().is_some();\n'
+    "    } else {\n"
+    '        command.arg("-vV");\n'
+    "    }\n"
+    '    command.arg("input.rs").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_probe_behind_a_short_circuit_does_not_cover_its_arm(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`query && ..` may skip the `-V`, so the if arm is not a probe."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", GUARDED_PROBE_IN_ONE_ARM)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SUBCOMMAND_IN_EACH_ARM = (
+    "use std::process::Command;\n"
+    "fn run(choice: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if choice {\n"
+    '        command.arg("metadata");\n'
+    "    } else {\n"
+    '        command.arg("build");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_each_arm_is_read_for_its_own_subcommand(tmp_path: pathlib.Path) -> None:
+    """`metadata` in the if arm does not hide the `build` in the else arm."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SUBCOMMAND_IN_EACH_ARM)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+COMMAND_NAMED_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn probe(Command: &mut Command) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    command.env("P", Command.arg("--version").get_program());\n'
+    '    command.arg("input.rs").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_bare_command_root_is_not_the_constructor(tmp_path: pathlib.Path) -> None:
+    """`Command.arg(..)` names the parameter, not the command being built."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", COMMAND_NAMED_PARAMETER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+HELPER_THAT_NAMES_THE_CALLER = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command, cmd: &mut Command) {\n"
+    '    target.env("P", cmd.arg("--version").get_program());\n'
+    "}\n"
+    "fn probe(other: &mut Command) {\n"
+    '    let mut cmd = Command::new("rustc");\n'
+    "    configure(&mut cmd, other);\n"
+    '    cmd.arg("input.rs").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_helper_that_names_the_caller_is_not_spliced(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper's own `cmd` would read as the caller's after the splice."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELPER_THAT_NAMES_THE_CALLER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+INNER_ELSE_AFTER_A_RUN = (
+    "use std::process::Command;\n"
+    "fn probe(ok: bool, inner: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    if ok {\n"
+    '        command.arg("--version").status().unwrap();\n'
+    "        if inner {\n"
+    '            command.arg("-Zunstable");\n'
+    "        } else {\n"
+    '            command.arg("-Zother");\n'
+    "        }\n"
+    "    }\n"
+    "}\n"
+)
+
+
+def test_an_else_inside_the_launched_block_is_not_another_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The inner `else` closes a block the launch is not in, so it is a reuse."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", INNER_ELSE_AFTER_A_RUN)
+    assert ids(tmp_path) == set()
+
+
+GROUPED_GLOB_IMPORT = (
+    "use std::process::Command;\n"
+    "use support::{*};\n"
+    "fn configure(target: &mut Command) {\n"
+    '    target.arg("--version");\n'
+    "}\n"
+    "fn probe() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    configure(&mut command);\n"
+    '    command.arg("input.rs").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_grouped_glob_is_still_a_glob(tmp_path: pathlib.Path) -> None:
+    """`use support::{*}` binds names without spelling them, like `use x::*`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", GROUPED_GLOB_IMPORT)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+HELP_IN_EVERY_ARM = (
+    "use std::process::Command;\n"
+    "fn run(choice: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("build");\n'
+    "    if choice {\n"
+    '        command.arg("-h");\n'
+    "    } else {\n"
+    '        command.arg("--help");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_help_given_in_every_arm_compiles_nothing(tmp_path: pathlib.Path) -> None:
+    """Whichever arm runs, cargo prints help instead of building."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELP_IN_EVERY_ARM)
     assert ids(tmp_path) == set()

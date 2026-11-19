@@ -778,15 +778,21 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   compiling subcommands only, files that name `Command`, 1 MiB cap), what a
   found command does with its arguments — including a helper's body spliced in
   at the call site, a read that restarts for each branch the command runs on or
-  after a branch that returns, and a word counted as unconditional only where
-  every block open at it is also open at the run's launch — is decided by
+  after a branch that returns, a word counted as unconditional only where every
+  block open at it is also open at the run's launch, a branch condition's own
+  arguments inherited by every run through it, and a subcommand or help flag
+  read per arm of a fully paired `if`/`else` — is decided by
   `nested_cargo_arguments`. That module reads the statements through
   `nested_cargo_statements`, which owns the run model: which statements are the
-  command's, where each run begins, which blocks surround each word, and how an
-  `else` arm pairs with its `if`. It finds the statements through
-  `nested_cargo_handoffs` (windows, helper bodies and file indexes) and
-  attributes them through `nested_cargo_receivers` (declining fields, path
-  items and namespace roots), and the bracket-depth reading of a signature and
+  command's, where each run begins, which blocks surround each word, how a
+  statement that opens a branch is split so its condition is shared, and how an
+  `else` pairs with the block it closes (an `else` beside the launched block
+  begins the next run; one that closes an inner `if` the launch is not in does
+  not). It finds the statements through `nested_cargo_handoffs` (windows,
+  helper bodies and file indexes, with an item beginning on the previous line
+  and a helper naming the caller's binding both declined) and attributes them
+  through `nested_cargo_receivers` (declining fields, path items, namespace
+  roots and a bare `Command`), and the bracket-depth reading of a signature and
   its body lives in `nested_cargo_syntax`; the envelope reads
   `.config/nextest.toml` for serial groups, whether an override uses one,
   `slow-timeout` in any profile or override and `global-timeout` in any

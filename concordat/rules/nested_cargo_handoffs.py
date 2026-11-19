@@ -10,7 +10,8 @@ arguments in the order they run.
 A handoff the scan cannot attribute -- a helper defined twice, a call reached
 through a path or method, a name a `use` item could import (a glob import names
 none but could bring any in, and an import may name an inline module in the same
-file as easily as another file, which the scan does not resolve), a caller
+file as easily as another file, which the scan does not resolve), a helper whose
+body names the caller's binding as well as its receiving parameter, a caller
 binding that shadows the helper by `let` or `let ref`, by a parameter or by a
 destructuring pattern (`let (configure,) = ..`), a parameter reassigned or
 shadowed -- is declined rather than guessed, because a false positive would
@@ -50,12 +51,15 @@ BINDING: typ.Final = re.compile(
 # A following item is another scope, so the command's arguments end there.
 # Rust writes a function's qualifiers before `fn` in any of several orders, so
 # `unsafe fn`, `default fn`, `extern "C" fn` and their combinations all begin a
-# new scope just as a plain `fn` does.
+# new scope just as a plain `fn` does. An item may begin on the line that ends
+# the previous one (`} fn later(..)`), so the boundary is the word `fn` and not
+# the start of a line; `fn` is a keyword, and the space before a name keeps it
+# from matching `fn` as part of another word or a `fn(..)` type.
 _FUNCTION_QUALIFIER: typ.Final = (
     r"(?:pub(?:\([^)]*\))?[ \t]+|default[ \t]+|const[ \t]+|async[ \t]+"
     r"|unsafe[ \t]+|extern[ \t]*\"[^\"]*\"[ \t]+)*"
 )
-FUNCTION_BOUNDARY: typ.Final = re.compile(rf"\n[ \t]*{_FUNCTION_QUALIFIER}fn[ \t]+\w+")
+FUNCTION_BOUNDARY: typ.Final = re.compile(rf"\b{_FUNCTION_QUALIFIER}fn[ \t]+\w+")
 
 
 def _argument_position(before: str | None) -> int | None:
@@ -127,6 +131,13 @@ def _receiver_statements(
     block open around the call; the caller's depth is closed again at the end,
     because the helper has returned by then.
 
+    Rewriting the parameter to the caller's binding is only sound while that
+    name means nothing else in the helper. A helper that receives the command
+    as `target` and names another of its own parameters `cmd` would, once
+    spliced into a caller whose binding is `cmd`, read that other value's calls
+    as the command's. The whole body is therefore declined when it mentions the
+    caller's binding at all, since the splice cannot tell the two apart.
+
     Returns
     -------
     Window
@@ -134,6 +145,9 @@ def _receiver_statements(
         braces of the statements between them retained.
     """
     start, end = span
+    collides = re.compile(rf"\b{re.escape(receiver)}\b")
+    if receiver != parameter and collides.search(masked, start, end) is not None:
+        return Window("", "")
     name = _identifier(re.escape(parameter))
     own = re.compile(rf"{name}\s*\.")
     shadow = re.compile(
@@ -322,17 +336,18 @@ def _imported(masked: str, name: str) -> bool:
     The handoff is therefore declined rather than read from the local namesake;
     a false positive here would hide a real compile.
 
-    A glob import (`use support::*`) binds names without spelling any of them,
-    so while one is present no name is certainly the file's own. That reads as
-    an import of every name, which further errs towards not demanding
-    configuration.
+    A glob import (`use support::*`, `use support::{*}`) binds names without
+    spelling any of them, so while one is present no name is certainly the
+    file's own. Any `*` inside a `use` item is that glob, because a path
+    segment cannot otherwise hold one. That reads as an import of every name,
+    which further errs towards not demanding configuration.
 
     Returns
     -------
     bool
         True when a `use` item names *name* or imports a whole module.
     """
-    if re.search(r"\buse\b[^;]*::\s*\*", masked) is not None:
+    if re.search(r"\buse\b[^;]*\*", masked) is not None:
         return True
     return re.search(rf"\buse\b[^;]*\b{re.escape(name)}\b", masked) is not None
 

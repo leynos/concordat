@@ -3065,64 +3065,82 @@ command's; a receiver reached through a field or a path is declined, however
 much whitespace sits around the separator. A name called as a namespace
 (`command::factory()`) is declined too, because the path root is a type or
 module rather than the binding, while a single colon is a field initializer, so
-`Settings { status: command }` still passes the command as a value. A launch
-may be spaced on either side of its dot or before its parenthesis
-(`command . status ()`). A command bound to a name and handed to a helper
-defined once in the same file is also read against that helper's body, because
-the helper adds the arguments. The call may span lines, and only statements on
-the parameter that receives the command count, so another command built in the
-helper does not contribute. Those statements are read at the call site with
-every use of the parameter's name taken to be the caller's binding, so a launch
-in the helper or the caller ends the arguments in the order they run, and a
-version flag added through a renamed parameter still probes the caller's
-command. A helper read that stops inside a block is closed before it is
-spliced, so a block the helper leaves open cannot hide a later unconditional
-flag. A helper defined more than once, or one whose receiving parameter is not
-a plain `name: Type` binding, is declined rather than guessed; so is a call
-that a binding in the caller's own function shadows (a parameter included, even
-one after a method's receiver, a name bound by a destructuring pattern such as
-`let (configure,) = ..`, and a borrowed binding such as
+`Settings { status: command }` still passes the command as a value. A bare
+`Command` receiver is an ordinary name the caller may have bound
+(`fn probe(Command: &mut Command)`), so only a `Command` reached through `::`
+is the constructor's namespace. A launch may be spaced on either side of its
+dot or before its parenthesis (`command . status ()`). A command bound to a
+name and handed to a helper defined once in the same file is also read against
+that helper's body, because the helper adds the arguments. The call may span
+lines, and only statements on the parameter that receives the command count, so
+another command built in the helper does not contribute. Those statements are
+read at the call site with every use of the parameter's name taken to be the
+caller's binding, so a launch in the helper or the caller ends the arguments in
+the order they run, and a version flag added through a renamed parameter still
+probes the caller's command. A helper read that stops inside a block is closed
+before it is spliced, so a block the helper leaves open cannot hide a later
+unconditional flag. A helper defined more than once, or one whose receiving
+parameter is not a plain `name: Type` binding, is declined rather than guessed;
+so is a call that a binding in the caller's own function shadows (a parameter
+included, even one after a method's receiver, a name bound by a destructuring
+pattern such as `let (configure,) = ..`, and a borrowed binding such as
 `let ref configure = ..`), a call written as a path or method
 (`support::configure(..)`, however it is spaced around the separator), a name a
 `use` item could import, or a helper that reassigns the parameter or redeclares
-its name. The scan does not resolve imports, and a `use` may name an inline
-module in the same file (`use self::support::configure`) as readily as a helper
-in another file, so an imported name is declined either way. A function item
-ends the arguments however it is qualified (`unsafe fn`, `default fn`,
-`extern "C" fn`), because the qualifiers do not move where the next scope
-begins. A glob import spells no name but could bring any in, so it declines
-every handoff in the file. A callee in another file is not seen either. These
-declinations err towards not demanding configuration and can miss compiler work.
+its name. A helper whose body also names the caller's binding is declined too:
+rewriting its receiving parameter to that name would make the helper's own uses
+of it read as the caller's. The scan does not resolve imports, and a `use` may
+name an inline module in the same file (`use self::support::configure`) as
+readily as a helper in another file, so an imported name is declined either
+way. A function item ends the arguments however it is qualified (`unsafe fn`,
+`default fn`, `extern "C" fn`), because the qualifiers do not move where the
+next scope begins, and it does so even when it begins on the line that ends the
+previous item (`} fn later(..)`): the boundary is the `fn` keyword, not the
+start of a line. A glob import spells no name but could bring any in, so it
+declines every handoff in the file, whether it is written `use support::*` or
+with the glob inside a group (`use support::{*}`). A callee in another file is
+not seen either. These declinations err towards not demanding configuration and
+can miss compiler work.
 
 A launch is read per path. A launch reached with no block open ends the read,
 because everything after it is a reuse of the command; a launch inside a block
-ends only that branch, so the statements after the block and an `else` arm are
-the first arguments of the next run. A `return` inside a block ends its path in
-the same way, wherever it is written, so a helper that returns early does not
-hide the caller's later run, and each run that leaves a branch inherits the
-arguments given before it, because they are on every path that reaches it. Each
-run is asked its own questions: a probe flag must be present on every run of a
-`rustc` command, while any run of a cargo command that compiles is enough. A
-flag reached only on some paths, behind a `&&`/`||` short circuit or inside a
-block that may not run, does not make a run a probe -- except when one fully
-paired `if`/`else` chain gives a probe in every arm, since then no path reaches
-the launch without one. A word is unconditional when every block open at it is
-also open at the run's launch, so the branch that launches contributes its
-flags while a sibling block that has already closed does not. A later
-declaration of the command's name shadows it inside that block only, while an
-assignment to it ends the read wherever it sits, because the block that ran it
-may have been entered. A cargo subcommand is the first word the arguments give
-that is neither an option nor an option's value (`--color always nextest` runs
-`nextest`, while `cargo help build` prints help), so an option's value is not
-mistaken for the subcommand, and a value the reader cannot see fills its
-option's slot rather than ending the read. A conditional word cannot hide the
-subcommand on the path that skips its block, so a `help` inside an `if` leaves
-an unconditional `build` still compiling. A `-h` or `--help` given on every
-path makes cargo print help whatever the subcommand is, while one added inside
-a block does not excuse the build on the path that skips it, and a word after a
-`--` belongs to the program the command runs, not to cargo. A word the reader
-cannot see leaves the subcommand open, and then any compiling argument before
-the launch is enough. A `--print` query is read across the command's ordered
+ends only that branch, so the statements after the block and the `else` arm
+beside it are the first arguments of the next run, while an `else` that closes
+an inner `if` the launch is not in is code after the run. A `return` inside a
+block ends its path in the same way, wherever it is written, so a helper that
+returns early does not hide the caller's later run, and each run that leaves a
+branch inherits the arguments given before it, because they are on every path
+that reaches it -- including those a branch condition adds, since the condition
+runs before either arm
+(`if command.arg("--version").get_program().is_some() { .. }`). Each run is
+asked its own questions: a probe flag must be present on every run of a `rustc`
+command, while any run of a cargo command that compiles is enough. A flag
+reached only on some paths, behind a `&&`/`||` short circuit or inside a block
+that may not run, does not make a run a probe -- except when one fully paired
+`if`/`else` chain gives a probe in every arm, whether that choice is written
+across statements or on one line, since then no path reaches the launch without
+one; a short circuit inside an arm (`query && command.arg("-V")`) can still
+skip that arm's word, so the arm does not cover its path. A word is
+unconditional when every block open at it is also open at the run's launch, so
+the branch that launches contributes its flags while a sibling block that has
+already closed does not. A later declaration of the command's name shadows it
+inside that block only, while an assignment to it ends the read wherever it
+sits, because the block that ran it may have been entered. A cargo subcommand
+is the first word the arguments give that is neither an option nor an option's
+value (`--color always nextest` runs `nextest`, while `cargo help build` prints
+help), so an option's value is not mistaken for the subcommand, and a value the
+reader cannot see fills its option's slot rather than ending the read. A
+conditional word cannot hide the subcommand on the path that skips its block,
+so a `help` inside an `if` leaves an unconditional `build` still compiling, and
+each arm of a fully paired chain is read for its own subcommand, so a
+`metadata` in the `if` arm does not hide the `build` in its `else` arm. A `-h`
+or `--help` given on every path makes cargo print help whatever the subcommand
+is, while one added inside a block does not excuse the build on the path that
+skips it; a help flag in every arm covers every path in the same way, so a
+launch whose arms each ask for help compiles nothing. A word after a `--`
+belongs to the program the command runs, not to cargo. A word the reader cannot
+see leaves the subcommand open, and then any compiling argument before the
+launch is enough. A `--print` query is read across the command's ordered
 arguments, so `.arg("--print").arg("cfg")` is the same probe as
 `.args(["--print", "cfg"])`, but its two halves must be adjacent: an unreadable
 word between them, or one given only inside a block, may be `link-args`, which

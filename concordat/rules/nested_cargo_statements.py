@@ -10,14 +10,20 @@ reused command does not count as the first run's work; a launch inside a block
 ends only that branch, and a `return` inside a block ends its path, so the
 command is read once for each path it runs on. A run that leaves a branch
 inherits the arguments given before it, because they are on every path that
-reaches it. A word is unconditional only when every block open at the word is
-also open at the run's launch: a flag in the branch that launches counts,
-while one in a sibling block that has already closed does not.
+reaches it; a statement that opens the branch its launch runs in is therefore
+recorded in two, so the arguments its condition adds belong to every run
+through the branch. A word is unconditional only when every block open at the
+word is also open at the run's launch: a flag in the branch that launches
+counts, while one in a sibling block that has already closed does not.
 
 A block is identified by the offset of its opening brace rather than by its
 depth, so two sibling blocks that both closed before the launch are told
-apart. The same identity pairs an `else` arm with the `if` arm beside it,
-which is what lets a probe given in every arm cover both paths.
+apart. That identity also decides whether a closing brace reaches the launch's
+branch or merely closes a nested block, so an `else` inside the launched block
+is code after the run rather than another path. The same identity pairs an
+`else` arm with the `if` arm beside it -- inline (`let _ = if c { .. } else
+{ .. };`) as well as across statements -- which is what lets a probe given in
+every arm cover both paths.
 
 A statement that moves the command's name to another value is not the
 command's, and neither is anything after it on that path: a declaration
@@ -45,9 +51,10 @@ from .nested_cargo_receivers import (
 )
 from .rust_source import blank_comments
 
-# A statement that opens an `else` arm is the other path through a launch that
-# closed its `if` arm earlier in the read, rather than code that runs after it.
-_ELSE: typ.Final = re.compile(r"\s*\}?\s*else\b")
+# An `else` arm is the other path through the `if` beside it. It may open the
+# statement (`} else {`) or sit inside one (`let _ = if c { .. } else { .. };`),
+# so the `}` that closes the arm is what identifies it, not the statement start.
+_ELSE: typ.Final = re.compile(r"\}\s*else\b")
 # A `return` ends the path it sits on, so what follows a returning block runs
 # only when the return was skipped.
 _RETURN: typ.Final = re.compile(r"\breturn\b")
@@ -365,24 +372,32 @@ class _StatementRead:
         return not self.stopped
 
     def _note_else(self, masked_statement: str, blocks: tuple[int, ...]) -> None:
-        """Record the `else` arm a statement opens, when it opens one.
+        """Record the `else` arms a statement holds, wherever they are written.
 
-        The arm is identified by the brace that opens it, so a chain of
-        `else if` arms can be walked from the first `if` to an unconditional
-        `else`. Only a pair whose `else` has no condition covers both paths.
+        An arm is identified by the brace that opens it, so a chain of `else
+        if` arms can be walked from the first `if` to an unconditional `else`.
+        The arm that closed is found by applying the statement's braces to the
+        blocks already open, which pairs an arm opened by an earlier statement
+        (`} else {`) and one opened in this statement (an inline `if`/`else`
+        expression) alike. Only a pair whose `else` has no condition covers
+        both paths.
         """
-        if not blocks or not masked_statement.lstrip().startswith("}"):
-            return
-        found = _ELSE.match(masked_statement)
-        if found is None:
-            return
-        brace = masked_statement.find("{", found.end())
-        if brace < 0:
-            return
-        closed = blocks[-1]
-        self._arms[closed] = self._offset + brace
-        if not masked_statement[found.end() :].lstrip().startswith("if"):
-            self._exhaustive.add(closed)
+        for found in _ELSE.finditer(masked_statement):
+            open_blocks = list(blocks)
+            closed: int | None = None
+            for index, char in enumerate(masked_statement[: found.start() + 1]):
+                if char == "{":
+                    open_blocks.append(self._offset + index)
+                elif char == "}" and open_blocks:
+                    closed = open_blocks.pop()
+            if closed is None:
+                continue
+            brace = masked_statement.find("{", found.end())
+            if brace < 0:
+                continue
+            self._arms[closed] = self._offset + brace
+            if not masked_statement[found.end() :].lstrip().startswith("if"):
+                self._exhaustive.add(closed)
 
     def _attribute(
         self, masked_statement: str, start_depth: int, blocks: tuple[int, ...]
@@ -510,6 +525,34 @@ class _Launch(typ.NamedTuple):
     depth: int
 
 
+def _append_statement(
+    statements: list[Statement],
+    window: Window,
+    span: tuple[int, int],
+    start_depth: int,
+    blocks: tuple[int, ...],
+    launch_blocks: tuple[int, ...] | None,
+) -> None:
+    """Append one of the command's statements, with its blocks around it.
+
+    The statement is kept as written, so a flag inside a string stays readable,
+    and masked, so its braces and the calls on other receivers are read from
+    the same offsets. *launch_blocks* is the blocks open at the statement's
+    launch, or None when it does not launch.
+    """
+    start, stop = span
+    statements.append(
+        Statement(
+            blank_comments(window.text[start:stop]),
+            window.masked[start:stop],
+            start,
+            start_depth,
+            blocks,
+            launch_blocks,
+        )
+    )
+
+
 def _record_statement(
     statements: list[Statement],
     window: Window,
@@ -525,6 +568,13 @@ def _record_statement(
     statement also keeps the blocks open at its start and at its launch, so a
     flag is placed in the block that launches, not merely at its depth.
 
+    A statement that opens the branch its launch runs in (`if cond {`, `} else
+    {`) is recorded as two: the text before the branch's brace, which runs on
+    every path that reaches the choice, and the arm itself. The condition's
+    arguments are then inherited by the run of every arm, as they are at run
+    time, rather than being attributed to whichever arm happened to be read
+    first.
+
     Returns
     -------
     _Launch | None
@@ -533,23 +583,37 @@ def _record_statement(
     """
     start, end = span
     stop = end if launch is None else launch
-    launch_blocks = None if launch is None else list(blocks)
-    if launch_blocks is not None:
-        _track(launch_blocks, window.masked[start:stop], start)
-    statements.append(
-        Statement(
-            blank_comments(window.text[start:stop]),
-            window.masked[start:stop],
-            start,
+    if launch is None:
+        _append_statement(statements, window, (start, stop), start_depth, blocks, None)
+        return None
+    launch_blocks = list(blocks)
+    _track(launch_blocks, window.masked[start:stop], start)
+    branch = launch_blocks[-1] if launch_blocks else None
+    depth = _depth_at(window.masked[start:end], launch - start, start_depth)
+    if branch is None:
+        _append_statement(statements, window, (start, stop), start_depth, blocks, ())
+        return _Launch(None, depth)
+    if start <= branch < stop:
+        # The statement opened the branch, so its condition is above the
+        # branch and belongs to every run through it.
+        _append_statement(
+            statements, window, (start, branch), start_depth, blocks, None
+        )
+        arm_blocks = list(blocks)
+        _track(arm_blocks, window.masked[branch:stop], branch)
+        _append_statement(
+            statements,
+            window,
+            (branch, stop),
             start_depth,
             blocks,
-            None if launch_blocks is None else tuple(launch_blocks),
+            tuple(arm_blocks),
         )
+        return _Launch(arm_blocks[-1] if arm_blocks else None, depth)
+    _append_statement(
+        statements, window, (start, stop), start_depth, blocks, tuple(launch_blocks)
     )
-    if launch is None or launch_blocks is None:
-        return None
-    depth = _depth_at(window.masked[start:end], launch - start, start_depth)
-    return _Launch(launch_blocks[-1] if launch_blocks else None, depth)
+    return _Launch(branch, depth)
 
 
 def _starts_a_run(
@@ -561,12 +625,14 @@ def _starts_a_run(
     """Report whether a statement begins the next run of the command.
 
     A statement that reaches the top level again (`}` closing the block the
-    launch sat in, or an `else` arm) is on another path, so its arguments are a
-    run of their own. A statement still inside the launched block is code that
-    runs after the command has already run on that path. The blocks are
-    compared by the identity of their opening brace, so a sibling block that
-    sits at the same depth as the launch's block is another path, while a
-    nested block inside it is not.
+    launch sat in, or the `else` arm beside it) is on another path, so its
+    arguments are a run of their own. A statement still inside the launched
+    block is code that runs after the command has already run on that path,
+    and an `else` arm nested inside the launched block is the same: it closes
+    an inner `if` the run is not in, so only the boundary's identity decides,
+    not the word `else`. The blocks are compared by the identity of their
+    opening brace, so a sibling block that sits at the same depth as the
+    launch's block is another path, while a nested block inside it is not.
 
     Returns
     -------
@@ -574,8 +640,6 @@ def _starts_a_run(
         True when the statement is reached without the boundary block open.
     """
     block, _depth = boundary
-    if _ELSE.match(masked_statement) is not None:
-        return True
     if launch is None:
         return block not in _entry_blocks(blocks, masked_statement)
     return block not in _blocks_at(blocks, masked_statement, launch)
