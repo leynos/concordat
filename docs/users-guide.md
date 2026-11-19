@@ -898,12 +898,15 @@ yamllint:
 	xargs -0 -r $(YAMLLINT) --strict -- <"$$tmp"
 ```
 
-The guarded form is accepted only with `mktemp` under `|| exit N`, the same
-shell variable on both redirections, `-z` and `-0` keeping the listing
-NUL-delimited, `&&` so a failed enumeration cannot reach the linter, and no
-trap other than the `rm -f` cleanup (which may be omitted). `$$` is shell
-syntax rather than a Make variable, so `$$(mktemp)` is not reported as
-unresolved.
+The guarded form is accepted only with `mktemp` under `|| exit N` where `N`
+makes the recipe fail, the same shell variable on both redirections, `-z` and
+`-0` keeping the listing NUL-delimited, `&&` so a failed enumeration cannot
+reach the linter, and no trap other than the `rm -f` cleanup (which may be
+omitted). The pathspecs must be whole arguments, so `*.yml.bak` does not count
+as `*.yml`. `git ls-files` may use only `-z`, `-c`/`--cached`, `--full-name` and
+`--`, and `xargs` may not use `-a`/`--arg-file` or `-d`/`--delimiter`, because
+those change which files are listed or read. `$$` is shell syntax rather than a
+Make variable, so `$$(mktemp)` is not reported as unresolved.
 
 yamllint must run from the repository root, because it resolves `extends:`
 against the current directory.

@@ -155,6 +155,13 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "guarded_soft_skip": Scenario(makefile="guarded-soft-skip"),
     "guarded_unresolved": Scenario(makefile="guarded-unresolved"),
     "guarded_trap_masks": Scenario(makefile="guarded-trap-masks"),
+    # Options that change what Git enumerates, or where xargs reads, must not
+    # count as coverage of the tracked YAML.
+    "guarded_pathspec_suffix": Scenario(makefile="guarded-pathspec-suffix"),
+    "guarded_untracked": Scenario(makefile="guarded-untracked"),
+    "guarded_xargs_arg_file": Scenario(makefile="guarded-xargs-arg-file"),
+    "xargs_arg_file": Scenario(makefile="xargs-arg-file"),
+    "untracked_ls_files": Scenario(makefile="untracked-ls-files"),
     "config_file_other": Scenario(makefile="config-file-other"),
     "config_file_attached": Scenario(makefile="config-file-attached"),
     "config_short_attached": Scenario(makefile="config-short-attached"),

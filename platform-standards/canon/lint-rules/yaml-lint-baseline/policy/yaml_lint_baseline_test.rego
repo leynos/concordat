@@ -530,6 +530,49 @@ test_guarded_trap_masks if {
   not mentions_mktemp(findings)
 }
 
+# A pathspec that merely contains a required one selects other files.
+test_guarded_pathspec_suffix if {
+  findings := policy.deny with input as data.fixtures.guarded_pathspec_suffix
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# `--others` selects untracked files, so the tracked YAML may go unlinted.
+test_guarded_untracked if {
+  findings := policy.deny with input as data.fixtures.guarded_untracked
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# `xargs -a` reads another list, so the buffered enumeration is ignored.
+test_guarded_xargs_arg_file if {
+  findings := policy.deny with input as data.fixtures.guarded_xargs_arg_file
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# The pipeline form has the same input-source hazard.
+test_xargs_arg_file if {
+  findings := policy.deny with input as data.fixtures.xargs_arg_file
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
+# The pipeline form must reject selection modes as well.
+test_untracked_ls_files if {
+  findings := policy.deny with input as data.fixtures.untracked_ls_files
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
 # Printing a command is not running it.
 test_echo_decoy if {
   findings := policy.deny with input as data.fixtures.echo_decoy

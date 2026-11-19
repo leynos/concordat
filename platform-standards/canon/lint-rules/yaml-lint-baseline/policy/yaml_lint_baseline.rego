@@ -519,20 +519,65 @@ informational(tool, tokens) if {
 	token in informational_flags[tool]
 }
 
+# `git ls-files` options that leave the listing as the tracked files, with
+# plain NUL-terminated names. Selection modes such as `--others`, `--deleted`,
+# `-m` or `-i`, and annotation modes such as `-s`, `-t` or `--stage`, either
+# enumerate another set or prefix each name, so they cannot prove that the
+# tracked YAML was listed.
+ls_files_safe_options := {"-z", "-c", "--cached", "--full-name", "--"}
+
+# Arguments as shell words with one layer of quoting removed, so `'*.yml'`,
+# `"*.yml"` and `*.yml` name the same pathspec. The pathspecs are matched as
+# whole words: a file named `*.yml.bak` is not a YAML pathspec.
+ls_files_arguments(text) := {argument |
+	some token in split(trim_space(text), " ")
+	argument := trim(token, "'\"")
+	argument != ""
+}
+
+# True when the arguments select exactly the configured YAML pathspecs, with
+# no additional pathspec that could narrow the walk, and no option that
+# changes the selection.
+ls_files_covers_tracked_yaml(text) if {
+	arguments := ls_files_arguments(text)
+	options := {argument | some argument in arguments; startswith(argument, "-")}
+	count(options - ls_files_safe_options) == 0
+	"-z" in options
+	pathspecs := {argument | some argument in arguments; not startswith(argument, "-")}
+	count(pathspecs) == count(yaml_pathspecs)
+	every pathspec in yaml_pathspecs {
+		pathspec in pathspecs
+	}
+}
+
+# `-a`/`--arg-file` makes xargs read a different list, and `-d`/`--delimiter`
+# overrides the NUL delimiter that `-0` establishes. A recipe using either
+# cannot prove that xargs reads the file Git's listing was written to.
+xargs_unsafe_option(option) if startswith(option, "-a")
+
+xargs_unsafe_option(option) if startswith(option, "-d")
+
+xargs_options_are_safe(text) if {
+	every option in {token |
+		some token in split(trim_space(text), " ")
+		startswith(token, "-")
+	} {
+		not xargs_unsafe_option(option)
+	}
+}
+
 # `git ls-files` must feed yamllint through `xargs`, with every pathspec in the
 # producer's arguments, so the lint covers the tracked YAML and nothing from
 # vendored or ignored trees. Co-occurrence in one recipe is not enough: the
 # list could be discarded and one file linted by name.
-git_fed_yamllint_pattern := `git[[:space:]]+ls-files([^;|&]*)\|[[:space:]]*xargs([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*[[:space:]]+([^[:space:];|&()]*/)?yamllint([[:space:]]|$)`
+git_fed_yamllint_pattern := `git[[:space:]]+ls-files([^;|&]*)\|[[:space:]]*xargs(([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*)[[:space:]]+([^[:space:];|&()]*/)?yamllint([[:space:]]|$)`
 
 recipe_selects_tracked_yaml(recipe) if {
 	some match in regex.find_all_string_submatch_n(
 		git_fed_yamllint_pattern, expand(recipe_text(recipe)), -1,
 	)
-	producer := match[1]
-	every pathspec in yaml_pathspecs {
-		contains(producer, pathspec)
-	}
+	ls_files_covers_tracked_yaml(match[1])
+	xargs_options_are_safe(match[2])
 }
 
 # -- guarded enumeration ------------------------------------------------------
@@ -610,15 +655,11 @@ guarded_enumeration_arguments(recipe, tool) := {tokens |
 	]
 	count(names) > 0
 	count({name | some name in names; name != names[0]}) == 0
-	producer := trim_space(match[3])
-	producer_tokens := [token | some token in split(producer, " "); token != ""]
-	"-z" in producer_tokens
-	every pathspec in yaml_pathspecs {
-		contains(producer, pathspec)
-	}
+	ls_files_covers_tracked_yaml(match[3])
 	options := trim_space(match[6])
 	option_tokens := [token | some token in split(options, " "); token != ""]
 	"-0" in option_tokens
+	xargs_options_are_safe(options)
 	arguments := trim_space(match[7])
 	tokens := [token | some token in split(arguments, " "); token != ""]
 }
