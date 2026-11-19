@@ -80,6 +80,7 @@ _ENV_PREFIXES: typ.Final = frozenset({
 # Make's recipe prefixes: silent, ignore-error, and always-run.
 _MAKE_PREFIXES: typ.Final = "@-+"
 _ASSIGNMENT: typ.Final = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=")
+_HEREDOC_OPERATOR: typ.Final = re.compile(r"^(?P<operator><<-?)(?P<name>.*)$")
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -109,6 +110,81 @@ def _assignment_selection(word: str) -> Selection | None:
     return Selection(text=value, is_reference=reference_name(value) is not None)
 
 
+def _heredoc_delimiter(word: str) -> tuple[bool, str] | None:
+    """Return whether *word* opens a here-document, and its delimiter.
+
+    Returns
+    -------
+    tuple[bool, str] | None
+        ``(needs_next_word, delimiter)`` for a `<<`/`<<-` word, or None when
+        the word opens no here-document. ``needs_next_word`` is true for a
+        bare operator, whose delimiter is the word that follows it.
+    """
+    match = _HEREDOC_OPERATOR.match(word)
+    if match is None:
+        return None
+    return not match.group("name"), match.group("name")
+
+
+def _skip_heredoc(text: str, index: int, delimiter: str, *, strip_tabs: bool) -> int:
+    """Return the index just past a here-document whose body ends at *delimiter*.
+
+    *index* is where the operator stood. The body starts on the next line and
+    runs to a line that is the delimiter alone, which is how a shell finds its
+    end; `<<-` also accepts leading tabs before the delimiter.
+
+    Returns
+    -------
+    int
+        The index of the first character after the terminator line, or the
+        end of the text when no terminator is written.
+    """
+    line_end = text.find("\n", index)
+    while line_end != -1:
+        next_end = text.find("\n", line_end + 1)
+        line = text[line_end + 1 : next_end if next_end != -1 else len(text)]
+        if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+            return len(text) if next_end == -1 else next_end + 1
+        line_end = next_end
+    return len(text)
+
+
+@dataclasses.dataclass(slots=True)
+class _Scan:
+    """The commands read so far, and the word being read.
+
+    The scanner's state lives here so the character loop stays a loop: a word
+    ends at a separator, a command ends at a shell break, and a here-document
+    body is skipped whole between the two.
+    """
+
+    commands: list[list[str]] = dataclasses.field(default_factory=list)
+    words: list[str] = dataclasses.field(default_factory=list)
+    current: list[str] = dataclasses.field(default_factory=list)
+    delimiter: str = ""
+    needs_delimiter: bool = False
+    strip_tabs: bool = False
+
+    def end_word(self) -> None:
+        """Complete the word being read and record any here-document it opens."""
+        word = "".join(self.current)
+        self.words.append(word)
+        self.current = []
+        heredoc = _heredoc_delimiter(word)
+        if heredoc is not None:
+            self.needs_delimiter, self.delimiter = heredoc
+            self.strip_tabs = word.startswith("<<-")
+        elif self.needs_delimiter:
+            self.needs_delimiter = False
+            self.delimiter = word
+
+    def end_command(self) -> None:
+        """Close the command the words read so far make, if there is one."""
+        if self.words:
+            self.commands.append(self.words)
+            self.words = []
+
+
 def shell_commands(text: str) -> list[list[str]]:
     """Return each command's words, split at unquoted shell separators.
 
@@ -116,7 +192,9 @@ def shell_commands(text: str) -> list[list[str]]:
     `echo "cargo +nightly-2026-10-30"` is an argument to `echo` rather than a
     selection, and `RUSTUP_TOOLCHAIN="$(PIN)"` is still the reference. An
     unquoted `#` at a word boundary starts a comment. Backslash line
-    continuations are folded first, as they are in a recipe.
+    continuations are folded first, as they are in a recipe. A here-document
+    body is command input rather than commands, so it is skipped whole: a
+    date a script feeds to `cat` is not a date it selects.
 
     Returns
     -------
@@ -124,9 +202,7 @@ def shell_commands(text: str) -> list[list[str]]:
         One word list per command, in the order written.
     """
     folded = re.sub(r"\\\n[ \t]*", " ", text)
-    commands: list[list[str]] = []
-    words: list[str] = []
-    current: list[str] = []
+    scan = _Scan()
     quote: str | None = None
     index = 0
     while index < len(folded):
@@ -135,7 +211,7 @@ def shell_commands(text: str) -> list[list[str]]:
             if char == quote:
                 quote = None
             else:
-                current.append(char)
+                scan.current.append(char)
             index += 1
             continue
         if char in "'\"":
@@ -143,28 +219,32 @@ def shell_commands(text: str) -> list[list[str]]:
             index += 1
             continue
         if char == "\\" and index + 1 < len(folded):
-            current.append(folded[index + 1])
+            scan.current.append(folded[index + 1])
             index += 2
             continue
-        if char == "#" and not current:
+        if char == "#" and not scan.current:
             while index < len(folded) and folded[index] != "\n":
                 index += 1
             continue
         if char.isspace() or char in _SHELL_BREAKS:
-            if current:
-                words.append("".join(current))
-                current = []
-            if char in _SHELL_BREAKS and words:
-                commands.append(words)
-                words = []
+            if scan.current:
+                scan.end_word()
+            if scan.delimiter:
+                scan.end_command()
+                index = _skip_heredoc(
+                    folded, index, scan.delimiter, strip_tabs=scan.strip_tabs
+                )
+                scan.delimiter = ""
+                continue
+            if char in _SHELL_BREAKS:
+                scan.end_command()
         else:
-            current.append(char)
+            scan.current.append(char)
         index += 1
-    if current:
-        words.append("".join(current))
-    if words:
-        commands.append(words)
-    return commands
+    if scan.current:
+        scan.end_word()
+    scan.end_command()
+    return scan.commands
 
 
 def _is_tool(word: str) -> bool:
@@ -254,6 +334,9 @@ def _program(words: list[str]) -> tuple[list[Selection], str | None, list[str]]:
         word with Make's recipe prefixes removed, and the arguments.
     """
     selections: list[Selection] = []
+    # Make removes `@`, `-` and `+` from a recipe line's first word before the
+    # shell sees it, so `@RUSTUP_TOOLCHAIN=...` is still an assignment.
+    words = [words[0].lstrip(_MAKE_PREFIXES), *words[1:]] if words else words
     index = 0
     while index < len(words) and _is_assignment(words[index]):
         selection = _assignment_selection(words[index])
@@ -297,6 +380,16 @@ def selection_in(words: list[str]) -> cabc.Iterator[Selection]:
     selections, program, args = _program(words)
     yield from selections
     if program is None:
+        return
+    if program == "export":
+        # `export NAME=value` assigns for the rest of the script without being
+        # a workflow `env` declaration, so the value is a real selection. Only
+        # this explicit form is read: an argument to `echo` is not one.
+        yield from (
+            selection
+            for argument in args
+            if (selection := _assignment_selection(argument)) is not None
+        )
         return
     if program.rpartition("/")[2] == "rustup":
         yield from _option_values(args)

@@ -1213,7 +1213,8 @@ literal reader walks the same decoded documents and adds each `run` command's
 toolchain selections, a toolchain action's ref and `with.toolchain`, and
 `makeutil`'s report of the root `Makefile`, judging a variable declaration per
 referenced name. It splits a `run` script into shell commands first, through
-`toolchain_literal_shell.py`, so a date an `echo` prints is not a selection and
+`toolchain_literal_shell.py`, so a date an `echo` prints or a here-document
+feeds to a command is not a selection, an `export RUSTUP_TOOLCHAIN=...` is, and
 a `+toolchain` override is only read as a program's argument. A `src/lib.rs`
 that cannot be examined (an occupied path, a dangling link, a refusal) is
 carried as `lib_read_error` and makes RT-025 indeterminate for that crate; it

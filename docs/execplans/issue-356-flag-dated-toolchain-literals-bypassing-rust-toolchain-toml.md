@@ -80,6 +80,13 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   survey column reads "Would fail at error". The shell-command reader now lives
   in `toolchain_literal_shell.py`, which keeps `toolchain_literal_facts` under
   pylint's module-length limit.
+- A second review, on the refactored head, raised five more, all actioned: a
+  here-document body is skipped rather than read as commands; an
+  `export RUSTUP_TOOLCHAIN=…` selects; a matrix `include` leg is no longer
+  replaced by an axis of the same key; a Make recipe prefix no longer hides a
+  `RUSTUP_TOOLCHAIN=` assignment; and an expanded command variable is tokenized
+  as a shell command, so a quoted override and several commands in one variable
+  are read. Six regression tests cover them.
 
 ## Lessons
 
@@ -103,6 +110,11 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   that shipped with the first draft.
 - A `dict` literal assigned to a name typed as a TypedDict is a `dict[str, str]`
   to `ty`; construct the TypedDict explicitly (`LiteralError(path=..., ...)`).
+- Reading shell text is a state machine, not a series of string replacements.
+  Every review round found another construct — quoting, a command's argument
+  position, a here-document body, a recipe prefix — that a simpler reader
+  mistook. Splitting the scanning state into `_Scan` keeps the character loop
+  within pylint's branch limit without hiding the rules it applies.
 
 ## Estate survey (2026-11-19)
 

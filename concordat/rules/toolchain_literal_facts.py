@@ -257,7 +257,9 @@ def _matrix_values(job: object) -> dict[str, list[str]]:
             continue
         texts = [text for item in entries if (text := _scalar_text(item))]
         if texts:
-            values[str(key)] = texts
+            # An `include` leg that the axis does not carry adds a value
+            # GitHub will still run, so an axis must not replace it.
+            values.setdefault(str(key), []).extend(texts)
     return values
 
 
@@ -418,21 +420,27 @@ def _expanded_literals(selection: Selection, table: VariableTable) -> list[str]:
     return [expanded]
 
 
-def _expand_program(words: list[str], table: VariableTable) -> list[str] | None:
-    """Return *words* with a referenced program expanded, or None.
+def _expanded_commands(
+    words: list[str], table: VariableTable
+) -> list[list[str]] | None:
+    """Return the commands a variable-named recipe expands to, or None.
 
     `CHECK = cargo +nightly-... check` makes the recipe's command a variable,
     so the program has to be expanded before its toolchain can be read. A
-    variable assigned the date itself is left in the substitution table out,
+    variable assigned the date itself is left out of the substitution table,
     so it stays a reference in the reconstructed command and is judged where
     the recipe writes it: that is what keeps `cargo +$(DEV_FAST_TOOLCHAIN)`
     declared rather than reported at its value.
 
+    The expansion is `makeutil`'s text, so it is tokenized as a shell command:
+    a quoted override is shell syntax, and a variable may hold several
+    commands.
+
     Returns
     -------
-    list[str] | None
-        The command with its program expanded, or None when the program is
-        not a reference or expands to nothing.
+    list[list[str]] | None
+        The commands the recipe runs, or None when the program is not a
+        reference or expands to nothing.
     """
     position = program_position(words)
     if position is None:
@@ -445,10 +453,9 @@ def _expand_program(words: list[str], table: VariableTable) -> list[str] | None:
         for name, value in table.values.items()
         if not _is_declared_date(shown(value))
     }
-    expanded = shown(expand(program, substitutable).text).split()
-    if not expanded:
-        return None
-    return [*words[:index], *expanded, *words[index + 1 :]]
+    expanded = shown(expand(program, substitutable).text)
+    command = " ".join([expanded, *words[index + 1 :]]).strip()
+    return shell_commands(command) if command else None
 
 
 def _recipe_texts(text: str, table: VariableTable) -> list[str]:
@@ -461,13 +468,14 @@ def _recipe_texts(text: str, table: VariableTable) -> list[str]:
             for selection in selection_in(words)
             for value in _reported_texts(selection, table)
         )
-        expanded = _expand_program(words, table)
+        expanded = _expanded_commands(words, table)
         if expanded is None:
             continue
-        for selection in selection_in(expanded):
-            for value in _reported_texts(selection, table):
-                if value not in texts:
-                    texts.append(value)
+        for command in expanded:
+            for selection in selection_in(command):
+                for value in _reported_texts(selection, table):
+                    if value not in texts:
+                        texts.append(value)
     return texts
 
 

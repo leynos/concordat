@@ -473,3 +473,109 @@ def test_a_makefile_outside_the_checkout_is_an_error(tmp_path: pathlib.Path) -> 
     assert facts["literals"] == [], facts
     assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
     assert "outside the checkout" in facts["errors"][0]["reason"], facts
+
+
+def test_a_here_document_body_is_not_a_command(tmp_path: pathlib.Path) -> None:
+    """Text a quoted here-document feeds to a command is data, not a selection."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  cat <<'EOF' > notes.txt
+                  cargo +nightly-2026-10-30 check
+                  EOF
+                  cargo +nightly-2026-09-01 test
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-09-01"]
+
+
+def test_a_matrix_include_beside_an_axis_contributes(tmp_path: pathlib.Path) -> None:
+    """An `include` leg written before an axis still adds its value."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        """\
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            strategy:
+              matrix:
+                include:
+                  - toolchain: nightly-2026-10-30
+                toolchain: [stable]
+            steps:
+              - run: cargo +${{ matrix.toolchain }} check
+        """,
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_recipe_prefix_does_not_hide_an_assignment(tmp_path: pathlib.Path) -> None:
+    """Make strips `@` before the shell, so the word is still an assignment."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        "Makefile",
+        "test:\n\t@RUSTUP_TOOLCHAIN=nightly-2026-10-30 cargo test\n",
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_command_variable_is_read_as_a_shell_command(tmp_path: pathlib.Path) -> None:
+    """A quoted override in a command variable is shell syntax, not text."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        "Makefile",
+        'CHECK = cargo "+nightly-2026-10-30" check\n\ntest:\n\t$(CHECK)\n',
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_command_variable_may_hold_several_commands(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Every command a command variable holds is read, not only the first."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        "Makefile",
+        "CHECK = cargo +nightly-2026-10-30 check && "
+        "cargo +nightly-2026-09-01 test\n"
+        "\n"
+        "test:\n"
+        "\t$(CHECK)\n",
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == [
+        "nightly-2026-10-30",
+        "nightly-2026-09-01",
+    ]
+
+
+def test_an_exported_toolchain_is_a_selection(tmp_path: pathlib.Path) -> None:
+    """`export RUSTUP_TOOLCHAIN=...` selects, and is not a workflow `env`."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  export RUSTUP_TOOLCHAIN=nightly-2026-10-30
+                  cargo check
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
