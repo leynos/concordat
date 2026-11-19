@@ -1806,3 +1806,73 @@ def test_each_run_is_asked_for_its_own_subcommand(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", HELP_TOPIC_AFTER_A_CONDITIONAL_RUN)
     assert ids(tmp_path) == set()
+
+
+INNER_REBINDING_BEFORE_A_BUILD = (
+    "use std::process::Command;\n"
+    "fn reused() -> Command {\n"
+    '    Command::new("echo")\n'
+    "}\n"
+    "fn build_after_rebinding(reuse: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if reuse {\n"
+    "        let mut command = reused();\n"
+    '        command.arg("check").status().unwrap();\n'
+    "    }\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_attribution_resumes_on_the_statement_that_closes_the_block(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The outer `build` follows the inner block, so it is still this command's."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", INNER_REBINDING_BEFORE_A_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+NAMESAKE_BINDING = (
+    "use std::process::Command;\n"
+    "fn other_command() -> Command {\n"
+    '    Command::new("git")\n'
+    "}\n"
+    "fn build_after_a_namesake() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    let my_command = other_command();\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_namesake_binding_does_not_move_the_command(tmp_path: pathlib.Path) -> None:
+    """`my_command` is another binding, so `command` still denotes the cargo one."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", NAMESAKE_BINDING)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+LAUNCH_AS_A_CONDITION = (
+    "use std::process::Command;\n"
+    "fn build_after_a_probe(probe: bool) -> bool {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if probe {\n"
+    '        command.arg("--version").status().unwrap();\n'
+    "        return false;\n"
+    "    }\n"
+    '    if command.arg("build").status().is_ok() {\n'
+    "        return true;\n"
+    "    }\n"
+    "    false\n"
+    "}\n"
+)
+
+
+def test_a_launch_is_read_at_the_depth_it_reaches(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The close brace before the launch reaches the outer depth, so a run starts."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LAUNCH_AS_A_CONDITION)
+    assert ids(tmp_path) == {"NC-004"}

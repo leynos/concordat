@@ -115,7 +115,9 @@ def _rebinding(name: str | None) -> re.Pattern[str] | None:
         rf"\blet\s+(?:mut\s+)?{identifier}\b"
         rf"|\bfor\s+(?:mut\s+)?{identifier}\b"
         rf"|\|\s*(?:mut\s+)?{identifier}\s*(?:\||:)"
-        rf"|{identifier}\s*=(?!=)"
+        # The name must be whole, so `my_command = ..` and `holder.command =
+        # ..` move their own value rather than the command's.
+        rf"|(?<![\w.]){identifier}\s*=(?!=)"
     )
 
 
@@ -133,6 +135,46 @@ def _launch_depth(masked_statement: str, launch: int, start_depth: int) -> int:
     """
     opened = start_depth + masked_statement.count("{", 0, launch)
     return opened - masked_statement.count("}", 0, launch)
+
+
+def _entry_depth(masked_statement: str, start_depth: int) -> int:
+    """Return the block depth a statement reaches once its leading braces close.
+
+    Statements are split at the previous `;`, so one can begin with the `}` that
+    closes a block opened earlier (`} command.arg(..)`). The depth the statement
+    is on is that of the text it starts with, not the depth before the brace: a
+    shadow declared in the block has ended by the time the statement runs.
+
+    Only braces before the statement's first other character count. A block the
+    statement opens itself, and the `}` that closes it later in the statement,
+    belong to the statement rather than before it.
+
+    Returns
+    -------
+    int
+        The depth after the leading closing braces.
+    """
+    depth = start_depth
+    for char in masked_statement:
+        if char.isspace():
+            continue
+        if char != "}":
+            break
+        depth -= 1
+    return depth
+
+
+def _end_shadows(shadows: list[int], masked_statement: str, start_depth: int) -> None:
+    """Drop the shadows the statement's leading braces have closed.
+
+    A shadow records that the command's name denotes another value inside a
+    block. A statement that begins by closing that block is outside it, so the
+    shadow ends before the statement is attributed and the command's name is
+    read again.
+    """
+    entry = _entry_depth(masked_statement, start_depth)
+    while shadows and entry < shadows[-1]:
+        shadows.pop()
 
 
 class CommandRead(typ.NamedTuple):
@@ -224,13 +266,25 @@ def _own_statements(text: str, start: int, window: Window) -> CommandRead:
         if rebinds:
             shadows.append(depth)
         else:
+            # A statement that begins by closing a block is no longer inside
+            # the shadow that block declared, so the shadow ends before the
+            # statement is attributed. A trailing `}` still belongs to the
+            # shadowed block, so the depth the statement ends at is not used.
+            _end_shadows(shadows, masked_statement, start_depth)
             owned = not shadows and (
                 offset == 0 or _owns_statement(window.masked, offset, at, name)
             )
             launch = launch_at(window.masked, offset, at, name) if owned else None
             skip = False
             if boundary is not None:
-                if _starts_a_run(masked_statement, start_depth, launch, boundary):
+                # The launch is measured within the statement, which is the
+                # text :func:`_launch_depth` counts braces in.
+                if _starts_a_run(
+                    masked_statement,
+                    start_depth,
+                    None if launch is None else launch - offset,
+                    boundary,
+                ):
                     starts.append(len(statements))
                     boundary = None
                 else:
