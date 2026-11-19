@@ -1212,11 +1212,16 @@ reference, matrix `include` legs too), and `rustup` (`install`, `run`,
 literal reader walks the same decoded documents and adds each `run` command's
 toolchain selections, a toolchain action's ref and `with.toolchain`, and
 `makeutil`'s report of the root `Makefile`, judging a variable declaration per
-referenced name. A `src/lib.rs` that cannot be examined (an occupied path, a
-dangling link, a refusal) is carried as `lib_read_error` and makes RT-025
-indeterminate for that crate; it is never read as the library's absence. A
-workflow that does not decode is recorded with its reason, which makes RT-026,
-RT-027 and RT-028 indeterminate, as does a `Makefile` the reader refuses. The
+referenced name. It splits a `run` script into shell commands first, through
+`toolchain_literal_shell.py`, so a date an `echo` prints is not a selection and
+a `+toolchain` override is only read as a program's argument. A `src/lib.rs`
+that cannot be examined (an occupied path, a dangling link, a refusal) is
+carried as `lib_read_error` and makes RT-025 indeterminate for that crate; it
+is never read as the library's absence. A workflow that does not decode is
+recorded with its reason, which makes RT-026 and RT-027 indeterminate, and
+RT-028 too because that workflow could have named a date. A root `Makefile` the
+reader refuses, or one `makeutil` parses only partially, reaches RT-028 alone
+as an indeterminate finding; RT-026 and RT-027 do not read the Makefile. The
 window and the accepted Dependabot intervals reach Conftest as
 `data.parameters`.
 

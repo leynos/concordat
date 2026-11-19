@@ -80,8 +80,8 @@ Table 1: Latest verdict and findings per estate repository.
 
 Table 2: Distinct repositories with blocking evidence per rule.
 
-| Rule   | Severity | Noncompliant repositories | Indeterminate-only repositories | Would fail |
-| ------ | -------- | ------------------------- | ------------------------------- | ---------- |
-| AP-001 | error    | 0                         | 6                               | 6          |
-| FP-003 | error    | 2                         | 0                               | 2          |
-| QG-001 | error    | 3                         | 3                               | 6          |
+| Rule   | Severity | Noncompliant repositories | Indeterminate-only repositories | Would fail at error |
+| ------ | -------- | ------------------------- | ------------------------------- | ------------------- |
+| AP-001 | error    | 0                         | 6                               | 6                   |
+| FP-003 | error    | 2                         | 0                               | 2                   |
+| QG-001 | error    | 3                         | 3                               | 6                   |

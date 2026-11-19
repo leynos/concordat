@@ -69,6 +69,17 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   `make typecheck` passes.
 - Documentation updated in the package README, users' guide, developers'
   guide, design doc, migration guide and roadmap.
+- CodeRabbit's review of the draft pull request raised thirteen concerns, all
+  actioned: a `run` script is now split into shell commands so a quoted date is
+  an argument rather than a selection; `${{ matrix.NAME }}` toolchains are
+  resolved over every leg; an exempt exception suppresses RT-028's
+  indeterminate finding too; the Makefile probe's refusal and a symlink that
+  leaves the checkout are reported as errors; a recovered `makeutil` parse is
+  reported rather than read as clean; the pin is observed once, by the
+  envelope; a Makefile command that is itself a variable is expanded; and the
+  survey column reads "Would fail at error". The shell-command reader now lives
+  in `toolchain_literal_shell.py`, which keeps `toolchain_literal_facts` under
+  pylint's module-length limit.
 
 ## Lessons
 
@@ -86,6 +97,12 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   fixtures spell tabs as `"\t"`.
 - The pinned `ty` in `make typecheck` (0.0.65) is the authority; a newer local
   `uv run ty` reports unrelated pre-existing diagnostics.
+- A token split on whitespace cannot tell a quoted date from a selection, and
+  a matrix toolchain has no text until the matrix is read. Both were found by
+  reading the rule against the workflows it is meant to judge, not by the tests
+  that shipped with the first draft.
+- A `dict` literal assigned to a name typed as a TypedDict is a `dict[str, str]`
+  to `ty`; construct the TypedDict explicitly (`LiteralError(path=..., ...)`).
 
 ## Estate survey (2026-11-19)
 

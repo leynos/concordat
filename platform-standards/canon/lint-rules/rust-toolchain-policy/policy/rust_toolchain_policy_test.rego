@@ -261,6 +261,12 @@ test_an_exception_exempts_the_literal if {
   count(audit(data.fixtures.literal_excepted)) == 0
 }
 
+# An exception that names the current pin also covers the file the reader
+# could not open: the repository has already said its toolchain is separate.
+test_an_exception_exempts_an_unreadable_file if {
+  count(audit(data.fixtures.literal_excepted_unreadable)) == 0
+}
+
 test_a_missing_severity_parameter_defaults_to_warning if {
   some finding in audit(data.fixtures.literal_in_a_makefile)
   finding[0] == "RT-028"

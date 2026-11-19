@@ -244,6 +244,7 @@ literal_severity := object.get(data.parameters, "literal_severity", "warning")
 deny contains finding("RT-028", literal_severity, "indeterminate", error.path, msg) if {
   applies
   has_pin
+  not exempt
   some error in input.literals.errors
   msg := sprintf("%s could not be read, so a dated toolchain literal there cannot be ruled out: %s", [error.path, error.reason])
 }

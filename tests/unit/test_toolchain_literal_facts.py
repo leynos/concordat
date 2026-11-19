@@ -12,6 +12,8 @@ import typing as typ
 
 import pytest
 
+from concordat.rules.makefile_facts import MakefileFacts
+from concordat.rules.toolchain import inspect_toolchain
 from concordat.rules.toolchain_literal_facts import (
     ToolchainLiteralFacts,
     toolchain_literal_facts,
@@ -52,6 +54,11 @@ def _rust_repository(checkout: pathlib.Path) -> pathlib.Path:
     return checkout
 
 
+def _read(checkout: pathlib.Path) -> ToolchainLiteralFacts:
+    """Read *checkout*'s literals against the pin facts it exposes."""
+    return toolchain_literal_facts(checkout, inspect_toolchain(checkout))
+
+
 def _literals(facts: ToolchainLiteralFacts) -> list[tuple[str, str, str]]:
     """Return each literal as `(kind, path, text)`."""
     return [(f["kind"], f["path"], f["text"]) for f in facts["literals"]]
@@ -78,7 +85,7 @@ def test_wireframes_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
         ),
     )
 
-    facts = toolchain_literal_facts(tmp_path)
+    facts = _read(tmp_path)
 
     assert _literals(facts) == [
         ("workflow", ".github/workflows/ci.yml", "nightly-2026-10-30")
@@ -103,7 +110,7 @@ def test_morningtons_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
         ),
     )
 
-    facts = toolchain_literal_facts(tmp_path)
+    facts = _read(tmp_path)
 
     assert [(kind, text) for kind, _, text in _literals(facts)] == [
         ("workflow", channel),
@@ -132,9 +139,7 @@ def test_the_fixed_shapes_pass(tmp_path: pathlib.Path) -> None:
         ),
     )
 
-    assert toolchain_literal_facts(tmp_path)["literals"] == [], _literals(
-        toolchain_literal_facts(tmp_path)
-    )
+    assert _read(tmp_path)["literals"] == [], _literals(_read(tmp_path))
 
 
 def test_a_reformatted_workflow_keeps_its_verdict(tmp_path: pathlib.Path) -> None:
@@ -155,7 +160,7 @@ def test_a_reformatted_workflow_keeps_its_verdict(tmp_path: pathlib.Path) -> Non
     _write(tmp_path, ".github/workflows/compact.yml", compact)
     _write(tmp_path, ".github/workflows/expanded.yml", expanded)
 
-    assert _literals(toolchain_literal_facts(tmp_path)) == [
+    assert _literals(_read(tmp_path)) == [
         ("workflow", ".github/workflows/compact.yml", "nightly-2026-10-30"),
         ("workflow", ".github/workflows/expanded.yml", "nightly-2026-10-30"),
     ]
@@ -181,9 +186,7 @@ def test_a_workflow_env_declaration_is_deliberate(tmp_path: pathlib.Path) -> Non
         """,
     )
 
-    assert [text for _, _, text in _literals(toolchain_literal_facts(tmp_path))] == [
-        "nightly-2026-09-01"
-    ]
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-09-01"]
 
 
 def test_a_comment_or_display_name_is_not_a_literal(tmp_path: pathlib.Path) -> None:
@@ -201,7 +204,7 @@ def test_a_comment_or_display_name_is_not_a_literal(tmp_path: pathlib.Path) -> N
         ),
     )
 
-    assert toolchain_literal_facts(tmp_path)["literals"] == []
+    assert _read(tmp_path)["literals"] == []
 
 
 def test_an_unpinned_repository_is_outside_the_rule(tmp_path: pathlib.Path) -> None:
@@ -213,7 +216,7 @@ def test_an_unpinned_repository_is_outside_the_rule(tmp_path: pathlib.Path) -> N
         _workflow("      - run: cargo +nightly-2026-10-30 test\n"),
     )
 
-    facts = toolchain_literal_facts(tmp_path)
+    facts = _read(tmp_path)
 
     assert facts["reads_pin"] is False, facts
     assert facts["literals"] == [], facts
@@ -224,7 +227,7 @@ def test_an_unreadable_workflow_is_carried_as_an_error(tmp_path: pathlib.Path) -
     _rust_repository(tmp_path)
     _write(tmp_path, ".github/workflows/ci.yml", "jobs: [unclosed\n")
 
-    facts = toolchain_literal_facts(tmp_path)
+    facts = _read(tmp_path)
 
     assert facts["literals"] == [], facts
     assert len(facts["errors"]) == 1, facts
@@ -246,7 +249,7 @@ def test_a_makefile_variable_declares_a_separate_pin(tmp_path: pathlib.Path) -> 
         "\tcargo +$(RUSTFMT_TOOLCHAIN) fmt --check\n",
     )
 
-    assert toolchain_literal_facts(tmp_path)["literals"] == []
+    assert _read(tmp_path)["literals"] == []
 
 
 def test_an_inline_makefile_literal_is_reported(tmp_path: pathlib.Path) -> None:
@@ -260,7 +263,7 @@ def test_an_inline_makefile_literal_is_reported(tmp_path: pathlib.Path) -> None:
         "\trustup run nightly-2026-10-30 rustc -vV\n",
     )
 
-    assert _literals(toolchain_literal_facts(tmp_path)) == [
+    assert _literals(_read(tmp_path)) == [
         ("makefile", "Makefile", "nightly-2026-10-30"),
         ("makefile", "Makefile", "nightly-2026-10-30"),
     ]
@@ -275,7 +278,7 @@ def test_an_undefined_makefile_variable_is_reported(tmp_path: pathlib.Path) -> N
         "test:\n\tRUSTUP_TOOLCHAIN=$(DEV_FAST_TOOLCHAIN) cargo test\n",
     )
 
-    assert _literals(toolchain_literal_facts(tmp_path)) == [
+    assert _literals(_read(tmp_path)) == [
         ("makefile", "Makefile", "$(DEV_FAST_TOOLCHAIN)")
     ]
 
@@ -295,9 +298,7 @@ def test_a_variable_that_expands_to_a_literal_is_reported(
         "\tRUSTUP_TOOLCHAIN=$(TEST_TOOLCHAIN) cargo test\n",
     )
 
-    assert [text for _, _, text in _literals(toolchain_literal_facts(tmp_path))] == [
-        "nightly-2026-10-30"
-    ]
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_makefile_without_literals_is_silent(tmp_path: pathlib.Path) -> None:
@@ -305,7 +306,7 @@ def test_a_makefile_without_literals_is_silent(tmp_path: pathlib.Path) -> None:
     _rust_repository(tmp_path)
     _write(tmp_path, "Makefile", "test:\n\tcargo test --all-targets\n")
 
-    assert toolchain_literal_facts(tmp_path)["literals"] == []
+    assert _read(tmp_path)["literals"] == []
 
 
 @pytest.mark.parametrize("makefile", ["Makefile", "makefile", "GNUmakefile"])
@@ -316,6 +317,159 @@ def test_the_makefile_spelling_does_not_matter(
     _rust_repository(tmp_path)
     _write(tmp_path, makefile, "test:\n\tcargo +nightly-2026-10-30 test\n")
 
-    assert _literals(toolchain_literal_facts(tmp_path)) == [
-        ("makefile", makefile, "nightly-2026-10-30")
+    assert _literals(_read(tmp_path)) == [("makefile", makefile, "nightly-2026-10-30")]
+
+
+def test_a_host_suffixed_nightly_is_reported(tmp_path: pathlib.Path) -> None:
+    """A target-triple suffix does not hide the date rustup selects."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            "      - run: cargo +nightly-2026-10-30-x86_64-unknown-linux-gnu test\n"
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == [
+        "nightly-2026-10-30-x86_64-unknown-linux-gnu"
     ]
+
+
+def test_a_quoted_command_is_not_a_selection(tmp_path: pathlib.Path) -> None:
+    """Text an `echo` prints is an argument, not a command."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            '      - run: echo "cargo +nightly-2026-10-30 test"\n'
+            "      - run: true; cargo +nightly-2026-11-05 check\n"
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-11-05"]
+
+
+def test_a_matrix_toolchain_is_resolved(tmp_path: pathlib.Path) -> None:
+    """A toolchain the matrix supplies is read from every leg."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        """\
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            strategy:
+              matrix:
+                toolchain:
+                  - nightly-2026-10-30
+                  - nightly-2026-11-05
+                include:
+                  - toolchain: nightly-2026-12-01
+            steps:
+              - uses: dtolnay/rust-toolchain@master
+                with:
+                  toolchain: ${{ matrix.toolchain }}
+        """,
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == [
+        "nightly-2026-10-30",
+        "nightly-2026-11-05",
+        "nightly-2026-12-01",
+    ]
+
+
+def test_a_matrix_toolchain_in_a_command_is_resolved(tmp_path: pathlib.Path) -> None:
+    """A `${{ matrix.x }}` argument is resolved before the date is read."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        """\
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            strategy:
+              matrix:
+                toolchain: [nightly-2026-10-30]
+            steps:
+              - run: cargo +${{ matrix.toolchain }} test
+        """,
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_command_variable_is_expanded(tmp_path: pathlib.Path) -> None:
+    """A recipe that runs `$(CHECK)` selects whatever that variable commands."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        "Makefile",
+        "CHECK = cargo +nightly-2026-10-30 check\n\ntest:\n\t$(CHECK)\n",
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_silent_recipe_prefix_is_not_the_program(tmp_path: pathlib.Path) -> None:
+    """Make's `@` prefix does not stop `cargo` being the program."""
+    _rust_repository(tmp_path)
+    _write(tmp_path, "Makefile", "test:\n\t@cargo +nightly-2026-10-30 test\n")
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_quoted_make_reference_is_a_reference(tmp_path: pathlib.Path) -> None:
+    """Quoting the reference must not hide that it is one."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        "Makefile",
+        "TOOL = $(PIN)\nPIN = nightly-2026-10-30\n\n"
+        'test:\n\tRUSTUP_TOOLCHAIN="$(TOOL)" cargo test\n',
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_recovered_parse_is_carried_as_an_error(tmp_path: pathlib.Path) -> None:
+    """A recovered parse may have lost the recipe that names the date."""
+    _rust_repository(tmp_path)
+    _write(tmp_path, "Makefile", "test:\n\tcargo test\n")
+    report: typ.Any = {
+        "schema_version": 1,
+        "parse": {"status": "recovered"},
+        "rules": [],
+        "variables": [],
+        "includes": [],
+    }
+
+    facts = toolchain_literal_facts(
+        tmp_path,
+        inspect_toolchain(tmp_path),
+        inspect=lambda _path: MakefileFacts(report=report, status="recovered"),
+    )
+
+    assert facts["literals"] == [], facts
+    assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
+    assert "recovered" in facts["errors"][0]["reason"], facts
+
+
+def test_a_makefile_outside_the_checkout_is_an_error(tmp_path: pathlib.Path) -> None:
+    """A symlink must not feed another repository's recipes into the audit."""
+    checkout = tmp_path / "checkout"
+    external = tmp_path / "external"
+    _rust_repository(checkout)
+    external.mkdir()
+    (external / "Makefile").write_text("test:\n\tcargo test\n", encoding="utf-8")
+    (checkout / "Makefile").symlink_to(external / "Makefile")
+
+    facts = _read(checkout)
+
+    assert facts["literals"] == [], facts
+    assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
+    assert "outside the checkout" in facts["errors"][0]["reason"], facts

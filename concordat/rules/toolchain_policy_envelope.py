@@ -349,7 +349,7 @@ def build_toolchain_policy_envelope(
         "crates": crates,
         "dependabot": _dependabot_facts(checkout),
         "ci": ci_facts(checkout),
-        "literals": toolchain_literal_facts(checkout, inspect=inspect),
+        "literals": toolchain_literal_facts(checkout, toolchain, inspect=inspect),
         "exceptions": find_exception_sections(
             checkout,
             _exception_documents(resolved),

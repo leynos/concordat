@@ -81,10 +81,10 @@ Table 1: Latest verdict and findings per estate repository.
 
 Table 2: Distinct repositories with blocking evidence per rule.
 
-| Rule   | Severity | Noncompliant repositories | Indeterminate-only repositories | Would fail |
-| ------ | -------- | ------------------------- | ------------------------------- | ---------- |
-| RT-022 | error    | 2                         | 0                               | 2          |
-| RT-025 | warning  | 22                        | 0                               | 22         |
-| RT-026 | error    | 7                         | 0                               | 7          |
-| RT-027 | error    | 2                         | 0                               | 2          |
-| RT-028 | warning  | 2                         | 0                               | 2          |
+| Rule   | Severity | Noncompliant repositories | Indeterminate-only repositories | Would fail at error |
+| ------ | -------- | ------------------------- | ------------------------------- | ------------------- |
+| RT-022 | error    | 2                         | 0                               | 2                   |
+| RT-025 | warning  | 22                        | 0                               | 22                  |
+| RT-026 | error    | 7                         | 0                               | 7                   |
+| RT-027 | error    | 2                         | 0                               | 2                   |
+| RT-028 | warning  | 2                         | 0                               | 2                   |

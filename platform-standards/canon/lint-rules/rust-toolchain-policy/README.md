@@ -68,8 +68,11 @@ The reader parses rather than matching lines: a workflow is walked as a decoded
 document, so a nightly in a comment or a step's name is not CI using it, and a
 reformat does not change the verdict. Only the places a workflow selects a
 toolchain are read: a step's `run` command, a toolchain action's `toolchain`
-input, and the action's own ref. The `Makefile` is read from `makeutil`'s
-report, with each recipe read as written.
+input, and the action's own ref. A `run` script is split into shell commands,
+so text an `echo` prints is not a selection, and a `${{ matrix.NAME }}`
+toolchain is resolved to every leg the job's matrix declares. The `Makefile` is
+read from `makeutil`'s report, with each recipe read as written; a command that
+is itself a variable is expanded so its selections are read.
 
 A literal is declared as deliberately separate by binding it to a name: a
 Makefile variable assigned the date itself

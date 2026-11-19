@@ -29,6 +29,6 @@ Table 1: Latest verdict and findings per estate repository.
 
 Table 2: Distinct repositories with blocking evidence per rule.
 
-| Rule   | Severity | Noncompliant repositories | Indeterminate-only repositories | Would fail |
-| ------ | -------- | ------------------------- | ------------------------------- | ---------- |
-| QG-001 | error    | 1                         | 0                               | 1          |
+| Rule   | Severity | Noncompliant repositories | Indeterminate-only repositories | Would fail at error |
+| ------ | -------- | ------------------------- | ------------------------------- | ------------------- |
+| QG-001 | error    | 1                         | 0                               | 1                   |

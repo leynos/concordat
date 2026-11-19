@@ -10,16 +10,20 @@ Five decisions are made here rather than in the policy:
 * workflows are walked as decoded documents. A nightly in a comment or in a
   step's display name is not CI using it. Only the places a workflow selects a
   toolchain are read: a step's `run` command, a toolchain action's `toolchain`
-  input, and the action's own ref.
+  input, and the action's own ref. A `run` script is split into shell commands,
+  so `echo "cargo +nightly-..."` prints a date rather than selecting it, and a
+  `${{ matrix.NAME }}` value is resolved to every leg the matrix declares.
 * a literal the workflow's document, job or step `env` declares is a
   deliberately separate pin, and is not reported. Declaring it there is the
   explicit way for a repository to say the pin is separate.
 * a Makefile is read from the `makeutil` report, because a recipe is what Make
-  runs. A variable assigned the date itself, at the name the recipe writes, is
-  a deliberate separate pin. A literal written inline is reported; a date
-  reached through another variable is reported at its expanded value; and a
-  reference to a variable the Makefile never assigns, where no included file
-  could, is reported as the reference, since nothing declares it.
+  runs. A variable whose whole value is the date, at the name the recipe
+  writes, is a deliberate separate pin; a variable that merely contains a date
+  in a command is not. A literal written inline is reported; a date reached
+  through another variable is reported at its expanded value; a command that
+  is itself a variable is expanded so its selections are read; and a reference
+  to a variable the Makefile never assigns, where no included file could, is
+  reported as the reference, since nothing declares it.
 * only dated nightlies are read. A numeric literal in CI is usually a host
   tool's toolchain, which is why RT-027 judges dated nightlies only too.
 * the findings belong to the envelope builder. The facts readers run at the
@@ -43,39 +47,35 @@ from .markdown_envelope import (
     load_workflows,
     resolved_root,
 )
-from .toolchain import inspect_toolchain
+from .toolchain_literal_shell import (
+    Selection,
+    command_selections,
+    program_position,
+    reference_name,
+    selection_in,
+    shell_commands,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
-DATED_NIGHTLY: typ.Final = re.compile(r"(?<![\w-])nightly-\d{4}-\d{2}-\d{2}(?![\w-])")
-# A value that is a Make reference rather than a literal: `$(NAME)`/`${NAME}`.
-_REFERENCE: typ.Final = re.compile(
-    r"^\$(?:\((?P<paren>[A-Za-z_][\w-]*)\)|\{(?P<brace>[A-Za-z_][\w-]*)\})$"
+    from .toolchain import ToolchainFacts
+
+# A dated nightly, with any target-triple suffix rustup accepts
+# (`nightly-2026-10-30-x86_64-unknown-linux-gnu`). The whole name is reported:
+# it is the toolchain the file selected.
+DATED_NIGHTLY: typ.Final = re.compile(
+    r"(?<![\w-])nightly-\d{4}-\d{2}-\d{2}(?:-[A-Za-z0-9_]+)*(?![\w-])"
 )
-# The programs that take cargo's `+toolchain` override. A reference is one too
-# when its name says cargo, which is what `$(CARGO)` is in a Makefile.
-_TOOLCHAINS: typ.Final = (
-    "cargo",
-    "cargo-nextest",
-    "clippy-driver",
-    "cross",
-    "miri",
-    "rustc",
-    "rustup",
+# A workflow expression naming an `env` or `matrix` value, and any expression.
+_WORKFLOW_REFERENCE: typ.Final = re.compile(
+    r"^\$\{\{\s*(?P<scope>env|matrix)\.(?P<name>[\w-]+)\s*\}\}$"
 )
-_RUSTUP_VERBS: typ.Final = ("default", "install", "override", "run")
-# rustup options that take a value, so the value is not read as a toolchain.
-_VALUE_OPTIONS: typ.Final = frozenset({
-    "--profile",
-    "-c",
-    "--component",
-    "-t",
-    "--target",
-})
-_SHELL_SEPARATORS: typ.Final = frozenset({";", ";;", "&", "&&", "|", "||", "#"})
-_MAKEFILE_NAMES: typ.Final = ("GNUmakefile", "Makefile", "makefile")
+_EXPRESSION: typ.Final = re.compile(r"\$\{\{\s*(?P<body>[^}]*?)\s*\}\}")
+# GNU Make reads these in this order, so the first present one is the file the
+# repository's recipes run from.
+_MAKEFILE_NAMES: typ.Final = ("GNUmakefile", "makefile", "Makefile")
 TOOLCHAIN_ACTIONS: typ.Final = (
     "dtolnay/rust-toolchain",
     "actions-rust-lang/setup-rust-toolchain",
@@ -141,14 +141,6 @@ class ToolchainLiteralFacts(typ.TypedDict):
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class Selection:
-    """One toolchain a command selects, as the command writes it."""
-
-    text: str
-    is_reference: bool
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
 class VariableTable:
     """A Makefile's substitutable variables, and the names it leaves unknown.
 
@@ -166,120 +158,6 @@ class VariableTable:
     values: cabc.Mapping[str, str]
     assigned: cabc.Container[str]
     has_includes: bool
-
-
-def _trim(word: str) -> str:
-    """Return *word* without the quoting and separators glued to it."""
-    return word.strip("\"'`").rstrip(";|&")
-
-
-def _tokens(text: str) -> list[str]:
-    """Return the words of a command text, backslash continuations folded."""
-    return re.sub(r"\\\n[ \t]*", " ", text).split()
-
-
-def _is_tool(word: str) -> bool:
-    """Return whether *word* is a program that takes the `+toolchain` override."""
-    bare = _trim(word).rpartition("/")[2]
-    if bare in _TOOLCHAINS:
-        return True
-    return bool(_REFERENCE.match(bare)) and "cargo" in bare.lower()
-
-
-def _overrides(tokens: list[str]) -> cabc.Iterator[Selection]:
-    """Yield each `+toolchain` override whose program is a known tool."""
-    for index, word in enumerate(tokens):
-        current = _trim(word)
-        if index and _is_tool(tokens[index - 1]) and current.startswith("+"):
-            value = current[1:]
-            yield Selection(text=value, is_reference=bool(_REFERENCE.match(value)))
-
-
-def _environment(tokens: list[str]) -> cabc.Iterator[Selection]:
-    """Yield each `RUSTUP_TOOLCHAIN=` value assigned on a command."""
-    for word in tokens:
-        name, separator, value = _trim(word).partition("=")
-        if separator and name == "RUSTUP_TOOLCHAIN" and value:
-            yield Selection(text=value, is_reference=bool(_REFERENCE.match(value)))
-
-
-def _option_values(tokens: list[str]) -> cabc.Iterator[Selection]:
-    """Yield each `--toolchain` value, in either spelling."""
-    for index, word in enumerate(tokens):
-        current = _trim(word)
-        value = ""
-        if current == "--toolchain" and index + 1 < len(tokens):
-            value = _trim(tokens[index + 1])
-        elif current.startswith("--toolchain="):
-            value = current.partition("=")[2]
-        if value:
-            yield Selection(text=value, is_reference=bool(_REFERENCE.match(value)))
-
-
-def _positional(args: list[str]) -> list[str]:
-    """Return the non-option words of a `rustup` argument list."""
-    names: list[str] = []
-    words = iter(args)
-    for word in words:
-        if word in _VALUE_OPTIONS:
-            next(words, None)
-        elif not word.startswith("-"):
-            names.append(word)
-    return names
-
-
-def _rustup_arguments(rest: list[str]) -> cabc.Iterator[Selection]:
-    """Yield the positional toolchains of one `rustup` invocation."""
-    if rest[:2] == ["toolchain", "install"]:
-        rest = rest[1:]
-    if not rest:
-        return
-    verb, args = rest[0], rest[1:]
-    if verb == "override" and args[:1] == ["set"]:
-        args = args[1:]
-    elif verb not in _RUSTUP_VERBS:
-        # `rustup component add ... --toolchain X` names its toolchain through
-        # the option, which `_option_values` reads instead.
-        return
-    names = _positional(args)
-    for name in names if verb == "install" else names[:1]:
-        yield Selection(text=name, is_reference=bool(_REFERENCE.match(name)))
-
-
-def _rustup(tokens: list[str]) -> cabc.Iterator[Selection]:
-    """Yield the toolchains each `rustup` command in *tokens* selects."""
-    for index, word in enumerate(tokens):
-        if _trim(word).rpartition("/")[2] != "rustup":
-            continue
-        rest: list[str] = []
-        for following in tokens[index + 1 :]:
-            current = _trim(following)
-            if current in _SHELL_SEPARATORS:
-                break
-            rest.append(current)
-        yield from _rustup_arguments(rest)
-
-
-def command_selections(text: str) -> list[Selection]:
-    """Return each toolchain a command text selects, as written.
-
-    The four routes are cargo's `+toolchain` override, a `RUSTUP_TOOLCHAIN=`
-    assignment, rustup's `--toolchain` option, and rustup's positional
-    toolchain argument. A value that is a reference is returned as one, so the
-    caller can decide whether the reference is a declaration.
-
-    Returns
-    -------
-    list[Selection]
-        The selected toolchains, in the order the text writes them.
-    """
-    tokens = _tokens(text)
-    return [
-        *_overrides(tokens),
-        *_environment(tokens),
-        *_option_values(tokens),
-        *_rustup(tokens),
-    ]
 
 
 def _literals_in(text: str) -> list[str]:
@@ -323,13 +201,113 @@ def _steps(job: object) -> cabc.Iterator[dict[str, object]]:
             yield typ.cast("dict[str, object]", step)
 
 
-def _step_literals(step: dict[str, object]) -> list[str]:
+def _scalar_text(value: object) -> str | None:
+    """Return a decoded YAML scalar as the text rustup would see, or None."""
+    if isinstance(value, bool) or not isinstance(value, str | int | float):
+        return None
+    return str(value)
+
+
+def _include_values(entries: cabc.Sequence[object]) -> dict[str, list[str]]:
+    """Return the values a matrix's `include` legs give each key.
+
+    An `include` entry adds keys a job's `matrix.toolchain` reference can
+    name, so they have to be read as thoroughly as an axis.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        The values the `include` legs give each key.
+    """
+    pairs = [
+        (str(name), text)
+        for entry in entries
+        if isinstance(entry, dict)
+        for name, item in entry.items()
+        if (text := _scalar_text(item))
+    ]
+    values: dict[str, list[str]] = {}
+    for name, text in pairs:
+        values.setdefault(name, []).append(text)
+    return values
+
+
+def _matrix_values(job: object) -> dict[str, list[str]]:
+    """Map each matrix key to every scalar it takes, `include` legs too.
+
+    A job may produce its toolchain from the matrix rather than name it, so
+    the value a `${{ matrix.toolchain }}` reference can take has to be read
+    from every leg. An axis that is not a list contributes nothing.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        The values each matrix key can take.
+    """
+    strategy = job.get("strategy") if isinstance(job, dict) else None
+    matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
+    if not isinstance(matrix, dict):
+        return {}
+    values: dict[str, list[str]] = {}
+    for key, listed in matrix.items():
+        entries = listed if isinstance(listed, list) else []
+        if key == "include":
+            for name, texts in _include_values(entries).items():
+                values.setdefault(name, []).extend(texts)
+            continue
+        texts = [text for item in entries if (text := _scalar_text(item))]
+        if texts:
+            values[str(key)] = texts
+    return values
+
+
+def _resolved(text: str, matrix: cabc.Mapping[str, list[str]]) -> list[str]:
+    """Return the values *text* names, following a matrix reference.
+
+    A `${{ env.NAME }}` reference is left as written: an `env` entry that
+    declares the date is exempt by its declaration, so resolving it would only
+    produce a value the same walk filters out.
+
+    Returns
+    -------
+    list[str]
+        The values *text* can take; just *text* when it is not a matrix
+        reference, and nothing when it names a key the matrix does not give.
+    """
+    reference = _WORKFLOW_REFERENCE.match(text.strip())
+    if reference is None or reference.group("scope") != "matrix":
+        return [text]
+    return matrix.get(reference.group("name"), [])
+
+
+def _collapsed(text: str) -> str:
+    """Return *text* with each `${{ ... }}` expression made one word."""
+    return _EXPRESSION.sub(
+        lambda match: "${{" + match.group("body").replace(" ", "") + "}}", text
+    )
+
+
+def _command_literals(text: str, matrix: cabc.Mapping[str, list[str]]) -> list[str]:
+    """Return the dated nightlies *text* selects as a toolchain."""
+    return [
+        literal
+        for selection in command_selections(_collapsed(text))
+        if not selection.is_reference
+        for value in _resolved(selection.text, matrix)
+        for literal in _literals_in(value)
+    ]
+
+
+def _step_literals(
+    step: dict[str, object], matrix: cabc.Mapping[str, list[str]]
+) -> list[str]:
     """Return the dated nightlies one step selects.
 
     A `run` script is a command, so its toolchain comes from the routes
     :func:`command_selections` knows. An action's `toolchain` input and its
     `@ref` are values in their own right: a date written there is the
-    toolchain even though no command names it.
+    toolchain even though no command names it, and a matrix reference is
+    resolved against every leg the job's matrix declares.
 
     Returns
     -------
@@ -339,14 +317,18 @@ def _step_literals(step: dict[str, object]) -> list[str]:
     literals: list[str] = []
     run = step.get("run")
     if isinstance(run, str):
-        literals.extend(_command_literals(run))
+        literals.extend(_command_literals(run, matrix))
     uses = step.get("uses")
     if isinstance(uses, str) and uses.startswith(TOOLCHAIN_ACTIONS):
         literals.extend(_literals_in(uses.rpartition("@")[2]))
         inputs = step.get("with")
         toolchain = inputs.get("toolchain") if isinstance(inputs, dict) else None
         if isinstance(toolchain, str):
-            literals.extend(_literals_in(toolchain))
+            literals.extend(
+                literal
+                for value in _resolved(toolchain, matrix)
+                for literal in _literals_in(value)
+            )
     return literals
 
 
@@ -365,39 +347,30 @@ def _workflow_literals(document: object, path: str) -> list[LiteralFacts]:
     found: list[LiteralFacts] = []
     for job in jobs.values():
         job_declared = document_declared | _env_literals(job)
+        matrix = _matrix_values(job)
         for step in _steps(job):
             declared = job_declared | _env_literals(step)
             found.extend(
                 {"path": path, "kind": KIND_WORKFLOW, "text": literal}
-                for literal in _step_literals(step)
+                for literal in _step_literals(step, matrix)
                 if literal not in declared
             )
     return found
 
 
-def _command_literals(text: str) -> list[str]:
-    """Return the dated nightlies *text* selects as a toolchain."""
-    return [
-        literal
-        for selection in command_selections(text)
-        if not selection.is_reference
-        for literal in _literals_in(selection.text)
-    ]
+def _is_declared_date(value: str) -> bool:
+    """Return whether *value* is a dated nightly and nothing else.
 
+    Only a variable whose whole value is the date declares a separate pin.
+    `CHECK = cargo +nightly-... check` contains one, but it is a command, not
+    a declaration of which toolchain the build deliberately uses.
 
-def _root_makefile(checkout: pathlib.Path) -> pathlib.Path | None:
-    """Return the root Makefile Make would read, or None when there is none."""
-    for name in _MAKEFILE_NAMES:
-        path = checkout / name
-        if is_file(path, OPERATION_READ_MAKEFILE):
-            return path
-    return None
-
-
-def _reference_name(text: str) -> str | None:
-    """Return the variable a `$(NAME)`/`${NAME}` text names, if it is one."""
-    match = _REFERENCE.match(text)
-    return (match.group("paren") or match.group("brace")) if match else None
+    Returns
+    -------
+    bool
+        Whether the whole value is one dated nightly.
+    """
+    return DATED_NIGHTLY.fullmatch(value.strip()) is not None
 
 
 def _reported_texts(selection: Selection, table: VariableTable) -> list[str]:
@@ -420,11 +393,11 @@ def _reported_texts(selection: Selection, table: VariableTable) -> list[str]:
     """
     if not selection.is_reference:
         return _literals_in(selection.text)
-    name = _reference_name(selection.text)
+    name = reference_name(selection.text)
     if name is None:
         return []
     written = table.values.get(name)
-    if written is not None and _literals_in(shown(written)):
+    if written is not None and _is_declared_date(shown(written)):
         return []
     if written is None and (name in table.assigned or table.has_includes):
         return []
@@ -439,10 +412,97 @@ def _expanded_literals(selection: Selection, table: VariableTable) -> list[str]:
         return literals
     if not expanded.startswith("$"):
         return []
-    name = _reference_name(expanded)
+    name = reference_name(expanded)
     if name is None or name in table.assigned or table.has_includes:
         return []
     return [expanded]
+
+
+def _expand_program(words: list[str], table: VariableTable) -> list[str] | None:
+    """Return *words* with a referenced program expanded, or None.
+
+    `CHECK = cargo +nightly-... check` makes the recipe's command a variable,
+    so the program has to be expanded before its toolchain can be read. A
+    variable assigned the date itself is left in the substitution table out,
+    so it stays a reference in the reconstructed command and is judged where
+    the recipe writes it: that is what keeps `cargo +$(DEV_FAST_TOOLCHAIN)`
+    declared rather than reported at its value.
+
+    Returns
+    -------
+    list[str] | None
+        The command with its program expanded, or None when the program is
+        not a reference or expands to nothing.
+    """
+    position = program_position(words)
+    if position is None:
+        return None
+    index, program = position
+    if reference_name(program) is None:
+        return None
+    substitutable = {
+        name: value
+        for name, value in table.values.items()
+        if not _is_declared_date(shown(value))
+    }
+    expanded = shown(expand(program, substitutable).text).split()
+    if not expanded:
+        return None
+    return [*words[:index], *expanded, *words[index + 1 :]]
+
+
+def _recipe_texts(text: str, table: VariableTable) -> list[str]:
+    """Return the literal texts to report for one recipe line."""
+    raw = shown(text)
+    texts: list[str] = []
+    for words in shell_commands(raw):
+        texts.extend(
+            value
+            for selection in selection_in(words)
+            for value in _reported_texts(selection, table)
+        )
+        expanded = _expand_program(words, table)
+        if expanded is None:
+            continue
+        for selection in selection_in(expanded):
+            for value in _reported_texts(selection, table):
+                if value not in texts:
+                    texts.append(value)
+    return texts
+
+
+def _makefile_path(
+    checkout: pathlib.Path,
+) -> tuple[pathlib.Path | None, LiteralError | None]:
+    """Return the root Makefile Make would read, or why it cannot be read."""
+    try:
+        root = checkout.resolve(strict=False)
+    except OSError as error:
+        return None, {
+            "path": "Makefile",
+            "reason": f"cannot resolve {checkout}: {error}",
+        }
+    for name in _MAKEFILE_NAMES:
+        path = checkout / name
+        try:
+            present = is_file(path, OPERATION_READ_MAKEFILE)
+        except OperationalRuleError as error:
+            # A probe that cannot answer is a fact about this checkout, not a
+            # reason to lose the rest of the envelope's evidence.
+            return None, {"path": name, "reason": str(error)}
+        if not present:
+            continue
+        try:
+            resolved = path.resolve(strict=False)
+        except OSError as error:
+            return None, {"path": name, "reason": f"cannot resolve {path}: {error}"}
+        if not resolved.is_relative_to(root):
+            return None, {
+                "path": name,
+                "reason": f"{name} resolves outside the checkout, to {resolved}",
+            }
+        return path, None
+    return None, None
 
 
 def _makefile_literals(
@@ -460,19 +520,31 @@ def _makefile_literals(
         The literals, and why the Makefile could not be read (None when it read
         cleanly, or when the checkout has no Makefile).
     """
-    makefile = _root_makefile(checkout)
+    error: LiteralError | None
+    makefile, error = _makefile_path(checkout)
     if makefile is None:
-        return [], None
+        return [], error
     try:
-        report = inspect(makefile).report
-    except MakefileRefusedError as error:
-        return [], {"path": makefile.name, "reason": str(error)}
-    except OperationalRuleError as error:
+        facts = inspect(makefile)
+    except MakefileRefusedError as refusal:
+        return [], {"path": makefile.name, "reason": str(refusal)}
+    except OperationalRuleError as failure:
         # An absent or unusable `makeutil` is a deployment fault that stops
         # every other package too. This one reports it as indeterminate rather
         # than making the package unusable, so a repository cannot silence
         # RT-028 by taking the tool away.
-        return [], {"path": makefile.name, "reason": str(error)}
+        return [], {"path": makefile.name, "reason": str(failure)}
+    report = facts.report
+    if facts.status != "complete":
+        # A recovered parse still emits facts, but they may be incomplete, so
+        # a recipe that selects a dated nightly could be the part it lost.
+        error = LiteralError(
+            path=makefile.name,
+            reason=(
+                "makeutil recovered from a parse error, so a recipe that "
+                "selects a dated nightly may be missing"
+            ),
+        )
     values = single_assignments(report["variables"])
     table = VariableTable(
         values=values,
@@ -484,15 +556,17 @@ def _makefile_literals(
             {"path": makefile.name, "kind": KIND_MAKEFILE, "text": text}
             for rule in report["rules"]
             for recipe in rule["recipes"]
-            for selection in command_selections(shown(recipe["text"]))
-            for text in _reported_texts(selection, table)
+            for text in _recipe_texts(recipe["text"], table)
         ],
-        None,
+        error,
     )
 
 
 def toolchain_literal_facts(
-    checkout: pathlib.Path, *, inspect: MakefileInspector = inspect_makefile
+    checkout: pathlib.Path,
+    toolchain: ToolchainFacts | None,
+    *,
+    inspect: MakefileInspector = inspect_makefile,
 ) -> ToolchainLiteralFacts:
     """Read the dated nightlies the checkout's workflows and Makefile select.
 
@@ -500,6 +574,9 @@ def toolchain_literal_facts(
     ----------
     checkout:
         Path to the local checkout to audit.
+    toolchain:
+        The pin facts the envelope already read, so this reader cannot see a
+        different file from the one RT-022 judges.
     inspect:
         Reads the root Makefile's facts. The default is the pure query; the
         command boundary injects an observing one.
@@ -510,7 +587,6 @@ def toolchain_literal_facts(
         The literals, whether the checkout pins its toolchain, and the files
         that could not be read.
     """
-    toolchain = inspect_toolchain(checkout)
     if (
         toolchain is None
         or toolchain["parse_error"] is not None

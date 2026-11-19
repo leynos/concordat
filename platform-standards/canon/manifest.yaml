@@ -369,7 +369,7 @@ artifacts:
       Audit-only RT-022 to RT-028 policy holding the Rust toolchain to an exact
       pin, a fresh nightly, a Dependabot entry that moves it, a declared MSRV
       that CI exercises, and no restated dated literal in CI or the Makefile.
-    sha256: 4b4da9d1655dde6ff5bd86e209cdb85c76380f5e7a2728ea9eb097b7a4807aab
+    sha256: dfa5f3db3f80c7a934214539541754b77f45b436cabb7ca7e3882a1fa0de9db7
   - id: lint-rule-rust-toolchain-policy-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-toolchain-policy/rule.yaml
