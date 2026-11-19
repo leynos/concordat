@@ -9,6 +9,7 @@ abort of the whole audit.
 from __future__ import annotations
 
 import os
+import pathlib
 import typing as typ
 
 import pytest
@@ -16,9 +17,6 @@ import pytest
 from concordat.errors import OperationalRuleError
 from concordat.rules import workflow_evidence
 from concordat.rules.workflow_evidence import load_workflows, read_text
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 
 def test_a_symlink_is_refused_when_the_workflow_is_opened(
@@ -214,7 +212,7 @@ def test_a_checkout_replaced_after_containment_is_refused(
     Containment compares the resolved workflow directory with the resolved
     checkout, both taken from pathnames. Opening the checkout afterwards can
     land on a different tree, so the walk matches the opened descriptor
-    against the identity recorded during resolution.
+    against the identity read before resolution.
     """
     checkout = tmp_path / "repo"
     workflow_directory = checkout / ".github" / "workflows"
@@ -242,7 +240,52 @@ def test_a_checkout_replaced_after_containment_is_refused(
     with pytest.raises(OperationalRuleError) as excinfo:
         load_workflows(checkout)
 
-    assert "replaced after its containment" in str(excinfo.value), str(excinfo.value)
+    assert "replaced after its identity was read" in str(excinfo.value), str(
+        excinfo.value
+    )
+
+
+def test_a_checkout_replaced_while_its_route_is_resolved_is_refused(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A root swapped while its route resolves is refused, not walked.
+
+    The identity is read before the route is resolved, so a checkout replaced
+    between those steps cannot agree with the tree the walk opens. Reading the
+    identity afterwards would describe whichever tree resolution reached, and
+    the replacement's workflows would then be audited as the named checkout's.
+    """
+    checkout = tmp_path / "repo"
+    workflow_directory = checkout / ".github" / "workflows"
+    workflow_directory.mkdir(parents=True)
+    (workflow_directory / "ci.yml").write_text("on: push\n", encoding="utf-8")
+    replacement = tmp_path / "replacement"
+    replacement_workflows = replacement / ".github" / "workflows"
+    replacement_workflows.mkdir(parents=True)
+    (replacement_workflows / "ci.yml").write_text("on: push\n", encoding="utf-8")
+    swapped = False
+
+    class ReplacingPath(pathlib.Path):
+        """A path that swaps the checkout when its route is first resolved."""
+
+        # `strict` mirrors `pathlib.Path.resolve`, which accepts it positionally,
+        # so the override has to keep the boolean default in that position.
+        @typ.override
+        def resolve(self, strict: bool = False) -> typ.Self:
+            """Swap the checkout in before it is resolved, once."""
+            nonlocal swapped
+            if not swapped:
+                swapped = True
+                checkout.rename(tmp_path / "moved")
+                replacement.rename(checkout)
+            return super().resolve(strict=strict)
+
+    with pytest.raises(OperationalRuleError) as excinfo:
+        load_workflows(ReplacingPath(checkout))
+
+    assert "replaced after its identity was read" in str(excinfo.value), str(
+        excinfo.value
+    )
 
 
 def test_an_entry_that_appears_after_the_open_failure_is_refused(

@@ -434,9 +434,14 @@ def _contained_workflow_directory(checkout: pathlib.Path) -> _ContainedDirectory
     """
     directory = checkout / WORKFLOWS_DIRECTORY
     try:
+        # The identity is read first so that everything resolved afterwards is
+        # checked against the tree as it was before resolution began. Reading
+        # it afterwards would describe whatever tree resolution happened to
+        # reach, so a checkout replaced mid-resolution would agree with the
+        # route taken from the tree it replaced.
+        identity = _entry_identity(checkout)
         root = checkout.resolve(strict=False)
         resolved = directory.resolve(strict=False)
-        identity = _entry_identity(root)
     except OSError as error:
         message = f"cannot resolve {directory}: {error}"
         raise OperationalRuleError(
@@ -460,19 +465,20 @@ def _contained_workflow_directory(checkout: pathlib.Path) -> _ContainedDirectory
 
 
 def _require_contained_root(location: _ContainedDirectory, descriptor: int) -> None:
-    """Refuse a checkout root replaced after its containment was checked.
+    """Refuse a checkout root that changed while its route was resolved.
 
     The containment decision compares the resolved workflow directory with the
     resolved checkout, and both come from pathnames. Opening the checkout
-    afterwards can land on a different tree if the path was replaced in
-    between, and the decision would then describe a tree the audit never
-    opened. Comparing the opened descriptor with the identity recorded during
-    resolution binds the decision and the walk to the same object.
+    afterwards can land on a different tree if the path was replaced at any
+    point after its identity was read, and the decision would then describe a
+    tree the audit never opened. Comparing the opened descriptor with the
+    identity read before resolution began binds the decision and the walk to
+    the same object.
 
     Raises
     ------
     OperationalRuleError
-        If the opened root is not the checkout that was resolved.
+        If the opened root is not the checkout whose identity was read.
     """
     if location.identity is None:
         return
@@ -480,8 +486,8 @@ def _require_contained_root(location: _ContainedDirectory, descriptor: int) -> N
     if (opened.st_dev, opened.st_ino) == location.identity:
         return
     message = (
-        f"{location.path}: the checkout was replaced after its containment was "
-        "checked, so the workflows found there are not the ones that were checked"
+        f"{location.path}: the checkout was replaced after its identity was "
+        "read, so the workflows found there are not the ones that were checked"
     )
     raise OperationalRuleError(
         message,
@@ -495,9 +501,9 @@ def _open_workflow_directory(location: _ContainedDirectory) -> int | None:
 
     The descriptor is acquired by walking from the resolved checkout, opening
     each component relative to the one before it. The opened root is first
-    matched against the identity recorded when it was resolved, and nothing
-    afterwards resolves the directory's pathname again, so a checkout that
-    replaces it cannot redirect enumeration or a read into another tree.
+    matched against the identity read before the route was resolved, and
+    nothing afterwards resolves the directory's pathname again, so a checkout
+    that replaces it cannot redirect enumeration or a read into another tree.
 
     Returns
     -------
