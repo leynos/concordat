@@ -214,9 +214,11 @@ timeout is long enough, are NC-004 and NC-005's business
   helper that returns a `Command` is read at its call sites, exactly as NC-007
   reads them. A run that adds an argument the reader cannot read is kept as its
   own fact even when its offline state matches an earlier run, because the
-  unreadable word may select a different target. A command a helper builds
-  whose call sites live in another file is read at its definition and its
-  subcommand is `unknown`.
+  unreadable word may select a different target. So is a run whose added
+  literal supplies a `--target-dir` the run before left waiting: that word is
+  the flag's value, not a harmless addition. A command a helper builds whose
+  call sites live in another file is read at its definition and its subcommand
+  is `unknown`.
 - **Names resolve inside one function.** A target value is read through the
   `let` bindings of the function that builds the command, signature included (a
   parameter typed `TempDir` counts), so another test's binding of the same name

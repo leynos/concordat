@@ -721,6 +721,47 @@ def test_a_conditional_argument_call_between_runs_keeps_both_facts(
     ]
 
 
+# The first run leaves `--target-dir` waiting, so the literal added for the
+# second run is the flag's value rather than a harmless addition.
+REUSED_COMMAND_COMPLETED_FLAG = """\
+fn build_twice() {
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.args(["build", "--frozen", "--target-dir"]);
+    cmd.status().unwrap();
+    cmd.arg("/tmp/nested-target");
+    cmd.status().unwrap();
+}
+"""
+
+
+def test_a_literal_that_completes_the_flag_is_judged_as_its_own_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The second run names a target the first one did not, so both are kept.
+
+    `--target-dir` waits for a value at the end of the first run. The literal
+    added before the second supplies it, which changes where the command
+    builds; treating the addition as harmless would drop that run.
+    """
+    put(tmp_path, "tests/twice.rs", REUSED_COMMAND_COMPLETED_FLAG)
+    spawns = build_nested_cargo_cold_envelope(tmp_path)["spawns"]
+    assert [(spawn["state"], spawn["target_state"]) for spawn in spawns] == [
+        ("offline", "inherited"),
+        ("offline", "unknown"),
+    ]
+
+
+def test_a_run_that_completes_the_flag_is_reported(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The run that supplies the pending flag's value is indeterminate."""
+    prepared_reused_command(tmp_path, REUSED_COMMAND_COMPLETED_FLAG)
+    found = findings(tmp_path)
+    assert [(f.rule_id, f.verdict, f.line) for f in found] == [
+        ("EN-001", "indeterminate", 2)
+    ]
+
+
 @pytest.mark.parametrize(
     ("filter_text", "is_prepared"),
     [

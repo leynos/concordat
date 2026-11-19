@@ -291,6 +291,27 @@ def test_the_target_signature_keeps_an_argument_the_reader_cannot_read() -> None
     assert target_signature([literal, ("arg", '"--release"')]) == ()
 
 
+def test_a_literal_that_completes_the_flag_starts_its_own_run() -> None:
+    """A literal added while `--target-dir` waits is that flag's value.
+
+    The earlier run ends with the flag still waiting, so the added literal is
+    not a harmless addition: it names the second run's target. The two runs can
+    build in different places and must not collapse into one signature.
+    """
+    dangling = ("args", '["build", "--frozen", "--target-dir"]')
+    value = ("arg", '"/tmp/nested-target"')
+    assert target_signature([dangling]) == (dangling,)
+    assert target_signature([dangling, value]) == (dangling, value)
+
+
+def test_a_literal_added_with_no_pending_flag_still_collapses() -> None:
+    """Nothing awaits a value, so a literal addition cannot change the target."""
+    literal = ("args", '["build", "--frozen"]')
+    assert target_signature([literal]) == ()
+    assert target_signature([literal, ("arg", '"--release"')]) == ()
+    assert target_signature([("args", '["build", "--release"]')]) == ()
+
+
 def test_an_escaped_variable_name_is_not_its_text() -> None:
     """A hexadecimal escape can spell `CARGO_TARGET_DIR`: the text is not the name."""
     calls = [("env", '"\\x43ARGO_TARGET_DIR", scratch.path()')]
