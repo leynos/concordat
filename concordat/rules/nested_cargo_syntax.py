@@ -11,6 +11,10 @@ closes only a `<` and a brace at the top level is the item's own body.
 A brace inside a const block is read as depth and not as structure, and inside
 a block only braces are read, because the scan's callers only ever look at a
 signature or an item's first delimiter.
+
+A parameter that is a pattern rather than a plain `name: Type` is read for the
+names it binds, because `fn run((configure,): ..)` binds `configure` in the
+caller's scope just as a `let` does.
 """
 
 from __future__ import annotations
@@ -235,6 +239,40 @@ def _body_span(
         return None
     end = closers.get(item[0])
     return None if end is None else (item[0] + 1, end - 1)
+
+
+def pattern_binds(masked: str, start: int, name: str) -> bool:
+    """Report whether a parameter pattern binds *name*.
+
+    A tuple or struct pattern (`fn run((configure,): (fn(&mut Command),))`)
+    binds names the plain reader cannot see. When one of them is a helper's
+    name, the caller's scope is uncertain and the handoff is declined rather
+    than attributed to a same-file function. Only the text before the
+    parameter's `:` is a binding pattern; the type after it names no value.
+
+    Returns
+    -------
+    bool
+        True when the list can be read and a non-plain parameter's pattern
+        mentions *name*.
+    """
+    open_at = _parameter_open(masked, start)
+    if open_at is None:
+        return False
+    close_at = _parameter_close(masked, open_at)
+    if close_at is None:
+        return False
+    parameters = masked[open_at + 1 : close_at]
+    parts = _split_parameters(parameters)
+    if SELF_RECEIVER.match(parameters):
+        parts = parts[1:]
+    bound = re.compile(rf"\b{re.escape(name)}\b")
+    for part in parts:
+        if not part.strip() or PARAMETER.fullmatch(part) is not None:
+            continue
+        if bound.search(part.split(":", 1)[0]) is not None:
+            return True
+    return False
 
 
 def parameter_names(masked: str, start: int) -> list[str]:

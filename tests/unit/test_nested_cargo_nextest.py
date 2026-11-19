@@ -2614,3 +2614,212 @@ def test_help_given_in_every_arm_compiles_nothing(tmp_path: pathlib.Path) -> Non
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", HELP_IN_EVERY_ARM)
     assert ids(tmp_path) == set()
+
+
+@pytest.mark.parametrize(
+    "filter_expression",
+    [
+        "not(binary(ui))",
+        "!binary(ui)",
+        "not (test(/^compiles($|::)/))",
+        "!test(compiles)",
+        "not(binary(ui)) | binary(other)",
+    ],
+)
+def test_a_negated_predicate_does_not_name_the_spawner(
+    tmp_path: pathlib.Path, filter_expression: str
+) -> None:
+    """A filter that excludes `ui` does not place it in the serial group."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", BUILD_TEST)
+    put(tmp_path, ".config/nextest.toml", grouped_config(filter_expression))
+    assert ids(tmp_path) == {"NC-005"}
+
+
+def test_a_selected_predicate_beside_a_negated_one_still_names_the_spawner(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`not(binary(other)) | binary(ui)` selects `ui` however it also excludes."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", BUILD_TEST)
+    put(
+        tmp_path,
+        ".config/nextest.toml",
+        grouped_config("not(binary(other)) | binary(ui)"),
+    )
+    assert ids(tmp_path) == set()
+
+
+ESCAPED_BUILD = (
+    "use std::process::Command;\n"
+    "#[test]\nfn compiles() {\n"
+    '    Command::new("cargo").arg("buil\\x64").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_an_escape_in_a_subcommand_is_decoded(tmp_path: pathlib.Path) -> None:
+    """A hexadecimal escape spells `build`, so the test compiles the crate."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", ESCAPED_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+UNICODE_ESCAPED_BUILD = ESCAPED_BUILD.replace("buil\\x64", "buil\\u{64}")
+
+
+def test_a_unicode_escape_in_a_subcommand_is_decoded(tmp_path: pathlib.Path) -> None:
+    """A Unicode escape spells `build` too, so it cannot hide the compile."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", UNICODE_ESCAPED_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+ESCAPED_VERSION_PROBE = (
+    "use std::process::Command;\n"
+    "#[test]\nfn probes() {\n"
+    '    Command::new("rustc").arg("--ver\\x73ion").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_an_escape_in_a_probe_flag_is_decoded(tmp_path: pathlib.Path) -> None:
+    """A hexadecimal escape spells `--version`, so the test compiles nothing."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ESCAPED_VERSION_PROBE)
+    assert ids(tmp_path) == set()
+
+
+ESCAPED_QUOTE_BEFORE_A_BUILD = (
+    "use std::process::Command;\n"
+    "#[test]\nfn compiles() {\n"
+    '    Command::new("cargo").args(["a\\"b", "build"]).status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_an_escaped_quote_does_not_split_the_literal(tmp_path: pathlib.Path) -> None:
+    """The first word is `a"b`, so the later `build` is an argument of it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", ESCAPED_QUOTE_BEFORE_A_BUILD)
+    assert ids(tmp_path) == set()
+
+
+PRINT_IN_EACH_ARM = (
+    "use std::process::Command;\n"
+    "fn probe(choice: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    if choice {\n"
+    '        command.arg("--print");\n'
+    "    } else {\n"
+    '        command.arg("--print");\n'
+    "    }\n"
+    '    command.arg("cfg");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_each_arm_is_read_with_the_shared_words_before_the_branch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`--print` in either arm is completed by the `cfg` given after the choice."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PRINT_IN_EACH_ARM)
+    assert ids(tmp_path) == set()
+
+
+HELP_ON_ONE_PATH_VERSION_ON_THE_OTHER = (
+    "use std::process::Command;\n"
+    "fn run(choice: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if choice {\n"
+    '        command.arg("build").arg("--help");\n'
+    "    } else {\n"
+    '        command.arg("--version");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_help_on_one_path_excuses_that_path_alone(tmp_path: pathlib.Path) -> None:
+    """The if arm prints help and the else arm its version, so nothing builds."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELP_ON_ONE_PATH_VERSION_ON_THE_OTHER)
+    assert ids(tmp_path) == set()
+
+
+HELP_ON_ONE_PATH_BUILD_ON_THE_OTHER = HELP_ON_ONE_PATH_VERSION_ON_THE_OTHER.replace(
+    'command.arg("--version")', 'command.arg("check")'
+)
+
+
+def test_help_on_one_path_does_not_excuse_the_other(tmp_path: pathlib.Path) -> None:
+    """The else arm still type-checks the crate without a help flag."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELP_ON_ONE_PATH_BUILD_ON_THE_OTHER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CLOSURE_PARAMETER_SHADOWS_THE_HELPER = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command) {\n"
+    '    let inspect = |_: (), target: &mut Command| target.arg("--version");\n'
+    "}\n"
+    "fn probe() {\n"
+    '    let mut cmd = Command::new("rustc");\n'
+    '    cmd.arg("src/lib.rs");\n'
+    "    configure(&mut cmd);\n"
+    "    cmd.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_closure_parameter_hides_the_helpers_parameter(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The closure's own `target` is not the command the helper was given."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CLOSURE_PARAMETER_SHADOWS_THE_HELPER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+PATTERN_BOUND_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn configure(cmd: &mut Command) {\n"
+    '    cmd.arg("--version");\n'
+    "}\n"
+    "fn run((configure,): (fn(&mut Command),)) {\n"
+    '    let mut cmd = Command::new("rustc");\n'
+    '    cmd.arg("input.rs");\n'
+    "    configure(&mut cmd);\n"
+    "    cmd.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_pattern_bound_parameter_hides_the_helper(tmp_path: pathlib.Path) -> None:
+    """A tuple pattern binds `configure`, so the call is not the free function."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PATTERN_BOUND_PARAMETER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONDITIONAL_BUILD_ONLY = (
+    "use std::process::Command;\n"
+    "fn run(flag: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if flag {\n"
+    '        command.arg("build");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_conditional_build_is_still_read_as_compiling(tmp_path: pathlib.Path) -> None:
+    """`build` is given on the path through the block, so the run may compile."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_BUILD_ONLY)
+    assert ids(tmp_path) == {"NC-004"}

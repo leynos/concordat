@@ -16,7 +16,9 @@ the repository's `.config/nextest.toml` provides:
 It also records, per top-level `tests/<stem>.rs` spawner, whether a grouped
 override's filter names the binary or one of its tests; the other
 spawners (helpers under `src/` or `tests/support/`) are judged at repository
-level only. The scan for spawners lives in `nested_cargo_spawn` and is
+level only. A predicate the filter negates (`not(binary(ui))`, `!test(ui)`)
+excludes that name rather than selecting it, so it does not count as naming
+the spawner. The scan for spawners lives in `nested_cargo_spawn` and is
 conservative by design. A configuration that cannot be decoded stays a fact, so
 the policy answers indeterminate.
 """
@@ -183,21 +185,31 @@ def _nextest(checkout: pathlib.Path) -> tuple[Nextest, list[str]]:
 
 
 PREDICATE: typ.Final = re.compile(r"\b(?:binary|binary_id|test)\(")
+# A filter can exclude a binary instead of selecting it, with `!` or `not`
+# before the predicate. The exclusion names the same tests, so a name inside it
+# says nothing about which tests the override places in the group.
+NEGATION: typ.Final = re.compile(r"(?:!\s*\(?\s*|\bnot\s*\(?\s*)$")
 
 
 def _predicate_arguments(text: str) -> list[str]:
-    """Return the arguments of every `binary(..)`, `binary_id(..)` and `test(..)`.
+    """Return the arguments of every selecting predicate, negations skipped.
 
-    The parentheses are balanced rather than matched lazily, because a regex
+    A filter such as `not(binary(ui))` or `!test(/^ui/)` excludes those names
+    rather than selecting them, so their arguments are not returned: an
+    override that only excludes `ui` does not place it in the group. The
+    parentheses are balanced rather than matched lazily, because a regex
     argument such as `/^name($|::)/` holds parentheses of its own.
 
     Returns
     -------
     list[str]
-        The text between each predicate's parentheses.
+        The text between the parentheses of each predicate that is not
+        negated.
     """
     found: list[str] = []
     for match in PREDICATE.finditer(text):
+        if NEGATION.search(text[: match.start()]) is not None:
+            continue
         depth, start = 1, match.end()
         for offset, char in enumerate(text[start:], start):
             depth += (char == "(") - (char == ")")
@@ -227,8 +239,9 @@ def _named(spawner: Spawner, filters: list[str]) -> bool:
 
     A spawner that is not a top-level test binary has nothing to name and is
     judged by the repository-level facts alone. A name counts only inside a
-    `binary(..)`, `binary_id(..)` or `test(..)` predicate and only as a whole
-    word, so a filter on `ui_extra` does not name `ui`.
+    `binary(..)`, `binary_id(..)` or `test(..)` predicate, only when that
+    predicate selects rather than excludes, and only as a whole word, so a
+    filter on `ui_extra` does not name `ui` and neither does `not(binary(ui))`.
 
     Returns
     -------

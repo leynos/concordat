@@ -780,24 +780,28 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   at the call site, a read that restarts for each branch the command runs on or
   after a branch that returns, a word counted as unconditional only where every
   block open at it is also open at the run's launch, a branch condition's own
-  arguments inherited by every run through it, and a subcommand or help flag
-  read per arm of a fully paired `if`/`else` — is decided by
-  `nested_cargo_arguments`. That module reads the statements through
-  `nested_cargo_statements`, which owns the run model: which statements are the
-  command's, where each run begins, which blocks surround each word, how a
-  statement that opens a branch is split so its condition is shared, and how an
-  `else` pairs with the block it closes (an `else` beside the launched block
-  begins the next run; one that closes an inner `if` the launch is not in does
-  not). It finds the statements through `nested_cargo_handoffs` (windows,
-  helper bodies and file indexes, with an item beginning on the previous line
-  and a helper naming the caller's binding both declined) and attributes them
-  through `nested_cargo_receivers` (declining fields, path items, namespace
-  roots and a bare `Command`), and the bracket-depth reading of a signature and
-  its body lives in `nested_cargo_syntax`; the envelope reads
-  `.config/nextest.toml` for serial groups, whether an override uses one,
-  `slow-timeout` in any profile or override and `global-timeout` in any
-  profile, and marks each top-level test binary as named or not by the grouped
-  filters. It runs neither Cargo nor nextest and does not evaluate filtersets.
+  arguments inherited by every run through it, each arm read with the words
+  given before the branch, a subcommand or help flag read per arm of a fully
+  paired `if`/`else` (a help flag excuses only its own arm), and each word
+  decoded from its literal's escapes — is decided by `nested_cargo_arguments`.
+  That module reads the statements through `nested_cargo_statements`, which
+  owns the run model: which statements are the command's, where each run
+  begins, which blocks surround each word, how a statement that opens a branch
+  is split so its condition is shared, and how an `else` pairs with the block
+  it closes (an `else` beside the launched block begins the next run; one that
+  closes an inner `if` the launch is not in does not). It finds the statements
+  through `nested_cargo_handoffs` (windows, helper bodies and file indexes,
+  with an item beginning on the previous line, a helper naming the caller's
+  binding, a helper name bound by a parameter pattern and one rebound by a
+  closure's `|..|` list all declined) and attributes them through
+  `nested_cargo_receivers` (declining fields, path items, namespace roots and a
+  bare `Command`), and the bracket-depth reading of a signature and its body
+  lives in `nested_cargo_syntax`; the envelope reads `.config/nextest.toml` for
+  serial groups, whether an override uses one, `slow-timeout` in any profile or
+  override and `global-timeout` in any profile, and marks each top-level test
+  binary as named or not by the grouped filters, where a negated predicate
+  names nothing. It runs neither Cargo nor nextest and does not evaluate
+  filtersets.
 - `policy-input/nested-cargo-ci-wiring` —
   `nested_cargo_wiring_envelope.build_nested_cargo_wiring_envelope`. It reuses
   the shared workflow reader of the CodeScene coverage envelope, then records

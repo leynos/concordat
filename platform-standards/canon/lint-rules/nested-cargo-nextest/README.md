@@ -60,7 +60,8 @@ configuration from a repository that needs none:
   more than once, or one whose receiving parameter is not a plain `name: Type`
   binding, is declined rather than guessed; so is a call that a binding in the
   caller's own function shadows (a parameter included, even one after a
-  method's receiver, a name bound by a destructuring pattern such as
+  method's receiver, a name bound by a parameter pattern such as
+  `fn run((configure,): ..)`, a name bound by a destructuring pattern such as
   `let (configure,) = ..`, and a borrowed binding such as
   `let ref configure = ..`), a call written as a path or method
   (`support::configure(..)`, however it is spaced around the separator), a name
@@ -71,8 +72,11 @@ configuration from a repository that needs none:
   `use support::{*}`) spells no name but could bring any in, so it declines
   every handoff in the file. A helper whose body names the caller's binding is
   declined too: rewriting its receiving parameter to that name would make the
-  helper's own uses of it read as the caller's. A function item ends the
-  arguments however it is qualified (`unsafe fn`, `default fn`,
+  helper's own uses of it read as the caller's. So is a helper whose receiving
+  parameter a closure rebinds in its own `|..|` list
+  (`|_: (), target: &mut Command| target.arg(..)`), because that `target` is
+  the closure's argument, not the command the helper was given. A function item
+  ends the arguments however it is qualified (`unsafe fn`, `default fn`,
   `extern "C" fn`), because the qualifiers do not change where the next scope
   begins, and it does so even when it begins on the line that ends the previous
   item (`} fn later(..)`): the boundary is the `fn` keyword, not the start of a
@@ -101,19 +105,26 @@ configuration from a repository that needs none:
   paired chain is read for its own subcommand, so a `metadata` in the `if` arm
   does not hide the `build` in its `else` arm. A `-h` or `--help` given on
   every path prints help whatever the subcommand is, while one added inside a
-  block does not excuse the build on the path that skips it; a help flag in
-  every arm covers every path in the same way. Words after a `--` belong to the
-  program the command runs, not to cargo. A word counts as unconditional only
-  when every block open at it is also open at the run's launch, so a flag in
-  the branch that launches is on the run's path while one in a sibling block
-  that has already closed is not. A flag added on only some paths, behind a
-  `&&`/`||` short circuit or inside a block that may not run, does not make a
-  run a probe -- except when one fully paired `if`/`else` chain gives a probe
-  in every arm, whether that choice is written across statements or on one line
+  block does not excuse the build on the path that skips it. A help flag in one
+  arm excuses only the path through that arm, so a `build --help` in the `if`
+  arm does not excuse the `check` its `else` arm runs, while a help flag in
+  every arm excuses the whole run. Words after a `--` belong to the program the
+  command runs, not to cargo. A word is the text its string literal has at run
+  time, so an escape (`\x64`, `\u{64}`) is decoded and cannot hide `build` or
+  `--version` from the read, and an escaped quote does not end the literal
+  early. A word counts as unconditional only when every block open at it is
+  also open at the run's launch, so a flag in the branch that launches is on
+  the run's path while one in a sibling block that has already closed is not. A
+  flag added on only some paths, behind a `&&`/`||` short circuit or inside a
+  block that may not run, does not make a run a probe -- except when one fully
+  paired `if`/`else` chain gives a probe in every arm, whether that choice is
+  written across statements or on one line
   (`let _ = if c { .. } else { .. };`), since then no path reaches the launch
-  without one; a short circuit inside an arm (`query && command.arg("-V")`) can
-  still skip that arm's flag, so the arm does not cover its path.
-  `cargo metadata` and `cargo config` do not count;
+  without one. Each arm is read with the words given before the branch, so a
+  `--print` in one arm and a `cfg` after the choice complete each other; a
+  short circuit inside an arm (`query && command.arg("-V")`) can still skip
+  that arm's flag, so the arm does not cover its path. `cargo metadata` and
+  `cargo config` do not count;
 - a `rustc` spawn counts, unless every run of that same command is given a
   version flag (`--version`, `-V`, `-vV`), a help flag (`-h`, `--help`) or a
   `--print` of a table that needs no compile (`sysroot`, `target-libdir`,
@@ -140,7 +151,9 @@ configuration from a repository that needs none:
   `global-timeout` (in any profile). Each missing piece is its own finding.
 - **NC-005** (warning by default): a top-level `tests/<stem>.rs` spawner is not
   named, by binary or by one of its `fn` names, in the filter of an override
-  that uses a serial group. Helpers under `src/` or `tests/support/`, and
+  that uses a serial group. A predicate the filter negates (`not(binary(ui))`,
+  `!test(compiles)`) excludes that name rather than selecting it, so it does
+  not name the spawner. Helpers under `src/` or `tests/support/`, and
   `main.rs`/`mod.rs`, are judged at repository level only.
 - **EN-001** (indeterminate; an error for an envelope defect, the configured
   severity otherwise): the envelope is not a schema-1

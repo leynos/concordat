@@ -24,8 +24,15 @@ at the flag is also open at the launch; a flag in a sibling block that has
 already closed does not. A choice whose arms are fully paired can still cover
 every path, whether it is written across statements or on one line: a `-vV` in
 the `if` arm and a `-V` in its `else` arm reach the shared launch as a probe
-either way. A short circuit inside an arm (`query && command.arg("-V")`) can
-still skip that arm's word, so the arm does not cover its path.
+either way. An arm is read with the words given before the branch, so a
+`--print` in each arm is completed by a `cfg` after the choice. A short circuit
+inside an arm (`query && command.arg("-V")`) can still skip that arm's word, so
+the arm does not cover its path.
+
+A word is the text its literal has at run time, so an escape cannot hide a
+compiling subcommand from the read. A literal that ends at an escaped quote is
+still one literal, so an argument before a later `build` keeps its place as the
+subcommand.
 
 A shape the scan cannot attribute -- a helper defined twice, a call reached
 through a path or method, a name a `use` item could import (a glob import names
@@ -82,9 +89,25 @@ _HELP_FLAGS: typ.Final = frozenset({"-h", "--help"})
 # One `.arg(..)`/`.args(..)` call, whose words are read in source order. Rust
 # allows whitespace around the dot, so `command . arg(..)` is the same call.
 _ARGUMENT_CALL: typ.Final = re.compile(r"\.\s*args?\s*\(")
-# One string literal whose text is its value at run time.
-_LITERAL: typ.Final = r'"[^"]*"'
+# One string literal, including escaped characters, so an escaped quote does
+# not end it early.
+_LITERAL: typ.Final = r'"(?:[^"\\]|\\.)*"'
 _WORD: typ.Final = re.compile(_LITERAL)
+# The escapes a plain Rust string decodes to a single character. Byte strings,
+# raw strings and continued lines are not read, because their run-time text is
+# not the source text and guessing would misclassify the word.
+_SHORT_ESCAPES: typ.Final = {
+    "\\": "\\",
+    '"': '"',
+    "'": "'",
+    "n": "\n",
+    "r": "\r",
+    "t": "\t",
+    "0": "\0",
+}
+_HEX_ESCAPE: typ.Final = re.compile(r"[0-9A-Fa-f]{2}")
+# A `\u{..}` escape's braces and digits, read after the `u`.
+_UNICODE_ESCAPE: typ.Final = re.compile(r"\{([0-9A-Fa-f]{1,6})\}")
 # Options cargo reads one value for before the subcommand.
 _VALUE_OPTIONS: typ.Final = frozenset({
     "--color",
@@ -115,6 +138,78 @@ class ConditionalWord(typ.NamedTuple):
     guarded: bool
 
 
+def _decode_escapes(literal: str) -> str | None:
+    """Return the run-time text of one string literal's contents, or None.
+
+    The word a command is given is the text the literal has at run time, so an
+    escape is decoded before the word is compared with `--version` or `build`:
+    otherwise a word written with an escape would read as one the scan does not
+    know, and a compiling subcommand could hide behind it. Only the escapes
+    that name one character are read, because a byte string, a raw string or a
+    continued line changes the text in ways this scan does not model, and a
+    shape it cannot decode may be any word at all.
+
+    Returns
+    -------
+    str | None
+        The decoded text, or None when an escape is one the scan does not
+        decode.
+    """
+    text: list[str] = []
+    index = 0
+    while index < len(literal):
+        char = literal[index]
+        if char != "\\":
+            text.append(char)
+            index += 1
+            continue
+        following = literal[index + 1 : index + 2]
+        short = _SHORT_ESCAPES.get(following)
+        if short is not None:
+            text.append(short)
+            index += 2
+            continue
+        if following == "x":
+            digits = literal[index + 2 : index + 4]
+            if _HEX_ESCAPE.fullmatch(digits) is None:
+                return None
+            text.append(chr(int(digits, 16)))
+            index += 4
+            continue
+        if following == "u":
+            found = _UNICODE_ESCAPE.match(literal[index + 2 :])
+            if found is None:
+                return None
+            code = int(found[1], 16)
+            # Rust rejects a surrogate code point, so a literal holding one
+            # cannot be the source of a word and is not guessed at.
+            if code > 0x10FFFF or 0xD800 <= code <= 0xDFFF:
+                return None
+            text.append(chr(code))
+            index += 2 + found.end()
+            continue
+        return None
+    return "".join(text)
+
+
+def _literal_word(item: str) -> str | None:
+    """Return the word one argument gives, or None when it is not a literal.
+
+    A word is read only when the whole argument is one string literal, so
+    `"--version"` is a word and `format!("--{}", name)` is not; the escapes
+    inside the literal are decoded, because the command receives their text.
+
+    Returns
+    -------
+    str | None
+        The literal's run-time text, or None when the argument is not one
+        readable string literal.
+    """
+    if _WORD.fullmatch(item) is None:
+        return None
+    return _decode_escapes(item[1:-1])
+
+
 def _argument_words(
     statement: str, masked_statement: str, name: str | None
 ) -> typ.Iterator[str | None]:
@@ -139,7 +234,7 @@ def _argument_words(
             yield None
             return
         yield from (
-            item[1:-1] if _WORD.fullmatch(item) is not None else None
+            _literal_word(item)
             for item in argument_items(statement[open_at + 1 : close - 1])
         )
 
@@ -267,7 +362,7 @@ def _probe_words(
             if close is None:
                 return
             words = [
-                item[1:-1] if _WORD.fullmatch(item) is not None else None
+                _literal_word(item)
                 for item in argument_items(statement.text[open_at + 1 : close - 1])
             ]
             if conditional:
@@ -426,11 +521,13 @@ def _every_arm_asks(
     """Report whether one exhaustive choice gives a probe on every path.
 
     Every conditional word must sit in an arm one block below the launch, and
-    the arms must be the whole of one fully paired `if`/`else` chain. A word
-    outside such a choice -- behind a short circuit, or nested in a block
-    inside an arm -- leaves a path with no answer, so the run is not a probe.
-    So does a guarded word: the arm gives it only when the short circuit
-    beside it does not skip it.
+    the arms must be the whole of one fully paired `if`/`else` chain. Each
+    path is then that arm's words in their place among the unconditional ones,
+    so a `--print` in every arm is completed by a `cfg` given after the choice.
+    A word outside such a choice -- behind a short circuit, or nested in a
+    block inside an arm -- leaves a path with no answer, so the run is not a
+    probe. So does a guarded word: the arm gives it only when the short
+    circuit beside it does not skip it.
 
     Returns
     -------
@@ -450,7 +547,9 @@ def _every_arm_asks(
             return False
         by_arm.setdefault(word.blocks[depth], []).append(word.word)
     order = _arm_chain(by_arm, arms)
-    return order is not None and all(_plain_asks(by_arm[arm]) for arm in order)
+    return order is not None and all(
+        _plain_asks(_plain_path(words, arm)) for arm in order
+    )
 
 
 def _asks_a_question(
@@ -531,9 +630,9 @@ def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> b
     compiling word before the launch is enough.
 
     When the conditional words cover one fully paired choice, each path is
-    read for its own subcommand and its own help flag, so a `metadata` in one
-    arm does not hide the `build` in the other, and a `-h` in the `if` arm with
-    a `--help` in its `else` arm still prints help on every path.
+    read for its own subcommand and its own help flag: a `metadata` in one arm
+    does not hide the `build` in the other, and a `--help` in the `if` arm
+    excuses that arm alone, not the `build` its `else` arm runs.
 
     Returns
     -------
@@ -550,9 +649,10 @@ def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> b
     if launch is not None:
         paths = _arm_paths(plain, launch, arms)
         if paths is not None:
-            if all(_asks_for_help(path) for path in paths.values()):
-                return False
-            return any(_path_compiles(path) for path in paths.values())
+            return any(
+                _path_compiles(path) and not _asks_for_help(path)
+                for path in paths.values()
+            )
     unconditional = _cargo_options(plain)
     if any(isinstance(word, str) and word in _HELP_FLAGS for word in unconditional):
         return False

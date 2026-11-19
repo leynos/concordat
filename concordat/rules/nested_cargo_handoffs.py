@@ -13,14 +13,15 @@ none but could bring any in, and an import may name an inline module in the same
 file as easily as another file, which the scan does not resolve), a helper whose
 body names the caller's binding as well as its receiving parameter, a caller
 binding that shadows the helper by `let` or `let ref`, by a parameter or by a
-destructuring pattern (`let (configure,) = ..`), a parameter reassigned or
-shadowed -- is declined rather than guessed, because a false positive would
-demand configuration from a repository that needs none.
-A
-`return` in a helper is kept as a word, because it ends the helper's path and
-what follows runs only when the return was skipped, so the reader can split the
-caller's runs there. The reading is textual, and every boundary and brace is
-read from the masked source, so a `;` or a `{` in a string moves nothing.
+destructuring pattern (`let (configure,) = ..`), a helper name bound by a
+parameter pattern (`fn run((configure,): ..)`) or rebound by a closure's own
+`|..|` list, a parameter reassigned or shadowed -- is declined rather than
+guessed, because a false positive would demand configuration from a repository
+that needs none. A `return` in a helper is kept as a word, because it ends the
+helper's path and what follows runs only when the return was skipped, so the
+reader can split the caller's runs there. The reading is textual, and every
+boundary and brace is read from the masked source, so a `;` or a `{` in a
+string moves nothing.
 
 :mod:`concordat.rules.nested_cargo_arguments` decides what the statements this
 module returns mean.
@@ -33,12 +34,20 @@ import re
 import typing as typ
 
 from .nested_cargo_receivers import reaches_through
-from .nested_cargo_syntax import _body_span, _parameter_at, parameter_names
+from .nested_cargo_syntax import (
+    _body_span,
+    _parameter_at,
+    parameter_names,
+    pattern_binds,
+)
 
 # A call behind `&&` or `||` does not run on every path to the launch.
 SHORT_CIRCUIT: typ.Final = re.compile(r"&&|\|\|")
 # A `return` ends the path it sits on, so a call after it is conditional.
 _RETURN: typ.Final = re.compile(r"\breturn\b")
+# A closure's parameter list, from its opening `|` to its closing one. Rust
+# permits `move |..|`, and the list may name the helper's parameter anywhere.
+CLOSURE_HEADER: typ.Final = re.compile(r"(?:\bmove\s+)?\|(?P<params>[^|]*)\|")
 # A new command's arguments belong to it, not to the one before it.
 COMMAND_NEW: typ.Final = re.compile(r"Command::new\(")
 # A binding may name the constructor through a path (`std::process::Command`),
@@ -104,6 +113,28 @@ def _identifier(pattern: str) -> str:
     return rf"(?<![\w]){pattern}"
 
 
+def _closure_shadows(statement: str, name: str, own: re.Pattern[str]) -> bool:
+    """Report whether a closure header before the call binds *name*.
+
+    A closure may name the command parameter in any position
+    (`|_: (), target: &mut Command| target.arg(..)`), not only first, so the
+    whole header is read. The closure's own arguments are not the caller's
+    command, so a later call inside it must not be spliced into the caller's
+    window.
+
+    Returns
+    -------
+    bool
+        True when a `|..|` header before the call names the parameter.
+    """
+    found = own.search(statement)
+    limit = len(statement) if found is None else found.start()
+    return any(
+        re.search(rf"\b{re.escape(name)}\b", header["params"]) is not None
+        for header in CLOSURE_HEADER.finditer(statement[:limit])
+    )
+
+
 def _receiver_statements(
     text: str, masked: str, span: tuple[int, int], parameter: str, receiver: str
 ) -> Window:
@@ -129,7 +160,9 @@ def _receiver_statements(
     A flag behind a short circuit (`query && command.arg("--version")`) is not
     on every path, so a statement with a `&&` or `||` before the call keeps a
     block open around the call; the caller's depth is closed again at the end,
-    because the helper has returned by then.
+    because the helper has returned by then. A closure parameter that names the
+    command parameter (`|_: (), target: &mut Command| ..`) shadows it wherever
+    in the header it sits, so nothing after that statement is read.
 
     Rewriting the parameter to the caller's binding is only sound while that
     name means nothing else in the helper. A helper that receives the command
@@ -160,7 +193,11 @@ def _receiver_statements(
     masked_pieces: list[str] = []
     offset = start
     for statement in masked[start:end].split(";"):
-        if COMMAND_NEW.search(statement) or shadow.search(statement):
+        if (
+            COMMAND_NEW.search(statement)
+            or shadow.search(statement)
+            or _closure_shadows(statement, parameter, own)
+        ):
             break
         piece, masked_piece = _receiver_piece(
             text, statement, own, parameter, receiver, offset
@@ -300,7 +337,9 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     configure|`): the name still denotes the borrowed value rather than the
     free function. The caller's parameter list is read because
     `fn run(configure: fn(&mut Command))` calls the argument, not the free
-    function.
+    function. A parameter written as a pattern (`fn run((configure,): ..)`)
+    binds names the plain reader cannot see, so the handoff is declined rather
+    than guessed.
 
     Returns
     -------
@@ -321,6 +360,8 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     if binder.search(masked, start, at) is not None:
         return True
     if _destructured(masked, name, start, at):
+        return True
+    if pattern_binds(masked, start, name):
         return True
     return name in parameter_names(masked, start)
 
