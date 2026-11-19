@@ -45,7 +45,9 @@ parameters:
               The weekday a private `weekly` entry must name when it names
               one, compared case-insensitively. An entry that omits
               `schedule.day` lets Dependabot choose and is accepted. The
-              weekday is not checked when this parameter is absent or blank.
+              weekday is not checked when this parameter is absent, but a
+              present value that is blank or not a string is malformed and
+              falls back to the daily rule.
         description: >-
           The cadence a registered private repository may use. Public
           repositories, unregistered checkouts and malformed values all keep

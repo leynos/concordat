@@ -157,6 +157,7 @@ default accepted_intervals := ["daily"]
 
 accepted_intervals := intervals if {
   is_private_repository
+  private_cadence_well_formed
   intervals := object.get(private_cadence, "accepted_intervals", null)
   is_array(intervals)
   count(intervals) > 0
@@ -166,11 +167,24 @@ accepted_intervals := intervals if {
   }
 }
 
-# `weekly_day` is deliberately undefined when the parameter is absent, so the
-# weekday check below cannot fire against a value nobody configured.
+weekly_day_declared if "weekly_day" in object.keys(private_cadence)
+
+# An absent weekday disables the check below, so a `weekly` entry may omit
+# `schedule.day`. A present but non-string or blank one makes the configured
+# cadence itself untrustworthy, so it falls back to the daily rule instead of
+# silently accepting a weekly entry on any day.
+private_cadence_well_formed if not weekly_day_declared
+
+private_cadence_well_formed if {
+  weekly_day_declared
+  is_string(private_cadence.weekly_day)
+  trim_space(private_cadence.weekly_day) != ""
+}
+
 weekly_day := day if {
   is_private_repository
-  day := object.get(private_cadence, "weekly_day", null)
+  weekly_day_declared
+  day := private_cadence.weekly_day
   is_string(day)
   trim_space(day) != ""
 }

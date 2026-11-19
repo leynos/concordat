@@ -397,3 +397,23 @@ test_absent_weekly_day_skips_the_day_check if {
   findings := policy.deny with input as data.fixtures.private_weekly_tuesday with data.parameters as parameters
   count(findings) == 0
 }
+
+# A declared but non-string weekday is malformed. It must not silently disable
+# the day check and let an arbitrary weekly entry through; the cadence falls
+# back to daily instead.
+test_malformed_weekly_day_keeps_the_daily_rule if {
+  parameters := object.union(shipped_parameters, {"private_cadence": {"accepted_intervals": ["daily", "weekly"], "weekly_day": 17}})
+  findings := policy.deny with input as data.fixtures.private_weekly_tuesday with data.parameters as parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.interval is weekly, not daily; private repository leynos/dev-env-rocky accepts daily"],
+  }
+}
+
+# A blank weekday is malformed in the same way.
+test_blank_weekly_day_keeps_the_daily_rule if {
+  parameters := object.union(shipped_parameters, {"private_cadence": {"accepted_intervals": ["daily", "weekly"], "weekly_day": " "}})
+  findings := policy.deny with input as data.fixtures.private_weekly_tuesday with data.parameters as parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.interval is weekly, not daily; private repository leynos/dev-env-rocky accepts daily"],
+  }
+}

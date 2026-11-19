@@ -70,9 +70,12 @@ are non-blank; a record nobody must revisit is not a record.
 A registered repository accepts every interval in `accepted_intervals`. A
 `weekly` entry that names a `schedule.day` must name `weekly_day`, compared
 case-insensitively; an entry that omits `day` lets Dependabot choose and is
-accepted. The weekday is not checked when `weekly_day` is absent. Every other
-clause is unchanged: the catch-all, the narrow earlier groups, local-action
-coverage, and the Cargo versioning rule all still apply to a private repository.
+accepted. The weekday is not checked when `weekly_day` is absent. A
+`weekly_day` that is present but blank or not a string is malformed: it does
+not silently disable the weekday check, and the cadence falls back to the daily
+rule. Every other clause is unchanged: the catch-all, the narrow earlier
+groups, local-action coverage, and the Cargo versioning rule all still apply to
+a private repository.
 
 The exception fails closed. Any of the following keeps the daily rule:
 
@@ -81,7 +84,8 @@ The exception fails closed. Any of the following keeps the daily rule:
   lower-casing, an unregistered name still has no record);
 - a registry record with a blank `rationale` or `review_trigger`;
 - absent, non-object or malformed parameters, including an
-  `accepted_intervals` value that is not a non-empty array of non-blank strings.
+  `accepted_intervals` value that is not a non-empty array of non-blank
+  strings, and a `weekly_day` that is present but not a non-blank string.
 
 In each case `accepted_intervals` falls back to `["daily"]`. The audit does not
 observe repository visibility. The registry is the only evidence it has, so a

@@ -341,14 +341,14 @@ artifacts:
       Audit-only DB-005 policy holding Dependabot to daily updates, one
       minor-and-patch catch-all per entry, and covered local actions. A
       registered private repository may run weekly on Monday instead.
-    sha256: e94497215cb9535eb81de334ebea7560ee457768673f9ab0ed98d073912792f8
+    sha256: ebbc616cd3aaf99b2d936e3e7980fc2080d18e4ddf3a4caafddf77420f09ef70
   - id: lint-rule-dependabot-update-shape-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/dependabot-update-shape/rule.yaml
     description: >
       Rule package manifest for the Dependabot update-shape policy, including
       the private-cadence and private-repository registry parameters.
-    sha256: f790422b388cee4cb3f47e422134af0f0b582e8ff95baa6f0ccf16d8d09db2de
+    sha256: c8f59060bfff3ed1f21665ed963cab01961699161aa863cf8344cc5f1bab32ee
   - id: lint-rule-rust-toolchain-policy
     type: opa-policy
     path: >-
