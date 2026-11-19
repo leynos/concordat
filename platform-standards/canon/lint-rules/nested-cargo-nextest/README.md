@@ -51,8 +51,13 @@ configuration from a repository that needs none:
   than guessed; so is a call that a binding in the caller's own function
   shadows (a parameter included, even one after a method's receiver), a call
   written as a path or method (`support::configure(..)`, however it is spaced
-  around the separator), or a helper that reassigns the parameter.
-  `cargo metadata` and `cargo config` do not count;
+  around the separator), or a helper that reassigns the parameter. A launch
+  inside a block that returns on the way out does not end the arguments: the
+  statements after the block are the first run on the path that skips it. The
+  subcommand is the first argument that is neither an option nor an option's
+  value, so `--color always nextest run` runs `nextest` and `cargo help build`
+  prints help rather than building. `cargo metadata` and `cargo config` do not
+  count;
 - a `rustc` spawn counts, unless an argument added to that same command is a
   version flag (`--version`, `-V`, `-vV`) or a `--print` of a table that needs
   no compile (`sysroot`, `target-libdir`, `host-tuple`, `cfg`, `target-list`,

@@ -1329,3 +1329,227 @@ def test_a_semicolon_only_marked_item_scopes_nothing(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "src/lib.rs", MARKED_DECLARATION_THEN_PRODUCTION_BUILD)
     assert ids(tmp_path) == set()
+
+
+FIELD_RECEIVER = (
+    "use std::process::Command;\n"
+    "fn compile_after_reading_a_field(holder: Holder) {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.env("PROGRAM", holder.command.arg("--version").get_program());\n'
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+)
+
+
+def test_a_field_receiver_is_not_the_local_binding(tmp_path: pathlib.Path) -> None:
+    """`holder.command` is another value, so its `--version` is not a probe."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", FIELD_RECEIVER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+INNER_REBINDING = (
+    "use std::process::Command;\n"
+    "fn reused() -> Command {\n"
+    '    Command::new("echo")\n}\n'
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if reuse {\n"
+    "        let mut command = reused();\n"
+    '        command.arg("build").status().unwrap();\n'
+    "    }\n"
+    '    command.arg("metadata").status().unwrap();\n}\n'
+)
+
+
+def test_an_inner_rebinding_is_not_the_outer_command(tmp_path: pathlib.Path) -> None:
+    """A `let` inside the block moves the name to another command there."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", INNER_REBINDING)
+    assert ids(tmp_path) == set()
+
+
+RESTRICTED_VISIBILITY_CALLBACK = (
+    "use std::process::Command;\n"
+    "fn add_build(command: &mut Command) {\n"
+    '    command.arg("build");\n}\n'
+    "pub(crate) fn run(add_build: fn(&mut Command)) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    add_build(&mut command);\n"
+    '    command.arg("metadata").status().unwrap();\n}\n'
+)
+
+
+def test_a_restricted_visibility_signature_still_shadows_the_helper(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`pub(crate)` holds no parameter, so the callback before it still shadows."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", RESTRICTED_VISIBILITY_CALLBACK)
+    assert ids(tmp_path) == set()
+
+
+GUARDED_HELPER_CALL = (
+    "use std::process::Command;\n"
+    "fn probe_toolchain() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    let _ = query && add_version(&mut command);\n"
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+    "fn add_version(command: &mut Command) -> bool {\n"
+    '    command.arg("--version");\n'
+    "    true\n}\n"
+)
+
+
+def test_a_short_circuited_helper_call_is_still_conditional(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`query && add_version(..)` skips the helper's flag when `query` is false."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", GUARDED_HELPER_CALL)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CLOSED_BLOCK_BEFORE_PROBE = (
+    "use std::process::Command;\n"
+    "fn probe_toolchain() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    let _ = if query { command.env("MODE", "a") } '
+    'else { command.env("MODE", "b") };\n'
+    '    command.arg("--version").status().unwrap();\n}\n'
+)
+
+
+def test_a_closed_block_does_not_lift_the_next_statement(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Both branches close, so the caller's `--version` is unconditional."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CLOSED_BLOCK_BEFORE_PROBE)
+    assert ids(tmp_path) == set()
+
+
+CONSTRUCTOR_TEXT_IN_A_LITERAL = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    Command::new("cargo")\n'
+    '        .env("LABEL", "Command::new(")\n'
+    '        .arg("build")\n'
+    "        .status()\n        .unwrap();\n}\n"
+)
+
+
+def test_a_constructor_in_a_string_does_not_end_the_window(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `Command::new(` inside an environment value builds no other command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONSTRUCTOR_TEXT_IN_A_LITERAL)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+HELP_SUBCOMMAND = (
+    "use std::process::Command;\n"
+    "fn prints_help() {\n"
+    '    Command::new("cargo").arg("help").arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_help_subcommand_is_not_a_compile(tmp_path: pathlib.Path) -> None:
+    """`cargo help build` prints help; `build` is its topic, not the subcommand."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELP_SUBCOMMAND)
+    assert ids(tmp_path) == set()
+
+
+QUALIFIED_CONSTRUCTOR = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = std::process::Command::new("cargo");\n'
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_qualified_constructor_still_binds_the_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`std::process::Command::new` binds `command` just as the bare form does."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", QUALIFIED_CONSTRUCTOR)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+ARGUMENT_AFTER_A_LAUNCH_IN_THE_SAME_STATEMENT = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(mode: &str) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if command.arg(mode).status().is_ok() {\n"
+    '        command.arg("build");\n'
+    "    }\n}\n"
+)
+
+
+def test_an_argument_after_the_launch_in_the_same_statement_is_not_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `build` in the `if` body is added after the only run of the command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ARGUMENT_AFTER_A_LAUNCH_IN_THE_SAME_STATEMENT)
+    assert ids(tmp_path) == set()
+
+
+CONDITIONAL_LAUNCH_THAT_RETURNS = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(metadata: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if metadata {\n"
+    '        command.arg("metadata").status().unwrap();\n'
+    "        return;\n"
+    "    }\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_conditional_launch_that_returns_does_not_end_the_arguments(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The later `build` is the first launch on the path that skips the `if`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_LAUNCH_THAT_RETURNS)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SHIFTED_ARRAY_IN_AN_OUTER_GENERIC = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add(None, &mut command);\n}\n"
+    "fn add(_: Option<[u8; 4 >> 1]>, target: &mut Command) {\n"
+    '    target.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_shift_in_an_outer_generics_array_keeps_parameter_positions(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The shift's `>` closes neither the array's `[` nor `Option`'s `<`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SHIFTED_ARRAY_IN_AN_OUTER_GENERIC)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+PROBE_FLAG_BEHIND_A_SHORT_CIRCUIT = (
+    "use std::process::Command;\n"
+    "fn compile_after_check() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    let _ = query && command.arg("--version").get_args().next().is_some();\n'
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+)
+
+
+def test_a_probe_flag_behind_a_short_circuit_is_not_a_probe(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The flag is absent when `query` is false, so it proves nothing."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBE_FLAG_BEHIND_A_SHORT_CIRCUIT)
+    assert ids(tmp_path) == {"NC-004"}

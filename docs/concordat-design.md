@@ -3079,23 +3079,30 @@ spaced around the separator), or a helper that reassigns the parameter or
 redeclares its name. A flag reached only on some paths, behind a `&&`/`||`
 short circuit or inside a block that may not run, does not make the command a
 probe. A callee in another file is not seen either. These declinations err
-towards not demanding configuration and can miss compiler work. The
-configuration facts are the ones netsuke and rstest-bdd converged on: a serial
-group, an override that uses it, an explicit `slow-timeout` (profile or
-override) and a `global-timeout` (any profile, since netsuke sets it on `ci`).
-A top-level test binary must also be named by a grouped override's filter, by
-binary or by one of its functions, which is how ortho-config's BDD suite is
-told apart from netsuke's. The package does not evaluate nextest filtersets: a
-name appearing in a grouped filter is the evidence, which is cheap and errs
-towards acceptance. The name must be a whole word inside a `binary()`,
-`binary_id()` or `test()` predicate, so `binary(ui_extra)` does not name `ui`,
-and a regex argument such as `/^name($|::)/` is read whole. Exemptions name a
-test source and follow the NC-001 convention: repository, path, rationale and
-review trigger, where a blank rationale or trigger suppresses nothing. The
-package ships at `warning` severity through a `severity` parameter, as
-`nested-cargo-offline-tests` does, because the estate survey found
-configuration gaps in a dozen repositories; promotion to `error` follows once
-they are clean.
+towards not demanding configuration and can miss compiler work. A launch inside
+a block that returns on the way out does not end the arguments: the statements
+after the block are the first run on the path that skips it, so they are read
+too, and a read that spans several runs asks only whether any of them compiles.
+A cargo subcommand is the first word the arguments give that is neither an
+option nor an option's value (`--color always nextest` runs `nextest`, while
+`cargo help build` prints help), so an option's value is not mistaken for the
+subcommand; a word the reader cannot see leaves the question open, and then any
+compiling argument before the launch is enough. The configuration facts are the
+ones netsuke and rstest-bdd converged on: a serial group, an override that uses
+it, an explicit `slow-timeout` (profile or override) and a `global-timeout`
+(any profile, since netsuke sets it on `ci`). A top-level test binary must also
+be named by a grouped override's filter, by binary or by one of its functions,
+which is how ortho-config's BDD suite is told apart from netsuke's. The package
+does not evaluate nextest filtersets: a name appearing in a grouped filter is
+the evidence, which is cheap and errs towards acceptance. The name must be a
+whole word inside a `binary()`, `binary_id()` or `test()` predicate, so
+`binary(ui_extra)` does not name `ui`, and a regex argument such as
+`/^name($|::)/` is read whole. Exemptions name a test source and follow the
+NC-001 convention: repository, path, rationale and review trigger, where a
+blank rationale or trigger suppresses nothing. The package ships at `warning`
+severity through a `severity` parameter, as `nested-cargo-offline-tests` does,
+because the estate survey found configuration gaps in a dozen repositories;
+promotion to `error` follows once they are clean.
 
 ##### Nested cargo cold build
 

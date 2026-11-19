@@ -28,7 +28,9 @@ PARAMETER: typ.Final = re.compile(
 )
 
 
-_OPENER: typ.Final = {")": "(", "]": "[", ">": "<"}
+_OPENER: typ.Final = {")": "(", "]": "["}
+# `pub(crate)` is a parenthesis that holds no parameter, so it is not the list.
+_VISIBILITY: typ.Final = re.compile(r"\bpub\s*$")
 
 
 def _depths(masked: str, start: int) -> typ.Iterator[tuple[int, int | None]]:
@@ -39,9 +41,11 @@ def _depths(masked: str, start: int) -> typ.Iterator[tuple[int, int | None]]:
     A brace at the top level is the item's own body and is reported at depth
     zero rather than entered. A return arrow is skipped whole.
 
-    A `>` with no `<` open is an operator (`4 >> 1`), not a closer, so it is
-    ignored; a `)` or `]` that opens nothing ends the scan with an unknown
-    depth, because nothing after it can be trusted.
+    A `>` closes a `<` only when the `<` is still the innermost opener, so the
+    `>` of an array length's shift (`[u8; 4 >> 1]`, and `Option<[u8; 4 >> 1]>`
+    around it) is an operator rather than a closer. A `)` or `]` that opens
+    nothing ends the scan with an unknown depth, because nothing after it can
+    be trusted.
 
     Yields
     ------
@@ -66,13 +70,19 @@ def _depths(masked: str, start: int) -> typ.Iterator[tuple[int, int | None]]:
                 openers.pop()
         elif char in "([<" and not inside_brace:
             openers.append(char)
-        elif char in ")]>" and not inside_brace:
+        elif char == ">" and not inside_brace:
+            # Only an innermost `<` is a generic that `>` can close. A `[` or
+            # `(` opened inside one is still open here, so the `>` belongs to a
+            # shift in an array length or a comparison, not to a type.
+            if openers and openers[-1] == "<":
+                openers.pop()
+        elif char in ")]" and not inside_brace:
             opened = _OPENER[char]
             if opened in openers:
                 while openers[-1] != opened:
                     openers.pop()
                 openers.pop()
-            elif char != ">":
+            else:
                 yield index, None
                 return
         index += 1
@@ -110,7 +120,9 @@ def _parameter_open(masked: str, start: int) -> int | None:
 
     Generics may hold their own parentheses (`F: Fn()`) and return arrows
     (`F: Fn() -> ()`), so only a `(` at bracket depth zero opens the parameter
-    list, and the `>` of an arrow does not close a generic.
+    list, and the `>` of an arrow does not close a generic. A restricted
+    visibility (`pub(crate) fn run(..)`) is a parenthesis of its own, so the
+    one after `pub` is skipped rather than read as the parameter list.
 
     Returns
     -------
@@ -120,7 +132,9 @@ def _parameter_open(masked: str, start: int) -> int | None:
     for index, depth in _depths(masked, start):
         if depth is None:
             return None
-        if masked[index] == "(" and not depth:
+        if masked[index] != "(" or depth:
+            continue
+        if _VISIBILITY.search(masked, start, index) is None:
             return index
     return None
 
