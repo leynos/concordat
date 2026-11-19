@@ -104,6 +104,12 @@ def prepared_reused_command(root: pathlib.Path, source: str) -> None:
     )
 
 
+def spawn_states(root: pathlib.Path) -> list[tuple[str, str]]:
+    """Return each run's offline and target state, in source order."""
+    spawns = build_nested_cargo_cold_envelope(root)["spawns"]
+    return [(spawn["state"], spawn["target_state"]) for spawn in spawns]
+
+
 def test_a_reused_command_is_judged_again_after_an_unreadable_argument(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -143,10 +149,7 @@ def test_two_unchanged_runs_of_a_reused_command_are_one_fact(
 ) -> None:
     """Identical evidence starts the process in the same place, so it is one fact."""
     put(tmp_path, "tests/twice.rs", REUSED_COMMAND_UNCHANGED)
-    spawns = build_nested_cargo_cold_envelope(tmp_path)["spawns"]
-    assert [(spawn["state"], spawn["target_state"]) for spawn in spawns] == [
-        ("offline", "inherited")
-    ]
+    assert spawn_states(tmp_path) == [("offline", "inherited")]
 
 
 def test_a_conditional_argument_call_between_runs_keeps_both_facts(
@@ -154,8 +157,7 @@ def test_a_conditional_argument_call_between_runs_keeps_both_facts(
 ) -> None:
     """A call on only some paths may change the target, so neither run collapses."""
     put(tmp_path, "tests/twice.rs", REUSED_COMMAND_CONDITIONAL_ARGUMENTS)
-    spawns = build_nested_cargo_cold_envelope(tmp_path)["spawns"]
-    assert [(spawn["state"], spawn["target_state"]) for spawn in spawns] == [
+    assert spawn_states(tmp_path) == [
         ("offline", "inherited"),
         ("offline", "unknown"),
     ]
@@ -184,8 +186,7 @@ def test_a_literal_that_completes_the_flag_is_judged_as_its_own_run(
     builds; treating the addition as harmless would drop that run.
     """
     put(tmp_path, "tests/twice.rs", REUSED_COMMAND_COMPLETED_FLAG)
-    spawns = build_nested_cargo_cold_envelope(tmp_path)["spawns"]
-    assert [(spawn["state"], spawn["target_state"]) for spawn in spawns] == [
+    assert spawn_states(tmp_path) == [
         ("offline", "inherited"),
         ("offline", "unknown"),
     ]
@@ -210,8 +211,7 @@ def test_an_empty_argument_call_does_not_end_the_flag_wait(
 ) -> None:
     """`args([])` adds no word, so the literal after it is still the flag value."""
     put(tmp_path, "tests/twice.rs", REUSED_COMMAND_EMPTY_CALL)
-    spawns = build_nested_cargo_cold_envelope(tmp_path)["spawns"]
-    assert [(spawn["state"], spawn["target_state"]) for spawn in spawns] == [
+    assert spawn_states(tmp_path) == [
         ("offline", "inherited"),
         ("offline", "unknown"),
     ]
@@ -249,8 +249,7 @@ def test_a_literal_manifest_path_between_runs_is_judged_as_its_own_run(
 ) -> None:
     """The first run is private; the manifest path sends the second elsewhere."""
     put(tmp_path, "tests/twice.rs", REUSED_COMMAND_MANIFEST_PATH)
-    spawns = build_nested_cargo_cold_envelope(tmp_path)["spawns"]
-    assert [(spawn["state"], spawn["target_state"]) for spawn in spawns] == [
+    assert spawn_states(tmp_path) == [
         ("offline", "private"),
         ("offline", "inherited"),
     ]
