@@ -37,36 +37,48 @@ configuration from a repository that needs none:
   is not an argument while a `//` in a string does not hide the rest of the
   line; each argument and launch is attributed to the receiver it is called on,
   so `other.arg("build")` and `command.env("P", other.output())` are not this
-  command's. A command bound to a name and handed to a helper defined once in
-  the same file is also read against that helper's body, even when the call
-  spans lines; only statements on the parameter that receives the command
-  count, so another command built in the helper does not contribute. Those
-  statements are read at the call site, and the parameter's name is taken to be
-  the caller's binding, so a launch on either side ends the arguments in the
-  order they run, and a version flag added through a renamed parameter still
-  probes the caller's command. A helper read that stops inside a block is
-  closed before it is spliced, so a block the helper leaves open cannot hide a
-  later unconditional flag. A helper defined more than once, or one whose
-  receiving parameter is not a plain `name: Type` binding, is declined rather
-  than guessed; so is a call that a binding in the caller's own function
-  shadows (a parameter included, even one after a method's receiver), a call
-  written as a path or method (`support::configure(..)`, however it is spaced
-  around the separator), or a helper that reassigns the parameter. A launch
-  inside a block that returns on the way out does not end the arguments: the
-  statements after the block are the first run on the path that skips it. The
-  subcommand is the first argument that is neither an option nor an option's
-  value, so `--color always nextest run` runs `nextest` and `cargo help build`
-  prints help rather than building. `cargo metadata` and `cargo config` do not
-  count;
-- a `rustc` spawn counts, unless an argument added to that same command is a
-  version flag (`--version`, `-V`, `-vV`) or a `--print` of a table that needs
-  no compile (`sysroot`, `target-libdir`, `host-tuple`, `cfg`, `target-list`,
-  `target-cpus`, `target-features`, `code-models`, `relocation-models`,
-  `tls-models`): such a probe exits at once. A flag added on only some paths,
-  behind a `&&`/`||` short circuit or inside a block that may not run, does not
-  make the command a probe. Comments and other statements do not count, and
-  `--print=link-args` and `--print=native-static-libs` still do, because they
-  build the crate;
+  command's, and a receiver reached through a field or a path is declined
+  however much whitespace sits around the separator (`holder . command`). A
+  command bound to a name and handed to a helper defined once in the same file
+  is also read against that helper's body, even when the call spans lines; only
+  statements on the parameter that receives the command count, so another
+  command built in the helper does not contribute. Those statements are read at
+  the call site with every use of the parameter taken to be the caller's
+  binding, so a launch on either side ends the arguments in the order they run,
+  and a version flag added through a renamed parameter still probes the
+  caller's command. A helper read that stops inside a block is closed before it
+  is spliced, so a block the helper leaves open cannot hide a later
+  unconditional flag. A helper defined more than once, or one whose receiving
+  parameter is not a plain `name: Type` binding, is declined rather than
+  guessed; so is a call that a binding in the caller's own function shadows (a
+  parameter included, even one after a method's receiver), a call written as a
+  path or method (`support::configure(..)`, however it is spaced around the
+  separator), a name a `use` item could import, since the call then reaches
+  another file, or a helper that reassigns the parameter.
+- each launch is read as its own **run**. A launch reached with no block open
+  ends the read, because everything after it is a reuse; a launch inside a
+  block ends only that branch, so the statements after the block and an `else`
+  arm are the first arguments of the next run. Every run of a `rustc` command
+  must be a probe, while any run of a cargo command that compiles is enough. A
+  later assignment to the command's binding moves the name to another value,
+  and the rest of that block is not the command's. The subcommand is the first
+  argument of the run that is neither an option nor an option's value, so
+  `--color always nextest run` runs `nextest` and `cargo help build` prints
+  help rather than building; a value the reader cannot see fills its option's
+  slot rather than ending the read. A `-h` or `--help` prints help whatever the
+  subcommand is, and words after a `--` belong to the program the command runs,
+  not to cargo. A flag added on only some paths, behind a `&&`/`||` short
+  circuit or inside a block that may not run, does not make a run a probe.
+  `cargo metadata` and `cargo config` do not count;
+- a `rustc` spawn counts, unless every run of that same command is given a
+  version flag (`--version`, `-V`, `-vV`), a help flag (`-h`, `--help`) or a
+  `--print` of a table that needs no compile (`sysroot`, `target-libdir`,
+  `host-tuple`, `cfg`, `target-list`, `target-cpus`, `target-features`,
+  `code-models`, `relocation-models`, `tls-models`): such a probe exits at
+  once. A `--print` query may be split across calls
+  (`.arg("--print").arg("cfg")`), which asks the same question as one array.
+  Comments and other statements do not count, and `--print=link-args` and
+  `--print=native-static-libs` still do, because they build the crate;
 - the file must name `Command`, so `env!("CARGO")` read for a path alone is not
   a spawn;
 - Python tests that spawn `cargo` are outside the scan: pytest bounds them.

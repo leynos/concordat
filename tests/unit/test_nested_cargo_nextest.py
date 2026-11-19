@@ -1553,3 +1553,256 @@ def test_a_probe_flag_behind_a_short_circuit_is_not_a_probe(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", PROBE_FLAG_BEHIND_A_SHORT_CIRCUIT)
     assert ids(tmp_path) == {"NC-004"}
+
+
+CARGO_HELP_FLAG = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("build").arg("--help").status().unwrap();\n}\n'
+)
+
+
+def test_a_help_flag_compiles_nothing(tmp_path: pathlib.Path) -> None:
+    """`cargo build --help` prints help instead of building."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CARGO_HELP_FLAG)
+    assert ids(tmp_path) == set()
+
+
+RUSTC_HELP_FLAG = (
+    "use std::process::Command;\n"
+    "fn compiler_help() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.arg("--help").status().unwrap();\n}\n'
+)
+
+
+def test_a_rustc_help_flag_compiles_nothing(tmp_path: pathlib.Path) -> None:
+    """`rustc --help` prints its help and exits, like the version flag does."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", RUSTC_HELP_FLAG)
+    assert ids(tmp_path) == set()
+
+
+SPACED_FIELD_RECEIVER = (
+    "use std::process::Command;\n"
+    "fn compile_after_reading_a_field(holder: Holder) {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.env("PROGRAM", holder . command.arg("--version").get_program());\n'
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+)
+
+
+def test_a_spaced_field_receiver_is_not_the_local_binding(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Rust allows whitespace around `.`, so `holder . command` is still a field."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SPACED_FIELD_RECEIVER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+PROBE_ON_ONLY_ONE_PATH = (
+    "use std::process::Command;\n"
+    "fn compile_or_probe(compile: bool) {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    if compile {\n"
+    '        command.arg("input.rs").status().unwrap();\n'
+    "        return;\n"
+    "    }\n"
+    '    command.arg("--version").status().unwrap();\n}\n'
+)
+
+
+def test_a_probe_on_one_path_does_not_hide_a_compile_on_another(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `--version` run is not the run that compiles `input.rs`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBE_ON_ONLY_ONE_PATH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SPACED_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn probe_after_a_run() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.arg("input.rs").status ();\n'
+    '    command.arg("--version").status();\n}\n'
+)
+
+
+def test_a_launch_with_a_space_before_its_arguments_ends_the_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Rust allows `status ()`, which is the run that compiles the input."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SPACED_LAUNCH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+HELPER_WITH_TWO_USES_IN_ONE_STATEMENT = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    configure(&mut command);\n}\n"
+    "fn configure(target: &mut Command) {\n"
+    '    if target.get_program() != "x" {\n'
+    '        target.arg("build");\n'
+    "    }\n"
+    "    target.status().unwrap();\n}\n"
+)
+
+
+def test_a_helper_statement_hands_every_use_of_its_parameter_on(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `build` after `get_program()` is on the same parameter."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELPER_WITH_TWO_USES_IN_ONE_STATEMENT)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+IMPORTED_HELPER_WITH_A_LOCAL_NAMESAKE = (
+    "use support::configure;\n"
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    configure(&mut command);\n"
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+    "mod helpers {\n"
+    "    use std::process::Command;\n"
+    "    pub fn configure(target: &mut Command) {\n"
+    '        target.arg("--version");\n'
+    "    }\n"
+    "}\n"
+)
+
+
+def test_an_imported_helper_is_not_read_from_a_local_namesake(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The call reaches the imported `configure`, not the module's `fn`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", IMPORTED_HELPER_WITH_A_LOCAL_NAMESAKE)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+BRANCHING_LAUNCHES = (
+    "use std::process::Command;\n"
+    "fn build_or_metadata(metadata: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if metadata {\n"
+    '        command.arg("metadata").status().unwrap();\n'
+    "    } else {\n"
+    '        command.arg("build").status().unwrap();\n'
+    "    }\n}\n"
+)
+
+
+def test_each_branch_ends_at_its_own_launch(tmp_path: pathlib.Path) -> None:
+    """The `else` branch builds, so the metadata run does not end the scan."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", BRANCHING_LAUNCHES)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+HELPER_BRANCH_THAT_RETURNS = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(metadata: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    prepare(&mut command, metadata);\n}\n"
+    "fn prepare(target: &mut Command, metadata: bool) {\n"
+    "    if metadata {\n"
+    '        target.arg("metadata").status().unwrap();\n'
+    "        return;\n"
+    "    }\n"
+    '    target.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_helper_branch_that_returns_keeps_its_later_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper's `return` is the caller's too, so `build` is still read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELPER_BRANCH_THAT_RETURNS)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+ASSIGNED_AWAY = (
+    "use std::process::Command;\n"
+    "fn git_command() -> Command {\n"
+    '    Command::new("git")\n'
+    "}\n"
+    "fn git_after_cargo() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    command = git_command();\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_reassigned_binding_is_no_longer_the_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """After `command = ..` the name denotes another command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ASSIGNED_AWAY)
+    assert ids(tmp_path) == set()
+
+
+UNREADABLE_OPTION_VALUE = (
+    "use std::process::Command;\n"
+    "fn build_with_colour(colour: &str) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.args(["--color", colour, "build"]).status().unwrap();\n}\n'
+)
+
+
+def test_an_unreadable_option_value_does_not_end_the_subcommand_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`colour` fills the `--color` slot, so `build` is the subcommand."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", UNREADABLE_OPTION_VALUE)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SPLIT_PRINT_QUERY = (
+    "use std::process::Command;\n"
+    "fn query_without_compiling() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.arg("--print").arg("cfg").status().unwrap();\n}\n'
+)
+
+
+def test_a_print_query_split_across_two_arguments_is_a_probe(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`--print cfg` in two calls asks the same question as one array."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SPLIT_PRINT_QUERY)
+    assert ids(tmp_path) == set()
+
+
+HELP_TOPIC_AFTER_A_CONDITIONAL_RUN = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(metadata: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if metadata {\n"
+    '        command.arg("metadata").status().unwrap();\n'
+    "        return;\n"
+    "    }\n"
+    '    command.arg("help").arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_each_run_is_asked_for_its_own_subcommand(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo help build` prints help; the earlier run reads metadata."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELP_TOPIC_AFTER_A_CONDITIONAL_RUN)
+    assert ids(tmp_path) == set()

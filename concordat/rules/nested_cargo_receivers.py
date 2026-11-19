@@ -8,10 +8,14 @@ chained calls, to the name the chain starts on.
 
 A name reached through a `.` or a `::` is a field or a path item, not the
 command's own binding (`holder.command.arg(..)`, `support::command.arg(..)`),
-so it is declined rather than guessed; so is a receiver that is not a plain
-name (`(&command).arg(..)`, `build().arg(..)`). `Command::new(..)` is the one
-chain a command that is never bound to a name can be called on, so the
-constructor counts as the command's own receiver.
+so it is declined rather than guessed, however much whitespace sits around the
+separator; so is a receiver that is not a plain name (`(&command).arg(..)`,
+`build().arg(..)`). `Command::new(..)` is the one chain a command that is never
+bound to a name can be called on, so the constructor counts as the command's
+own receiver.
+
+A launch is the command's `.status()`, `.output()` or `.spawn()`, with or
+without whitespace before the parenthesis, since Rust allows `command.status ()`.
 
 A statement that calls the command is also the only place its block depth can
 be read: the chain's text before the call says which blocks the call sits in,
@@ -23,7 +27,7 @@ from __future__ import annotations
 import re
 import typing as typ
 
-LAUNCH: typ.Final = re.compile(r"\.(?:status|output|spawn)\(")
+LAUNCH: typ.Final = re.compile(r"\.(?:status|output|spawn)\s*\(")
 # One call on a named command, from its last receiver pivot (or the start of
 # the statement) to the method call itself: `command.x().y(z).w(..)`, and
 # `command.arg("build").status()` in the same form.
@@ -62,7 +66,8 @@ def _receiver_of(masked: str, at: int) -> str | None:
     `Command::new("cargo").arg(..)` on `Command`, however many calls sit
     between. A receiver reached through `.` or `::` names a field or a path
     item rather than the command's binding, so it is declined: the flag or
-    launch belongs to some other value.
+    launch belongs to some other value. Rust allows whitespace around `.` and
+    `::`, so `holder . command` is read the same way as `holder.command`.
 
     Returns
     -------
@@ -100,7 +105,13 @@ def _receiver_of(masked: str, at: int) -> str | None:
             index -= 1
         if index == end:
             return None
-        if index >= 0 and masked[index] in (".", ":"):
+        # The separator that reaches a field or a path item may be spaced away
+        # from the name it qualifies, so the whitespace before it is skipped
+        # before the name is accepted as the command's own.
+        before = index
+        while before >= 0 and masked[before].isspace():
+            before -= 1
+        if before >= 0 and masked[before] in (".", ":"):
             return None
         return masked[index + 1 : end + 1]
     return None

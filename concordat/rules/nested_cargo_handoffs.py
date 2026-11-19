@@ -8,9 +8,10 @@ helper's statements in at the call site so a launch in either place ends the
 arguments in the order they run.
 
 A handoff the scan cannot attribute -- a helper defined twice, a call reached
-through a path or method, a caller binding that shadows the helper, a parameter
-reassigned or shadowed -- is declined rather than guessed, because a false
-positive would demand configuration from a repository that needs none. The
+through a path or method, a name a `use` item could import, a caller binding
+that shadows the helper, a parameter reassigned or shadowed -- is declined
+rather than guessed, because a false positive would demand configuration from
+a repository that needs none. The
 reading is textual, and every boundary and brace is read from the masked
 source, so a `;` or a `{` in a string moves nothing.
 
@@ -160,9 +161,12 @@ def _receiver_piece(
     """Return one helper statement as written and masked, for the caller.
 
     A statement that calls the parameter is kept with its argument, rewritten to
-    the caller's binding. Any other statement keeps only its braces, because
-    they move the block depth a later statement is judged at. A call behind
-    `&&` or `||` may not run, so it is wrapped in a block of its own.
+    the caller's binding. Every use in the statement is rewritten, because a
+    statement can read the parameter once and then add to it
+    (`if target.get_program() != "x" { target.arg("build") }`). Any other
+    statement keeps only its braces, because they move the block depth a later
+    statement is judged at. A call behind `&&` or `||` may not run, so it is
+    wrapped in a block of its own.
 
     Returns
     -------
@@ -177,10 +181,14 @@ def _receiver_piece(
     piece = text[offset : offset + len(statement)]
     masked_piece = statement
     if receiver != parameter:
-        piece = f"{piece[: found.start()]}{receiver}.{piece[found.end() :]}"
-        masked_piece = (
-            f"{statement[: found.start()]}{receiver}.{statement[found.end() :]}"
-        )
+        # The uses are found in the masked statement and spliced into both
+        # forms at the same offsets, so the two stay the same length and the
+        # reader can still index one by the other.
+        for use in reversed(list(own.finditer(masked_piece))):
+            piece = f"{piece[: use.start()]}{receiver}.{piece[use.end() :]}"
+            masked_piece = (
+                f"{masked_piece[: use.start()]}{receiver}.{masked_piece[use.end() :]}"
+            )
     if SHORT_CIRCUIT.search(masked_piece, 0, found.start()) is not None:
         return "{" + piece + "}", "{" + masked_piece + "}"
     return piece, masked_piece
@@ -247,6 +255,22 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     return name in parameter_names(masked, start)
 
 
+def _imported(masked: str, name: str) -> bool:
+    """Report whether a `use` in the file could bring *name* in.
+
+    A call to an imported function resolves to another file, so a same-file
+    `fn` of that name is not necessarily the one the call reaches. The scan
+    cannot tell the two apart, so the handoff is declined rather than read from
+    the local namesake; a false positive here would hide a real compile.
+
+    Returns
+    -------
+    bool
+        True when a `use` item names *name*.
+    """
+    return re.search(rf"\buse\b[^;]*\b{re.escape(name)}\b", masked) is not None
+
+
 def _callee_arguments(
     text: str,
     masked: str,
@@ -261,9 +285,11 @@ def _callee_arguments(
     The helper must be defined exactly once in the file: with two definitions
     the caller's lexical scope is unknown, so no argument is read from either.
     A local binding of the helper's name before the call shadows it, so the
-    call is declined rather than resolved by name alone. The definition's text
-    still stops at the next function item, so a helper at the end of the file
-    cannot run into unrelated code.
+    call is declined rather than resolved by name alone; so is a name a `use`
+    item could import, because the call then reaches another file and a local
+    namesake is not what it runs. The definition's text still stops at the next
+    function item, so a helper at the end of the file cannot run into unrelated
+    code.
 
     *base* is the file offset of the window *call* was matched in, used to find
     the caller's scope for the shadowing check.
@@ -276,6 +302,8 @@ def _callee_arguments(
         or shaped uncertainly.
     """
     if _shadowed(masked, call["callee"], base + call.start(), index):
+        return None
+    if _imported(masked, call["callee"]):
         return None
     definitions = index.definitions.get(call["callee"], [])
     if len(definitions) != 1:
