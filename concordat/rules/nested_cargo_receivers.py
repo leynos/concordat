@@ -9,10 +9,14 @@ chained calls, to the name the chain starts on.
 A name reached through a `.` or a `::` is a field or a path item, not the
 command's own binding (`holder.command.arg(..)`, `support::command.arg(..)`),
 so it is declined rather than guessed, however much whitespace sits around the
-separator; so is a receiver that is not a plain name (`(&command).arg(..)`,
-`build().arg(..)`). `Command::new(..)` is the one chain a command that is never
-bound to a name can be called on, so the constructor counts as the command's
-own receiver.
+separator; a name called as a namespace (`command::factory().arg(..)`) is
+declined in the same way, because the path root is a type or module rather than
+the binding. A single colon is not a separator: `Result { status: command }`
+is a field initializer whose value is the command, so the binding keeps its
+arguments there. So is a receiver that is not a plain name
+(`(&command).arg(..)`, `build().arg(..)`). `Command::new(..)` is the one chain
+a command that is never bound to a name can be called on, so the constructor
+counts as the command's own receiver.
 
 A launch is the command's `.status()`, `.output()` or `.spawn()`, with or
 without whitespace on either side of the dot or before the parenthesis, since
@@ -37,6 +41,24 @@ _CHAIN: typ.Final = re.compile(
     r"(?<![\w.])(?P<name>\w+)\s*\.\s*(?P<method>\w+)\s*\("
 )
 _OPENERS: typ.Final = {")": "(", "]": "[", "}": "{"}
+
+
+def _reached_through_separator(before: str) -> bool:
+    """Report whether the text before a name ends in a field or path separator.
+
+    A single colon is not a separator. Rust writes a struct field initializer as
+    `field: value`, so `Settings { status: command }` passes the command as a
+    value and the binding still owns the call. A path separator is the two
+    adjacent colons of `support::command`, which may be spaced away from the
+    name it qualifies.
+
+    Returns
+    -------
+    bool
+        True when the text ends in `.` or `::`.
+    """
+    before = before.rstrip()
+    return before.endswith((".", "::"))
 
 
 def _matching_opener(masked: str, closer_at: int) -> int | None:
@@ -67,8 +89,12 @@ def _receiver_of(masked: str, at: int) -> str | None:
     `Command::new("cargo").arg(..)` on `Command`, however many calls sit
     between. A receiver reached through `.` or `::` names a field or a path
     item rather than the command's binding, so it is declined: the flag or
-    launch belongs to some other value. Rust allows whitespace around `.` and
-    `::`, so `holder . command` is read the same way as `holder.command`.
+    launch belongs to some other value. A path root is declined too, unless it
+    is the `Command` namespace itself, because `command::factory().arg(..)`
+    calls a function on a type or module rather than on the binding. Rust
+    allows whitespace around `.` and `::`, so `holder . command` is read the
+    same way as `holder.command`; a single colon is a field initializer, not a
+    separator, so `Settings { status: command }` keeps the binding.
 
     Returns
     -------
@@ -76,6 +102,7 @@ def _receiver_of(masked: str, at: int) -> str | None:
         The receiver's name, or None when the text does not name a plain one.
     """
     index = at - 1
+    through_path = False
     while index >= 0:
         while index >= 0 and masked[index].isspace():
             index -= 1
@@ -96,6 +123,7 @@ def _receiver_of(masked: str, at: int) -> str | None:
                 return None
             continue
         if char == ":" and index > 0 and masked[index - 1] == ":":
+            through_path = True
             index -= 2
             continue
         if char == ".":
@@ -112,9 +140,14 @@ def _receiver_of(masked: str, at: int) -> str | None:
         before = index
         while before >= 0 and masked[before].isspace():
             before -= 1
-        if before >= 0 and masked[before] in (".", ":"):
+        field = before >= 0 and masked[before] == "."
+        qualified = before > 0 and masked[before] == ":" and masked[before - 1] == ":"
+        if field or qualified:
             return None
-        return masked[index + 1 : end + 1]
+        name = masked[index + 1 : end + 1]
+        if through_path and name != "Command":
+            return None
+        return name
     return None
 
 
@@ -168,7 +201,9 @@ def owns_chain(chain: re.Match[str], name: str | None) -> bool:
 
     The chain's text before the name is kept as `before`, so a name reached
     through a `.` or a `::` (`support::command.arg(..)`, `holder . command`) is
-    declined here too, even when it spells the binding's own name.
+    declined here too, even when it spells the binding's own name. A single
+    colon is a field initializer, so `Settings { status: command.arg(..) }`
+    keeps the binding.
 
     Returns
     -------
@@ -176,8 +211,7 @@ def owns_chain(chain: re.Match[str], name: str | None) -> bool:
         True for the command's own name or for `Command::new(..)`, reached
         without a field or path separator.
     """
-    before = chain["before"].rstrip()
-    if before.endswith((".", ":")):
+    if _reached_through_separator(chain["before"]):
         return False
     return chain["name"] == "Command" or chain["name"] == name
 

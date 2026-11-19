@@ -2039,3 +2039,146 @@ def test_an_else_arm_keeps_the_arguments_given_before_the_branch(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", PROBE_SHARED_BEFORE_A_BRANCH)
     assert ids(tmp_path) == set()
+
+
+FIELD_INITIALIZER_RECEIVER = (
+    "use std::process::Command;\n"
+    "fn build_in_a_struct_literal() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    let _ = Settings { status: command.arg("build").status() };\n'
+    "}\n"
+)
+
+
+def test_a_field_initializer_receiver_is_still_the_binding(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A single colon initializes a field; the value is still the command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", FIELD_INITIALIZER_RECEIVER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+NAMESPACE_CALL_NAMED_LIKE_THE_BINDING = (
+    "use std::process::Command;\n"
+    "fn build_around_a_namespace_call() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("--verbose")\n'
+    '        .env("V", command::factory().output())\n'
+    '        .arg("build")\n'
+    "        .status()\n"
+    "        .unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_namespace_call_named_like_the_binding_is_not_its_launch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`command::factory()` starts at a path root, so its launch is not ours."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", NAMESPACE_CALL_NAMED_LIKE_THE_BINDING)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+UNREADABLE_WORD_INSIDE_A_PRINT_QUERY = (
+    "use std::process::Command;\n"
+    "fn print_a_kind(print_kind: &str) {\n"
+    '    Command::new("rustc")\n'
+    '        .args(["--print", print_kind, "cfg"])\n'
+    "        .status()\n"
+    "        .unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_word_between_the_two_halves_of_a_print_query_breaks_the_query(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The unseen word may be `link-args`, so `cfg` is not certainly its answer."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", UNREADABLE_WORD_INSIDE_A_PRINT_QUERY)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+DESTRUCTURED_HELPER = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command) {\n"
+    '    target.arg("build");\n'
+    "}\n"
+    "fn noop(_: &mut Command) {}\n"
+    "fn read_help() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    let (configure,) = (noop as fn(&mut Command),);\n"
+    "    configure(&mut command);\n"
+    '    command.arg("help").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_destructured_binding_hides_the_helper(tmp_path: pathlib.Path) -> None:
+    """The local `configure` is a destructured value, not the module's `fn`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", DESTRUCTURED_HELPER)
+    assert ids(tmp_path) == set()
+
+
+CONDITIONAL_HELP_BEFORE_A_BUILD = (
+    "use std::process::Command;\n"
+    "fn build_after_a_conditional_help(debug: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if debug {\n"
+    '        command.arg("help");\n'
+    "    }\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_conditional_subcommand_does_not_stop_the_build_being_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`build` is the subcommand on every path; the `help` is on one."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_HELP_BEFORE_A_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+PROBE_INSIDE_ITS_LAUNCHING_BRANCH = (
+    "use std::process::Command;\n"
+    "fn probe_in_a_branch(only_version: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    if only_version {\n"
+    '        command.arg("--version").status().unwrap();\n'
+    "    }\n"
+    "}\n"
+)
+
+
+def test_a_probe_flag_inside_its_launching_branch_is_a_probe(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The flag and the launch share a branch, so every run asks a question."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBE_INSIDE_ITS_LAUNCHING_BRANCH)
+    assert ids(tmp_path) == set()
+
+
+PROBE_IN_BOTH_ARMS = (
+    "use std::process::Command;\n"
+    "fn probe_either_branch(only_version: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    if only_version {\n"
+    '        command.arg("--version").status().unwrap();\n'
+    "    } else {\n"
+    '        command.arg("--version").status().unwrap();\n'
+    "    }\n"
+    "}\n"
+)
+
+
+def test_a_probe_flag_in_both_arms_is_a_probe(tmp_path: pathlib.Path) -> None:
+    """Neither arm compiles, so the command never compiles on any path."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBE_IN_BOTH_ARMS)
+    assert ids(tmp_path) == set()

@@ -9,9 +9,11 @@ arguments in the order they run.
 
 A handoff the scan cannot attribute -- a helper defined twice, a call reached
 through a path or method, a name a `use` item could import (a glob import names
-none but could bring any in), a caller binding that shadows the helper, a
-parameter reassigned or shadowed -- is declined rather than guessed, because a
-false positive would demand configuration from a repository that needs none. A
+none but could bring any in), a caller binding that shadows the helper by
+`let`, by a parameter or by a destructuring pattern (`let (configure,) = ..`),
+a parameter reassigned or shadowed -- is declined rather than guessed, because
+a false positive would demand configuration from a repository that needs none.
+A
 `return` in a helper is kept as a word, because it ends the helper's path and
 what follows runs only when the return was skipped, so the reader can split the
 caller's runs there. The reading is textual, and every boundary and brace is
@@ -242,14 +244,39 @@ def file_index(masked: str) -> FileIndex:
     )
 
 
+def _destructured(masked: str, name: str, start: int, at: int) -> bool:
+    """Report whether a `let` between *start* and *at* binds *name* by pattern.
+
+    A tuple, slice or struct pattern binds names without writing `let name`:
+    `let (configure,) = ..` and `let Settings { configure } = ..` both shadow
+    the free function of that name. The `let` pattern runs to the `=`, so a
+    call on the right-hand side (`let x = configure(..)`) is not mistaken for a
+    binding.
+
+    Returns
+    -------
+    bool
+        True when a destructuring `let` binds *name*.
+    """
+    pattern = re.compile(r"\blet\b([^=;]*?)\s*=")
+    bound = re.compile(rf"\b{re.escape(name)}\b")
+    for found in pattern.finditer(masked, start, at):
+        binding = found[1]
+        destructures = binding.lstrip().startswith(("(", "[")) or "{" in binding
+        if destructures and bound.search(binding) is not None:
+            return True
+    return False
+
+
 def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     """Report whether *name* may be a local binding at *at* rather than a `fn`.
 
     A parameter of the caller's own function, a closure, loop variable, `let`,
     `const` or `static` with the helper's name shadows the free function, so
-    the call reaches something the scan cannot read. The caller's parameter
-    list is read because `fn run(configure: fn(&mut Command))` calls the
-    argument, not the free function.
+    the call reaches something the scan cannot read. A `let` whose pattern
+    destructures the name (`let (configure,) = ..`) binds it too. The caller's
+    parameter list is read because `fn run(configure: fn(&mut Command))` calls
+    the argument, not the free function.
 
     Returns
     -------
@@ -265,6 +292,8 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
         rf"|\|\s*(?:mut\s+)?{pattern}\s*(?:\||:)"
     )
     if binder.search(masked, start, at) is not None:
+        return True
+    if _destructured(masked, name, start, at):
         return True
     return name in parameter_names(masked, start)
 

@@ -9,7 +9,10 @@ launch reached at the top level ends the read, so an argument added to a reused
 command does not count as the first run's work; a launch inside a block ends
 only that branch, and a `return` inside a block ends its path, so the command
 is read once for each path it runs on. A run that leaves a branch inherits the
-arguments given before it, because they are on every path that reaches it.
+arguments given before it, because they are on every path that reaches it. A
+word is unconditional only when every block open at the word is also open at
+the run's launch: a flag in a branch that launches counts, while one in a
+sibling block that has already closed does not.
 
 A shape the scan cannot attribute -- a helper defined twice, a call reached
 through a path or method, a name a `use` item could import (a glob import names
@@ -21,9 +24,14 @@ literal contents kept, and braces come from the masked source, so a `;` or a
 `{` in a string does not move a statement boundary. A cargo command's
 subcommand is the first word its arguments give that is neither an option nor
 an option's value, so `cargo help build` reads help as the subcommand and
-`build` as its topic, while `-h` or `--help` makes the command compile nothing
-at all when it is given on every path: a help flag inside a block does not
-excuse the build on the path that skips it.
+`build` as its topic. A conditional word cannot hide the subcommand on the
+path that skips its block, so a `help` inside an `if` leaves the unconditional
+`build` still compiling. `-h` or `--help` makes the command compile nothing at
+all when it is given on every path: a help flag inside a block does not excuse
+the build on the path that skips it. A `--print` query asks the compiler what
+it is only when its two halves are adjacent: an unreadable word between
+`--print` and `cfg` may be `link-args`, which builds the crate, so the query is
+not read as a probe.
 
 :mod:`concordat.rules.nested_cargo_receivers` decides which calls belong to the
 command; this module decides what those calls mean.
@@ -190,14 +198,33 @@ def _end_shadows(shadows: list[int], masked_statement: str, start_depth: int) ->
         shadows.pop()
 
 
+class Statement(typ.NamedTuple):
+    """One statement that adds to the command, and the blocks around it.
+
+    *text* is the statement as written, so a flag inside a string stays
+    readable, and *masked* is the same with comments and literal bodies
+    blanked. *blocks* holds the opening braces still open where the statement
+    begins, identified by their offset in the window rather than by depth so
+    that sibling blocks are told apart; *launch_blocks* is the same at the
+    statement's launch, or None when it does not launch. *start_depth* is the
+    number of blocks open where the statement begins.
+    """
+
+    text: str
+    masked: str
+    start: int
+    start_depth: int
+    blocks: tuple[int, ...]
+    launch_blocks: tuple[int, ...] | None
+
+
 class CommandRead(typ.NamedTuple):
     """The statements that add to one command, grouped by run.
 
     Attributes
     ----------
     statements:
-        Each statement as written, its masked twin, and the number of blocks
-        still open where it starts.
+        Each statement read for the command.
     starts:
         Where each run begins: the index in *statements* of its first statement
         of its own, and the depth of the branch that run leaves. A command
@@ -205,11 +232,11 @@ class CommandRead(typ.NamedTuple):
         restarts the command's argument list.
     """
 
-    statements: list[tuple[str, str, int]]
+    statements: list[Statement]
     starts: list[tuple[int, int]]
 
     @property
-    def runs(self) -> list[list[tuple[str, str, int]]]:
+    def runs(self) -> list[list[Statement]]:
         """The statements grouped into the runs they describe.
 
         A run that leaves a branch (`else`) or a block that returned still
@@ -218,7 +245,7 @@ class CommandRead(typ.NamedTuple):
         and end above the branch's depth, so a conditional argument is not
         carried into a run it may not be part of.
         """
-        runs: list[list[tuple[str, str, int]]] = []
+        runs: list[list[Statement]] = []
         bounds = [*self.starts, (len(self.statements), 0)]
         for (first, depth), (last, _next) in pairwise(bounds):
             if first >= last:
@@ -232,7 +259,7 @@ class CommandRead(typ.NamedTuple):
         return runs
 
 
-def _entirely_above(statement: tuple[str, str, int], depth: int) -> bool:
+def _entirely_above(statement: Statement, depth: int) -> bool:
     """Report whether a statement begins and ends above *depth*.
 
     A statement that opens or closes a block at *depth* belongs to a branch,
@@ -244,8 +271,8 @@ def _entirely_above(statement: tuple[str, str, int], depth: int) -> bool:
     bool
         True when the statement is wholly above the branch.
     """
-    _, masked_statement, start_depth = statement
-    end_depth = start_depth + masked_statement.count("{") - masked_statement.count("}")
+    start_depth = statement.start_depth
+    end_depth = start_depth + statement.masked.count("{") - statement.masked.count("}")
     return start_depth < depth and end_depth < depth
 
 
@@ -275,11 +302,14 @@ class _StatementRead:
         self._window = window
         self._name = name
         self._rebinding = _rebinding(name)
-        self._statements: list[tuple[str, str, int]] = []
+        self._statements: list[Statement] = []
         self._starts: list[tuple[int, int]] = [(0, 0)]
         self._shadows: list[int] = []
         self._offset = 0
         self._depth = 0
+        # The offsets of the opening braces still open, so a word can be
+        # placed in the same block the launch is, not merely at its depth.
+        self._blocks: list[int] = []
         # The depth of the block the last conditional launch ran in, while the
         # statements that follow it on that path are still being read.
         self._boundary: int | None = None
@@ -299,6 +329,8 @@ class _StatementRead:
         masked_statement = self._window.masked[self._offset : at]
         start_depth = self._depth
         self._depth += masked_statement.count("{") - masked_statement.count("}")
+        blocks = tuple(self._blocks)
+        _track(self._blocks, masked_statement, self._offset)
         moved = (
             self._rebinding.search(masked_statement)
             if self._offset > 0 and self._rebinding is not None
@@ -311,7 +343,7 @@ class _StatementRead:
             else:
                 self._shadows.append(self._depth)
         else:
-            self._attribute(masked_statement, start_depth)
+            self._attribute(masked_statement, start_depth, blocks)
         if returned is not None:
             depth = _depth_at(masked_statement, returned.start(), start_depth)
             if depth > 0:
@@ -325,7 +357,9 @@ class _StatementRead:
         self._offset = at + 1
         return not self.stopped
 
-    def _attribute(self, masked_statement: str, start_depth: int) -> None:
+    def _attribute(
+        self, masked_statement: str, start_depth: int, blocks: tuple[int, ...]
+    ) -> None:
         """Keep the statement if it is the command's, and begin its run."""
         # A statement that begins by closing a block is no longer inside the
         # shadow that block declared, so the shadow ends before the statement
@@ -358,7 +392,12 @@ class _StatementRead:
             self._start(self._pending)
             self._pending = None
         launched_at = _record_statement(
-            self._statements, self._window, (offset, end), launch, start_depth
+            self._statements,
+            self._window,
+            (offset, end),
+            launch,
+            start_depth,
+            blocks,
         )
         if launched_at == 0:
             self.stopped = True
@@ -421,16 +460,19 @@ def _own_statements(text: str, start: int, window: Window) -> CommandRead:
 
 
 def _record_statement(
-    statements: list[tuple[str, str, int]],
+    statements: list[Statement],
     window: Window,
     span: tuple[int, int],
     launch: int | None,
     start_depth: int,
+    blocks: tuple[int, ...],
 ) -> int | None:
     """Append one of the command's statements, ending it at its launch.
 
     An argument after the launch in the same statement is added to a reused
-    command, so only the text before it is kept as the run's argument.
+    command, so only the text before it is kept as the run's argument. The
+    statement also keeps the blocks open at its start and at its launch, so a
+    flag is placed in the block that launches, not merely at its depth.
 
     Returns
     -------
@@ -441,11 +483,19 @@ def _record_statement(
     """
     start, end = span
     stop = end if launch is None else launch
-    statements.append((
-        blank_comments(window.text[start:stop]),
-        window.masked[start:stop],
-        start_depth,
-    ))
+    launch_blocks = None if launch is None else list(blocks)
+    if launch_blocks is not None:
+        _track(launch_blocks, window.masked[start:stop], start)
+    statements.append(
+        Statement(
+            blank_comments(window.text[start:stop]),
+            window.masked[start:stop],
+            start,
+            start_depth,
+            blocks,
+            None if launch_blocks is None else tuple(launch_blocks),
+        )
+    )
     if launch is None:
         return None
     return _depth_at(window.masked[start:end], launch - start, start_depth)
@@ -495,22 +545,20 @@ def is_probe(text: str, start: int, window: Window) -> bool:
     read = _own_statements(text, start, window)
     runs = read.runs
     return bool(runs) and all(
-        _asks_a_question([
-            word
-            for statement, masked_statement, depth in run
-            for word in _probe_words(statement, masked_statement, depth, name)
-        ])
-        for run in runs
+        _asks_a_question(list(_probe_words(run, name))) for run in runs
     )
 
 
-def _asks_a_question(words: list[str]) -> bool:
+def _asks_a_question(words: list[str | None]) -> bool:
     """Report whether an argument sequence makes the compiler print and exit.
 
     A `--print` query may be one word (`--print=cfg`) or two (`--print cfg`),
     and the two forms ask the same question however they are split across
-    calls. `--print` with any other word after it still compiles. A help flag
-    makes the compiler print its help and exit, so it asks nothing either.
+    calls. `--print` with any other word after it still compiles, and so does a
+    query whose two halves are separated by an argument the reader cannot see
+    (`.args(["--print", print_kind, "cfg"])`): the unseen word may be
+    `link-args`, which builds the crate. A help flag makes the compiler print
+    its help and exit, so it asks nothing either.
 
     Returns
     -------
@@ -519,6 +567,8 @@ def _asks_a_question(words: list[str]) -> bool:
         words.
     """
     for index, word in enumerate(words):
+        if word is None:
+            continue
         if word in _VERSION_FLAGS or word in _HELP_FLAGS:
             return True
         if word.startswith("--print=") and word[len("--print=") :] in _QUERY_SET:
@@ -532,41 +582,70 @@ def _asks_a_question(words: list[str]) -> bool:
     return False
 
 
-def _probe_words(
-    statement: str, masked_statement: str, depth: int, name: str | None
-) -> typ.Iterator[str]:
-    """Yield the words a statement gives the command unconditionally, in order.
+def _track(blocks: list[int], text: str, base: int) -> None:
+    """Apply the braces in *text* to *blocks*, in place.
 
-    A word inside a block (`if query_only { cmd.arg("--print=cfg") }`), whether
-    added in the same statement or in one that follows the opening brace, may
-    not be there when the command runs, so it is not yielded. A block may also
-    close before the word in the same statement, so the braces before the word
-    are counted against the depth the statement starts at. A word behind a
-    `&&` or `||` short circuit may be skipped on the path that runs the
-    command, so it is not yielded either. The braces are counted in the masked
-    statement, so one in a string is not a block, and a word given to another
-    command in the same statement is not this command's word.
+    Each opening brace is identified by its offset in the window, not its
+    depth, so sibling blocks are told apart. *base* is the offset of *text*.
+    """
+    for index, char in enumerate(text):
+        if char == "{":
+            blocks.append(base + index)
+        elif char == "}" and blocks:
+            blocks.pop()
+
+
+def _probe_words(run: list[Statement], name: str | None) -> typ.Iterator[str | None]:
+    """Yield the arguments a run gives the command unconditionally.
+
+    Every block open at the argument must also be open at the launch, so the
+    branch that launches contributes its flags while a sibling block that
+    closed earlier does not; comparing the opening offsets rather than their
+    number is what tells the two apart. A word behind a `&&` or `||` short
+    circuit may be skipped on the path that runs the command, so it is not
+    yielded either. Braces are counted in the masked text, and another
+    command's word is not this command's.
 
     Yields
     ------
-    str
-        The literal text of each unconditional word.
+    str | None
+        The literal text of each unconditional argument, or None when it is
+        not a literal the scan can read.
     """
-    for found in _ARGUMENT_CALL.finditer(masked_statement):
-        if not owns_call(masked_statement, found.start(), name):
-            continue
-        before = masked_statement[: found.start()]
-        if SHORT_CIRCUIT.search(before) is not None:
-            continue
-        if depth + before.count("{") - before.count("}") != 0:
-            continue
-        open_at = found.end() - 1
-        close = scan_balanced(masked_statement, open_at)
-        if close is None:
-            return
-        for item in argument_items(statement[open_at + 1 : close - 1]):
-            if _WORD.fullmatch(item) is not None:
-                yield item[1:-1]
+    # A statement's text ends at its launch, so the blocks it records are the
+    # ones the launch sits in. None means the run never launches.
+    launch: tuple[int, ...] | None = None
+    for statement in run:
+        if statement.launch_blocks is not None:
+            launch = statement.launch_blocks
+            break
+    if launch is None:
+        return
+    for statement in run:
+        open_blocks = list(statement.blocks)
+        seen = 0
+        for found in _ARGUMENT_CALL.finditer(statement.masked):
+            _track(
+                open_blocks,
+                statement.masked[seen : found.start()],
+                statement.start + seen,
+            )
+            seen = found.start()
+            if not owns_call(statement.masked, found.start(), name):
+                continue
+            before = statement.masked[: found.start()]
+            if SHORT_CIRCUIT.search(before) is not None:
+                continue
+            if tuple(open_blocks) != launch[: len(open_blocks)]:
+                continue
+            open_at = found.end() - 1
+            close = scan_balanced(statement.masked, open_at)
+            if close is None:
+                return
+            yield from (
+                item[1:-1] if _WORD.fullmatch(item) is not None else None
+                for item in argument_items(statement.text[open_at + 1 : close - 1])
+            )
 
 
 def _argument_words(
@@ -645,16 +724,19 @@ def _cargo_options(words: typ.Iterable[str | None]) -> list[str | None]:
     return options
 
 
-def _run_compiles(run: list[tuple[str, str, int]], name: str | None) -> bool:
+def _run_compiles(run: list[Statement], name: str | None) -> bool:
     """Report whether one run of the command adds compiling work before it launches.
 
     A help flag makes cargo print its help and exit, so a run that is given one
     compiles nothing whatever its subcommand says. Only a help flag given on
     every path counts: one added inside a block is absent when that block does
     not run, and the run then compiles. Otherwise the subcommand, the first
-    word that is neither an option nor an option's value, decides. A word the
-    reader cannot see leaves the subcommand open, and then any compiling
-    argument before the launch is enough.
+    word that is neither an option nor an option's value, decides. A
+    conditional word may change the subcommand on the path that runs its
+    block, so the unconditional subcommand is read as well: a conditional
+    `help` does not hide the `build` that runs when the block is skipped. A
+    word the reader cannot see leaves the subcommand open, and then any
+    compiling argument before the launch is enough.
 
     Returns
     -------
@@ -663,23 +745,19 @@ def _run_compiles(run: list[tuple[str, str, int]], name: str | None) -> bool:
     """
     words = _cargo_options(
         word
-        for statement, masked_statement, _depth in run
-        for word in _argument_words(statement, masked_statement, name)
+        for statement in run
+        for word in _argument_words(statement.text, statement.masked, name)
     )
-    unconditional = _cargo_options(
-        word
-        for statement, masked_statement, depth in run
-        for word in _probe_words(statement, masked_statement, depth, name)
-    )
+    unconditional = _cargo_options(_probe_words(run, name))
     if any(word in _HELP_FLAGS for word in unconditional):
         return False
     first = _first_positional(words)
     if first is not None:
-        return first in _COMPILING
+        return first in _COMPILING or _first_positional(unconditional) in _COMPILING
     return any(
-        owns_call(masked_statement, found.start(), name)
-        for statement, masked_statement, _depth in run
-        for found in COMPILES.finditer(statement)
+        owns_call(statement.masked, found.start(), name)
+        for statement in run
+        for found in COMPILES.finditer(statement.text)
     )
 
 
