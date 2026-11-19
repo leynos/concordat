@@ -336,7 +336,7 @@ A Makefile that 0.3.1 reported as noncompliant or indeterminate only because of
 one of these shapes can now be compliant. Nothing needs migrating.
 
 `rust-toolchain-policy` audits the Rust toolchain a repository builds with
-(RT-022 to RT-027; see [Migrating to 0.2](migrating-to-0.2.md) for adopting it):
+(RT-022 to RT-028; see [Migrating to 0.2](migrating-to-0.2.md) for adopting it):
 
 ```shell
 concordat artefact rule run rust-toolchain-policy --repo /path/to/checkout
@@ -354,12 +354,24 @@ It requires that:
 - every declared MSRV is exercised by CI: a workflow installs that toolchain,
   a job or step runs cargo-msrv or is named for the MSRV, a step selects its
   toolchain from `rust-version`, or the pin is that version (RT-026);
-- no workflow names a dated nightly other than the pinned one (RT-027).
+- no workflow names a dated nightly other than the pinned one (RT-027);
+- no workflow or root `Makefile` restates a dated nightly literal instead of
+  reading the pin (RT-028, a warning by default).
+
+RT-028 exists because a restated date drifts as soon as Dependabot moves the
+pin: `ci.yml` adding a component to `nightly-2026-10-30` while the pin is
+`nightly-2026-11-05` installs the component on a toolchain the build never
+uses. Read the channel from `rust-toolchain.toml` instead, as a step output or
+a parsed variable. A pin that is deliberately separate is declared by binding
+the date to a name: a Makefile variable assigned the date itself and used as
+`$(NAME)`, or a workflow `env` entry. A date reached through one variable from
+another, or written inline, is still reported. Severity is the
+`literal_severity` parameter; promote it to `error` once the estate is clear.
 
 A repository whose nightly cannot move records that in
 `docs/developers-guide.md` under a heading containing "Toolchain policy",
-naming the pinned channel in the section. That exempts RT-023, RT-024 and
-RT-025 while the section names the current pin. A repository with no Cargo
+naming the pinned channel in the section. That exempts RT-023, RT-024, RT-025
+and RT-028 while the section names the current pin. A repository with no Cargo
 manifest is outside the rule. Workspace members are judged where `.concordat`
 declares them as Rust surfaces.
 

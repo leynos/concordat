@@ -1,6 +1,6 @@
 # Migrating to 0.2
 
-Release 0.2 adds the `rust-toolchain-policy` rule package (RT-022 to RT-027).
+Release 0.2 adds the `rust-toolchain-policy` rule package (RT-022 to RT-028).
 The audit is read-only and no existing rule changes, so nothing needs migrating
 for a repository that does not run it. This note is for a repository adopting
 the rule.
@@ -24,13 +24,19 @@ findings to zero:
 - **RT-026**: exercise each declared MSRV in CI with one
   `cargo check --lib --locked`, not a second test run.
 - **RT-027**: name no dated nightly in a workflow other than the pinned one.
+- **RT-028**: spell no dated nightly out in a workflow or the root `Makefile`;
+  read the channel from `rust-toolchain.toml` instead, as a step output or a
+  parsed variable. A pin that is deliberately separate is declared by binding
+  the date to a name (a `Makefile` variable assigned the date itself and used as
+  `$(NAME)`, or a workflow `env` entry). This clause is a warning by default;
+  the rule's `literal_severity` parameter promotes it to `error`.
 
 ## A nightly that cannot move
 
 A repository whose nightly is coupled to compiler internals records a section in
 `docs/developers-guide.md` whose heading contains "Toolchain policy" and which
-names the pinned channel. That exempts RT-023, RT-024 and RT-025 for as long as
-the section names the current pin, so each bump must update it.
+names the pinned channel. That exempts RT-023, RT-024, RT-025 and RT-028 for as
+long as the section names the current pin, so each bump must update it.
 
 ## Applicability
 

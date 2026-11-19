@@ -1197,22 +1197,28 @@ than something a repository may configure.
 a `policy-input/rust-toolchain-policy` document from the pin (read by
 `inspect_toolchain`), the governed Cargo packages (from the shared surface
 resolver), the `rust-toolchain` entries of the Dependabot configuration (read
-through `build_dependabot_envelope`), the toolchains the workflows name, and
-any recorded exception (read by `find_exception_sections`). The builder takes
-"today" as a required argument and records it as `evaluated_on`, so neither it
-nor the policy reads a clock. The command boundary injects one: the registered
-resolver in `packages.py` reads `packages.today_provider` (by default
-`utc_today`), and a test replaces that provider to fix the date. The workflow
-facts (`toolchain_ci_facts.py`) are extracted from decoded YAML, not by
-searching text: a step's `uses` ref, its `with.toolchain` input (following a
-`${{ env.NAME }}` or `${{ matrix.NAME }}` reference, matrix `include` legs
-too), and `rustup` (`install`, `run`, `default`, `override set`) or
-`cargo +toolchain` commands in its `run`. A `src/lib.rs` that cannot be
-examined (an occupied path, a dangling link, a refusal) is carried as
-`lib_read_error` and makes RT-025 indeterminate for that crate; it is never
-read as the library's absence. A workflow that does not decode is recorded with
-its reason, which makes RT-026 and RT-027 indeterminate. The window and the
-accepted Dependabot intervals reach Conftest as `data.parameters`.
+through `build_dependabot_envelope`), the toolchains the workflows name, the
+dated nightlies the workflows and root `Makefile` spell out (read by
+`toolchain_literal_facts.py`), and any recorded exception (read by
+`find_exception_sections`). The builder takes "today" as a required argument
+and records it as `evaluated_on`, so neither it nor the policy reads a clock.
+The command boundary injects one: the registered resolver in `packages.py` reads
+`packages.today_provider` (by default `utc_today`), and a test replaces that
+provider to fix the date. The workflow facts (`toolchain_ci_facts.py`) are
+extracted from decoded YAML, not by searching text: a step's `uses` ref, its
+`with.toolchain` input (following a `${{ env.NAME }}` or `${{ matrix.NAME }}`
+reference, matrix `include` legs too), and `rustup` (`install`, `run`,
+`default`, `override set`) or `cargo +toolchain` commands in its `run`. The
+literal reader walks the same decoded documents and adds each `run` command's
+toolchain selections, a toolchain action's ref and `with.toolchain`, and
+`makeutil`'s report of the root `Makefile`, judging a variable declaration per
+referenced name. A `src/lib.rs` that cannot be examined (an occupied path, a
+dangling link, a refusal) is carried as `lib_read_error` and makes RT-025
+indeterminate for that crate; it is never read as the library's absence. A
+workflow that does not decode is recorded with its reason, which makes RT-026,
+RT-027 and RT-028 indeterminate, as does a `Makefile` the reader refuses. The
+window and the accepted Dependabot intervals reach Conftest as
+`data.parameters`.
 
 `dependabot-update-shape` takes its own as well. `build_dependabot_envelope` (in
 `dependabot_envelope.py`) assembles a `policy-input/dependabot-update-shape`

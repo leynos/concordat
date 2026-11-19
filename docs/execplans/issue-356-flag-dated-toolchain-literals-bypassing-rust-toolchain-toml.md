@@ -1,0 +1,125 @@
+# Flag dated toolchain literals that bypass rust-toolchain.toml (#356)
+
+This ExecPlan (execution plan) is a living document. The sections `Purpose`,
+`Constraints`, `Decision log`, `Tasks`, `Progress` and `Outcomes` are kept up
+to date as work proceeds.
+
+Status: IN PROGRESS
+
+## Purpose
+
+A workflow or Makefile can name a dated nightly literal (`nightly-YYYY-MM-DD`,
+or `+nightly-YYYY-MM-DD`) while `rust-toolchain.toml` moves on. Dependabot
+bumps the file daily in nightly-pinned repositories, so the literal drifts and
+CI silently configures a toolchain the build does not use. wireframe#864 and
+mornington#37 are the two observed shapes.
+
+The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
+`warning` severity, so the estate can be surveyed before the rule blocks.
+
+## Constraints
+
+- Workflows and Makefiles are parsed (YAML documents, `makeutil` report), not
+  matched line by line, so a reformat does not change the verdict.
+- Literals compare for dated nightlies only, as RT-027 does: numeric literals
+  are usually a host tool's toolchain.
+- A literal declared as deliberately separate is not reported: a Makefile
+  variable whose value is the literal, and a workflow literal the job or
+  document declares through `env`.
+- An exemption (the RT-023 shape: a section naming the pinned channel) also
+  exempts RT-028.
+
+## Decision log
+
+- Extend the existing `rust-toolchain-policy` package rather than add a new
+  one: it already reads the pin and the workflow toolchains, and a second
+  package would duplicate that reader.
+- Makefile literals are found by expanding `makeutil`'s variable table with
+  the existing `makefile_expansion` helper, which captures a top-level
+  `NAME ?= nightly-...` declaration, a variable that expands to a literal, and
+  an undefined `$(DEV_FAST_TOOLCHAIN)`.
+- Workflow literals are read on the raw decoded documents: a later rule
+  promotion needs `line` on every finding, which the current `json_safe` facts
+  lose.
+
+## Tasks
+
+- [x] Envelope facts (`toolchain_literal_facts.py`) with unit tests.
+- [x] RT-028 in the Rego policy with fixture tests.
+- [x] BDD scenario through `concordat artefact rule run`.
+- [x] README, users' guide, developers' guide, design doc, migration guide.
+- [x] Manifest hashes and package version (`0.2.0`).
+- [x] Estate survey recorded.
+- [ ] Commit gates, CodeRabbit, draft pull request.
+
+## Progress
+
+- Envelope facts landed: `toolchain_literal_facts.py` walks the decoded
+  workflows and `makeutil`'s root-`Makefile` report, and reports
+  `{reads_pin, literals, errors}`. Sixteen unit tests in
+  `tests/unit/test_toolchain_literal_facts.py`.
+- `build_toolchain_policy_envelope` carries `literals`; `packages.py` injects
+  the observed `makeutil` inspector so the builder never shells out in tests.
+- Rego: RT-028 has one `noncompliant` rule and one `indeterminate` rule, both
+  gated on `applies` and `has_pin` and the latter also on `not exempt`.
+  `literal_severity` is read with `object.get(..., "warning")`, so a partial
+  `data.parameters` cannot silently drop the finding.
+- Fixtures: `literals` added to all 39, five new ones for the literal shapes.
+  The policy suite (24), the BDD suite (9) and the manifest tests pass;
+  `make typecheck` passes.
+- Documentation updated in the package README, users' guide, developers'
+  guide, design doc, migration guide and roadmap.
+
+## Lessons
+
+- The workflow action input is not a shell command: `with.toolchain` and the
+  `uses` ref must be read as values, not fed to `command_selections`. The first
+  unit-test failure was exactly that.
+- Declaration is per referenced name. A set of every variable that holds a
+  date wrongly excused `A ?= nightly-...` / `B=$(A)` / `cargo +$(B)`: the
+  recipe writes `B`, which is not assigned the date, so it is reported at its
+  expanded value.
+- `makeutil` reads recipes as written, so the expansion helper is what turns
+  `$(NAME)` into the literal; `shown()` restores unresolved placeholders so a
+  reference with no assignment and no includes is reported as written.
+- Ruff rejects mixed tabs and spaces in Python literals, so the Makefile test
+  fixtures spell tabs as `"\t"`.
+- The pinned `ty` in `make typecheck` (0.0.65) is the authority; a newer local
+  `uv run ty` reports unrelated pre-existing diagnostics.
+
+## Estate survey (2026-11-19)
+
+`uv run python -m scripts.parabellum_sweep --package rust-toolchain-policy`
+audited all 52 repositories of `docs/parabellum/estate.yaml` at their
+default-branch heads, and
+`... report --package rust-toolchain-policy --output docs/parabellum/rust-toolchain-policy-survey.md`
+rendered the survey; the records sit in the campaign ledger beside the
+`rust-makefile-baseline` campaign.
+
+| Rule   | Severity | Repositories | Findings |
+| ------ | -------- | ------------ | -------- |
+| RT-022 | error    | 2            | 2        |
+| RT-025 | warning  | 22           | 22       |
+| RT-026 | error    | 7            | 7        |
+| RT-027 | error    | 2            | 2        |
+| RT-028 | warning  | 2            | 2        |
+
+RT-028 fires twice, both on a literal written inline in
+`.github/workflows/ci.yml`:
+
+- gauss selects `nightly-2026-08-07` while the pin is `1.99.1`.
+- rstest-bdd selects `nightly-2026-08-07` while the pin is `stable` (which is
+  itself RT-022).
+
+Both are also RT-027 findings, because CI resolved a date the pin does not
+name. That overlap is expected: RT-027 catches the drift that is already
+visible, and RT-028 catches the literal that will drift as soon as the pin
+moves. No repository that RT-027 passes draws RT-028, so promoting the clause to
+`error` after these two literals read the pin adds no new blockers beyond the
+RT-027 failures they already carry.
+
+cuprum is RT-022 (no root `rust-toolchain.toml`) rather than an RT-028 case:
+its fast toolchain lives below the `rust/` directory the rule declines to
+judge, so no literal reached the reader. Its declared-variable shape is covered
+by the unit and BDD tests instead. mornington is not in the estate manifest, so
+its `release.yml` shape could not be surveyed here.
