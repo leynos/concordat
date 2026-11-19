@@ -565,6 +565,8 @@ def _may_change_target(method: str, payload: str, *, awaits_flag_value: bool) ->
         return True
     if method == UNSEEN_ARGUMENTS or "--target-dir" in payload:
         return True
+    if _MANIFEST_PATH in payload:
+        return True
     return method in {"arg", "args"} and (
         awaits_flag_value or _has_unreadable_item(payload)
     )
@@ -579,12 +581,12 @@ def target_signature(
     build in different places, so a reader that keeps one fact per distinct
     state must also tell them apart by this signature.
 
-    An `arg`/`args` call whose every item is a literal is left out, because it
-    cannot change the target: two runs that differ only by a harmless literal
-    addition still collapse. A call holding an item the reader cannot read is
-    kept, because that item may be the flag, and so is a call the reader could
-    not see through at all. So is an argument call whose first word completes a
-    `--target-dir` the run before left waiting: that word is the flag's value.
+    An `arg`/`args` call whose every item is a literal is usually left out,
+    because it cannot change the target: two runs that differ only by a
+    harmless literal addition still collapse. It is kept when it names
+    `--target-dir` or `--manifest-path`, because either moves where cargo
+    builds, when it holds an item the reader cannot read, and when its first
+    word completes a `--target-dir` the run before left waiting.
 
     Returns
     -------

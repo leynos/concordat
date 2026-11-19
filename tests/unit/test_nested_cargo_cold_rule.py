@@ -762,6 +762,34 @@ def test_a_run_that_completes_the_flag_is_reported(
     ]
 
 
+# The manifest path moves the default target to another workspace, so the
+# second run is not the private build the first one was.
+REUSED_COMMAND_MANIFEST_PATH = """\
+fn build_twice() {
+    let scratch = tempfile::tempdir().unwrap();
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.current_dir(scratch.path());
+    cmd.env_clear();
+    cmd.args(["build", "--frozen"]);
+    cmd.status().unwrap();
+    cmd.arg("--manifest-path=../app/Cargo.toml");
+    cmd.status().unwrap();
+}
+"""
+
+
+def test_a_literal_manifest_path_between_runs_is_judged_as_its_own_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The first run is private; the manifest path sends the second elsewhere."""
+    put(tmp_path, "tests/twice.rs", REUSED_COMMAND_MANIFEST_PATH)
+    spawns = build_nested_cargo_cold_envelope(tmp_path)["spawns"]
+    assert [(spawn["state"], spawn["target_state"]) for spawn in spawns] == [
+        ("offline", "private"),
+        ("offline", "inherited"),
+    ]
+
+
 @pytest.mark.parametrize(
     ("filter_text", "is_prepared"),
     [

@@ -312,6 +312,19 @@ def test_a_literal_added_with_no_pending_flag_still_collapses() -> None:
     assert target_signature([("args", '["build", "--release"]')]) == ()
 
 
+def test_the_target_signature_keeps_a_literal_manifest_path() -> None:
+    """`--manifest-path` moves the default target, so a run that adds one differs.
+
+    With a temporary working directory the earlier run is private; the manifest
+    path makes the later one build in that other workspace instead, so the two
+    runs must not collapse into one fact.
+    """
+    base = ("args", '["build", "--frozen"]')
+    manifest = ("arg", '"--manifest-path=../app/Cargo.toml"')
+    assert target_signature([base]) == ()
+    assert target_signature([base, manifest]) == (manifest,)
+
+
 def test_an_escaped_variable_name_is_not_its_text() -> None:
     """A hexadecimal escape can spell `CARGO_TARGET_DIR`: the text is not the name."""
     calls = [("env", '"\\x43ARGO_TARGET_DIR", scratch.path()')]
