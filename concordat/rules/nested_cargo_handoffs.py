@@ -9,10 +9,12 @@ arguments in the order they run.
 
 A handoff the scan cannot attribute -- a helper defined twice, a call reached
 through a path or method, a name a `use` item could import (a glob import names
-none but could bring any in), a caller binding that shadows the helper by
-`let`, by a parameter or by a destructuring pattern (`let (configure,) = ..`),
-a parameter reassigned or shadowed -- is declined rather than guessed, because
-a false positive would demand configuration from a repository that needs none.
+none but could bring any in, and an import may name an inline module in the same
+file as easily as another file, which the scan does not resolve), a caller
+binding that shadows the helper by `let` or `let ref`, by a parameter or by a
+destructuring pattern (`let (configure,) = ..`), a parameter reassigned or
+shadowed -- is declined rather than guessed, because a false positive would
+demand configuration from a repository that needs none.
 A
 `return` in a helper is kept as a word, because it ends the helper's path and
 what follows runs only when the return was skipped, so the reader can split the
@@ -46,9 +48,14 @@ BINDING: typ.Final = re.compile(
     r"(?:[A-Za-z_]\w*[ \t]*::[ \t]*)*$"
 )
 # A following item is another scope, so the command's arguments end there.
-FUNCTION_BOUNDARY: typ.Final = re.compile(
-    r"\n[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?(?:async[ \t]+)?(?:const[ \t]+)?fn[ \t]+\w+"
+# Rust writes a function's qualifiers before `fn` in any of several orders, so
+# `unsafe fn`, `default fn`, `extern "C" fn` and their combinations all begin a
+# new scope just as a plain `fn` does.
+_FUNCTION_QUALIFIER: typ.Final = (
+    r"(?:pub(?:\([^)]*\))?[ \t]+|default[ \t]+|const[ \t]+|async[ \t]+"
+    r"|unsafe[ \t]+|extern[ \t]*\"[^\"]*\"[ \t]+)*"
 )
+FUNCTION_BOUNDARY: typ.Final = re.compile(rf"\n[ \t]*{_FUNCTION_QUALIFIER}fn[ \t]+\w+")
 
 
 def _argument_position(before: str | None) -> int | None:
@@ -274,9 +281,12 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     A parameter of the caller's own function, a closure, loop variable, `let`,
     `const` or `static` with the helper's name shadows the free function, so
     the call reaches something the scan cannot read. A `let` whose pattern
-    destructures the name (`let (configure,) = ..`) binds it too. The caller's
-    parameter list is read because `fn run(configure: fn(&mut Command))` calls
-    the argument, not the free function.
+    destructures the name (`let (configure,) = ..`) binds it too, and so does a
+    binding that borrows the value (`let ref configure = ..`, `|ref mut
+    configure|`): the name still denotes the borrowed value rather than the
+    free function. The caller's parameter list is read because
+    `fn run(configure: fn(&mut Command))` calls the argument, not the free
+    function.
 
     Returns
     -------
@@ -287,9 +297,12 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     boundary = bisect.bisect_left(index.boundaries, at) - 1
     start = index.boundaries[boundary] if boundary >= 0 else 0
     pattern = rf"\b{re.escape(name)}\b"
+    # `ref` and `mut` may each be present, in either combination, before the
+    # name a pattern binds; neither changes which name is bound.
+    binding = r"(?:(?:ref\s+)?mut\s+|ref\s+)?"
     binder = re.compile(
-        rf"\b(?:let\s+(?:mut\s+)?|const\s+|static\s+|for\s+(?:mut\s+)?){pattern}"
-        rf"|\|\s*(?:mut\s+)?{pattern}\s*(?:\||:)"
+        rf"\b(?:let\s+{binding}|const\s+|static\s+|for\s+{binding}){pattern}"
+        rf"|\|\s*{binding}{pattern}\s*(?:\||:)"
     )
     if binder.search(masked, start, at) is not None:
         return True
@@ -301,10 +314,13 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
 def _imported(masked: str, name: str) -> bool:
     """Report whether a `use` in the file could bring *name* in.
 
-    A call to an imported function resolves to another file, so a same-file
-    `fn` of that name is not necessarily the one the call reaches. The scan
-    cannot tell the two apart, so the handoff is declined rather than read from
-    the local namesake; a false positive here would hide a real compile.
+    A call to an imported function may resolve to another file, and it may
+    resolve to an inline module in the same file (`use
+    self::support::configure`). The scan does not resolve imports, so it cannot
+    tell which definition the call reaches, and a same-file `fn` of that name is
+    not certainly the one it does.
+    The handoff is therefore declined rather than read from the local namesake;
+    a false positive here would hide a real compile.
 
     A glob import (`use support::*`) binds names without spelling any of them,
     so while one is present no name is certainly the file's own. That reads as

@@ -18,7 +18,11 @@ from concordat.rules import packages, runner
 from concordat.rules.nested_cargo_nextest_envelope import (
     build_nested_cargo_nextest_envelope,
 )
-from concordat.rules.nested_cargo_receivers import call_chain, owns_chain
+from concordat.rules.nested_cargo_receivers import (
+    _statement_end,
+    call_chains,
+    owns_chain,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -1882,13 +1886,25 @@ def test_a_launch_is_read_at_the_depth_it_reaches(
 def test_a_qualified_receiver_does_not_own_the_chain() -> None:
     """`support::command.arg(..)` calls a path item, not the local binding."""
     qualified = 'support::command.arg("build").status()'
-    qualified_chain = call_chain(qualified, 0, len(qualified))
+    qualified_chain = next(iter(call_chains(qualified, 0, len(qualified))), None)
     assert qualified_chain is not None
     assert not owns_chain(qualified_chain, "command")
     plain = 'command.arg("build").status()'
-    plain_chain = call_chain(plain, 0, len(plain))
+    plain_chain = next(iter(call_chains(plain, 0, len(plain))), None)
     assert plain_chain is not None
     assert owns_chain(plain_chain, "command")
+
+
+def test_a_statement_without_a_semicolon_ends_at_the_window_edge() -> None:
+    """A statement ends after its own text, not one character short of it.
+
+    The chain search stops at that offset, so returning the last character's
+    index instead of the offset past it would hide a call written right at the
+    window's edge.
+    """
+    assert _statement_end('command.arg("x");', 0, 17) == 16
+    assert _statement_end('command.arg("x")', 0, 16) == 16
+    assert _statement_end("", 0, 0) == 0
 
 
 SPACED_LAUNCH_AFTER_THE_DOT = (
@@ -2181,4 +2197,204 @@ def test_a_probe_flag_in_both_arms_is_a_probe(tmp_path: pathlib.Path) -> None:
     """Neither arm compiles, so the command never compiles on any path."""
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", PROBE_IN_BOTH_ARMS)
+    assert ids(tmp_path) == set()
+
+
+LAUNCH_IN_A_SIBLING_BLOCK = (
+    "use std::process::Command;\n"
+    "fn build_on_the_other_path(probe: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    if probe { command.arg("--version").status().unwrap(); return; }\n'
+    '    if !probe { command.arg("build").status().unwrap(); }\n'
+    "}\n"
+)
+
+
+def test_a_launch_in_a_sibling_block_is_another_run(tmp_path: pathlib.Path) -> None:
+    """A closed block that sits beside the launch is not the same path."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LAUNCH_IN_A_SIBLING_BLOCK)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SPACED_ARGUMENT_CALL = (
+    "use std::process::Command;\n"
+    "fn build_with_a_spaced_call() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command . arg("build") . status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_an_argument_call_may_be_spaced_after_its_dot(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`command . arg(..)` is the same call as `command.arg(..)`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SPACED_ARGUMENT_CALL)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+LINK_ARGS_ON_ONE_PATH = (
+    "use std::process::Command;\n"
+    "fn print_with_a_branch(link: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    command.arg("--print");\n'
+    "    if link {\n"
+    '        command.arg("link-args");\n'
+    "    }\n"
+    '    command.arg("cfg").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_conditional_word_between_the_print_halves_breaks_the_query(
+    tmp_path: pathlib.Path,
+) -> None:
+    """On the path that runs the block the query is `link-args`, not `cfg`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LINK_ARGS_ON_ONE_PATH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+PROBES_IN_BOTH_ARMS_BEFORE_A_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn probe_both_ways(choice: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    if choice {\n"
+    '        command.arg("-vV");\n'
+    "    } else {\n"
+    '        command.arg("-V");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_probe_in_every_arm_probes_the_shared_launch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Neither arm reaches the launch without a version flag."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBES_IN_BOTH_ARMS_BEFORE_A_LAUNCH)
+    assert ids(tmp_path) == set()
+
+
+TUPLE_WITH_ANOTHER_RECEIVER = (
+    "use std::process::Command;\n"
+    "fn build_in_a_tuple(other: &mut Command) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    let _ = (other.get_program(), command.arg("build").status());\n'
+    "}\n"
+)
+
+
+def test_another_receiver_does_not_hide_the_command_in_the_statement(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The second tuple element still runs, however the statement starts."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", TUPLE_WITH_ANOTHER_RECEIVER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+FIELD_ASSIGNMENT_BEFORE_A_BUILD = (
+    "use std::process::Command;\n"
+    "struct Holder {\n"
+    "    command: Command,\n"
+    "}\n"
+    "fn build_after_a_field_assignment(holder: &mut Holder, replacement: Command) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    holder . command = replacement;\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_field_assignment_does_not_move_the_binding(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`holder . command = ..` moves the field, however it is spaced."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", FIELD_ASSIGNMENT_BEFORE_A_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+MODE_BEFORE_A_BUILD = (
+    "use std::process::Command;\n"
+    "fn build_after_a_mode(mode: &str) {\n"
+    '    Command::new("cargo")\n'
+    '        .args([mode, "build"])\n'
+    "        .status()\n"
+    "        .unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_compiling_word_after_an_unreadable_one_is_still_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`mode` may be an option, so `build` is still the subcommand."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", MODE_BEFORE_A_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+REF_SHADOWED_HELPER = (
+    "use std::process::Command;\n"
+    "type Configurer = fn(&mut Command);\n"
+    "fn configure(target: &mut Command) {\n"
+    '    target.arg("build");\n'
+    "}\n"
+    "fn read_help(callback: Configurer) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    let ref configure = callback;\n"
+    "    configure(&mut command);\n"
+    '    command.arg("help").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_ref_binding_hides_the_helper(tmp_path: pathlib.Path) -> None:
+    """`let ref configure = ..` binds the name to the callback, not the `fn`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", REF_SHADOWED_HELPER)
+    assert ids(tmp_path) == set()
+
+
+UNSAFE_FUNCTION_AFTER_A_COMMAND = (
+    "use std::process::Command;\n"
+    "fn construct() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "}\n"
+    "unsafe fn later(command: &mut Command) {\n"
+    '    command.arg("build");\n'
+    "}\n"
+)
+
+
+def test_an_unsafe_function_ends_the_command_window(tmp_path: pathlib.Path) -> None:
+    """The next function item is another scope, however it is qualified."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", UNSAFE_FUNCTION_AFTER_A_COMMAND)
+    assert ids(tmp_path) == set()
+
+
+REF_REBOUND_AFTER_A_RUN = (
+    "use std::process::Command;\n"
+    "fn run(fast: bool, other: &mut Command) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if fast {\n"
+    '        command.arg("--version").status().unwrap();\n'
+    "    }\n"
+    "    let ref command: &&mut Command = other;\n"
+    '    command.arg("test").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_ref_rebinding_ends_the_argument_read(tmp_path: pathlib.Path) -> None:
+    """`let ref command = ..` makes the later launch another value's run."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", REF_REBOUND_AFTER_A_RUN)
     assert ids(tmp_path) == set()

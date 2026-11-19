@@ -56,13 +56,18 @@ configuration from a repository that needs none:
   cannot hide a later unconditional flag. A helper defined more than once, or
   one whose receiving parameter is not a plain `name: Type` binding, is
   declined rather than guessed; so is a call that a binding in the caller's own
-  function shadows (a parameter included, even one after a method's receiver,
-  and a name bound by a destructuring pattern such as `let (configure,) = ..`),
-  a call written as a path or method (`support::configure(..)`, however it is
-  spaced around the separator), a name a `use` item could import, since the
-  call then reaches another file, or a helper that reassigns the parameter. A
-  glob import (`use support::*`) spells no name but could bring any in, so it
-  declines every handoff in the file.
+  function shadows (a parameter included, even one after a method's receiver, a
+  name bound by a destructuring pattern such as `let (configure,) = ..`, and a
+  borrowed binding such as `let ref configure = ..`), a call written as a path
+  or method (`support::configure(..)`, however it is spaced around the
+  separator), a name a `use` item could import, or a helper that reassigns the
+  parameter. The scan does not resolve imports, and a `use` may name an inline
+  module in the same file (`use self::support::configure`) as easily as a
+  helper in another file, so an imported name is declined either way; a glob
+  import (`use support::*`) spells no name but could bring any in, so it
+  declines every handoff in the file. A function item ends the arguments
+  however it is qualified (`unsafe fn`, `default fn`, `extern "C" fn`), because
+  the qualifiers do not change where the next scope begins.
 - each launch is read as its own **run**. A launch reached with no block open
   ends the read, because everything after it is a reuse; a launch inside a
   block ends only that branch, so the statements after the block and an `else`
@@ -87,8 +92,9 @@ configuration from a repository that needs none:
   at the run's launch, so a flag in the branch that launches is on the run's
   path while one in a sibling block that has already closed is not. A flag
   added on only some paths, behind a `&&`/`||` short circuit or inside a block
-  that may not run, does not make a run a probe. `cargo metadata` and
-  `cargo config` do not count;
+  that may not run, does not make a run a probe -- except when one fully paired
+  `if`/`else` chain gives a probe in every arm, since then no path reaches the
+  launch without one. `cargo metadata` and `cargo config` do not count;
 - a `rustc` spawn counts, unless every run of that same command is given a
   version flag (`--version`, `-V`, `-vV`), a help flag (`-h`, `--help`) or a
   `--print` of a table that needs no compile (`sysroot`, `target-libdir`,
@@ -97,10 +103,11 @@ configuration from a repository that needs none:
   once. A `--print` query may be split across calls
   (`.arg("--print").arg("cfg")`), which asks the same question as one array,
   but its two halves must be adjacent: a word the reader cannot see between them
-  (`.args(["--print", print_kind, "cfg"])`) may be `link-args`, so the query
-  is not a probe. Comments and other statements do not count, and
-  `--print=link-args` and `--print=native-static-libs` still do, because they
-  build the crate;
+  (`.args(["--print", print_kind, "cfg"])`), or one given only inside a block
+  (`.arg("--print")`, then `if link { .arg("link-args") }`, then
+  `.arg("cfg")`), may be `link-args`, so the query is not a probe. Comments and
+  other statements do not count, and `--print=link-args` and
+  `--print=native-static-libs` still do, because they build the crate;
 - the file must name `Command`, so `env!("CARGO")` read for a path alone is not
   a spawn;
 - Python tests that spawn `cargo` are outside the scan: pytest bounds them.

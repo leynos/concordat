@@ -779,8 +779,11 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   found command does with its arguments — including a helper's body spliced in
   at the call site, a read that restarts for each branch the command runs on or
   after a branch that returns, and a word counted as unconditional only where
-  every block open at it is also open at the run's launch — lives in
-  `nested_cargo_arguments`, which finds the statements through
+  every block open at it is also open at the run's launch — is decided by
+  `nested_cargo_arguments`. That module reads the statements through
+  `nested_cargo_statements`, which owns the run model: which statements are the
+  command's, where each run begins, which blocks surround each word, and how an
+  `else` arm pairs with its `if`. It finds the statements through
   `nested_cargo_handoffs` (windows, helper bodies and file indexes) and
   attributes them through `nested_cargo_receivers` (declining fields, path
   items and namespace roots), and the bracket-depth reading of a signature and

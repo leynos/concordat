@@ -171,20 +171,16 @@ def owns_call(masked: str, at: int, name: str | None) -> bool:
     return root in ("Command", name)
 
 
-def call_chain(masked: str, start: int, end: int) -> re.Match[str] | None:
-    """Return the call that ends the statement at *start* by the next `;`.
-
-    A statement's first launch belongs to the command it is called on:
-    `command.arg("build").status()` runs the command, while a launch inside an
-    argument (`command.env("P", other.output())`) belongs to something else.
+def _statement_end(masked: str, start: int, end: int) -> int:
+    """Return where the statement at *start* ends: its top-level `;` or *end*.
 
     Returns
     -------
-    re.Match[str] | None
-        The chain's match, or None when the statement calls no named command.
+    int
+        The offset of the statement's terminating `;`, or *end* when it has
+        none within the window.
     """
     depth = 0
-    index = end
     for index in range(start, end):
         match masked[index]:
             case "(" | "[" | "{":
@@ -192,8 +188,23 @@ def call_chain(masked: str, start: int, end: int) -> re.Match[str] | None:
             case ")" | "]" | "}":
                 depth -= 1
             case ";" if depth == 0:
-                break
-    return _CHAIN.match(masked, start, index)
+                return index
+    return end
+
+
+def call_chains(masked: str, start: int, end: int) -> typ.Iterator[re.Match[str]]:
+    """Yield every call chain the statement at *start* makes, in source order.
+
+    A statement can mention several commands (`(other.get_program(),
+    command.arg("build").status())`), so every chain is offered rather than
+    only the one the statement opens with; the later elements still run.
+
+    Yields
+    ------
+    re.Match[str]
+        One match per `name.method(..)` chain in the statement.
+    """
+    yield from _CHAIN.finditer(masked, start, _statement_end(masked, start, end))
 
 
 def owns_chain(chain: re.Match[str], name: str | None) -> bool:
