@@ -1793,9 +1793,14 @@ workflow_group_unclassifiable(workflow) if {
 	group_stability_at(value, event) == "unclassifiable"
 }
 
+# A disabled job never runs, so its concurrency group cannot cancel anything.
+# Counting its group as unreadable would suppress RC-001 for the jobs that do
+# run, which is the one thing an unknown in a block that never applies must not
+# do.
 unclassifiable_job_groups(workflow) := {name |
 	some name in object.keys(workflow_jobs(workflow))
 	job := workflow_jobs(workflow)[name]
+	not job_disabled(job)
 	value := job_concurrency(job)
 	some event in pr_events(workflow)
 	block_cancels_at(value, event)
@@ -2000,6 +2005,7 @@ deny contains finding("EN-001", severity, "indeterminate", workflow_path(workflo
 	unknown := {name |
 		some name in object.keys(jobs)
 		job := jobs[name]
+		not job_disabled(job)
 		events := cancelling_events(job_concurrency(job), pr_events(workflow))
 		group_identity_unknown(job_concurrency(job), events)
 	}

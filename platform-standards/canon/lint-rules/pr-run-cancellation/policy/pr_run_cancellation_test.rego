@@ -210,6 +210,12 @@ test_two_run_varying_fallback_branches_are_indeterminate if {
 	profile(data.fixtures.two_run_varying_fallback_branches) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
 }
 
+# The same unreadable group keeps its indeterminate verdict when it belongs to
+# a job that runs: the job's concurrency can neither be confirmed nor excused.
+test_an_enabled_job_with_an_unreadable_group_is_indeterminate if {
+	profile(data.fixtures.enabled_job_unclassifiable_group) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
+}
+
 # A block that provably never cancels is noncompliant whatever its group says.
 # `cancel-in-progress: false` with a run-varying fallback leaves every
 # superseded run running, so the unreadable group cannot excuse it.
@@ -876,6 +882,23 @@ test_a_job_disabled_by_a_literal_false_expression_needs_no_concurrency if {
 # request's run even though the group is a constant.
 test_a_disabled_job_with_a_constant_group_is_compliant if {
 	count(findings(data.fixtures.disabled_job_constant_group)) == 0
+}
+
+# A group the rule cannot classify stops it judging the blocks that do run, so
+# an unreadable group on a disabled job must not excuse the enabled job that has
+# no concurrency block at all.
+test_a_disabled_job_with_an_unreadable_group_does_not_suppress_rc_001 if {
+	found := findings(data.fixtures.disabled_job_unclassifiable_group)
+	count(found) == 1
+	some f in found
+	f.rule_id == "RC-001"
+	contains(f.msg, "job(s) test")
+}
+
+# The identity of a disabled job's group matters no more than its stability:
+# the job never runs, so an unreadable marker there names no run to separate.
+test_a_disabled_job_with_an_unreadable_identity_is_ignored if {
+	count(findings(data.fixtures.disabled_job_unknown_identity_group)) == 0
 }
 
 # Variants of the reference shape are derived by patching it, so a change to

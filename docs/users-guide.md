@@ -1060,7 +1060,11 @@ not cancel does not make the cancelling event's constant group indeterminate.
 Workflow-level and job-level groups are checked independently, because GitHub
 applies both. A job is covered for an event when either level cancels it, so a
 workflow block that cancels `pull_request` runs and a job block that cancels
-`pull_request_target` runs cover that job for both. The reference shape is:
+`pull_request_target` runs cover that job for both. A job disabled with
+`if: false` is ignored by both checks: it needs no block of its own, and a
+block it does declare is not read, so an unreadable group there reports neither
+a defect nor an indeterminate verdict and cannot suppress RC-001 for the jobs
+that do run. The reference shape is:
 
 ```yaml
 concurrency:
