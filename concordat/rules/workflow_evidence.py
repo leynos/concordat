@@ -72,6 +72,18 @@ if typ.TYPE_CHECKING:
     type JsonSafe = cabc.Callable[[object], object]
 
 
+class WorkflowReaders(typ.NamedTuple):
+    """The two hooks a caller may substitute when decoding one workflow.
+
+    They travel together because every caller that overrides one keeps its own
+    module-level pair, and bundling them keeps this loader's parameters within
+    the argument budget the code-health gate allows.
+    """
+
+    read_text: ReadText
+    json_safe: JsonSafe
+
+
 def read_text(path: pathlib.Path) -> str:
     """Read a workflow as UTF-8 text without following a symlink, or raise.
 
@@ -232,13 +244,15 @@ def json_safe(value: object) -> object:
     )
 
 
+WORKFLOW_READERS: typ.Final = WorkflowReaders(read_text=read_text, json_safe=json_safe)
+
+
 def load_workflow(
     checkout: pathlib.Path,
     relative: pathlib.PurePosixPath,
     *,
     is_link: bool,
-    read_text: ReadText = read_text,
-    json_safe: JsonSafe = json_safe,
+    readers: WorkflowReaders = WORKFLOW_READERS,
 ) -> WorkflowFile:
     """Return one decoded workflow fact, retaining any content-level failure.
 
@@ -258,11 +272,11 @@ def load_workflow(
         fact["error"] = "workflow file is a symlink"
         return fact
     try:
-        text = read_text(path)
+        text = readers.read_text(path)
     except UnicodeDecodeError as error:
         fact["error"] = f"not UTF-8 text: {error}"
         return fact
-    return _decode_into(fact, text, json_safe)
+    return _decode_into(fact, text, readers.json_safe)
 
 
 def _decode_into(fact: WorkflowFile, text: str, json_safe: JsonSafe) -> WorkflowFile:
@@ -512,24 +526,30 @@ def _workflow_entry_mode(
     return mode if stat.S_ISREG(mode) or stat.S_ISLNK(mode) else None
 
 
+class _RootWorkflowEntry(typ.NamedTuple):
+    """One enumerated root workflow entry: its name, path and lstat mode."""
+
+    name: str
+    path: pathlib.Path
+    mode: int
+
+
 def _root_workflow_fact(
     directory_fd: int,
-    name: str,
-    path: pathlib.Path,
-    mode: int,
+    entry: _RootWorkflowEntry,
     json_safe: JsonSafe,
 ) -> WorkflowFile:
     """Return one root workflow fact, retaining any content-level failure."""
     fact: WorkflowFile = {
-        "path": str(WORKFLOWS_DIRECTORY / name),
+        "path": str(WORKFLOWS_DIRECTORY / entry.name),
         "parsed": None,
         "error": None,
     }
-    if stat.S_ISLNK(mode):
+    if stat.S_ISLNK(entry.mode):
         fact["error"] = "workflow file is a symlink"
         return fact
     try:
-        text = _read_entry(directory_fd, name, path)
+        text = _read_entry(directory_fd, entry.name, entry.path)
     except UnicodeDecodeError as error:
         fact["error"] = f"not UTF-8 text: {error}"
         return fact
@@ -564,6 +584,10 @@ def load_workflows(
             mode = _workflow_entry_mode(directory_fd, name, path)
             if mode is not None:
                 facts.append(
-                    _root_workflow_fact(directory_fd, name, path, mode, json_safe)
+                    _root_workflow_fact(
+                        directory_fd,
+                        _RootWorkflowEntry(name=name, path=path, mode=mode),
+                        json_safe,
+                    )
                 )
         return facts

@@ -20,6 +20,7 @@ import typing as typ
 
 from .workflow_evidence import OPERATION_READ_WORKFLOW as OPERATION_READ_WORKFLOW
 from .workflow_evidence import WorkflowFile as WorkflowFile
+from .workflow_evidence import WorkflowReaders as _WorkflowReaders
 from .workflow_evidence import json_safe as _json_safe
 from .workflow_evidence import load_workflow as _load_single_workflow
 from .workflow_evidence import load_workflows as _load_root_workflows
@@ -87,8 +88,7 @@ def _load_workflow(
         checkout,
         relative,
         is_link=is_link,
-        read_text=_read_text,
-        json_safe=_json_safe,
+        readers=_WorkflowReaders(read_text=_read_text, json_safe=_json_safe),
     )
 
 
