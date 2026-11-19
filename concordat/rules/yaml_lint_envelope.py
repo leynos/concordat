@@ -178,11 +178,15 @@ def _decode_yaml(text: str) -> tuple[object | None, str | None]:
     -------
     tuple[object | None, str | None]
         ``(document, None)`` on success, or ``(None, reason)``. A mapping key
-        JSON cannot carry, such as a YAML date, is a reason, never a crash.
+        JSON cannot carry, such as a YAML date, and a value JSON cannot carry,
+        such as `.nan`, are reasons, never crashes.
     """
     try:
         return json_safe(YAML(typ="safe").load(text)), None
-    except YAMLError as decode_error:
+    except (YAMLError, ValueError) as decode_error:
+        # A non-finite float such as `.nan` parses, then the strict converter
+        # refuses it with `ValueError`. It is this file's content error, not a
+        # reason to abort the audit.
         return None, f"invalid YAML: {decode_error}"
     except TypeError as key_error:
         return None, f"unsupported mapping key: {key_error}"

@@ -570,6 +570,23 @@ actuators that remediate them. Each check ships as a lint rule package under
   per-scenario target before its fix (reported as indeterminate, because the
   value comes from another file), netsuke after #913 and #939 and a clean
   repository give the expected result for every case.
+- [x] Ship the pull-request run cancellation rule (RC-001, RC-002,
+  `pr-run-cancellation`, leynos/concordat#388): every workflow triggered by
+  `pull_request` or `pull_request_target` has a cancelling `concurrency` block,
+  at workflow level or on every job not disabled with `if: false`, and each
+  cancelling group names the pull request through
+  `github.event.pull_request.number` or `github.head_ref`. An unreadable
+  workflow, trigger or concurrency block is indeterminate rather than a pass;
+  exemptions name an exact workflow, or a repository, with a rationale and a
+  review trigger. Acceptance: the package's Rego suite covers the reference
+  shape, the job-level and reusable-caller shapes, every trigger spelling, each
+  non-cancelling value including an expression the declared event proves false,
+  indeterminate evidence and both exemption kinds; both this rule and
+  `main-owned-codescene-coverage` are evaluated over one checkout to hold the
+  reconciliation with the main-only publisher; the BDD scenarios drive the real
+  policy through `concordat artefact rule run`; and an estate survey populates
+  the Ubicloud subset before promotion. Shipped at `warning` severity, with the
+  `severity` parameter raising it to `error`.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for

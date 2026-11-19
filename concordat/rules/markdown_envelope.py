@@ -11,7 +11,6 @@ verdict instead of silently treating the file as absent.
 
 from __future__ import annotations
 
-import json
 import os
 import pathlib
 import typing as typ
@@ -25,6 +24,10 @@ from . import fs_probe
 from .action_pins import PinResolution, PinResolver, resolve_pins
 from .jsonc import JsoncError, loads_jsonc
 from .makefile_facts import MakefileInspector, inspect_makefile
+
+# The workflow readers own the JSON conversion so every envelope accepts and
+# rejects exactly the same values; this module re-exports it for its callers.
+from .workflow_evidence import json_safe
 
 if typ.TYPE_CHECKING:
     from .makefile_facts import MakeutilReport
@@ -73,8 +76,6 @@ OPERATION_RESOLVE_CHECKOUT: typ.Final = "resolve-checkout"
 OPERATION_LIST_WORKFLOWS: typ.Final = "list-workflows"
 OPERATION_PROBE_PATH: typ.Final = "probe-path"
 OPERATION_READ_MAKEFILE: typ.Final = "read-makefile"
-
-_yaml = YAML(typ="safe")
 
 
 class MarkdownlintConfig(typ.TypedDict):
@@ -392,25 +393,6 @@ def _alternate_configs(checkout: pathlib.Path) -> list[str]:
     return present
 
 
-def json_safe(value: object) -> object:
-    """Return *value* with any non-JSON scalar (a YAML timestamp) stringified.
-
-    Parameters
-    ----------
-    value:
-        A decoded document: mappings, sequences and scalars.
-
-    Returns
-    -------
-    object
-        The same document after a JSON round trip, with every scalar JSON
-        cannot represent replaced by its string form. A mapping key JSON
-        cannot carry, such as a YAML date, raises `TypeError`, which the caller
-        is expected to record as a decoding error.
-    """
-    return typ.cast("object", json.loads(json.dumps(value, default=str)))
-
-
 def _load_workflow(
     checkout: pathlib.Path, root: pathlib.Path, relative: pathlib.PurePosixPath
 ) -> WorkflowFile:
@@ -433,14 +415,29 @@ def _load_workflow(
         fact["error"] = f"not UTF-8 text: {error}"
         return fact
     try:
-        parsed: object = _yaml.load(text)
-    except YAMLError as error:
+        # ruamel does not guarantee that a loader which raised can handle
+        # further input, so each document gets its own rather than sharing
+        # module state across an audit.
+        parsed: object = YAML(typ="safe").load(text)
+    except (YAMLError, ValueError, TypeError) as error:
+        # An out-of-range timestamp scalar, such as `2026-02-30`, raises
+        # `ValueError` from the safe loader's constructor rather than a
+        # `YAMLError`. An `!!omap` whose key is a sequence raises `TypeError`,
+        # because the loader tries to build a Python mapping keyed by a list.
+        # Both are still defects in this file's content, so they are reported
+        # for this workflow instead of aborting the whole audit.
         fact["error"] = f"invalid YAML: {error}"
         return fact
     if not isinstance(parsed, dict):
         fact["error"] = "workflow document is not a mapping"
         return fact
-    fact["parsed"] = json_safe(parsed)
+    try:
+        fact["parsed"] = json_safe(parsed)
+    except (TypeError, ValueError) as error:
+        # A key JSON cannot represent, such as a YAML date, raises `TypeError`.
+        # It is a defect in this file's content, so it stays this file's
+        # evidence instead of aborting the envelope.
+        fact["error"] = f"workflow document is not JSON-safe: {error}"
     return fact
 
 

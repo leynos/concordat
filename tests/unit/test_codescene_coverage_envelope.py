@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 import pathlib
 import typing as typ
 
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import codescene_coverage_envelope
+from concordat.rules import codescene_coverage_envelope, workflow_evidence
 from concordat.rules.codescene_coverage_envelope import (
     ENVELOPE_KIND,
     ENVELOPE_SCHEMA_VERSION,
@@ -41,8 +42,11 @@ class _DenialCase:
 
     Attributes
     ----------
+    owner:
+        Module holding the call that refuses: `pathlib` for a directory or
+        status query, `os` for the read that opens the file.
     method:
-        `pathlib.Path` method that refuses.
+        Name of the call that refuses.
     resource:
         Whether the error must name the workflow directory or the file.
     detail:
@@ -50,6 +54,7 @@ class _DenialCase:
 
     """
 
+    owner: str
     method: str
     resource: str
     detail: str
@@ -107,12 +112,12 @@ class TestBuildCodesceneCoverageEnvelope:
 
         read_paths: list[pathlib.Path] = []
 
-        def record_read(path: pathlib.Path) -> str:
-            """Record the requested path, then fail so no target is read."""
+        def record_read(directory_fd: int, name: str, path: pathlib.Path) -> str:
+            """Record the entry a read was attempted for, then fail."""
             read_paths.append(path)
             raise AssertionError
 
-        monkeypatch.setattr(codescene_coverage_envelope, "_read_text", record_read)
+        monkeypatch.setattr(workflow_evidence, "_read_entry", record_read)
 
         envelope = build_codescene_coverage_envelope(tmp_path)
 
@@ -299,14 +304,19 @@ class TestBuildCodesceneCoverageEnvelope:
         "case",
         [
             pytest.param(
-                _DenialCase("iterdir", "directory", "cannot list"),
+                _DenialCase("os", "listdir", "directory", "cannot list"),
                 id="directory-enumeration",
             ),
             pytest.param(
-                _DenialCase("lstat", "file", "cannot stat"), id="entry-status"
+                _DenialCase("os", "stat", "file", "cannot stat"),
+                id="entry-status",
             ),
+            # Enumeration and the open are bound to the directory descriptor,
+            # so the denial to simulate for a file's contents is the read that
+            # follows its open, not a path-based `Path.read_text`.
             pytest.param(
-                _DenialCase("read_text", "file", "cannot read"), id="file-contents"
+                _DenialCase("os", "read", "file", "cannot read"),
+                id="file-contents",
             ),
         ],
     )
@@ -330,10 +340,14 @@ class TestBuildCodesceneCoverageEnvelope:
             """Raise a permission error for whichever filesystem call is patched."""
             raise PermissionError(13, "Permission denied")
 
-        monkeypatch.setattr(pathlib.Path, case.method, refuse)
-
-        with pytest.raises(OperationalRuleError) as excinfo:
-            build_codescene_coverage_envelope(tmp_path)
+        owner = pathlib.Path if case.owner == "pathlib" else os
+        # The denial is scoped to the builder call. `os.stat` patched for the
+        # whole process would also deny pytest's own path checks while it
+        # builds the report for a failing assertion.
+        with monkeypatch.context() as patch:
+            patch.setattr(owner, case.method, refuse)
+            with pytest.raises(OperationalRuleError) as excinfo:
+                build_codescene_coverage_envelope(tmp_path)
 
         assert excinfo.value.operation == OPERATION_READ_WORKFLOW
         assert excinfo.value.resource == expected

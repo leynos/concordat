@@ -58,6 +58,9 @@ from concordat.rules.nested_cargo_offline_envelope import (
 from concordat.rules.nested_cargo_wiring_envelope import (
     ENVELOPE_KIND as NESTED_CARGO_WIRING_ENVELOPE_KIND,
 )
+from concordat.rules.pr_run_cancellation_envelope import (
+    ENVELOPE_KIND as PR_RUN_CANCELLATION_ENVELOPE_KIND,
+)
 from concordat.rules.prover_tooling_envelope import (
     ENVELOPE_KIND as PROVER_TOOLING_ENVELOPE_KIND,
 )
@@ -186,6 +189,11 @@ class TestRegisteredPackages:
                 id="codescene-coverage",
             ),
             pytest.param(
+                "pr-run-cancellation",
+                PR_RUN_CANCELLATION_ENVELOPE_KIND,
+                id="pr-run-cancellation",
+            ),
+            pytest.param(
                 "dependabot-update-shape",
                 DEPENDABOT_ENVELOPE_KIND,
                 id="dependabot-update-shape",
@@ -278,6 +286,22 @@ class TestRegisteredPackages:
         assert unresolvable == set(), (
             f"these packages resolve only by registration: {sorted(unresolvable)}"
         )
+
+    def test_a_manifest_only_package_builds_its_declared_envelope(
+        self, checkout: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The manifest route must select a builder and run it, not just exist.
+
+        Emptying the identifier mapping leaves `pr-run-cancellation` with only
+        its shipped `rule.yaml` to resolve by. The returned kind proves the
+        builder the manifest route selected is the one that produced the
+        envelope, which a key-existence check alone cannot show.
+        """
+        monkeypatch.setattr(packages, "PACKAGE_ENVELOPE_BUILDERS", {})
+
+        envelope = packages.default_envelope_builder("pr-run-cancellation", checkout)
+
+        assert envelope["kind"] == PR_RUN_CANCELLATION_ENVELOPE_KIND, envelope
 
     def test_every_registered_builder_is_also_declarable(self) -> None:
         """A registered builder must be reachable by the kind it emits.
@@ -466,6 +490,7 @@ class TestDeclaredInputKind:
             ("rust-prover-tooling", PROVER_TOOLING_ENVELOPE_KIND),
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
+            ("pr-run-cancellation", PR_RUN_CANCELLATION_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
             ("dependency-family-contracts", FAMILY_ENVELOPE_KIND),
             ("rust-toolchain-policy", TOOLCHAIN_POLICY_ENVELOPE_KIND),

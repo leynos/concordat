@@ -20,6 +20,7 @@ Nothing here runs Cargo or reads the network.
 
 from __future__ import annotations
 
+import os
 import re
 import tomllib
 import typing as typ
@@ -48,18 +49,44 @@ def origin_slug(checkout: pathlib.Path) -> str | None:
     Returns
     -------
     str | None
-        The slug, or None when there is no repository, no origin, an origin
-        that is not a GitHub URL, or a repository git cannot open. A checkout
-        without a slug cannot match a named exemption and is fully audited.
+        The slug, or None when there is no repository at *checkout*, no
+        origin, an origin that is not a GitHub URL, or a repository git cannot
+        open. A checkout without a slug cannot match a named exemption and is
+        fully audited.
     """
     try:
         discovered = pygit2.discover_repository(str(checkout))
         if discovered is None:
             return None
-        origin = pygit2.Repository(discovered).remotes["origin"]
+        repository = pygit2.Repository(discovered)
+        if not _is_work_tree_root(checkout, repository):
+            return None
+        origin = repository.remotes["origin"]
     except (KeyError, pygit2.GitError):
         return None
     return parse_github_slug(origin.url) if origin.url else None
+
+
+def _is_work_tree_root(checkout: pathlib.Path, repository: pygit2.Repository) -> bool:
+    """Report whether *repository*'s work tree is *checkout*.
+
+    `discover_repository` walks up parent directories, so a plain directory
+    inside another repository finds that repository. Its origin is not this
+    checkout's identity: matching an exemption on it would suppress the wrong
+    audit, and a bare repository has no work tree to match at all.
+
+    The caller passes the repository it already opened, so the identity is read
+    from the same handle that supplies the remote.
+
+    Returns
+    -------
+    bool
+        True when the repository's work tree is *checkout*.
+    """
+    workdir = repository.workdir
+    if workdir is None:
+        return False
+    return os.path.realpath(workdir) == os.path.realpath(checkout)
 
 
 def is_fixture_directory(directory: str) -> bool:

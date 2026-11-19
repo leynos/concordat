@@ -491,6 +491,14 @@ read from its literal labels; a label written as an expression is classified
 only when every literal it could select agrees, and is otherwise indeterminate.
 A repository that generates no coverage anywhere is not a subject of this rule.
 
+The publisher and the cancellation rule do not compete for the same document.
+`pr-run-cancellation` audits workflows with a pull-request trigger, and this
+rule keeps CodeScene publication in a main-only workflow, so a dual-trigger
+workflow carries the reference concurrency shape but does not invoke CodeScene,
+and the main-only publisher is not audited for cancellation.
+`tests/unit/test_pr_run_cancellation_coverage_interaction.py` evaluates both
+rules over one checkout to hold that reconciliation.
+
 Adopting the rule in a repository removes a quality gate from its pull-request
 lane, so an adoption takes a full review rather than a mechanical merge on
 green. Two things follow an adoption and are expected, not defects: the
@@ -950,6 +958,168 @@ Both checks are `warning` in the shipped parameters, so the estate is surveyed
 before the rule blocks; `severity: error` promotes them. An exemption names a
 repository, an exact file, a rationale and a review trigger, and suppresses
 NC-009 and NC-010 for that file only.
+
+### Auditing pull-request run cancellation
+
+The `pr-run-cancellation` rule keeps a pull request from paying for superseded
+runs:
+
+```shell
+concordat artefact rule run pr-run-cancellation --repo /path/to/checkout
+```
+
+Every push starts a run against the same ref. GitHub's default concurrency
+queue already replaces an older pending run with the newest one in the group
+even when `cancel-in-progress` is false, but a run that is already executing is
+left alone, so the newest push waits behind it and paid work continues on a
+commit nobody will merge. **RC-001** requires a cancelling `concurrency` block
+in every workflow triggered by `pull_request` or `pull_request_target`, at
+workflow level or on every job not disabled with `if: false`, for every
+pull-request event the workflow declares. **RC-002** requires every cancelling
+block's `group` to name the pull request inside a `${{ ... }}` expression.
+`github.event.pull_request.number` keeps different pull requests apart;
+`github.head_ref` is accepted as a marker, but it is the source branch name
+rather than a unique pull-request identity, so two forks using the same branch
+name share a group. A marker written as literal text, including inside a quoted
+string literal, used as a comparison operand, spelled as the prefix of a longer
+property name such as `github.head_ref_name`, or handed to a function that
+returns something else, such as `contains(github.head_ref, 'release')`, is part
+of a constant group and does not count, and an operator applied to any
+enclosing call replaces the value, whether the call discards it, as in
+`contains(format('{0}', github.head_ref), 'release')`, or renders it, as in
+`format('{0}', format('{0}-{1}', github.head_ref, 'ci') == 'release')`.
+Negation and conjunction replace the value too, so `!github.head_ref` and the
+left operand of `&&` do not count. `format` counts only where its literal
+template renders that argument's replacement index:
+`format('ci-{0}', github.head_ref)` names the pull request, and
+`format('ci', github.head_ref)` does not. A marker passed to a call the rule
+does not recognize, one in the separator argument of `join`, whose contribution
+depends on how many elements the array holds, or one rendered through a
+`format` template the rule cannot read, is indeterminate. A static index such as
+`github['head_ref']` counts as the property it names. A group built from a
+value that changes between pushes, such as `github.run_id`, `github['run_id']`
+or `github.sha`, does not cancel because the next push's run never shares it.
+Such a value only counts where the expression renders it, so
+`format('ci-{0}', github.head_ref, github.run_id)` is stable, while
+`format('ci-{0}-{1}', github.head_ref, github.run_id)` is not. A run value
+guarded by a `&&` in its own argument counts only when that guard can render
+it, so `format('{0}-{1}', github.head_ref, false && github.run_id)` is a
+constant group while the same expression with `true` is not, and a run value
+behind a constant-first fallback in its own argument, as in
+`format('{0}', 'ci' || github.run_id)`, is not part of the value either. Every
+branch a pull request can select must name the pull request: the documented
+`github.head_ref || github.run_id` shape is accepted because `github.head_ref`
+is non-empty on a pull request, so the fallback is never selected, and
+`github.head_ref || fromJSON(github.head_ref)` is accepted for the same reason.
+A branch that is provably falsy is skipped too, so `false || github.head_ref`,
+`'' || github.head_ref` and `format('{0}', false || github.head_ref)` still
+name the pull request, while `'ci' || github.head_ref` does not. An
+unrecognized call in a fallback the pull request can reach, such as the
+`fromJSON` branch of
+`github.event_name == 'push' && github.head_ref || fromJSON(github.head_ref)`,
+leaves the identity unreadable and is indeterminate. Each declared event is
+judged on its own, so one expression body may name the pull request for
+`pull_request` and another for `pull_request_target`. A branch guarded by a
+`github.event_name` comparison is judged against every pull-request event the
+workflow declares, so `github.event_name == 'pull_request' && github.head_ref`
+is selected on a `pull_request` run, while
+`github.event_name == 'push' && github.head_ref || 'ci'` falls through to the
+constant `ci`, and `github.event_name == 'push' && github.head_ref` alone
+renders a boolean. A workflow that also declares `pull_request_target`
+therefore fails the `pull_request`-guarded shape, because that guard selects
+`ci` on the other event's run. A guard that excludes every declared event skips
+the branch it protects, so
+`github.event_name == 'push' && github.head_ref || github.run_id` selects the
+run id on a `pull_request` workflow and the group varies. Any other `&&` chain
+is judged by what the rule can prove about every guard in it: a literal `false`
+anywhere makes the whole conjunction a constant, so
+`github.ref && false && github.head_ref` does not name the pull request, while
+a reference GitHub always resolves to a non-empty string (such as `github.ref`,
+`github.sha` or `github.event_name`) selects the value after it, as
+`github.ref && github.head_ref` does. Such a conjunction never falls through,
+so the fallback in `github.ref && github.head_ref || 'ci'` is unreachable and
+the group is compliant. A guard the rule cannot prove truthy or falsy, such as
+`github.event.pull_request.title && github.head_ref` or
+`github.ref == 'refs/heads/main' && github.head_ref`, makes the group
+indeterminate. The chain is read in full wherever it sits, including inside a
+call argument, so `format('{0}', false && github.head_ref)` names nothing, and
+behind an event guard, so
+`github.event_name == 'pull_request' && false && github.head_ref` names nothing
+either. Every enclosing argument is read, so an outer guard also decides an
+inner call: `format('{0}', false && format('{0}', github.head_ref))` names
+nothing, while `format('{0}', github.ref && format('{0}', github.head_ref))`
+does. A `||` nested inside a call argument is that argument's own fallback, so
+a value that changes between runs beside it leaves the group unreadable, and
+the workflow is reported indeterminate. That fallback does not reach a later
+argument, so `format('{0}-{1}', github.workflow || 'ci', github.head_ref)`
+still names the pull request. A block is judged on the events it actually
+cancels, so a conditional block with a constant group is reported even though
+RC-001 also fires for the events it leaves alone. An unreadable identity is
+judged the same way: a call the rule cannot classify on an event the block does
+not cancel does not make the cancelling event's constant group indeterminate.
+Workflow-level and job-level groups are checked independently, because GitHub
+applies both. A job is covered for an event when either level cancels it, so a
+workflow block that cancels `pull_request` runs and a job block that cancels
+`pull_request_target` runs cover that job for both. A job disabled with
+`if: false` is ignored by both checks: it needs no block of its own, and a
+block it does declare is not read, so an unreadable group there reports neither
+a defect nor an indeterminate verdict and cannot suppress RC-001 for the jobs
+that do run. The reference shape is:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+That event test covers `pull_request`. A workflow triggered by
+`pull_request_target` evaluates it false there, so the rule does not count it
+as cancelling that event's runs. Test that event too:
+
+```yaml
+cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
+```
+
+`github.head_ref` is the source branch name, not a unique pull-request
+identity: two pull requests from different forks can both use a branch called
+`feature`, and they then share a group. A repository that accepts fork pull
+requests and must not cancel one fork's run against another's should name the
+pull request by number, as the reference shape above does. Naming the pull
+request is necessary but not sufficient for isolation: GitHub concurrency
+groups are repository-wide, so two workflows, or two jobs with their own
+concurrency blocks, that build the same group cancel one another's runs. The
+reference shape's `github.workflow` prefix separates workflows, and a job-level
+block needs its own discriminator. A pull-request number plus a workflow or job
+discriminator avoids both the fork collision and cross-workflow cancellation.
+RC-002 requires only the pull-request identity and does not demand a
+discriminator.
+
+`cancel-in-progress: true` or a trimmed, case-insensitive `"true"` cancels. An
+expression cancels unless the rule can prove it false for the run that matters.
+A trimmed literal-false expression (`${{ false }}`) does not cancel, and
+neither does an expression that is nothing but `github.event_name` tests when
+the declared event fails them: `${{ github.event_name == 'pull_request' }}`
+cancels a `pull_request` run and not a `pull_request_target` run, while the
+two-event guard above cancels both. The declared event also proves a `&&`
+conjunction false when its guard is an event test that excludes that event,
+because `&&` short-circuits: `${{ github.event_name == 'push' && true }}` and
+`${{ github.event_name == 'push' && false }}` do not cancel a `pull_request`
+run, and neither does a `||` chain whose every branch is an event test that
+excludes it, such as
+`${{ github.event_name == 'push' || github.event_name == 'schedule' }}`.
+Everything else keeps the conservative reading: the rule does not evaluate
+arbitrary expressions, so a provably false value in a shape it cannot settle,
+such as `${{ contains(github.event_name, 'push') || false }}`, is treated as
+cancelling rather than reported. An absent value, `false`, `"false"` and the
+string shorthand do not cancel. A workflow triggered only by push, schedule or
+`workflow_call` is not audited. A workflow whose document, trigger, concurrency
+shape, nested-fallback group or unrecognized call cannot be read is
+indeterminate (**EN-001**) rather than passing. Both clauses ship at `warning`
+so the estate can be surveyed first; `severity: error` promotes them. An
+exemption names a repository and an exact workflow, or a whole repository, with
+a rationale and a review trigger; a blank field suppresses nothing, and an
+exemption never suppresses indeterminate evidence. See the
+[rule reference](../platform-standards/canon/lint-rules/pr-run-cancellation/README.md).
 
 ### Auditing prover tooling
 

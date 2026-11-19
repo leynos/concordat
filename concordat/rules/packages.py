@@ -77,6 +77,12 @@ from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
 from .nested_cargo_registry import BY_KIND as NESTED_CARGO_BY_KIND
 from .nested_cargo_registry import BY_PACKAGE as NESTED_CARGO_BY_PACKAGE
 from .nested_cargo_registry import NestedCargoEnvelope
+from .pr_run_cancellation_envelope import (
+    ENVELOPE_KIND as PR_RUN_CANCELLATION_ENVELOPE_KIND,
+)
+from .pr_run_cancellation_envelope import (
+    build_rule_envelope as _pr_run_cancellation_envelope,
+)
 from .prover_tooling_envelope import (
     ENVELOPE_KIND as PROVER_TOOLING_ENVELOPE_KIND,
 )
@@ -125,6 +131,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from .action_pins import PinResolver
+    from .pr_run_cancellation_envelope import PrRunCancellationEnvelope
 
 type RuleEnvelope = (
     PolicyEnvelope
@@ -143,6 +150,7 @@ type RuleEnvelope = (
     | ToolchainPolicyEnvelope
     | YamlLintEnvelope
     | ProverToolingEnvelope
+    | PrRunCancellationEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -610,12 +618,11 @@ _yaml_lint_envelope = _observed(build_yaml_lint_envelope)
 _prover_tooling_envelope = _observed(build_prover_tooling_envelope)
 
 
-# Every rule package's envelope builder, keyed by package identifier. The
-# mapping is the complete list rather than the exceptions to a default: a
+# The mapping is the complete list rather than the exceptions to a default: a
 # package that reads facts of one shape and a policy that expects another
-# produce a confident verdict about the wrong document, which is the failure a
-# fail-closed audit exists to avoid. An identifier that is not here, and
-# declares no input kind of its own, is refused.
+# produces a confident verdict about the wrong document, the failure a
+# fail-closed audit exists to avoid; an identifier absent here that declares
+# no input kind of its own is refused.
 #
 # The view is read-only. Package selection is a composition decision, not state
 # a caller may reach in and change.
@@ -625,6 +632,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-dev-build-footprint": _dev_build_envelope,
     **NESTED_CARGO_BY_PACKAGE,
     "main-owned-codescene-coverage": _coverage_envelope,
+    "pr-run-cancellation": _pr_run_cancellation_envelope,
     "dependabot-update-shape": _dependabot_envelope,
     "dependency-family-contracts": _dependency_family_envelope,
     "rust-toolchain-policy": _toolchain_policy_envelope,
@@ -648,6 +656,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     **NESTED_CARGO_BY_KIND,
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
+    PR_RUN_CANCELLATION_ENVELOPE_KIND: _pr_run_cancellation_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
     FAMILY_ENVELOPE_KIND: _dependency_family_envelope,
     TOOLCHAIN_POLICY_ENVELOPE_KIND: _toolchain_policy_envelope,
