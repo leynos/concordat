@@ -580,10 +580,13 @@ actuators that remediate them. Each check ships as a lint rule package under
   exemptions name an exact workflow, or a repository, with a rationale and a
   review trigger. Acceptance: the package's Rego suite covers the reference
   shape, the job-level and reusable-caller shapes, every trigger spelling, each
-  non-cancelling value, indeterminate evidence and both exemption kinds; the
-  BDD scenarios drive the real policy through `concordat artefact rule run`;
-  and an estate survey populates the Ubicloud subset before promotion. Shipped
-  at `warning` severity, with the `severity` parameter raising it to `error`.
+  non-cancelling value including an expression the declared event proves false,
+  indeterminate evidence and both exemption kinds; both this rule and
+  `main-owned-codescene-coverage` are evaluated over one checkout to hold the
+  reconciliation with the main-only publisher; the BDD scenarios drive the real
+  policy through `concordat artefact rule run`; and an estate survey populates
+  the Ubicloud subset before promotion. Shipped at `warning` severity, with the
+  `severity` parameter raising it to `error`.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for

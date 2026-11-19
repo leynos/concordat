@@ -10,11 +10,16 @@ the findings here are **RC-001** and **RC-002**.
 
 ## Why
 
-Every push to a pull request starts a run against the same ref. Without
-concurrency cancellation the earlier runs keep the runners busy on a commit
-nobody will merge, and the newest run queues behind them. On a metered runner
-that is paid work for a superseded revision; on any runner it is latency before
-the answer the author is waiting for.
+Every push to a pull request starts a run against the same ref. GitHub's
+concurrency queue already replaces an older *pending* run with the newest one
+in the group when `cancel-in-progress` is false, so a push that arrives while
+the previous run only waited costs nothing extra. A run that is already
+*executing* is left alone: the newest push waits behind it, and each later push
+waits in turn. On a metered runner that is paid work for a revision nobody will
+merge; on any runner it is latency before the answer the author is waiting for.
+`cancel-in-progress` is what stops the executing run. The queue depth is
+configurable with `queue: single` (the default) or `queue: max`; the default
+keeps at most one pending run per group, which is the behaviour described here.
 
 The reference shape is:
 
@@ -49,16 +54,21 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   pull-request event it declares. A block whose `cancel-in-progress` is only a
   `github.event_name` test cancels for the events that test selects and leaves
   the others running, so a `pull_request_target`-only workflow guarded with
-  `github.event_name == 'pull_request'` is reported. A workflow-level block
-  covers every job, and covering every declared event may be split between the
-  levels: a workflow block that cancels `pull_request` runs and a job block
-  that cancels `pull_request_target` runs cover that job for both. A job that
-  sets literal `if: false` is skipped, so it needs no block. A
-  reusable-workflow caller job (`uses:`) is judged by its own `concurrency`,
-  not by the jobs inside the called workflow, because those jobs are not in
-  this document. One finding per workflow, naming every uncovered job. A block
-  whose group carries a value that separates runs of the same pull request —
-  `github.run_id`, `github.run_number`, `github.run_attempt`, `github.sha` or
+  `github.event_name == 'pull_request'` is reported. An expression the declared
+  event proves false does not cancel either:
+  `${{ github.event_name == 'push' && true }}` is false on every pull-request
+  run, and
+  `${{ github.event_name == 'push' || github.event_name == 'schedule' }}`
+  selects neither declared pull-request event. A workflow-level block covers
+  every job, and covering every declared event may be split between the levels:
+  a workflow block that cancels `pull_request` runs and a job block that cancels
+  `pull_request_target` runs cover that job for both. A job that sets literal
+  `if: false` is skipped, so it needs no block. A reusable-workflow caller job
+  (`uses:`) is judged by its own `concurrency`, not by the jobs inside the
+  called workflow, because those jobs are not in this document. One finding per
+  workflow, naming every uncovered job. A block whose group carries a value
+  that separates runs of the same pull request — `github.run_id`,
+  `github.run_number`, `github.run_attempt`, `github.sha` or
   `github.event.pull_request.head.sha` — does not cancel the run that ought to
   be superseded. The next push's first attempt never shares a group containing
   a per-run value, and a group containing the attempt number leaves an older
@@ -126,14 +136,22 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   `github.head_ref` is the source branch name rather than a unique pull-request
   identity, so two pull requests from different forks that both use a branch
   called `feature` share a group; a repository that must keep fork runs apart
-  should name `github.event.pull_request.number`. A marker handed to a function
-  that returns something else does not count either: `contains`, `startsWith`,
-  `endsWith`, `hashFiles`, `success`, `failure`, `always` and `cancelled`
-  return a boolean or a constant, so
-  `${{ contains(github.head_ref, 'release') }}` is a group every pull request
-  shares. Every call still open around the marker is examined, because an
-  operator applied to any of them replaces the value: an outer call that
-  discards it, as in
+  should name `github.event.pull_request.number`. Naming the pull request is
+  necessary but not sufficient for isolation. GitHub concurrency groups are
+  repository-wide, so two workflows — or two jobs with their own concurrency
+  blocks — that build the same group cancel one another's runs even when both
+  name a pull request. The reference shape's `github.workflow` prefix keeps
+  workflows apart, and a job-level block needs its own job discriminator.
+  RC-002 requires only the pull-request identity; the discriminator is a design
+  choice the rule does not demand. A pull-request number *plus* a workflow or
+  job discriminator avoids both the fork collision and cross-workflow
+  cancellation. A marker handed to a function that returns something else does
+  not count either: `contains`, `startsWith`, `endsWith`, `hashFiles`,
+  `success`, `failure`, `always` and `cancelled` return a boolean or a
+  constant, so `${{ contains(github.head_ref, 'release') }}` is a group every
+  pull request shares. Every call still open around the marker is examined,
+  because an operator applied to any of them replaces the value: an outer call
+  that discards it, as in
   `${{ contains(format('{0}', github.head_ref), 'release') }}`, and one that
   renders it, as in
   `${{ format('{0}', format('{0}-{1}', github.head_ref, 'ci') == 'release') }}`,
@@ -213,18 +231,59 @@ audited. That includes push-only, schedule-only and `workflow_call`-only
 workflows; a workflow that carries a PR trigger alongside another trigger is
 audited.
 
+## Relationship to the coverage rule
+
+leynos/concordat#388 asks for a dual-trigger workflow that also satisfies the
+existing coverage topology. `main-owned-codescene-coverage` keeps CodeScene
+publication in a main-only workflow: its main-only trigger accepts exactly a
+`push` to `main`, optionally with `workflow_dispatch`, and it reports any
+pull-request workflow that invokes CodeScene or receives `CS_ACCESS_TOKEN`. A
+single document therefore cannot be both a dual-trigger workflow and the
+coverage publisher. The reconciliation is to keep the publisher main-only and
+let the dual-trigger workflows carry the cancellation shape:
+
+- the main-only publisher runs coverage generation and upload, and is not
+  audited here because it declares no pull-request trigger;
+- each dual-trigger workflow uses the reference concurrency shape and does not
+  invoke CodeScene.
+
+`tests/unit/test_pr_run_cancellation_coverage_interaction.py` evaluates both
+policies over one checkout: a main-only publisher plus a dual-trigger workflow
+is compliant under both, while moving CodeScene into the dual-trigger workflow
+keeps cancellation compliant and is reported by the coverage rule. Neither rule
+is weakened to force a single-document shape.
+
 ## What counts as cancelling
 
 - `cancel-in-progress: true`, or a string that trims and folds to `true`.
-- Any expression other than a trimmed literal-false expression, because it may
-  evaluate true on the run that matters. `${{ false }}` is the one expression
-  the rule treats as not cancelling, unless the expression is nothing but
-  `github.event_name` tests: those are evaluated on each declared pull-request
-  event, so `${{ github.event_name == 'pull_request' }}` cancels a
-  `pull_request` run and does not cancel a `pull_request_target` run of the
-  same workflow. A `||` chain of such tests covers the events it selects, so
-  the two-event guard above cancels both. Any comparison, operator or reference
-  beyond a bare event test keeps the conservative reading.
+- An expression, unless the rule can prove it false for the run that matters.
+  Most expressions keep the conservative reading, because they may evaluate
+  true on the run that matters. The rule proves these false, and therefore not
+  cancelling:
+  - a trimmed literal-false expression, `${{ false }}`;
+  - an expression that is nothing but `github.event_name` tests, evaluated on
+    each declared pull-request event: `${{ github.event_name == 'pull_request' }}`
+    cancels a `pull_request` run and does not cancel a `pull_request_target`
+    run of the same workflow, while a `||` chain of such tests covers the
+    events it selects, so the two-event guard above cancels both;
+  - an expression the declared event makes false. `&&` short-circuits, so a
+    conjunction whose guard is an event test that excludes this event, or a
+    literal GitHub treats as falsy, is false whatever follows it:
+    `${{ github.event_name == 'push' && true }}` and
+    `${{ github.event_name == 'push' && false }}` never cancel a
+    `pull_request` run. A `||` chain is false only when every branch is, so
+    `${{ github.event_name == 'push' || github.event_name == 'schedule' }}`
+    does not cancel a `pull_request` run either, and a conjunction whose
+    guards all hold is as false as the value after them, as in
+    `${{ true && false }}`.
+
+  **Unsettled expressions are treated as cancelling.** The rule does not
+  evaluate arbitrary expressions, and it reports a defect only where the text
+  proves one. `${{ contains(github.event_name, 'push') || false }}` is false on
+  a pull-request run, but the rule cannot read the event test inside `contains`
+  and keeps the conservative reading, so the expression is not reported. A
+  value written in a shape the rule cannot settle is not detected; write a
+  shape RC-001 understands, or use `cancel-in-progress: true`.
 - **Not cancelling:** an absent value, `false`, the string `"false"`, a value
   that is neither `true` nor an expression, an event test that excludes a
   declared event, the string shorthand `concurrency: <group>`, which leaves
@@ -276,7 +335,14 @@ Only root workflows (`.github/workflows/*.yml` and `*.yaml`) are read. A
 cancellation block set inside a reusable workflow in another repository, a
 composite action, or a called workflow is outside the audited document. Whether
 a group is *unique enough* beyond naming the pull request, such as including
-the workflow name, is not judged.
+the workflow name, is not judged. GitHub applies concurrency groups
+repository-wide, so two workflows that both build a bare pull-request group, or
+two jobs with separate blocks that build the same group, cancel one another's
+runs. The reference shape's `github.workflow` prefix separates workflows, and a
+job-level block needs its own discriminator; the rule neither requires nor
+checks either. A compliant RC-002 therefore establishes that the group names
+the pull request, not that two different workflows or jobs stay out of each
+other's groups.
 
 The marker check is syntactic: the rule confirms that the marker is evaluated
 in the selected part of the group, unquoted, not directly compared, not
@@ -311,6 +377,7 @@ does not discard them; a group made unique some other way is not detected.
 
 The package's own suite is the specification: `fixtures/data.json` carries the
 reference shape, job-level and reusable-caller shapes, every trigger spelling,
-each indeterminate shape, each non-cancelling value, and both exemption kinds.
+each indeterminate shape, each non-cancelling value, the expressions a declared
+event proves false, and both exemption kinds.
 `policy/pr_run_cancellation_test.rego` compares the exact finding profile for
 each fixture and patches the reference shape to derive variants.
