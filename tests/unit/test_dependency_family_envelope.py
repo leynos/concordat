@@ -17,13 +17,14 @@ import pytest
 from concordat.rules.dependency_family_envelope import (
     ENVELOPE_KIND,
     ENVELOPE_SCHEMA_VERSION,
-    Declaration,
     DependencyFamilyEnvelope,
     build_dependency_family_envelope,
 )
 
 if typ.TYPE_CHECKING:
     import pathlib
+
+    from concordat.rules.dependency_family_facts import Declaration
 
 _CONFIG = """\
 version: 2
@@ -471,8 +472,6 @@ def test_hidden_and_vendored_python_projects_are_not_read(
 
     assert envelope["declarations"] == []
     assert envelope["problems"] == []
-
-
 
 
 def test_optional_dependencies_are_optional_declarations(

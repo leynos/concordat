@@ -40,24 +40,21 @@ from ruamel.yaml.error import YAMLError
 
 from .dependabot_envelope import build_dependabot_envelope
 from .dependency_family_coverage import mapping, sequence
-from .dependency_family_declarations import (
-    Declaration,
-    Monitoring,
-    cargo_declarations,
-    python_declarations,
-)
+from .dependency_family_declarations import cargo_declarations
 from .dependency_family_derived import (
     DerivedInput,
     ProtectedBound,
     derived_inputs,
     protected_bounds,
 )
+from .dependency_family_python import python_declarations
 from .fs_probe import probe_file
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from .dependabot_envelope import ConfigFile
+    from .dependency_family_facts import Declaration, Monitoring
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 2
 ENVELOPE_KIND: typ.Final = "policy-input/dependency-family-contracts"

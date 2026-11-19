@@ -28,7 +28,8 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
-    from .dependency_family_envelope import Declaration
+    from .dependency_family_facts import Declaration
+    from .makefile_expansion import Assignments
 
 _yaml = YAML(typ="safe")
 
@@ -421,7 +422,7 @@ def _recipe_occurrences(
     path: str,
     tool: str,
     target: str | None,
-    values: dict[str, str],
+    values: Assignments,
 ) -> tuple[list[tuple[str, str]], bool]:
     """Return the tool's version occurrences and whether one failed to expand."""
     occurrences: list[tuple[str, str]] = []

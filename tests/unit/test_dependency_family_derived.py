@@ -26,7 +26,7 @@ from concordat.rules.dependency_family_versions import (
 if typ.TYPE_CHECKING:
     import pathlib
 
-    from concordat.rules.dependency_family_envelope import Declaration
+    from concordat.rules.dependency_family_facts import Declaration
 
 _RELATIONSHIPS = {"pyo3-build-config-family": {"pyo3", "pyo3-build-config"}}
 

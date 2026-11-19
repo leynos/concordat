@@ -23,8 +23,8 @@ contacts no registry.
   could. Repair: add a group for the family.
 - **DF-002** A `tuple` of independently versioned packages (for example maturin
   with PyO3) with no upper bound, no `ignore` rule that holds a member back and
-  no shared multi-ecosystem group. A group cannot select mutually compatible latest
-  versions, and an exact pin is the thing a version update replaces. An
+  no shared multi-ecosystem group. A group cannot select mutually compatible
+  latest versions, and an exact pin is the thing a version update replaces. An
   `ignore` rule must name the published package, not an alias.
 - **DF-003** A narrow group matches every member of a family, but an earlier
   group takes one of them first. Repair: move it ahead of the shadowing group.

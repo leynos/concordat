@@ -1251,8 +1251,12 @@ full, but the same walk still runs: a manifest outside the governed surfaces
 that declares a related package is named and makes the result indeterminate, so
 declaring surfaces cannot hide a related manifest. That discovery lives in
 `dependency_family_discovery.py`; `dependency_family_declarations.py` turns the
-discovered surfaces and locks into declaration facts; the Dependabot coverage
-reader lives in `dependency_family_coverage.py`; and resolved lock identities in
+discovered Cargo surfaces and locks into declaration facts, delegating
+workspace inheritance to `dependency_family_workspaces.py`; and
+`dependency_family_python.py` does the same for every `pyproject.toml`. The two
+collectors share the declaration shape and requirement helpers in
+`dependency_family_facts.py`; the Dependabot coverage reader lives in
+`dependency_family_coverage.py`; and resolved lock identities in
 `dependency_family_resolution.py`. `dependency_family_versions.py` holds the
 version-range comparison shared by the bound and derived-input facts, and
 `dependency_family_update_types.py` classifies update types for Dependabot

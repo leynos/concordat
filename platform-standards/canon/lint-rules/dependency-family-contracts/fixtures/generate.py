@@ -796,4 +796,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-# weave: run 'weave explain platform-standards/canon/lint-rules/dependency-family-contracts/fixtures/generate.py' for per-hunk detail, 'weave check' to verify your resolution

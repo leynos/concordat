@@ -144,8 +144,6 @@ def workspace_member_manifests(
     return sorted(found)
 
 
-
-
 def loose_manifest(nested: pathlib.Path) -> tuple[dict[str, object], str | None]:
     """Return a nested manifest decoded without the surface resolver, or why not.
 
@@ -170,8 +168,6 @@ class WorkspaceInfo(typ.TypedDict):
 
     members: list[str]
     exclude: list[str]
-
-
 
 
 def inherited_workspace(
@@ -239,6 +235,11 @@ def _matches_any(path: pathlib.PurePosixPath, patterns: cabc.Iterable[str]) -> b
     A malformed `members` entry (an empty string, for example) is not a member
     glob Cargo would honour. Ignoring it keeps the malformed entry from either
     raising or silently widening what the audit reads.
+
+    Returns
+    -------
+    bool
+        Whether Cargo's glob semantics match *path* against any *patterns*.
     """
     for pattern in patterns:
         try:
@@ -277,16 +278,19 @@ def ungoverned_problems(
     members: cabc.Collection[str],
     governed: dict[str, object],
     unmonitored: cabc.Collection[str] = (),
+    *,
+    report_unreadable: bool = True,
 ) -> list[str]:
     """Return the problems posed by nested manifests no declared surface governs.
 
     A manifest that cannot be read or decoded is a problem, since nothing can
-    be said about what it declares. One that decodes is a problem only when it
-    declares, or defines for its workspace, a package some recorded
-    relationship names: otherwise no relationship could apply to it and its
-    absence from the audit hides nothing. A manifest the repository has listed
-    under `dependencies.unmonitored_manifests` is deliberately outside the
-    audit and draws no problem.
+    be said about what it declares, unless *report_unreadable* is false. One
+    that decodes is a problem only when it declares, or defines for its
+    workspace, a package some recorded relationship names: otherwise no
+    relationship could apply to it and its absence from the audit hides
+    nothing. A manifest the repository has listed under
+    `dependencies.unmonitored_manifests` is deliberately outside the audit and
+    draws no problem.
 
     Returns
     -------
@@ -307,7 +311,13 @@ def ungoverned_problems(
             continue
         outside = f"{path} is a Cargo manifest outside the governed Rust surfaces"
         if error is not None:
-            found.append(f"{outside} and cannot be read: {error}")
+            # With declared surfaces, an unreadable manifest the declaration
+            # excludes is not probed: the workspace reader owns the ancestors a
+            # member actually depends on, and it reports those it cannot use.
+            # Without declared surfaces the root is the only audited surface,
+            # so an unreadable nested manifest may still hide a relationship.
+            if report_unreadable:
+                found.append(f"{outside} and cannot be read: {error}")
             continue
         related = sorted(
             _declared_packages(doc, inherited_workspace(path, documents, governed))
