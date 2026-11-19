@@ -106,6 +106,35 @@ rules_defining(target) := [rule |
 
 # -- Make variable expansion -------------------------------------------------
 
+# A doubled dollar is the shell's own dollar, not a Make reference. Make writes
+# it as `$$` in a recipe and the shell reads it back as `$`. Replacing it with
+# a sentinel before any Make-reference check keeps `$$(mktemp)` from looking
+# like a reference to `mktemp`. The sentinel deliberately stays in the expanded
+# text: collapsing it back to `$` here would recreate that false reference in
+# `unresolved_tokens` and the shape patterns below.
+shell_dollar := "\u0000"
+
+# The sentinel as a regex fragment, so patterns can require the shell spelling
+# without embedding a raw NUL in the source.
+shell_dollar_pattern := "\\x00"
+
+protect_shell_dollars(text) := replace(text, "$$", shell_dollar)
+
+# makeutil reports a continued recipe as one entry holding literal
+# backslash-newline pairs. Fold each one, and the blanks after it, to a single
+# space the way `joined()` in concordat/rules/makefile_expansion.py does, so a
+# logical command reads as one line. This is static normalization of the
+# Makefile text, not a model of shell quoting.
+recipe_continuation_pattern := `\\\n[[:blank:]]*`
+
+normalise_recipe_text(text) := regex.replace(
+	protect_shell_dollars(text),
+	recipe_continuation_pattern,
+	" ",
+)
+
+recipe_text(recipe) := normalise_recipe_text(recipe.text)
+
 # Recipes name their tools through variables (`$(YAMLLINT) --strict`), so the
 # flags a recipe passes are only visible after expansion. Makeutil records
 # every assignment; a variable with exactly one unconditional, non-`define`
@@ -134,7 +163,9 @@ variable_value[name] := value if {
 	some variable in input.makefile.variables
 	name := variable.name
 	single_valued(name)
-	value := variable.raw_value
+	# A value can itself carry `$$`; protect it here so all three replacement
+	# passes keep it as shell text rather than a Make reference.
+	value := protect_shell_dollars(variable.raw_value)
 }
 
 paren_replacements := {sprintf("$(%s)", [name]): value |
@@ -316,10 +347,12 @@ closure_provable(root) if {
 # expands to that probe in command position. The probe's fallback may name
 # one nested Make reference such as `$(HOME)`, so one level of parentheses
 # is allowed inside it before the closing parenthesis.
-tool_word(tool) := sprintf(
-	`%s(([^[:space:];|&()]*/)?%s|\$\(shell[[:space:]]+(command -v|which)[[:space:]]+%s([^()]|\([^()]*\))*\))`,
-	[xargs_wrapper, tool, tool],
+bare_tool_word(tool) := sprintf(
+	`(?:(?:[^[:space:];|&()]*/)?%s|\$\(shell[[:space:]]+(?:command -v|which)[[:space:]]+%s(?:[^()]|\([^()]*\))*\))`,
+	[tool, tool],
 )
+
+tool_word(tool) := sprintf("%s%s", [xargs_wrapper, bare_tool_word(tool)])
 
 # `git ls-files -z ... | xargs -0 -r yamllint --strict --` is the one shape
 # that feeds a Git-selected file list to a tool that has no Git mode, so xargs
@@ -353,7 +386,7 @@ recipe_is_comment(recipe) if regex.match(`^[[:space:]]*[-@+]*[[:space:]]*#`, rec
 tool_arguments(recipe, tool) := {tokens |
 	not recipe_is_comment(recipe)
 	some match in regex.find_all_string_submatch_n(
-		tool_segment_pattern(tool), expand(recipe.text), -1,
+		tool_segment_pattern(tool), expand(recipe_text(recipe)), -1,
 	)
 	arguments := match[count(match) - 1]
 	tokens := [token |
@@ -374,7 +407,7 @@ binding_arguments(recipe, tool) := {tokens |
 	not recipe_is_comment(recipe)
 	recipe.ignore_errors == false
 	some match in regex.find_all_string_submatch_n(
-		tool_binding_segment_pattern(tool), expand(recipe.text), -1,
+		tool_binding_segment_pattern(tool), expand(recipe_text(recipe)), -1,
 	)
 	arguments := match[count(match) - 1]
 	tokens := [token |
@@ -494,7 +527,7 @@ git_fed_yamllint_pattern := `git[[:space:]]+ls-files([^;|&]*)\|[[:space:]]*xargs
 
 recipe_selects_tracked_yaml(recipe) if {
 	some match in regex.find_all_string_submatch_n(
-		git_fed_yamllint_pattern, expand(recipe.text), -1,
+		git_fed_yamllint_pattern, expand(recipe_text(recipe)), -1,
 	)
 	producer := match[1]
 	every pathspec in yaml_pathspecs {
@@ -502,17 +535,116 @@ recipe_selects_tracked_yaml(recipe) if {
 	}
 }
 
+# -- guarded enumeration ------------------------------------------------------
+#
+# A recipe can buffer the Git listing in a temporary file instead of piping it,
+# so the linter starts only after Git has enumerated the whole tree:
+#
+#   @tmp=$$(mktemp) || exit 1; \
+#   trap 'rm -f "$$tmp"' EXIT; \
+#   git ls-files -z '*.yml' '*.yaml' >"$$tmp" && \
+#   xargs -0 -r $(YAMLLINT) --strict -- <"$$tmp"
+#
+# The whole normalized recipe is matched in a fixed clause order, and the
+# captured variable names are compared here because RE2 has no
+# backreferences. A recipe outside this exact shape is left to the pipeline
+# checks above, which report it as a missing enumeration or a soft skip rather
+# than accepting it. The recognizer proves the wiring only; strictness,
+# overrides and unresolved variables are judged on its own tokens below.
+guarded_name := `([A-Za-z_][A-Za-z0-9_]*)`
+
+# Producer and tool arguments stop at any shell separator or redirection. A
+# backtick would start a second command substitution; `\x60` keeps it out of a
+# raw string.
+guarded_argument_text := `([^;|&<>\x60]*)`
+
+# `"$VAR"` and `"${VAR}"` are the two double-quoted spellings a redirection may
+# use; the captured name is compared with the assignment's by the caller.
+guarded_redirection := sprintf(
+	`"%s(?:%s|\{%s\})"`,
+	[shell_dollar_pattern, guarded_name, guarded_name],
+)
+
+guarded_assignment := sprintf(
+	`%s=%s\(mktemp[^()]*\)[[:space:]]*\|\|[[:space:]]*exit[[:space:]]+[1-9][0-9]*[[:space:]]*;[[:space:]]*`,
+	[guarded_name, shell_dollar_pattern],
+)
+
+# Only the ticket's cleanup trap is accepted. Another trap body could mask the
+# exit status the `&&` exists to propagate.
+guarded_cleanup := sprintf(
+	`(?:trap[[:space:]]+'rm[[:space:]]+-f[[:space:]]+"%s%s"'[[:space:]]+EXIT[[:space:]]*;[[:space:]]*)?`,
+	[shell_dollar_pattern, guarded_name],
+)
+
+guarded_xargs_options := `((?:[[:space:]]+-[^[:space:]]+(?:[[:space:]]+[0-9]+)?)*)`
+
+guarded_recipe_pattern(tool) := sprintf(
+	"^[[:space:]]*[@+]?[[:space:]]*%s%s%s%s>%s[[:space:]]*&&[[:space:]]*xargs%s[[:space:]]+%s%s<%s[[:space:]]*$",
+	[
+		guarded_assignment,
+		guarded_cleanup,
+		`git[[:space:]]+ls-files[[:space:]]+`,
+		guarded_argument_text,
+		guarded_redirection,
+		guarded_xargs_options,
+		bare_tool_word(tool),
+		guarded_argument_text,
+		guarded_redirection,
+	],
+)
+
+# The arguments of a guarded yamllint invocation, but only when the same
+# temporary file receives the complete NUL-delimited listing and feeds xargs,
+# and both Git and the linter can fail the recipe.
+guarded_enumeration_arguments(recipe, tool) := {tokens |
+	not recipe_is_comment(recipe)
+	recipe.ignore_errors == false
+	some match in regex.find_all_string_submatch_n(
+		guarded_recipe_pattern(tool), expand(recipe_text(recipe)), -1,
+	)
+	names := [name |
+		some index in {1, 2, 4, 5, 8, 9}
+		name := match[index]
+		name != ""
+	]
+	count(names) > 0
+	count({name | some name in names; name != names[0]}) == 0
+	producer := trim_space(match[3])
+	producer_tokens := [token | some token in split(producer, " "); token != ""]
+	"-z" in producer_tokens
+	every pathspec in yaml_pathspecs {
+		contains(producer, pathspec)
+	}
+	options := trim_space(match[6])
+	option_tokens := [token | some token in split(options, " "); token != ""]
+	"-0" in option_tokens
+	arguments := trim_space(match[7])
+	tokens := [token | some token in split(arguments, " "); token != ""]
+}
+
+# The yamllint invocations carrying tracked-YAML evidence: a binding pipeline
+# invocation, or the guarded recognizer's own invocation. The tokens stay tied
+# to the invocation that supplied the evidence, so flags from one command
+# cannot be judged against another's enumeration.
+yamllint_evidence(recipe) := union({
+	{tokens |
+		some tokens in binding_arguments(recipe, "yamllint")
+		recipe_selects_tracked_yaml(recipe)
+	},
+	guarded_enumeration_arguments(recipe, "yamllint"),
+})
+
 strict_flag(tokens) if "--strict" in tokens
 
 strict_flag(tokens) if "-s" in tokens
 
 recipe_satisfies("YL-001", recipe) if {
-	some tokens in binding_arguments(recipe, "yamllint")
+	some tokens in yamllint_evidence(recipe)
 	strict_flag(tokens)
 	count(yamllint_overrides(tokens)) == 0
 	not informational("yamllint", tokens)
 	count(unresolved_tokens(tokens)) == 0
-	recipe_selects_tracked_yaml(recipe)
 }
 
 recipe_satisfies("YL-002", recipe) if {
@@ -591,7 +723,7 @@ deny contains f if {
 	closure_provable(lint_target)
 	some recipe in path_recipes(lint_target)
 	not recipe_satisfies("YL-001", recipe)
-	some tokens in binding_arguments(recipe, "yamllint")
+	some tokens in yamllint_evidence(recipe)
 	count(unresolved_tokens(tokens)) == 0
 	not strict_flag(tokens)
 	f := finding(
@@ -613,15 +745,20 @@ deny contains f if {
 	)
 }
 
+# A binding invocation with no proven enumeration is reported regardless of the
+# other defects: the no-strict and unresolved findings above both require
+# enumeration evidence, so without this a recipe that runs an unfed linter and
+# also lacks `--strict` would be reported nowhere at all. Overrides are still
+# excluded because that finding does not require evidence and would otherwise
+# duplicate the report for the same invocation.
 deny contains f if {
 	closure_provable(lint_target)
 	some recipe in path_recipes(lint_target)
 	not recipe_satisfies("YL-001", recipe)
 	some tokens in binding_arguments(recipe, "yamllint")
-	count(unresolved_tokens(tokens)) == 0
-	strict_flag(tokens)
 	count(yamllint_overrides(tokens)) == 0
 	not recipe_selects_tracked_yaml(recipe)
+	count(guarded_enumeration_arguments(recipe, "yamllint")) == 0
 	f := finding(
 		"YL-001", "noncompliant", makefile_path, recipe.location.start_line,
 		sprintf("%q-path recipe runs yamllint without a `git ls-files` list covering %s; select tracked YAML only", [lint_target, concat(" and ", yaml_pathspecs)]),
@@ -632,7 +769,7 @@ deny contains f if {
 	closure_provable(lint_target)
 	some recipe in path_recipes(lint_target)
 	not recipe_satisfies("YL-001", recipe)
-	some tokens in binding_arguments(recipe, "yamllint")
+	some tokens in yamllint_evidence(recipe)
 	unresolved := unresolved_tokens(tokens)
 	count(unresolved) > 0
 	f := finding(
@@ -690,7 +827,7 @@ tool_invoked_on_path(root, tool) if {
 # policy could not resolve: the tool may be hidden behind it.
 unresolved_on_path(root) := {name |
 	some recipe in path_recipes(root)
-	some name in unresolved_references(recipe.text)
+	some name in unresolved_references(recipe_text(recipe))
 }
 
 deny contains f if {

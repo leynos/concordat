@@ -42,6 +42,11 @@ _INSTALLER: typ.Final = (
     "0123456789abcdef0123456789abcdef01234567"
 )
 _PIPE: typ.Final = "git ls-files -z '*.yml' '*.yaml' | xargs -0 -r"
+# Every form the generated yamllint recipe may feed the tool with. `unfed` is
+# the control: the tool runs, but nothing proves the tracked YAML reaches it.
+# `guarded-semicolon` has the guarded clauses but separates enumeration from
+# linting with `;`, so a failed Git still lets the linter run on partial output.
+_FEEDERS: typ.Final = ("pipeline", "guarded", "guarded-semicolon", "unfed")
 
 # (text appended to the yamllint arguments, whether it overrides the config)
 _YAMLLINT_FLAGS: typ.Final = (
@@ -78,7 +83,7 @@ class GateChoice:
     depth: int
     on_path: bool
     strict: str
-    git_fed: bool
+    feeder: str
     flags: tuple[str, bool]
     soft: bool
 
@@ -87,10 +92,25 @@ class GateChoice:
         return (
             self.on_path
             and self.strict != ""
-            and self.git_fed
+            and self.feeder in {"pipeline", "guarded"}
             and not self.flags[1]
             and not self.soft
         )
+
+    def _recipe_lines(self, arguments: str) -> list[str]:
+        """Render the recipe body for the chosen feeder form."""
+        prefix = "-" if self.soft else ""
+        if self.feeder == "pipeline":
+            return [f"\t{prefix}{_PIPE} $(YAMLLINT) {arguments}"]
+        if self.feeder == "unfed":
+            return [f"\t{prefix}true && $(YAMLLINT) {arguments}"]
+        separator = "&&" if self.feeder == "guarded" else ";"
+        return [
+            f"\t{prefix}@tmp=$$(mktemp) || exit 1; \\",
+            "\ttrap 'rm -f \"$$tmp\"' EXIT; \\",
+            f"\tgit ls-files -z '*.yml' '*.yaml' >\"$$tmp\" {separator} \\",
+            f'\txargs -0 -r $(YAMLLINT) {arguments} <"$$tmp"',
+        ]
 
     def makefile(self) -> str:
         """Render a Makefile whose `lint` closure holds this recipe."""
@@ -108,14 +128,12 @@ class GateChoice:
         for index, name in enumerate(chain):
             following = names[index + 1]
             lines += [f"{name}: {following}", ""]
-        feeder = _PIPE if self.git_fed else "true &&"
         arguments = " ".join(
             part for part in (self.strict, self.flags[0].strip(), "--") if part
         )
-        prefix = "-" if self.soft else ""
         lines += [
             "yamllint:",
-            f"\t{prefix}{feeder} $(YAMLLINT) {arguments}",
+            *self._recipe_lines(arguments),
             "",
             "actionlint:",
             "\t$(ACTIONLINT)",
@@ -161,7 +179,7 @@ _GATES = st.builds(
     depth=st.integers(min_value=0, max_value=3),
     on_path=st.booleans(),
     strict=st.sampled_from(_STRICT_SPELLINGS),
-    git_fed=st.booleans(),
+    feeder=st.sampled_from(_FEEDERS),
     flags=st.sampled_from(_YAMLLINT_FLAGS),
     soft=st.booleans(),
 )
@@ -211,7 +229,7 @@ _COMPLIANT_GATE: typ.Final = GateChoice(
     depth=0,
     on_path=True,
     strict="--strict",
-    git_fed=True,
+    feeder="pipeline",
     flags=("", False),
     soft=False,
 )

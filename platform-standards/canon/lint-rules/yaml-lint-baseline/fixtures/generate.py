@@ -134,10 +134,27 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "not_in_lint": Scenario(makefile="not-in-lint"),
     "no_strict": Scenario(makefile="no-strict"),
     "no_ls_files": Scenario(makefile="no-ls-files"),
+    # These two also lack --strict and, for the second, carry an unresolved
+    # flag variable: the missing-enumeration finding must still be reported.
+    "unfed_no_strict": Scenario(makefile="unfed-no-strict"),
+    "unfed_unresolved": Scenario(makefile="unfed-unresolved"),
     "one_pathspec": Scenario(makefile="one-pathspec"),
     "config_data": Scenario(makefile="config-data"),
     "no_warnings": Scenario(makefile="no-warnings"),
     "discarded_ls_files": Scenario(makefile="discarded-ls-files"),
+    # The guarded form buffers the Git listing in a temporary file so the
+    # linter runs only after enumeration succeeds.
+    "guarded": Scenario(makefile="guarded"),
+    "guarded_no_trap": Scenario(makefile="guarded-no-trap"),
+    "guarded_after_failure": Scenario(makefile="guarded-after-failure"),
+    "guarded_different_file": Scenario(makefile="guarded-different-file"),
+    "guarded_discarded": Scenario(makefile="guarded-discarded"),
+    "guarded_missing_pathspec": Scenario(makefile="guarded-missing-pathspec"),
+    "guarded_no_nul": Scenario(makefile="guarded-no-nul"),
+    "guarded_not_strict": Scenario(makefile="guarded-not-strict"),
+    "guarded_soft_skip": Scenario(makefile="guarded-soft-skip"),
+    "guarded_unresolved": Scenario(makefile="guarded-unresolved"),
+    "guarded_trap_masks": Scenario(makefile="guarded-trap-masks"),
     "config_file_other": Scenario(makefile="config-file-other"),
     "config_file_attached": Scenario(makefile="config-file-attached"),
     "config_short_attached": Scenario(makefile="config-short-attached"),

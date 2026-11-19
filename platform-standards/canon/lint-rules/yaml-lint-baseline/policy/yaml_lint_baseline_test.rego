@@ -14,6 +14,12 @@ kinds(findings) := {
   [finding.rule_id, finding.verdict, finding.path] | some finding in findings
 }
 
+# `$$(mktemp)` is shell text; no finding may report it as a Make variable.
+mentions_mktemp(findings) if {
+  some finding in findings
+  contains(finding.msg, "mktemp")
+}
+
 # Labels must be a list.
 test_actionlint_labels_not_list if {
   findings := policy.deny with input as data.fixtures.actionlint_labels_not_list
@@ -430,6 +436,100 @@ test_discarded_ls_files if {
   }
 }
 
+# An escaped shell substitution is not a Make variable, so the guarded recipe
+# that buffers the Git listing before linting satisfies YL-001.
+test_guarded if {
+  findings := policy.deny with input as data.fixtures.guarded
+  count(findings) == 0
+}
+
+# The cleanup trap is optional, and the temporary file needs no fixed name.
+test_guarded_no_trap if {
+  findings := policy.deny with input as data.fixtures.guarded_no_trap
+  count(findings) == 0
+}
+
+# A `;` between enumeration and linting runs the linter on partial output.
+test_guarded_after_failure if {
+  findings := policy.deny with input as data.fixtures.guarded_after_failure
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# Reading a different file breaks the data flow from Git to the linter.
+test_guarded_different_file if {
+  findings := policy.deny with input as data.fixtures.guarded_different_file
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# Discarding the listing to `/dev/null` proves nothing about what was linted.
+test_guarded_discarded if {
+  findings := policy.deny with input as data.fixtures.guarded_discarded
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# A list that omits `*.yaml` leaves those files unlinted.
+test_guarded_missing_pathspec if {
+  findings := policy.deny with input as data.fixtures.guarded_missing_pathspec
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# Without NUL delimiters the file list is not the one Git enumerated.
+test_guarded_no_nul if {
+  findings := policy.deny with input as data.fixtures.guarded_no_nul
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# The guarded wiring says nothing about strictness.
+test_guarded_not_strict if {
+  findings := policy.deny with input as data.fixtures.guarded_not_strict
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without --strict; warnings would not fail the target"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# `|| true` after xargs leaves the linter's status unable to fail the target.
+test_guarded_soft_skip if {
+  findings := policy.deny with input as data.fixtures.guarded_soft_skip
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe soft-skips yamllint; its exit status cannot fail the target"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# A genuine unresolved Make variable stays indeterminate; only `$$` is shell text.
+test_guarded_unresolved if {
+  findings := policy.deny with input as data.fixtures.guarded_unresolved
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 8, "\"lint\"-path recipe runs yamllint with unresolved Make variables: YAMLLINT_FLAGS; its flags cannot be proven"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# A trap that exits zero masks both Git and linter failures.
+test_guarded_trap_masks if {
+  findings := policy.deny with input as data.fixtures.guarded_trap_masks
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
 # Printing a command is not running it.
 test_echo_decoy if {
   findings := policy.deny with input as data.fixtures.echo_decoy
@@ -563,6 +663,24 @@ test_no_lint_target if {
 # Linting `.` reaches vendored and ignored trees.
 test_no_ls_files if {
   findings := policy.deny with input as data.fixtures.no_ls_files
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
+# An unfed linter is reported even when it also lacks --strict; otherwise it
+# would be reported nowhere, because the no-strict finding requires enumeration
+# evidence.
+test_unfed_no_strict if {
+  findings := policy.deny with input as data.fixtures.unfed_no_strict
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
+# An unresolved flag variable does not hide the missing enumeration either.
+test_unfed_unresolved if {
+  findings := policy.deny with input as data.fixtures.unfed_unresolved
   profile(findings) == {
     ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
   }
