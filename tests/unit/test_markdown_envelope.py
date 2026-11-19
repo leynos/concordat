@@ -282,6 +282,21 @@ class TestWorkflows:
         [
             pytest.param("on: [push\njobs:\n", "invalid YAML", id="syntax"),
             pytest.param("- just\n- a list\n", "not a mapping", id="sequence"),
+            # `!!omap` builds a Python mapping from its pairs, and a sequence
+            # key makes that construction raise `TypeError` rather than a
+            # `YAMLError`.
+            pytest.param(
+                "name: CI\njobs: !!omap\n  - ? [a, b]\n    : value\n",
+                "invalid YAML",
+                id="omap-sequence-key",
+            ),
+            # `.nan` decodes to a float JSON cannot encode. Left in, it would
+            # fail Conftest on the whole document rather than this one file.
+            pytest.param(
+                "name: CI\njobs: {}\nsince: .nan\n",
+                "not JSON-safe",
+                id="not-a-number",
+            ),
         ],
     )
     def test_undecodable_workflow_carries_its_error(

@@ -8,8 +8,12 @@ description: >-
   nobody will merge, and the newest run queues behind them. RC-001 requires a
   cancelling `concurrency` block: at workflow level, or on every job that is
   not disabled with `if: false`. RC-002 requires every cancelling block to name
-  the pull request in its group, through `github.event.pull_request.number` or
-  `github.head_ref`, so two pull requests do not cancel one another's runs. A
+  the pull request in its group. `github.event.pull_request.number` isolates
+  runs from different pull requests. `github.head_ref` is accepted as a
+  marker, but it is the source branch name rather than a unique pull-request
+  identity, so two forks using the same branch name share a group; prefer the
+  number where fork runs must stay apart. Naming the pull request is necessary
+  but not sufficient for isolation, because groups are repository-wide. A
   workflow the rule cannot decode, whose trigger it cannot classify, or whose
   concurrency shape it cannot read is reported as indeterminate rather than
   passing. Exemptions name a repository and an exact workflow path, suppress

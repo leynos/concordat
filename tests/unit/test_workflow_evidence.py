@@ -55,6 +55,83 @@ def test_a_fifo_replaced_before_the_read_is_refused(
         read_text(fifo)
 
 
+def test_a_root_entry_replaced_by_a_link_after_classification_is_refused(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The collector's own read refuses a link swapped in after classification.
+
+    The cancellation and CodeScene builders never call `read_text`; they list,
+    classify and read through `load_workflows`. A regression that dropped
+    `O_NOFOLLOW` from `_read_entry` would therefore go unnoticed by a test
+    that exercises `read_text` alone.
+    """
+    checkout = tmp_path / "repo"
+    directory = checkout / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    workflow = directory / "ci.yml"
+    workflow.write_text("on: push\n", encoding="utf-8")
+    outside = tmp_path / "outside.yml"
+    outside.write_text("name: leaked\n", encoding="utf-8")
+    classify = workflow_evidence._workflow_entry_mode
+
+    def classify_then_replace(
+        directory_fd: int, name: str, path: pathlib.Path
+    ) -> int | None:
+        """Replace the workflow with a link after its mode was accepted."""
+        mode = classify(directory_fd, name, path)
+        if name == "ci.yml":
+            workflow.unlink()
+            workflow.symlink_to(outside)
+        return mode
+
+    monkeypatch.setattr(
+        workflow_evidence, "_workflow_entry_mode", classify_then_replace
+    )
+
+    with pytest.raises(OperationalRuleError) as excinfo:
+        load_workflows(checkout)
+
+    assert "cannot read" in str(excinfo.value), str(excinfo.value)
+    assert "leaked" not in str(excinfo.value), str(excinfo.value)
+
+
+def test_a_root_entry_replaced_by_a_fifo_after_classification_is_refused(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A FIFO swap is refused from the descriptor rather than blocking.
+
+    `O_NONBLOCK` makes the read-only open return immediately, and the
+    descriptor type check then refuses it. The suite's global timeout bounds
+    the test if either guarantee regresses, so a regression fails the test
+    instead of waiting for a writer that never comes.
+    """
+    checkout = tmp_path / "repo"
+    directory = checkout / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    workflow = directory / "ci.yml"
+    workflow.write_text("on: push\n", encoding="utf-8")
+    classify = workflow_evidence._workflow_entry_mode
+
+    def classify_then_replace(
+        directory_fd: int, name: str, path: pathlib.Path
+    ) -> int | None:
+        """Replace the workflow with a FIFO after its mode was accepted."""
+        mode = classify(directory_fd, name, path)
+        if name == "ci.yml":
+            workflow.unlink()
+            os.mkfifo(workflow)
+        return mode
+
+    monkeypatch.setattr(
+        workflow_evidence, "_workflow_entry_mode", classify_then_replace
+    )
+
+    with pytest.raises(OperationalRuleError) as excinfo:
+        load_workflows(checkout)
+
+    assert "not a regular file" in str(excinfo.value), str(excinfo.value)
+
+
 def test_each_document_is_decoded_by_its_own_loader(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -85,24 +162,87 @@ def test_each_document_is_decoded_by_its_own_loader(
     assert loaders[0] is not loaders[1], loaders
 
 
-def test_an_out_of_range_timestamp_is_a_content_error(
-    tmp_path: pathlib.Path,
+@pytest.mark.parametrize(
+    ("content", "fragment"),
+    [
+        # `2026-02-30` fails inside the safe loader's timestamp constructor
+        # with a `ValueError` rather than a `YAMLError`.
+        pytest.param(
+            "on: push\nenv:\n  BUILD_DATE: 2026-02-30\n",
+            "invalid YAML",
+            id="out-of-range-timestamp",
+        ),
+        # `!!omap` builds a mapping from its pairs, and a sequence key makes
+        # that construction raise `TypeError`.
+        pytest.param(
+            "on: push\nenv: !!omap\n  - ? [a, b]\n    : value\n",
+            "invalid YAML",
+            id="omap-sequence-key",
+        ),
+        # `.nan` decodes to a float JSON cannot encode, which the strict
+        # converter refuses rather than emitting `NaN`.
+        pytest.param(
+            "on: push\nenv:\n  SINCE: .nan\n",
+            "not JSON-safe",
+            id="not-a-number",
+        ),
+    ],
+)
+def test_content_the_loader_cannot_build_is_a_content_error(
+    tmp_path: pathlib.Path, content: str, fragment: str
 ) -> None:
-    """A timestamp the loader cannot build is reported, not raised.
+    """Content the reader cannot decode is reported, not raised.
 
-    `2026-02-30` fails inside the safe loader's timestamp constructor with a
-    `ValueError` rather than a `YAMLError`. An uncaught one would abort the
-    whole audit instead of carrying this file as indeterminate.
+    Each of these shapes fails after the YAML parse or inside it with an
+    exception other than `YAMLError`. An uncaught one would abort the whole
+    audit instead of carrying this file as indeterminate evidence.
     """
     directory = tmp_path / ".github" / "workflows"
     directory.mkdir(parents=True)
-    (directory / "a.yml").write_text(
-        "on: push\nenv:\n  BUILD_DATE: 2026-02-30\n", encoding="utf-8"
-    )
+    (directory / "a.yml").write_text(content, encoding="utf-8")
     facts = load_workflows(tmp_path)
     assert len(facts) == 1, facts
     assert facts[0]["parsed"] is None, facts
-    assert "invalid YAML" in (facts[0]["error"] or ""), facts
+    assert fragment in (facts[0]["error"] or ""), facts
+
+
+def test_a_checkout_replaced_after_containment_is_refused(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A root replaced between the containment check and the open is refused.
+
+    Containment compares the resolved workflow directory with the resolved
+    checkout, both taken from pathnames. Opening the checkout afterwards can
+    land on a different tree, so the walk matches the opened descriptor
+    against the identity recorded during resolution.
+    """
+    checkout = tmp_path / "repo"
+    workflow_directory = checkout / ".github" / "workflows"
+    workflow_directory.mkdir(parents=True)
+    (workflow_directory / "ci.yml").write_text("on: push\n", encoding="utf-8")
+    resolve = workflow_evidence._contained_workflow_directory
+
+    def resolve_then_replace(
+        path: pathlib.Path,
+    ) -> workflow_evidence._ContainedDirectory:
+        """Record containment, then swap a different tree into the same path."""
+        location = resolve(path)
+        replacement = tmp_path / "replacement"
+        replacement_workflows = replacement / ".github" / "workflows"
+        replacement_workflows.mkdir(parents=True)
+        (replacement_workflows / "ci.yml").write_text("on: push\n", encoding="utf-8")
+        checkout.rename(tmp_path / "moved")
+        replacement.rename(checkout)
+        return location
+
+    monkeypatch.setattr(
+        workflow_evidence, "_contained_workflow_directory", resolve_then_replace
+    )
+
+    with pytest.raises(OperationalRuleError) as excinfo:
+        load_workflows(checkout)
+
+    assert "replaced after its containment" in str(excinfo.value), str(excinfo.value)
 
 
 def test_an_entry_that_appears_after_the_open_failure_is_refused(
@@ -120,10 +260,10 @@ def test_an_entry_that_appears_after_the_open_failure_is_refused(
     workflow_directory.parent.mkdir(parents=True)
     descend = workflow_evidence._descend
 
-    def descend_then_occupy(parent: int, part: str) -> int:
+    def descend_then_occupy(parent: int, part: str, *, is_target: bool) -> int:
         """Occupy the workflow path, then raise the error the open raced with."""
         if part != "workflows":
-            return descend(parent, part)
+            return descend(parent, part, is_target=is_target)
         workflow_directory.write_text("occupied\n", encoding="utf-8")
         raise FileNotFoundError(2, "No such file or directory", str(workflow_directory))
 

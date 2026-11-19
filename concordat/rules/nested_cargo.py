@@ -56,28 +56,34 @@ def origin_slug(checkout: pathlib.Path) -> str | None:
     """
     try:
         discovered = pygit2.discover_repository(str(checkout))
-        if discovered is None or not _is_work_tree_root(checkout, discovered):
+        if discovered is None:
             return None
-        origin = pygit2.Repository(discovered).remotes["origin"]
+        repository = pygit2.Repository(discovered)
+        if not _is_work_tree_root(checkout, repository):
+            return None
+        origin = repository.remotes["origin"]
     except (KeyError, pygit2.GitError):
         return None
     return parse_github_slug(origin.url) if origin.url else None
 
 
-def _is_work_tree_root(checkout: pathlib.Path, discovered: str) -> bool:
-    """Report whether the discovered repository's work tree is *checkout*.
+def _is_work_tree_root(checkout: pathlib.Path, repository: pygit2.Repository) -> bool:
+    """Report whether *repository*'s work tree is *checkout*.
 
     `discover_repository` walks up parent directories, so a plain directory
     inside another repository finds that repository. Its origin is not this
     checkout's identity: matching an exemption on it would suppress the wrong
     audit, and a bare repository has no work tree to match at all.
 
+    The caller passes the repository it already opened, so the identity is read
+    from the same handle that supplies the remote.
+
     Returns
     -------
     bool
-        True when *discovered* is the repository whose work tree is *checkout*.
+        True when the repository's work tree is *checkout*.
     """
-    workdir = pygit2.Repository(discovered).workdir
+    workdir = repository.workdir
     if workdir is None:
         return False
     return os.path.realpath(workdir) == os.path.realpath(checkout)

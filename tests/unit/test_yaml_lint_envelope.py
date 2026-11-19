@@ -178,6 +178,17 @@ def test_a_date_mapping_key_is_a_configuration_error(tmp_path: pathlib.Path) -> 
     assert "unsupported mapping key" in str(local["error"]), local
 
 
+def test_a_non_finite_value_is_a_configuration_error(tmp_path: pathlib.Path) -> None:
+    """`.nan` parses but no JSON parser accepts it, so it stays this file's error."""
+    _write(tmp_path, ".yamllint.yml", "ignored: .nan\n")
+
+    local = _local_config(build_yaml_lint_envelope(tmp_path))
+
+    assert local is not None
+    assert local["parsed"] is None
+    assert "invalid YAML" in str(local["error"]), local
+
+
 def test_alternate_yamllint_names_are_listed(tmp_path: pathlib.Path) -> None:
     """Yamllint would honour these, so the policy names them in its finding."""
     _write(tmp_path, ".yamllint", "extends: default\n")

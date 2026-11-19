@@ -115,6 +115,10 @@ test_a_workflow_group_without_the_pull_request_is_noncompliant if {
 # request's run is reported once.
 test_a_job_group_without_the_pull_request_is_noncompliant if {
 	profile(data.fixtures.job_group_missing_pull_request) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+	found := [f | some f in findings(data.fixtures.job_group_missing_pull_request); f.rule_id == "RC-002"]
+	count(found) == 1
+	some f in found
+	contains(f.msg, "job bad of")
 }
 
 # GitHub applies workflow-level and job-level concurrency independently, so a
@@ -179,6 +183,13 @@ test_a_run_attempt_group_does_not_cancel_a_superseded_rerun if {
 	profile(data.fixtures.run_attempt_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# A comparison of a run-varying reference renders a boolean that still changes
+# between runs: `github.run_attempt == '1'` is true on a first attempt and
+# false on a re-run, so the two attempts build different groups.
+test_a_comparison_of_a_run_varying_reference_destabilises_the_group if {
+	profile(data.fixtures.run_attempt_comparison_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 # GitHub documents this shape for cancelling pull-request runs without
 # cancelling push runs: the pull-request branch is selected, and the run-id
 # fallback applies only to pushes, which the rule does not audit.
@@ -199,6 +210,13 @@ test_two_run_varying_fallback_branches_are_indeterminate if {
 	profile(data.fixtures.two_run_varying_fallback_branches) == {["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"]}
 }
 
+# A block that provably never cancels is noncompliant whatever its group says.
+# `cancel-in-progress: false` with a run-varying fallback leaves every
+# superseded run running, so the unreadable group cannot excuse it.
+test_a_non_cancelling_block_with_an_unreadable_group_is_noncompliant if {
+	profile(data.fixtures.non_cancelling_unclassifiable_group) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 # A comparison renders as a boolean, so every pull request produces the same
 # group even though the marker is evaluated.
 test_a_compared_marker_does_not_name_the_pull_request if {
@@ -217,6 +235,19 @@ test_a_parenthesized_comparison_does_not_name_the_pull_request if {
 # produces.
 test_a_parenthesized_operand_comparison_does_not_name_the_pull_request if {
 	profile(data.fixtures.parenthesized_operand_comparison_group) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# An operator applied to a group replaces the value the group computed, just
+# as it does for a call: `(github.head_ref || 'fallback') == 'release'`
+# renders a boolean for every pull request.
+test_a_comparison_outside_a_group_does_not_name_the_pull_request if {
+	profile(data.fixtures.grouped_fallback_comparison) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# `&&` yields its right operand, so a grouped pull-request reference on the
+# left selects the constant after it.
+test_a_conjunction_outside_a_group_does_not_name_the_pull_request if {
+	profile(data.fixtures.grouped_conjunction_constant) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
 # One evaluated occurrence is enough: the second occurrence is a comparison,
@@ -520,6 +551,18 @@ test_a_job_group_is_judged_on_the_events_the_job_cancels if {
 	}
 }
 
+# The block cancels both declared events. On `pull_request` the event guard
+# fails and the group is the definite constant `ci-false`; on
+# `pull_request_target` the `fromJSON` result cannot be read. The unreadable
+# event keeps its own indeterminate finding without suppressing the definite
+# defect the other event proves.
+test_an_unreadable_event_does_not_suppress_a_definite_identity_failure if {
+	profile(data.fixtures.identity_unknown_for_one_event) == {
+		["EN-001", "warning", "indeterminate", ".github/workflows/ci.yml"],
+		["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"],
+	}
+}
+
 # A bare marker is always truthy, so the fallback after it is never selected.
 test_an_unknown_call_in_an_unreachable_fallback_is_compliant if {
 	count(findings(data.fixtures.head_ref_before_unknown_fallback)) == 0
@@ -743,6 +786,25 @@ test_a_disjunction_that_excludes_every_declared_event_does_not_cancel if {
 	profile(data.fixtures.provably_false_cancel_disjunction) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# A bare event test is a `||` branch in its own right, so it is false on an
+# event it does not name. `github.event_name == 'push' || false` renders
+# `false` on a `pull_request` run and never cancels it.
+test_a_bare_event_test_beside_a_falsy_branch_does_not_cancel if {
+	profile(data.fixtures.bare_event_test_or_false) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# The same test beside a truthy branch may still render true, so it keeps the
+# conservative reading and is not reported.
+test_a_bare_event_test_beside_a_truthy_branch_cancels if {
+	count(findings(data.fixtures.bare_event_test_or_true)) == 0
+}
+
+# GitHub compares strings case-insensitively, so `!= 'PULL_REQUEST'` is false
+# on a `pull_request` run however the name is spelled.
+test_an_event_test_with_an_uppercase_name_does_not_cancel if {
+	profile(data.fixtures.uppercase_event_test) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 test_a_guard_that_holds_for_the_declared_event_cancels if {
 	count(findings(data.fixtures.truthy_guard_cancel_expression)) == 0
 }
@@ -808,6 +870,12 @@ test_a_disabled_job_needs_no_concurrency if {
 
 test_a_job_disabled_by_a_literal_false_expression_needs_no_concurrency if {
 	count(findings(data.fixtures.literal_false_if)) == 0
+}
+
+# A disabled job never runs, so its shared group cannot cancel another pull
+# request's run even though the group is a constant.
+test_a_disabled_job_with_a_constant_group_is_compliant if {
+	count(findings(data.fixtures.disabled_job_constant_group)) == 0
 }
 
 # Variants of the reference shape are derived by patching it, so a change to

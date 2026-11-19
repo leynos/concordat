@@ -59,23 +59,26 @@ STATIC_INDEX_PATTERN := `\['([A-Za-z_][A-Za-z0-9_]*)'\]`
 # comparison, as in `github.event_name == 'push' && github.head_ref`. The
 # literal operand of such a comparison is kept, encoded as `@name@`, because
 # every other literal is erased and the comparison would otherwise read
-# `github.event_name == ""`. Only a lowercase identifier is encoded, so the
-# token can never carry a dot, a quote or a `||` separator and cannot be
-# mistaken for a reference or a fallback.
-EVENT_NAME_RIGHT_PATTERN := `(github\.event_name\s*(?:==|!=)\s*)'([a-z_]+)'`
+# `github.event_name == ""`. Only an identifier is encoded, so the token can
+# never carry a dot, a quote or a `||` separator and cannot be mistaken for a
+# reference or a fallback. Upper case is encoded too: GitHub compares strings
+# case-insensitively, so `github.event_name != 'PULL_REQUEST'` is false on a
+# `pull_request` run, and the reader lower-cases the name when it decodes the
+# comparison.
+EVENT_NAME_RIGHT_PATTERN := `(github\.event_name\s*(?:==|!=)\s*)'([A-Za-z_]+)'`
 
-EVENT_NAME_LEFT_PATTERN := `'([a-z_]+)'(\s*(?:==|!=)\s*github\.event_name)`
+EVENT_NAME_LEFT_PATTERN := `'([A-Za-z_]+)'(\s*(?:==|!=)\s*github\.event_name)`
 
 # The guard itself, with the encoded event name, and the value it protects.
-EVENT_GUARD_RIGHT_PATTERN := `^\(?\s*github\.event_name\s*(==|!=)\s*@([a-z_]+)@\s*\)?\s*&&\s*`
+EVENT_GUARD_RIGHT_PATTERN := `^\(?\s*github\.event_name\s*(==|!=)\s*@([A-Za-z_]+)@\s*\)?\s*&&\s*`
 
-EVENT_GUARD_LEFT_PATTERN := `^\(?\s*@([a-z_]+)@\s*(==|!=)\s*github\.event_name\s*\)?\s*&&\s*`
+EVENT_GUARD_LEFT_PATTERN := `^\(?\s*@([A-Za-z_]+)@\s*(==|!=)\s*github\.event_name\s*\)?\s*&&\s*`
 
 # A bare event test: the same comparison with nothing after it. This is what a
 # `cancel-in-progress` guard looks like when it is the whole expression.
-EVENT_TEST_RIGHT_PATTERN := `^\(*\s*github\.event_name\s*(==|!=)\s*@([a-z_]+)@\s*\)*$`
+EVENT_TEST_RIGHT_PATTERN := `^\(*\s*github\.event_name\s*(==|!=)\s*@([A-Za-z_]+)@\s*\)*$`
 
-EVENT_TEST_LEFT_PATTERN := `^\(*\s*@([a-z_]+)@\s*(==|!=)\s*github\.event_name\s*\)*$`
+EVENT_TEST_LEFT_PATTERN := `^\(*\s*@([A-Za-z_]+)@\s*(==|!=)\s*github\.event_name\s*\)*$`
 
 # `fromJSON` is deliberately left out of every set below. It parses its
 # argument, so a marker inside it may not survive: a branch name that is a JSON
@@ -582,6 +585,36 @@ enclosing_call_defeats(head, offset) if {
 	call_result_is_replaced(head, position)
 }
 
+# A grouping parenthesis passes its value through, but an operator applied to
+# the group replaces it exactly as an operator applied to a call does.
+# `(github.head_ref || 'fallback') == 'release'` renders a boolean, and
+# `(github.event.pull_request.number || 0) && 'ci'` renders `ci`, so neither
+# names the pull request. A group no operator follows, such as
+# `(github.head_ref)`, still carries the marker.
+enclosing_group_defeats(head, offset) if {
+	some position in enclosing_group_positions(head, offset)
+	group_result_is_replaced(head, position)
+}
+
+# The grouping parentheses still open at `offset`; named calls are handled by
+# `enclosing_call_defeats`, which also judges what the call does with its
+# arguments.
+enclosing_group_positions(head, offset) := groups if {
+	prefix := substring(head, 0, offset)
+	groups := [position |
+		some position in open_call_positions(prefix)
+		not call_name_before(head, position)
+	]
+}
+
+group_result_is_replaced(head, position) if {
+	end := call_close(head, position)
+	operator_defeats(
+		substring(head, 0, position),
+		substring(head, end + 1, count(characters(head)) - end - 1),
+	)
+}
+
 call_result_is_replaced(head, position) if {
 	name := call_name_before(head, position)
 	trimmed := trim_right(substring(head, 0, position), " \t\r\n")
@@ -782,6 +815,7 @@ occurrence_survives_value(head, before, after) if {
 	not precedes_negation(before)
 	not follows_conjunction(after)
 	not enclosing_call_defeats(head, count(before))
+	not enclosing_group_defeats(head, count(before))
 }
 
 marker_occurrence_context_holds(head, before, after) if {
@@ -998,6 +1032,43 @@ run_varying_occurrence_counts(head, before, after) if {
 	not chain_discards_value(links)
 }
 
+# A run-varying reference used as a comparison operand renders a boolean, so
+# `occurrence_survives_value` rejects it as an identity marker. The boolean can
+# still change between runs: `github.run_attempt == '1'` is true on a first
+# attempt and false on a re-run, so the two attempts build different groups and
+# the re-run is never superseded. Group stability therefore counts the
+# comparison, even though the group does not carry the reference as text.
+mentions_run_varying_value(text) if {
+	head := lower(text)
+	some marker in RUN_VARYING_MARKERS
+	parts := split(head, marker)
+	some index, following in parts
+	index > 0
+	run_varying_comparison_counts(
+		head,
+		occurrence_prefix(parts, marker, index),
+		following,
+	)
+}
+
+run_varying_comparison_counts(head, before, after) if {
+	not continues_property(after)
+	not extends_property(before)
+	comparison_operand(before, after)
+	marker_is_selected(before)
+	run_value_reachable(before)
+	not argument_conjunction_provably_falsy(before)
+	links := call_links(before)
+	not chain_discards_value(links)
+}
+
+# Either side of the comparison names the same value, so a reference on the
+# left is read from the operator that follows it and one on the right from the
+# operator before it.
+comparison_operand(_, after) if follows_comparison(after)
+
+comparison_operand(before, _) if precedes_comparison(before)
+
 argument_conjunction_provably_falsy(before) if {
 	some guard in argument_guards(before)
 	branch_provably_falsy(guard)
@@ -1073,6 +1144,17 @@ expression_cancels_at(value, event) if {
 	not body_is_event_test(body)
 }
 
+# Whether a block's `cancel-in-progress` can make it cancel this event at all,
+# before its group is considered. A block whose value is provably false never
+# cancels, so an unreadable group cannot excuse the run it leaves uncovered:
+# `cancel-in-progress: false` with a `github.run_id || github.sha` group is a
+# noncompliant block, not merely an unreadable one.
+block_cancels_at(value, event) if {
+	is_object(value)
+	"cancel-in-progress" in object.keys(value)
+	cancels_in_progress_at(value["cancel-in-progress"], event)
+}
+
 # A `cancel-in-progress` expression the event makes false does not cancel that
 # event's run, whatever shape the rest of it has. `&&` short-circuits, so a
 # conjunction whose guard excludes this event — or whose guard is a literal
@@ -1092,6 +1174,14 @@ expression_provably_falsy_at(value, event) if {
 }
 
 branch_provably_falsy_at(branch, _) if branch_provably_falsy(branch)
+
+# A bare event test is a branch in its own right, so it is judged against the
+# declared event exactly as a `&&` guard is: `github.event_name == 'push' ||
+# false` renders `false` on a `pull_request` run and never cancels it.
+branch_provably_falsy_at(branch, event) if {
+	test := event_test(branch)
+	not event_test_holds_at(test, event)
+}
 
 branch_provably_falsy_at(branch, event) if {
 	conjunction := branch_conjunction(branch)
@@ -1148,14 +1238,14 @@ event_test(branch) := {"event": event, "operator": operator} if {
 	matches := regex.find_all_string_submatch_n(EVENT_TEST_RIGHT_PATTERN, trimmed, 1)
 	count(matches) > 0
 	operator := matches[0][1]
-	event := matches[0][2]
+	event := lower(matches[0][2])
 }
 
 event_test(branch) := {"event": event, "operator": operator} if {
 	trimmed := trim_space(branch)
 	matches := regex.find_all_string_submatch_n(EVENT_TEST_LEFT_PATTERN, trimmed, 1)
 	count(matches) > 0
-	event := matches[0][1]
+	event := lower(matches[0][1])
 	operator := matches[0][2]
 }
 
@@ -1354,7 +1444,7 @@ event_guard(branch) := {"event": event, "operator": operator, "value": value} if
 	matches := regex.find_all_string_submatch_n(EVENT_GUARD_RIGHT_PATTERN, trimmed, 1)
 	count(matches) > 0
 	operator := matches[0][1]
-	event := matches[0][2]
+	event := lower(matches[0][2])
 	value := trim_space(regex.replace(trimmed, EVENT_GUARD_RIGHT_PATTERN, ""))
 }
 
@@ -1362,7 +1452,7 @@ event_guard(branch) := {"event": event, "operator": operator, "value": value} if
 	trimmed := trim_space(branch)
 	matches := regex.find_all_string_submatch_n(EVENT_GUARD_LEFT_PATTERN, trimmed, 1)
 	count(matches) > 0
-	event := matches[0][1]
+	event := lower(matches[0][1])
 	operator := matches[0][2]
 	value := trim_space(regex.replace(trimmed, EVENT_GUARD_LEFT_PATTERN, ""))
 }
@@ -1589,45 +1679,54 @@ branch_list_settled_at(branches, event) if {
 # argument, does not name anything.
 # Every event is judged on its own, because the group text may name the pull
 # request through one body for one event and a different body for another.
-group_names_pull_request(value, events) if {
+group_names_pull_request_at(value, event) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	bodies := expression_bodies(group)
+	some body in expression_bodies(group)
+	branch_list_settled_at(expression_branches(body), event)
+}
+
+group_names_pull_request(value, events) if {
 	every event in events {
-		some body in bodies
-		branch_list_settled_at(expression_branches(body), event)
+		group_names_pull_request_at(value, event)
 	}
 }
 
 # A group whose only marker references feed a call the rule does not classify,
 # or sit behind a comparison or guard the rule cannot evaluate, may or may not
 # carry the pull request, so it is reported as indeterminate rather than as a
-# pass or a defect.
-group_identity_unknown(value, events) if {
+# pass or a defect. Identity is classified per event: a group that renders
+# `ci-false` on `pull_request` and an unreadable value on `pull_request_target`
+# is a definite RC-002 for the first event and an EN-001 for the second, so the
+# unreadable event does not suppress the definite failure.
+group_identity_unknown_at(value, event) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	not group_names_pull_request(value, events)
+	not group_names_pull_request_at(value, event)
 	some body in expression_bodies(group)
 	branches := expression_branches(body)
 	some index in numbers.range(0, count(branches) - 1)
-	some event in events
 	branch_value_reachable_at(branches, index, event)
 	branch_guard_unsettled_at(branches[index], event)
 }
 
-group_identity_unknown(value, events) if {
+group_identity_unknown_at(value, event) if {
 	is_object(value)
 	group := object.get(value, "group", null)
 	is_string(group)
-	not group_names_pull_request(value, events)
+	not group_names_pull_request_at(value, event)
 	some body in expression_bodies(group)
 	branches := expression_branches(body)
 	some index in numbers.range(0, count(branches) - 1)
-	some event in events
 	branch_value_reachable_at(branches, index, event)
 	branch_has_unclassifiable_marker(branches[index])
+}
+
+group_identity_unknown(value, events) if {
+	some event in events
+	group_identity_unknown_at(value, event)
 }
 
 # An unknown transformation in any branch the pull request can select may or may
@@ -1688,15 +1787,19 @@ concurrency_shapes_readable(workflow) if {
 
 workflow_group_unclassifiable(workflow) if {
 	workflow_has_concurrency(workflow)
+	value := workflow_concurrency(workflow)
 	some event in pr_events(workflow)
-	group_stability_at(workflow_concurrency(workflow), event) == "unclassifiable"
+	block_cancels_at(value, event)
+	group_stability_at(value, event) == "unclassifiable"
 }
 
 unclassifiable_job_groups(workflow) := {name |
 	some name in object.keys(workflow_jobs(workflow))
 	job := workflow_jobs(workflow)[name]
+	value := job_concurrency(job)
 	some event in pr_events(workflow)
-	group_stability_at(job_concurrency(job), event) == "unclassifiable"
+	block_cancels_at(value, event)
+	group_stability_at(value, event) == "unclassifiable"
 } if {
 	concurrency_shapes_readable(workflow)
 }
@@ -1926,10 +2029,11 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	rc_audited(workflow)
 	workflow_cancels_somewhere(workflow)
 	events := cancelling_events(workflow_concurrency(workflow), pr_events(workflow))
-	not group_names_pull_request(workflow_concurrency(workflow), events)
-	not group_identity_unknown(workflow_concurrency(workflow), events)
+	some event in events
+	not group_names_pull_request_at(workflow_concurrency(workflow), event)
+	not group_identity_unknown_at(workflow_concurrency(workflow), event)
 	msg := sprintf(
-		"workflow %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
+		"workflow %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number to keep different pull requests apart; github.head_ref is accepted but is only the source branch name",
 		[workflow_path(workflow)],
 	)
 }
@@ -1947,12 +2051,14 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	jobs := workflow_jobs(workflow)
 	some name in object.keys(jobs)
 	job := jobs[name]
+	not job_disabled(job)
 	job_cancels_somewhere(job, pr_events(workflow))
 	job_events := cancelling_events(job_concurrency(job), pr_events(workflow))
-	not group_names_pull_request(job_concurrency(job), job_events)
-	not group_identity_unknown(job_concurrency(job), job_events)
+	some event in job_events
+	not group_names_pull_request_at(job_concurrency(job), event)
+	not group_identity_unknown_at(job_concurrency(job), event)
 	msg := sprintf(
-		"job %s of %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number or github.head_ref so runs for different pull requests do not cancel one another",
+		"job %s of %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number to keep different pull requests apart; github.head_ref is accepted but is only the source branch name",
 		[name, workflow_path(workflow)],
 	)
 }

@@ -64,6 +64,31 @@ def test_a_checkout_with_no_repository_has_no_slug(tmp_path: pathlib.Path) -> No
     assert envelope["repository"] == {"name": None}, envelope
 
 
+def test_an_origin_that_changes_during_the_read_is_an_operational_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The slug and the workflows must describe one checkout, not two.
+
+    The slug decides which exemption applies while the workflows decide the
+    verdict. Reading the slug on both sides of the walk and refusing a change
+    stops a checkout replaced mid-read from binding one repository's identity
+    to another repository's workflows.
+    """
+    _write_workflow(tmp_path, "ci.yml")
+    slugs = iter(["leynos/before", "leynos/after"])
+    monkeypatch.setattr(
+        pr_run_cancellation_envelope,
+        "origin_slug",
+        lambda _checkout: next(slugs),
+    )
+
+    with pytest.raises(OperationalRuleError) as excinfo:
+        build_pr_run_cancellation_envelope(tmp_path)
+
+    assert excinfo.value.operation == OPERATION_READ_WORKFLOW
+    assert "origin remote changed" in str(excinfo.value), str(excinfo.value)
+
+
 def test_the_origin_slug_names_the_repository(tmp_path: pathlib.Path) -> None:
     """Exemptions are matched on `owner/name`, so the slug must survive."""
     pygit2.init_repository(str(tmp_path))

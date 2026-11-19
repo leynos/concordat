@@ -287,6 +287,22 @@ class TestRegisteredPackages:
             f"these packages resolve only by registration: {sorted(unresolvable)}"
         )
 
+    def test_a_manifest_only_package_builds_its_declared_envelope(
+        self, checkout: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The manifest route must select a builder and run it, not just exist.
+
+        Emptying the identifier mapping leaves `pr-run-cancellation` with only
+        its shipped `rule.yaml` to resolve by. The returned kind proves the
+        builder the manifest route selected is the one that produced the
+        envelope, which a key-existence check alone cannot show.
+        """
+        monkeypatch.setattr(packages, "PACKAGE_ENVELOPE_BUILDERS", {})
+
+        envelope = packages.default_envelope_builder("pr-run-cancellation", checkout)
+
+        assert envelope["kind"] == PR_RUN_CANCELLATION_ENVELOPE_KIND, envelope
+
     def test_every_registered_builder_is_also_declarable(self) -> None:
         """A registered builder must be reachable by the kind it emits.
 

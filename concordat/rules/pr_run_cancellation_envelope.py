@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import typing as typ
 
+from concordat.errors import OperationalRuleError
+
 from .nested_cargo import origin_slug
 from .workflow_evidence import OPERATION_READ_WORKFLOW as OPERATION_READ_WORKFLOW
 from .workflow_evidence import WorkflowFile as WorkflowFile
@@ -81,20 +83,48 @@ def build_pr_run_cancellation_envelope(
         The repository checkout to read workflows from.
 
     An `OperationalRuleError` reaches the caller when the workflow directory
-    resolves outside the checkout, or when any part of reading it fails. An
-    absent directory is not a failure: it is a repository with no workflows.
+    resolves outside the checkout, when any part of reading it fails, or when
+    the checkout's origin changes during the read. An absent directory is not
+    a failure: it is a repository with no workflows.
+
+    The slug is read on both sides of the workflow walk. An exemption is
+    matched on the slug while the verdict is decided by the workflows, so if a
+    checkout another process can write to is replaced mid-read, the two facts
+    would describe different trees. Reading it twice and refusing a change
+    binds both to one snapshot instead of letting a substituted tree decide
+    which exemption applies.
 
     Returns
     -------
     PrRunCancellationEnvelope
         Every root workflow document, decoded or carrying its content error,
         and the repository slug an exemption is matched against.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the workflow directory resolves outside the checkout, a workflow
+        cannot be read, or the origin remote changes while the workflows are
+        read.
     """
+    slug = origin_slug(checkout)
+    workflows = _load_workflows(checkout)
+    if origin_slug(checkout) != slug:
+        message = (
+            f"{checkout}: the origin remote changed while its workflows were "
+            "read, so the repository identity and the workflow facts do not "
+            "describe one checkout"
+        )
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_READ_WORKFLOW,
+            resource=str(checkout),
+        )
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
-        "repository": {"name": origin_slug(checkout)},
-        "workflows": _load_workflows(checkout),
+        "repository": {"name": slug},
+        "workflows": workflows,
     }
 
 

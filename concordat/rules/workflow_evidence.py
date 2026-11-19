@@ -38,8 +38,60 @@ WORKFLOWS_DIRECTORY: typ.Final = pathlib.PurePosixPath(".github/workflows")
 WORKFLOW_SUFFIXES: typ.Final = frozenset({".yml", ".yaml"})
 OPERATION_READ_WORKFLOW: typ.Final = "read-workflow"
 _READ_CHUNK: typ.Final = 65536
-_ENTRY_FLAGS: typ.Final = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
-_DIRECTORY_FLAGS: typ.Final = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+# These flags exist only on POSIX. The rule registry imports every rule module
+# on every platform the package ships to, so a direct attribute read here
+# would fail the import on Windows and take the whole registry with it. The
+# missing flags become zero, and `_require_supported_platform` refuses a host
+# that lacks them before any of the reader's guarantees depend on them.
+_O_NOFOLLOW: typ.Final = getattr(os, "O_NOFOLLOW", 0)
+_O_DIRECTORY: typ.Final = getattr(os, "O_DIRECTORY", 0)
+_O_NONBLOCK: typ.Final = getattr(os, "O_NONBLOCK", 0)
+_O_PATH: typ.Final = getattr(os, "O_PATH", 0)
+_ENTRY_FLAGS: typ.Final = os.O_RDONLY | _O_NOFOLLOW | _O_NONBLOCK
+_DIRECTORY_FLAGS: typ.Final = os.O_RDONLY | _O_DIRECTORY | _O_NOFOLLOW
+# An intermediate component is only traversed, never listed or read. `O_PATH`
+# needs no read permission and cannot be used for I/O, which is exactly that
+# role. A platform without it falls back to an ordinary directory open.
+_SEARCH_FLAGS: typ.Final = (_O_PATH or os.O_RDONLY) | _O_DIRECTORY | _O_NOFOLLOW
+
+# Captured once, while `os` still holds the real functions: tests and callers
+# replace `os.open` or `os.stat`, and a membership test after that substitution
+# would misread the platform as unsupported.
+_SUPPORTS_DESCRIPTOR_WALK: typ.Final = (
+    os.open in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
+    and os.listdir in os.supports_fd
+    and not any(value == 0 for value in (_O_NOFOLLOW, _O_DIRECTORY, _O_NONBLOCK))
+)
+
+
+def _require_supported_platform(operation: str) -> None:
+    """Refuse a host without the POSIX calls this reader's guarantees need.
+
+    Every read, status query and directory listing is made relative to a
+    descriptor so that a checkout changed during the audit cannot decide what
+    the rule sees. A platform without `dir_fd` support, or without
+    `O_NOFOLLOW`, `O_DIRECTORY` and `O_NONBLOCK`, can only offer the weaker
+    pathname walk, so the audit fails as unsupported instead of silently
+    dropping the guarantee.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the host cannot make descriptor-relative filesystem calls.
+    """
+    if _SUPPORTS_DESCRIPTOR_WALK:
+        return
+    message = (
+        "cannot read workflows: this platform lacks the POSIX "
+        "descriptor-relative calls and open flags that keep the walk inside "
+        "the checkout"
+    )
+    raise OperationalRuleError(
+        message,
+        operation=operation,
+        resource=str(WORKFLOWS_DIRECTORY),
+    )
 
 
 class WorkflowFile(typ.TypedDict):
@@ -112,6 +164,7 @@ def read_text(path: pathlib.Path) -> str:
     records as that one file's content error rather than as an operational
     failure.
     """
+    _require_supported_platform(OPERATION_READ_WORKFLOW)
     try:
         descriptor = os.open(path, _ENTRY_FLAGS)
     except OSError as error:
@@ -292,11 +345,13 @@ def _decode_into(fact: WorkflowFile, text: str, json_safe: JsonSafe) -> Workflow
         # further input, so each document gets its own. A shared instance would
         # let the first malformed file decide every later file's verdict.
         parsed: object = YAML(typ="safe").load(text)
-    except (YAMLError, ValueError) as error:
+    except (YAMLError, ValueError, TypeError) as error:
         # An out-of-range timestamp scalar, such as `2026-02-30`, raises
         # `ValueError` from the safe loader's constructor rather than a
-        # `YAMLError`. It is still a defect in this file's content, so it is
-        # reported for this workflow instead of aborting the whole audit.
+        # `YAMLError`. An `!!omap` whose key is a sequence raises `TypeError`,
+        # because the loader tries to build a Python mapping keyed by a list.
+        # Both are still defects in this file's content, so they are reported
+        # for this workflow instead of aborting the whole audit.
         fact["error"] = f"invalid YAML: {error}"
         return fact
     if not isinstance(parsed, dict):
@@ -321,11 +376,39 @@ class _ContainedDirectory(typ.NamedTuple):
         from.
     parts:
         The resolved directory's components below *root*, in order.
+    identity:
+        The checkout root's `(device, inode)` pair recorded while the
+        containment was checked, or None when the root was already absent.
+        The walk compares it with the descriptor it opens, so a root replaced
+        between the check and the open is refused rather than read.
     """
 
     path: pathlib.Path
     root: pathlib.Path
     parts: tuple[str, ...]
+    identity: tuple[int, int] | None
+
+
+def _entry_identity(path: pathlib.Path) -> tuple[int, int] | None:
+    """Return *path*'s `(device, inode)` pair, or None when it cannot be read.
+
+    A status failure is not reported here. The open that follows makes the
+    same call against the same path, so an unreadable checkout still fails
+    with the operation and resource its caller expects; answering None only
+    skips the race check for this one walk rather than treating an
+    unreadable tree as empty.
+
+    Returns
+    -------
+    tuple[int, int] | None
+        The entry's device and inode numbers, or None when it cannot be
+        stat'ed.
+    """
+    try:
+        status = path.stat()
+    except OSError:
+        return None
+    return (status.st_dev, status.st_ino)
 
 
 def _contained_workflow_directory(checkout: pathlib.Path) -> _ContainedDirectory:
@@ -353,6 +436,7 @@ def _contained_workflow_directory(checkout: pathlib.Path) -> _ContainedDirectory
     try:
         root = checkout.resolve(strict=False)
         resolved = directory.resolve(strict=False)
+        identity = _entry_identity(root)
     except OSError as error:
         message = f"cannot resolve {directory}: {error}"
         raise OperationalRuleError(
@@ -367,16 +451,53 @@ def _contained_workflow_directory(checkout: pathlib.Path) -> _ContainedDirectory
             operation=OPERATION_READ_WORKFLOW,
             resource=directory,
         )
-    return _ContainedDirectory(directory, root, resolved.relative_to(root).parts)
+    return _ContainedDirectory(
+        directory,
+        root,
+        resolved.relative_to(root).parts,
+        identity,
+    )
+
+
+def _require_contained_root(location: _ContainedDirectory, descriptor: int) -> None:
+    """Refuse a checkout root replaced after its containment was checked.
+
+    The containment decision compares the resolved workflow directory with the
+    resolved checkout, and both come from pathnames. Opening the checkout
+    afterwards can land on a different tree if the path was replaced in
+    between, and the decision would then describe a tree the audit never
+    opened. Comparing the opened descriptor with the identity recorded during
+    resolution binds the decision and the walk to the same object.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the opened root is not the checkout that was resolved.
+    """
+    if location.identity is None:
+        return
+    opened = os.fstat(descriptor)
+    if (opened.st_dev, opened.st_ino) == location.identity:
+        return
+    message = (
+        f"{location.path}: the checkout was replaced after its containment was "
+        "checked, so the workflows found there are not the ones that were checked"
+    )
+    raise OperationalRuleError(
+        message,
+        operation=OPERATION_READ_WORKFLOW,
+        resource=location.path,
+    )
 
 
 def _open_workflow_directory(location: _ContainedDirectory) -> int | None:
     """Open the contained workflow directory, or report it as absent.
 
     The descriptor is acquired by walking from the resolved checkout, opening
-    each component relative to the one before it. Nothing afterwards resolves
-    the directory's pathname again, so a checkout that replaces it cannot
-    redirect enumeration or a read into another tree.
+    each component relative to the one before it. The opened root is first
+    matched against the identity recorded when it was resolved, and nothing
+    afterwards resolves the directory's pathname again, so a checkout that
+    replaces it cannot redirect enumeration or a read into another tree.
 
     Returns
     -------
@@ -384,22 +505,38 @@ def _open_workflow_directory(location: _ContainedDirectory) -> int | None:
         A descriptor for the directory, or None when the directory does not
         exist. A component that cannot be opened, or a missing one that is a
         broken link rather than absence, raises from `_absent_or_refused`.
+
+    Raises
+    ------
+    OperationalRuleError
+        If a component resolves outside the checkout or the opened root is no
+        longer the directory that was resolved.
     """
+    flags = _SEARCH_FLAGS if location.parts else _DIRECTORY_FLAGS
     try:
-        descriptor = os.open(location.root, _DIRECTORY_FLAGS)
+        descriptor = os.open(location.root, flags)
     except OSError as error:
         return _absent_or_refused(location, error)
     try:
-        for part in location.parts:
-            descriptor = _descend(descriptor, part)
+        _require_contained_root(location, descriptor)
+        last = len(location.parts) - 1
+        for index, part in enumerate(location.parts):
+            descriptor = _descend(descriptor, part, is_target=index == last)
     except OSError as error:
         os.close(descriptor)
         return _absent_or_refused(location, error)
+    except OperationalRuleError:
+        os.close(descriptor)
+        raise
     return descriptor
 
 
-def _descend(parent: int, part: str) -> int:
+def _descend(parent: int, part: str, *, is_target: bool) -> int:
     """Open *part* below *parent*, closing the parent once the child is open.
+
+    Only the final component is listed, so only it needs a readable
+    descriptor. `.github` and any other intermediate component are opened
+    search-only, which neither requires nor grants read permission on them.
 
     Closing the parent only after the child is open leaves the caller exactly
     one descriptor to release when the open fails.
@@ -409,7 +546,8 @@ def _descend(parent: int, part: str) -> int:
     int
         A descriptor for the opened component.
     """
-    child = os.open(part, _DIRECTORY_FLAGS, dir_fd=parent)
+    flags = _DIRECTORY_FLAGS if is_target else _SEARCH_FLAGS
+    child = os.open(part, flags, dir_fd=parent)
     os.close(parent)
     return child
 
@@ -534,6 +672,27 @@ class _RootWorkflowEntry(typ.NamedTuple):
     mode: int
 
 
+def _root_workflow_entries(
+    directory_fd: int, path: pathlib.Path
+) -> cabc.Iterator[_RootWorkflowEntry]:
+    """Yield the directory's root workflow entries in filename order.
+
+    Selection is separated from fact construction so `load_workflows` can
+    consume the eligible entries without a mutable accumulator. Each entry's
+    status is read once, here, and travels with the entry.
+
+    Yields
+    ------
+    _RootWorkflowEntry
+        Each eligible root entry, in filename order.
+    """
+    for name in _list_entries(directory_fd, path):
+        entry_path = path / name
+        mode = _workflow_entry_mode(directory_fd, name, entry_path)
+        if mode is not None:
+            yield _RootWorkflowEntry(name=name, path=entry_path, mode=mode)
+
+
 def _root_workflow_fact(
     directory_fd: int,
     entry: _RootWorkflowEntry,
@@ -574,20 +733,12 @@ def load_workflows(
         Every root workflow document, decoded or carrying its content error,
         in filename order.
     """
+    _require_supported_platform(OPERATION_READ_WORKFLOW)
     location = _contained_workflow_directory(checkout)
     with _bound_workflow_directory(location) as directory_fd:
         if directory_fd is None:
             return []
-        facts: list[WorkflowFile] = []
-        for name in _list_entries(directory_fd, location.path):
-            path = location.path / name
-            mode = _workflow_entry_mode(directory_fd, name, path)
-            if mode is not None:
-                facts.append(
-                    _root_workflow_fact(
-                        directory_fd,
-                        _RootWorkflowEntry(name=name, path=path, mode=mode),
-                        json_safe,
-                    )
-                )
-        return facts
+        return [
+            _root_workflow_fact(directory_fd, entry, json_safe)
+            for entry in _root_workflow_entries(directory_fd, location.path)
+        ]

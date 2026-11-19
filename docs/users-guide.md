@@ -976,15 +976,16 @@ commit nobody will merge. **RC-001** requires a cancelling `concurrency` block
 in every workflow triggered by `pull_request` or `pull_request_target`, at
 workflow level or on every job not disabled with `if: false`, for every
 pull-request event the workflow declares. **RC-002** requires every cancelling
-block's `group` to name the pull request through
-`github.event.pull_request.number` or `github.head_ref` inside a `${{ ... }}`
-expression, so two pull requests do not cancel one another's runs. A marker
-written as literal text, including inside a quoted string literal, used as a
-comparison operand, spelled as the prefix of a longer property name such as
-`github.head_ref_name`, or handed to a function that returns something else,
-such as `contains(github.head_ref, 'release')`, is part of a constant group and
-does not count, and an operator applied to any enclosing call replaces the
-value, whether the call discards it, as in
+block's `group` to name the pull request inside a `${{ ... }}` expression.
+`github.event.pull_request.number` keeps different pull requests apart;
+`github.head_ref` is accepted as a marker, but it is the source branch name
+rather than a unique pull-request identity, so two forks using the same branch
+name share a group. A marker written as literal text, including inside a quoted
+string literal, used as a comparison operand, spelled as the prefix of a longer
+property name such as `github.head_ref_name`, or handed to a function that
+returns something else, such as `contains(github.head_ref, 'release')`, is part
+of a constant group and does not count, and an operator applied to any
+enclosing call replaces the value, whether the call discards it, as in
 `contains(format('{0}', github.head_ref), 'release')`, or renders it, as in
 `format('{0}', format('{0}-{1}', github.head_ref, 'ci') == 'release')`.
 Negation and conjunction replace the value too, so `!github.head_ref` and the

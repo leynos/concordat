@@ -341,10 +341,13 @@ class TestBuildCodesceneCoverageEnvelope:
             raise PermissionError(13, "Permission denied")
 
         owner = pathlib.Path if case.owner == "pathlib" else os
-        monkeypatch.setattr(owner, case.method, refuse)
-
-        with pytest.raises(OperationalRuleError) as excinfo:
-            build_codescene_coverage_envelope(tmp_path)
+        # The denial is scoped to the builder call. `os.stat` patched for the
+        # whole process would also deny pytest's own path checks while it
+        # builds the report for a failing assertion.
+        with monkeypatch.context() as patch:
+            patch.setattr(owner, case.method, refuse)
+            with pytest.raises(OperationalRuleError) as excinfo:
+                build_codescene_coverage_envelope(tmp_path)
 
         assert excinfo.value.operation == OPERATION_READ_WORKFLOW
         assert excinfo.value.resource == expected
