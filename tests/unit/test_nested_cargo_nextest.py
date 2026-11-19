@@ -18,6 +18,7 @@ from concordat.rules import packages, runner
 from concordat.rules.nested_cargo_nextest_envelope import (
     build_nested_cargo_nextest_envelope,
 )
+from concordat.rules.nested_cargo_receivers import call_chain, owns_chain
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -1876,3 +1877,165 @@ def test_a_launch_is_read_at_the_depth_it_reaches(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", LAUNCH_AS_A_CONDITION)
     assert ids(tmp_path) == {"NC-004"}
+
+
+def test_a_qualified_receiver_does_not_own_the_chain() -> None:
+    """`support::command.arg(..)` calls a path item, not the local binding."""
+    qualified = 'support::command.arg("build").status()'
+    qualified_chain = call_chain(qualified, 0, len(qualified))
+    assert qualified_chain is not None
+    assert not owns_chain(qualified_chain, "command")
+    plain = 'command.arg("build").status()'
+    plain_chain = call_chain(plain, 0, len(plain))
+    assert plain_chain is not None
+    assert owns_chain(plain_chain, "command")
+
+
+SPACED_LAUNCH_AFTER_THE_DOT = (
+    "use std::process::Command;\n"
+    "fn probe_after_a_run() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.arg("input.rs"). status().unwrap();\n'
+    '    command.arg("--version"). status().unwrap();\n}\n'
+)
+
+
+def test_a_launch_with_a_space_after_its_dot_ends_the_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Rust allows `command . status()`, so the spaced run still compiles."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SPACED_LAUNCH_AFTER_THE_DOT)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+HELPER_THAT_RETURNS_BEFORE_A_PROBE = (
+    "use std::process::Command;\n"
+    "fn compile() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.arg("input.rs");\n'
+    "    configure(&mut command);\n"
+    "    command.status().unwrap();\n}\n"
+    "fn configure(target: &mut Command) {\n"
+    "    if skip() {\n"
+    "        return;\n"
+    "    }\n"
+    '    target.arg("--version");\n'
+    "}\n"
+)
+
+
+def test_a_helper_return_starts_the_callers_next_run(tmp_path: pathlib.Path) -> None:
+    """The `--version` is only added when the helper does not return early."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELPER_THAT_RETURNS_BEFORE_A_PROBE)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+GLOB_IMPORTED_HELPER = (
+    "use support::*;\n"
+    "use std::process::Command;\n"
+    "fn compile() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.arg("input.rs");\n'
+    "    configure(&mut command);\n"
+    "    command.status().unwrap();\n}\n"
+    "fn configure(target: &mut Command) {\n"
+    '    target.arg("--version");\n'
+    "}\n"
+)
+
+
+def test_a_glob_import_hides_the_helper(tmp_path: pathlib.Path) -> None:
+    """`use support::*` could bring another `configure` in, so none is read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", GLOB_IMPORTED_HELPER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+ARGUMENT_AFTER_A_CLOSED_BLOCK = (
+    "use std::process::Command;\n"
+    "fn build_when_not_help(help: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if help {\n"
+    '        command.arg("--help");\n'
+    "        command.status().unwrap();\n"
+    "    }\n"
+    '    command.arg("build");\n'
+    "    command.status().unwrap();\n}\n"
+)
+
+
+def test_an_argument_after_a_closed_block_is_read(tmp_path: pathlib.Path) -> None:
+    """The `build` follows the block, so it begins the next run."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ARGUMENT_AFTER_A_CLOSED_BLOCK)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONDITIONAL_HELP_FLAG = (
+    "use std::process::Command;\n"
+    "fn build_unless_help(help: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("build");\n'
+    "    if help {\n"
+    '        command.arg("--help");\n'
+    "    }\n"
+    "    command.status().unwrap();\n}\n"
+)
+
+
+def test_a_conditional_help_flag_does_not_excuse_a_build(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`build` is given on every path; the `--help` only on one."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_HELP_FLAG)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+ASSIGNED_IN_A_BLOCK = (
+    "use std::process::Command;\n"
+    "fn git_command() -> Command {\n"
+    '    Command::new("git")\n'
+    "}\n"
+    "fn build_after_assignment() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    {\n"
+    "        command = git_command();\n"
+    "    }\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_an_assignment_inside_a_block_also_moves_the_name(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The block may have run, so `command` is no longer certainly the cargo one."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ASSIGNED_IN_A_BLOCK)
+    assert ids(tmp_path) == set()
+
+
+PROBE_SHARED_BEFORE_A_BRANCH = (
+    "use std::process::Command;\n"
+    "fn probe_either_way(probe: bool) {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    '    command.arg("--version");\n'
+    "    if probe {\n"
+    "        command.status().unwrap();\n"
+    "    } else {\n"
+    "        command.status().unwrap();\n"
+    "    }\n"
+    "}\n"
+)
+
+
+def test_an_else_arm_keeps_the_arguments_given_before_the_branch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`--version` is on every path, so the `else` run asks a question too."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBE_SHARED_BEFORE_A_BRANCH)
+    assert ids(tmp_path) == set()

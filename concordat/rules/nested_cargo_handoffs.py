@@ -8,12 +8,14 @@ helper's statements in at the call site so a launch in either place ends the
 arguments in the order they run.
 
 A handoff the scan cannot attribute -- a helper defined twice, a call reached
-through a path or method, a name a `use` item could import, a caller binding
-that shadows the helper, a parameter reassigned or shadowed -- is declined
-rather than guessed, because a false positive would demand configuration from
-a repository that needs none. The
-reading is textual, and every boundary and brace is read from the masked
-source, so a `;` or a `{` in a string moves nothing.
+through a path or method, a name a `use` item could import (a glob import names
+none but could bring any in), a caller binding that shadows the helper, a
+parameter reassigned or shadowed -- is declined rather than guessed, because a
+false positive would demand configuration from a repository that needs none. A
+`return` in a helper is kept as a word, because it ends the helper's path and
+what follows runs only when the return was skipped, so the reader can split the
+caller's runs there. The reading is textual, and every boundary and brace is
+read from the masked source, so a `;` or a `{` in a string moves nothing.
 
 :mod:`concordat.rules.nested_cargo_arguments` decides what the statements this
 module returns mean.
@@ -25,10 +27,13 @@ import bisect
 import re
 import typing as typ
 
+from .nested_cargo_receivers import reaches_through
 from .nested_cargo_syntax import _body_span, _parameter_at, parameter_names
 
 # A call behind `&&` or `||` does not run on every path to the launch.
 SHORT_CIRCUIT: typ.Final = re.compile(r"&&|\|\|")
+# A `return` ends the path it sits on, so a call after it is conditional.
+_RETURN: typ.Final = re.compile(r"\breturn\b")
 # A new command's arguments belong to it, not to the one before it.
 COMMAND_NEW: typ.Final = re.compile(r"Command::new\(")
 # A binding may name the constructor through a path (`std::process::Command`),
@@ -176,8 +181,13 @@ def _receiver_piece(
     """
     found = own.search(statement)
     if found is None:
-        braces = "{" * statement.count("{") + "}" * statement.count("}")
-        return braces, braces
+        # The braces place the statement in the caller's depth; a `return` is
+        # kept as a word, because it ends the helper's path and the caller
+        # reads what follows as the path that skipped it.
+        marker = "{" * statement.count("{") + "}" * statement.count("}")
+        if _RETURN.search(statement) is not None:
+            marker += " return"
+        return marker, marker
     piece = text[offset : offset + len(statement)]
     masked_piece = statement
     if receiver != parameter:
@@ -190,6 +200,10 @@ def _receiver_piece(
                 f"{masked_piece[: use.start()]}{receiver}.{masked_piece[use.end() :]}"
             )
     if SHORT_CIRCUIT.search(masked_piece, 0, found.start()) is not None:
+        return "{" + piece + "}", "{" + masked_piece + "}"
+    if _RETURN.search(masked_piece, 0, found.start()) is not None:
+        # A `return` before the call ends the helper's path, so the flag is
+        # given only to the caller's path that reaches it.
         return "{" + piece + "}", "{" + masked_piece + "}"
     return piece, masked_piece
 
@@ -263,11 +277,18 @@ def _imported(masked: str, name: str) -> bool:
     cannot tell the two apart, so the handoff is declined rather than read from
     the local namesake; a false positive here would hide a real compile.
 
+    A glob import (`use support::*`) binds names without spelling any of them,
+    so while one is present no name is certainly the file's own. That reads as
+    an import of every name, which further errs towards not demanding
+    configuration.
+
     Returns
     -------
     bool
-        True when a `use` item names *name*.
+        True when a `use` item names *name* or imports a whole module.
     """
+    if re.search(r"\buse\b[^;]*::\s*\*", masked) is not None:
+        return True
     return re.search(rf"\buse\b[^;]*\b{re.escape(name)}\b", masked) is not None
 
 
@@ -355,7 +376,7 @@ def _callee_bodies(
         empty when no helper is read.
     """
     # Rust allows whitespace around `::` and `.`, so the regex can only rule
-    # out a separator that touches the name; :func:`_reaches_through` finds one
+    # out a separator that touches the name; :func:`reaches_through` finds one
     # that sits a few spaces before it.
     passed = re.compile(
         rf"(?<![.:\w])(?P<callee>\w+)\s*\(\s*(?:(?P<before>[^()]*),\s*)?"
@@ -363,34 +384,12 @@ def _callee_bodies(
     )
     bodies: list[tuple[int, Window]] = []
     for call in passed.finditer(window):
-        if _reaches_through(window, call.start()):
+        if reaches_through(window, call.start()):
             continue
         body = _callee_arguments(text, masked, closers, call, name, base, index)
         if body is not None:
             bodies.append((call.end(), body))
     return bodies
-
-
-def _reaches_through(masked: str, at: int) -> bool:
-    """Report whether the name at *at* is reached through `::` or a `.`.
-
-    Rust allows whitespace around both separators, so `support:: configure(..)`
-    is a path call and `harness . configure(..)` is a method call; neither can
-    be this file's free function, however the call is spaced.
-
-    Returns
-    -------
-    bool
-        True when the preceding non-whitespace character is a separator.
-    """
-    index = at - 1
-    while index >= 0 and masked[index].isspace():
-        index -= 1
-    if index < 0:
-        return False
-    if masked[index] == ".":
-        return True
-    return index > 0 and masked[index] == ":" and masked[index - 1] == ":"
 
 
 def command_window(

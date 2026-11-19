@@ -778,15 +778,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   compiling subcommands only, files that name `Command`, 1 MiB cap), what a
   found command does with its arguments — including a helper's body spliced in
   at the call site and a read that restarts for each branch the command runs on
-  — lives in `nested_cargo_arguments`, which finds the statements through
-  `nested_cargo_handoffs` (windows, helper bodies and file indexes) and
-  attributes them through `nested_cargo_receivers`, and the bracket-depth
-  reading of a signature and its body lives in `nested_cargo_syntax`; the
-  envelope reads `.config/nextest.toml` for serial groups, whether an override
-  uses one, `slow-timeout` in any profile or override and `global-timeout` in
-  any profile, and marks each top-level test binary as named or not by the
-  grouped filters. It runs neither Cargo nor nextest and does not evaluate
-  filtersets.
+  or after a branch that returns — lives in `nested_cargo_arguments`, which
+  finds the statements through `nested_cargo_handoffs` (windows, helper bodies
+  and file indexes) and attributes them through `nested_cargo_receivers`, and
+  the bracket-depth reading of a signature and its body lives in
+  `nested_cargo_syntax`; the envelope reads `.config/nextest.toml` for serial
+  groups, whether an override uses one, `slow-timeout` in any profile or
+  override and `global-timeout` in any profile, and marks each top-level test
+  binary as named or not by the grouped filters. It runs neither Cargo nor
+  nextest and does not evaluate filtersets.
 - `policy-input/nested-cargo-ci-wiring` —
   `nested_cargo_wiring_envelope.build_nested_cargo_wiring_envelope`. It reuses
   the shared workflow reader of the CodeScene coverage envelope, then records

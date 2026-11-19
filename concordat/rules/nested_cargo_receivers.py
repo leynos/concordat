@@ -15,7 +15,8 @@ bound to a name can be called on, so the constructor counts as the command's
 own receiver.
 
 A launch is the command's `.status()`, `.output()` or `.spawn()`, with or
-without whitespace before the parenthesis, since Rust allows `command.status ()`.
+without whitespace on either side of the dot or before the parenthesis, since
+Rust allows `command . status ()`.
 
 A statement that calls the command is also the only place its block depth can
 be read: the chain's text before the call says which blocks the call sits in,
@@ -27,7 +28,7 @@ from __future__ import annotations
 import re
 import typing as typ
 
-LAUNCH: typ.Final = re.compile(r"\.(?:status|output|spawn)\s*\(")
+LAUNCH: typ.Final = re.compile(r"\.\s*(?:status|output|spawn)\s*\(")
 # One call on a named command, from its last receiver pivot (or the start of
 # the statement) to the method call itself: `command.x().y(z).w(..)`, and
 # `command.arg("build").status()` in the same form.
@@ -165,12 +166,42 @@ def call_chain(masked: str, start: int, end: int) -> re.Match[str] | None:
 def owns_chain(chain: re.Match[str], name: str | None) -> bool:
     """Report whether *chain* calls the command bound to *name*.
 
+    The chain's text before the name is kept as `before`, so a name reached
+    through a `.` or a `::` (`support::command.arg(..)`, `holder . command`) is
+    declined here too, even when it spells the binding's own name.
+
     Returns
     -------
     bool
-        True for the command's own name or for `Command::new(..)`.
+        True for the command's own name or for `Command::new(..)`, reached
+        without a field or path separator.
     """
+    before = chain["before"].rstrip()
+    if before.endswith((".", ":")):
+        return False
     return chain["name"] == "Command" or chain["name"] == name
+
+
+def reaches_through(masked: str, at: int) -> bool:
+    """Report whether the name at *at* is reached through `::` or a `.`.
+
+    Rust allows whitespace around both separators, so `support:: configure(..)`
+    is a path call and `harness . configure(..)` is a method call; neither can
+    be a free function of the current file, however the call is spaced.
+
+    Returns
+    -------
+    bool
+        True when the preceding non-whitespace character is a separator.
+    """
+    index = at - 1
+    while index >= 0 and masked[index].isspace():
+        index -= 1
+    if index < 0:
+        return False
+    if masked[index] == ".":
+        return True
+    return index > 0 and masked[index] == ":" and masked[index - 1] == ":"
 
 
 def launch_at(masked: str, start: int, end: int, name: str | None) -> int | None:

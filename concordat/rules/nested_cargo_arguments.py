@@ -7,11 +7,14 @@ statements that add arguments to that command, with a helper's body spliced in
 at its call site and each call attributed to the receiver it is called on. A
 launch reached at the top level ends the read, so an argument added to a reused
 command does not count as the first run's work; a launch inside a block ends
-only that branch, so the command is read once for each path it runs on.
+only that branch, and a `return` inside a block ends its path, so the command
+is read once for each path it runs on. A run that leaves a branch inherits the
+arguments given before it, because they are on every path that reaches it.
 
 A shape the scan cannot attribute -- a helper defined twice, a call reached
-through a path or method, a name a `use` item could import, a receiver that is
-a field or a call, a parameter or binding reassigned or shadowed -- is declined
+through a path or method, a name a `use` item could import (a glob import names
+none but could bring any in), a receiver that is a field or a call, a parameter
+or binding reassigned or shadowed -- is declined
 rather than guessed, because a false positive would demand configuration from a
 repository that needs none. The reading is textual: comments are blanked and
 literal contents kept, and braces come from the masked source, so a `;` or a
@@ -19,7 +22,8 @@ literal contents kept, and braces come from the masked source, so a `;` or a
 subcommand is the first word its arguments give that is neither an option nor
 an option's value, so `cargo help build` reads help as the subcommand and
 `build` as its topic, while `-h` or `--help` makes the command compile nothing
-at all.
+at all when it is given on every path: a help flag inside a block does not
+excuse the build on the path that skips it.
 
 :mod:`concordat.rules.nested_cargo_receivers` decides which calls belong to the
 command; this module decides what those calls mean.
@@ -73,6 +77,9 @@ _VALUE_OPTIONS: typ.Final = frozenset({
 # A statement that opens an `else` arm is the other path through a launch that
 # closed its `if` arm earlier in the read, rather than code that runs after it.
 _ELSE: typ.Final = re.compile(r"\s*\}?\s*else\b")
+# A `return` ends the path it sits on, so what follows a returning block runs
+# only when the return was skipped.
+_RETURN: typ.Final = re.compile(r"\breturn\b")
 SUBCOMMANDS: typ.Final = (
     "build|check|test|run|package|clippy|doc|rustc|install|publish|bench|miri"
     "|nextest|llvm-cov|rustdoc"
@@ -100,13 +107,17 @@ def _rebinding(name: str | None) -> re.Pattern[str] | None:
 
     A `let`, a loop variable, a closure parameter or a plain assignment to the
     command's name gives it a new value: the caller's command is no longer what
-    the name denotes. An unbound command has no name to move.
+    the name denotes. A declaration only moves the name inside the block that
+    declares it, while an assignment moves it for everything that follows,
+    wherever it sits, because the block it runs in may have been entered. The
+    assignment is therefore kept in its own group, which is how the reader tells
+    the two apart. An unbound command has no name to move.
 
     Returns
     -------
     re.Pattern[str] | None
-        The declaration, loop or closure pattern, or None when the command is
-        not bound to a name.
+        The declaration, loop, closure or assignment pattern, or None when the
+        command is not bound to a name.
     """
     if name is None:
         return None
@@ -117,24 +128,26 @@ def _rebinding(name: str | None) -> re.Pattern[str] | None:
         rf"|\|\s*(?:mut\s+)?{identifier}\s*(?:\||:)"
         # The name must be whole, so `my_command = ..` and `holder.command =
         # ..` move their own value rather than the command's.
-        rf"|(?<![\w.]){identifier}\s*=(?!=)"
+        rf"|(?<![\w.])(?P<assign>{identifier})\s*=(?!=)"
     )
 
 
-def _launch_depth(masked_statement: str, launch: int, start_depth: int) -> int:
-    """Return the block depth the launch at *launch* is reached at.
+def _depth_at(masked_statement: str, at: int, start_depth: int) -> int:
+    """Return the block depth the text at *at* is reached at.
 
     The block it sits in may have been opened by the statement itself or by an
     earlier statement (`if metadata {`), so the depth the statement starts at
-    is counted with the braces that precede the launch.
+    is counted with the braces that precede *at*. A launch and a `return` are
+    both judged by the depth they sit at rather than by the depth their
+    statement starts or ends at.
 
     Returns
     -------
     int
-        The number of blocks still open where the launch runs.
+        The number of blocks still open at *at*.
     """
-    opened = start_depth + masked_statement.count("{", 0, launch)
-    return opened - masked_statement.count("}", 0, launch)
+    opened = start_depth + masked_statement.count("{", 0, at)
+    return opened - masked_statement.count("}", 0, at)
 
 
 def _entry_depth(masked_statement: str, start_depth: int) -> int:
@@ -186,23 +199,180 @@ class CommandRead(typ.NamedTuple):
         Each statement as written, its masked twin, and the number of blocks
         still open where it starts.
     starts:
-        The index in *statements* where each run begins. A command launched on
-        more than one path is read once per path, and each run restarts the
-        command's argument list.
+        Where each run begins: the index in *statements* of its first statement
+        of its own, and the depth of the branch that run leaves. A command
+        launched on more than one path is read once per path, and each run
+        restarts the command's argument list.
     """
 
     statements: list[tuple[str, str, int]]
-    starts: list[int]
+    starts: list[tuple[int, int]]
 
     @property
     def runs(self) -> list[list[tuple[str, str, int]]]:
-        """The statements grouped into the runs they describe."""
-        bounds = [*self.starts, len(self.statements)]
-        return [
-            self.statements[first:last]
-            for first, last in pairwise(bounds)
-            if first < last
-        ]
+        """The statements grouped into the runs they describe.
+
+        A run that leaves a branch (`else`) or a block that returned still
+        inherits the arguments given before the branch, because they are on
+        every path that reaches it. Those statements are the ones that begin
+        and end above the branch's depth, so a conditional argument is not
+        carried into a run it may not be part of.
+        """
+        runs: list[list[tuple[str, str, int]]] = []
+        bounds = [*self.starts, (len(self.statements), 0)]
+        for (first, depth), (last, _next) in pairwise(bounds):
+            if first >= last:
+                continue
+            shared = [
+                statement
+                for statement in self.statements[:first]
+                if _entirely_above(statement, depth)
+            ]
+            runs.append([*shared, *self.statements[first:last]])
+        return runs
+
+
+def _entirely_above(statement: tuple[str, str, int], depth: int) -> bool:
+    """Report whether a statement begins and ends above *depth*.
+
+    A statement that opens or closes a block at *depth* belongs to a branch,
+    so its arguments are not on every path through that branch and are not
+    carried into the run that leaves it.
+
+    Returns
+    -------
+    bool
+        True when the statement is wholly above the branch.
+    """
+    _, masked_statement, start_depth = statement
+    end_depth = start_depth + masked_statement.count("{") - masked_statement.count("}")
+    return start_depth < depth and end_depth < depth
+
+
+class _StatementRead:
+    """Accumulate a command's statements, its runs and the shadows over it.
+
+    The read keeps five facts that only make sense together: the statements
+    kept, where the runs begin, the blocks that shadow the command's name, the
+    block depth and the launch boundary. They live in one object so each step
+    of the read can be a small, named method rather than one long loop.
+
+    A statement that moves the command's name to another value is not the
+    command's, and neither is anything after it on that path: a declaration
+    shadows the name inside its block, and attribution resumes once that block
+    closes, while an assignment ends the read because the block it ran in may
+    have been entered.
+
+    Attributes
+    ----------
+    stopped:
+        True once the read has reached a launch at the top level, or a binding
+        that moves the name for good.
+    """
+
+    def __init__(self, window: Window, name: str | None) -> None:
+        """Start reading *window* for the command bound to *name*."""
+        self._window = window
+        self._name = name
+        self._rebinding = _rebinding(name)
+        self._statements: list[tuple[str, str, int]] = []
+        self._starts: list[tuple[int, int]] = [(0, 0)]
+        self._shadows: list[int] = []
+        self._offset = 0
+        self._depth = 0
+        # The depth of the block the last conditional launch ran in, while the
+        # statements that follow it on that path are still being read.
+        self._boundary: int | None = None
+        # The depth a `return` was met at, until a statement is recorded after
+        # it: what follows is the first of the path that skipped the return.
+        self._pending: int | None = None
+        self.stopped = False
+
+    def feed(self, at: int) -> bool:
+        """Read the statement ending at *at*, returning whether the read goes on.
+
+        Returns
+        -------
+        bool
+            False once the read has stopped, so the caller can leave the loop.
+        """
+        masked_statement = self._window.masked[self._offset : at]
+        start_depth = self._depth
+        self._depth += masked_statement.count("{") - masked_statement.count("}")
+        moved = (
+            self._rebinding.search(masked_statement)
+            if self._offset > 0 and self._rebinding is not None
+            else None
+        )
+        returned = _RETURN.search(masked_statement)
+        if moved is not None:
+            if self._depth == 0 or moved.group("assign") is not None:
+                self.stopped = True
+            else:
+                self._shadows.append(self._depth)
+        else:
+            self._attribute(masked_statement, start_depth)
+        if returned is not None:
+            depth = _depth_at(masked_statement, returned.start(), start_depth)
+            if depth > 0:
+                # A `return` ends a path inside a block, so the statements
+                # after the block are the first of the path that skipped it.
+                # A `return` at the top level of a helper hands control back
+                # to the caller, whose statements continue the same run.
+                self._pending = depth
+        while self._shadows and self._depth < self._shadows[-1]:
+            self._shadows.pop()
+        self._offset = at + 1
+        return not self.stopped
+
+    def _attribute(self, masked_statement: str, start_depth: int) -> None:
+        """Keep the statement if it is the command's, and begin its run."""
+        # A statement that begins by closing a block is no longer inside the
+        # shadow that block declared, so the shadow ends before the statement
+        # is attributed. A trailing `}` still belongs to the shadowed block, so
+        # the depth the statement ends at is not used.
+        _end_shadows(self._shadows, masked_statement, start_depth)
+        offset = self._offset
+        end = offset + len(masked_statement)
+        owned = not self._shadows and (
+            offset == 0 or _owns_statement(self._window.masked, offset, end, self._name)
+        )
+        launch = (
+            launch_at(self._window.masked, offset, end, self._name) if owned else None
+        )
+        if self._boundary is not None and not _starts_a_run(
+            masked_statement,
+            start_depth,
+            None if launch is None else launch - offset,
+            self._boundary,
+        ):
+            # The statement is still inside the block the command ran in, so
+            # it is that path's code after the run rather than another run.
+            return
+        if self._boundary is not None:
+            self._start(self._boundary)
+            self._boundary = None
+        if not owned:
+            return
+        if self._pending is not None:
+            self._start(self._pending)
+            self._pending = None
+        launched_at = _record_statement(
+            self._statements, self._window, (offset, end), launch, start_depth
+        )
+        if launched_at == 0:
+            self.stopped = True
+        elif launched_at is not None:
+            self._boundary = launched_at
+
+    def _start(self, depth: int) -> None:
+        """Begin a run at the next statement recorded, leaving branch *depth*."""
+        if self._starts[-1][0] != len(self._statements):
+            self._starts.append((len(self._statements), depth))
+
+    def result(self) -> CommandRead:
+        """Return the statements kept and where their runs begin."""
+        return CommandRead(self._statements, self._starts)
 
 
 def _own_statements(text: str, start: int, window: Window) -> CommandRead:
@@ -221,12 +391,15 @@ def _own_statements(text: str, start: int, window: Window) -> CommandRead:
     reached with no block open does end the read, because everything after it
     is a reuse of the command rather than another run. The statements after a
     conditional launch but still inside its block are that path's code after
-    the run, so they are not read.
+    the run, so they are not read. A `return` inside a block ends its path in
+    the same way, wherever the `return` was written, so a helper that returns
+    early does not hide the caller's later run.
 
-    A later declaration of the command's name, or an assignment to it, moves
-    the name to another value for the rest of that block, so a statement inside
-    the block is not the command's, and attribution resumes after it; a
-    declaration at the command's own level ends the read.
+    A later declaration of the command's name shadows it inside that block, so
+    a statement inside the block is not the command's, and attribution resumes
+    after it; a declaration at the command's own level ends the read. An
+    assignment to the name ends the read wherever it sits, because the block
+    that ran it may have been entered.
 
     Statement boundaries and block depth come from the masked window, so a
     brace in a string literal does not make a later flag look conditional,
@@ -240,67 +413,11 @@ def _own_statements(text: str, start: int, window: Window) -> CommandRead:
     CommandRead
         The statements, grouped by the run they belong to.
     """
-    name = _bound_name(text, start)
-    rebinding = _rebinding(name)
-    statements: list[tuple[str, str, int]] = []
-    starts = [0]
-    shadows: list[int] = []
-    offset = 0
-    depth = 0
-    # The depth of the block the last conditional launch ran in, while the
-    # statements that follow it on that path are still being read.
-    boundary: int | None = None
+    read = _StatementRead(window, _bound_name(text, start))
     for at, char in enumerate(window.masked + ";"):
-        if char != ";":
-            continue
-        masked_statement = window.masked[offset:at]
-        start_depth = depth
-        depth += masked_statement.count("{") - masked_statement.count("}")
-        rebinds = (
-            offset > 0
-            and rebinding is not None
-            and rebinding.search(masked_statement) is not None
-        )
-        if rebinds and depth == 0:
+        if char == ";" and not read.feed(at):
             break
-        if rebinds:
-            shadows.append(depth)
-        else:
-            # A statement that begins by closing a block is no longer inside
-            # the shadow that block declared, so the shadow ends before the
-            # statement is attributed. A trailing `}` still belongs to the
-            # shadowed block, so the depth the statement ends at is not used.
-            _end_shadows(shadows, masked_statement, start_depth)
-            owned = not shadows and (
-                offset == 0 or _owns_statement(window.masked, offset, at, name)
-            )
-            launch = launch_at(window.masked, offset, at, name) if owned else None
-            skip = False
-            if boundary is not None:
-                # The launch is measured within the statement, which is the
-                # text :func:`_launch_depth` counts braces in.
-                if _starts_a_run(
-                    masked_statement,
-                    start_depth,
-                    None if launch is None else launch - offset,
-                    boundary,
-                ):
-                    starts.append(len(statements))
-                    boundary = None
-                else:
-                    skip = True
-            if owned and not skip:
-                launched_at = _record_statement(
-                    statements, window, (offset, at), launch, start_depth
-                )
-                if launched_at == 0:
-                    break
-                if launched_at is not None:
-                    boundary = launched_at
-        while shadows and depth < shadows[-1]:
-            shadows.pop()
-        offset = at + 1
-    return CommandRead(statements, starts)
+    return read.result()
 
 
 def _record_statement(
@@ -331,7 +448,7 @@ def _record_statement(
     ))
     if launch is None:
         return None
-    return _launch_depth(window.masked[start:end], launch - start, start_depth)
+    return _depth_at(window.masked[start:end], launch - start, start_depth)
 
 
 def _starts_a_run(
@@ -345,7 +462,9 @@ def _starts_a_run(
     A statement that reaches the top level again (`}` closing the block the
     launch sat in, or an `else` arm) is on another path, so its arguments are a
     run of their own. A statement still inside the launched block is code that
-    runs after the command has already run on that path.
+    runs after the command has already run on that path. A statement that
+    begins by closing the block is judged by the depth it reaches, not by the
+    depth it starts at, because the arguments it adds are outside the block.
 
     Returns
     -------
@@ -355,8 +474,8 @@ def _starts_a_run(
     if _ELSE.match(masked_statement) is not None:
         return True
     if launch is None:
-        return start_depth < boundary
-    return _launch_depth(masked_statement, launch, start_depth) < boundary
+        return _entry_depth(masked_statement, start_depth) < boundary
+    return _depth_at(masked_statement, launch, start_depth) < boundary
 
 
 def is_probe(text: str, start: int, window: Window) -> bool:
@@ -530,10 +649,12 @@ def _run_compiles(run: list[tuple[str, str, int]], name: str | None) -> bool:
     """Report whether one run of the command adds compiling work before it launches.
 
     A help flag makes cargo print its help and exit, so a run that is given one
-    compiles nothing whatever its subcommand says. Otherwise the subcommand,
-    the first word that is neither an option nor an option's value, decides.
-    A word the reader cannot see leaves the subcommand open, and then any
-    compiling argument before the launch is enough.
+    compiles nothing whatever its subcommand says. Only a help flag given on
+    every path counts: one added inside a block is absent when that block does
+    not run, and the run then compiles. Otherwise the subcommand, the first
+    word that is neither an option nor an option's value, decides. A word the
+    reader cannot see leaves the subcommand open, and then any compiling
+    argument before the launch is enough.
 
     Returns
     -------
@@ -545,7 +666,12 @@ def _run_compiles(run: list[tuple[str, str, int]], name: str | None) -> bool:
         for statement, masked_statement, _depth in run
         for word in _argument_words(statement, masked_statement, name)
     )
-    if any(word in _HELP_FLAGS for word in words):
+    unconditional = _cargo_options(
+        word
+        for statement, masked_statement, depth in run
+        for word in _probe_words(statement, masked_statement, depth, name)
+    )
+    if any(word in _HELP_FLAGS for word in unconditional):
         return False
     first = _first_positional(words)
     if first is not None:
