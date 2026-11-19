@@ -162,6 +162,13 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "guarded_xargs_arg_file": Scenario(makefile="guarded-xargs-arg-file"),
     "xargs_arg_file": Scenario(makefile="xargs-arg-file"),
     "untracked_ls_files": Scenario(makefile="untracked-ls-files"),
+    # Long xargs options, informational modes and unquoted globs are further
+    # ways to claim enumeration evidence without reading the listing.
+    "guarded_xargs_help": Scenario(makefile="guarded-xargs-help"),
+    "guarded_xargs_long_arg_file": Scenario(makefile="guarded-xargs-long-arg-file"),
+    "xargs_long_arg_file": Scenario(makefile="xargs-long-arg-file"),
+    "guarded_unquoted_pathspec": Scenario(makefile="guarded-unquoted-pathspec"),
+    "unquoted_pathspec": Scenario(makefile="unquoted-pathspec"),
     "config_file_other": Scenario(makefile="config-file-other"),
     "config_file_attached": Scenario(makefile="config-file-attached"),
     "config_short_attached": Scenario(makefile="config-short-attached"),

@@ -903,10 +903,13 @@ makes the recipe fail, the same shell variable on both redirections, `-z` and
 `-0` keeping the listing NUL-delimited, `&&` so a failed enumeration cannot
 reach the linter, and no trap other than the `rm -f` cleanup (which may be
 omitted). The pathspecs must be whole arguments, so `*.yml.bak` does not count
-as `*.yml`. `git ls-files` may use only `-z`, `-c`/`--cached`, `--full-name` and
-`--`, and `xargs` may not use `-a`/`--arg-file` or `-d`/`--delimiter`, because
-those change which files are listed or read. `$$` is shell syntax rather than a
-Make variable, so `$$(mktemp)` is not reported as unresolved.
+as `*.yml`, and a wildcard must be quoted so the shell does not expand it first.
+`git ls-files` may use only `-z`, `-c`/`--cached`, `--full-name` and `--`.
+`xargs` may not use `-a`/`--arg-file` or `-d`/`--delimiter`, because those
+change which files are read, nor `--help`, `--show-limits` or `--version`,
+which exit without running the linter; long options are matched by prefix,
+since any unambiguous abbreviation is accepted. `$$` is shell syntax rather
+than a Make variable, so `$$(mktemp)` is not reported as unresolved.
 
 yamllint must run from the repository root, because it resolves `extends:`
 against the current directory.

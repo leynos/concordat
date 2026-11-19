@@ -573,6 +573,48 @@ test_untracked_ls_files if {
   }
 }
 
+# An informational xargs mode prints help and never runs the linter.
+test_guarded_xargs_help if {
+  findings := policy.deny with input as data.fixtures.guarded_xargs_help
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# Long spellings of the input-source option bypass a short-option-only check.
+test_guarded_xargs_long_arg_file if {
+  findings := policy.deny with input as data.fixtures.guarded_xargs_long_arg_file
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+test_xargs_long_arg_file if {
+  findings := policy.deny with input as data.fixtures.xargs_long_arg_file
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
+# An unquoted glob is expanded by the shell before Git sees it, so the
+# pathspecs that reach Git depend on the root directory's contents.
+test_guarded_unquoted_pathspec if {
+  findings := policy.deny with input as data.fixtures.guarded_unquoted_pathspec
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+test_unquoted_pathspec if {
+  findings := policy.deny with input as data.fixtures.unquoted_pathspec
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
 # Printing a command is not running it.
 test_echo_decoy if {
   findings := policy.deny with input as data.fixtures.echo_decoy

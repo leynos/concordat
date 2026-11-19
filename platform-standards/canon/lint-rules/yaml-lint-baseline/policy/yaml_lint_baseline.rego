@@ -535,10 +535,36 @@ ls_files_arguments(text) := {argument |
 	argument != ""
 }
 
+# Matching quotes keep the shell from expanding a glob before Git sees it.
+is_shell_quoted(token) if {
+	startswith(token, "'")
+	endswith(token, "'")
+}
+
+is_shell_quoted(token) if {
+	startswith(token, `"`)
+	endswith(token, `"`)
+}
+
+# An unquoted glob is expanded by the shell first, so the pathspec Git receives
+# is whatever the working directory happened to contain, not the glob.
+unquoted_glob(token) if {
+	not is_shell_quoted(token)
+	some glob in {"*", "?", "["}
+	contains(token, glob)
+}
+
+ls_files_has_unquoted_glob(text) if {
+	some token in split(trim_space(text), " ")
+	not startswith(token, "-")
+	unquoted_glob(token)
+}
+
 # True when the arguments select exactly the configured YAML pathspecs, with
 # no additional pathspec that could narrow the walk, and no option that
 # changes the selection.
 ls_files_covers_tracked_yaml(text) if {
+	not ls_files_has_unquoted_glob(text)
 	arguments := ls_files_arguments(text)
 	options := {argument | some argument in arguments; startswith(argument, "-")}
 	count(options - ls_files_safe_options) == 0
@@ -550,12 +576,24 @@ ls_files_covers_tracked_yaml(text) if {
 	}
 }
 
-# `-a`/`--arg-file` makes xargs read a different list, and `-d`/`--delimiter`
-# overrides the NUL delimiter that `-0` establishes. A recipe using either
-# cannot prove that xargs reads the file Git's listing was written to.
+# `-a`/`--arg-file` makes xargs read a different list, `-d`/`--delimiter`
+# overrides the NUL delimiter that `-0` establishes, and `--help`,
+# `--show-limits` and `--version` make xargs print and exit without running the
+# linter. getopt_long accepts any unambiguous prefix, so long options are
+# matched by prefix too; an invalid abbreviation makes xargs fail instead.
 xargs_unsafe_option(option) if startswith(option, "-a")
 
 xargs_unsafe_option(option) if startswith(option, "-d")
+
+xargs_unsafe_option(option) if startswith(option, "--a")
+
+xargs_unsafe_option(option) if startswith(option, "--d")
+
+xargs_unsafe_option(option) if startswith(option, "--h")
+
+xargs_unsafe_option(option) if startswith(option, "--s")
+
+xargs_unsafe_option(option) if startswith(option, "--v")
 
 xargs_options_are_safe(text) if {
 	every option in {token |
