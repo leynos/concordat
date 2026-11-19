@@ -20,6 +20,7 @@ from concordat.rules.nested_cargo_target import (
     UNKNOWN,
     classify_value,
     read_target,
+    target_signature,
 )
 
 TEMP_SOURCE = "let scratch = tempfile::tempdir().unwrap();\n"
@@ -238,6 +239,56 @@ def test_an_unconditional_unreadable_argument_may_be_the_flag() -> None:
         ("arg", "path"),
     ]
     assert read_target(after_option, TEMP_SOURCE).state == PRIVATE
+
+
+def test_a_conditional_argument_leaves_the_previous_option_unknown() -> None:
+    """An option spelled before a conditional call may already have its value.
+
+    `args(["build", "--manifest-path"])`, a conditional `arg("Cargo.toml")` and
+    then `arg(flag)`: if the branch ran, `flag` is free to be
+    `--target-dir=<private path>`. Reading it as the manifest path's value would
+    report the temporary variable as the target, so it must be unknown instead.
+    """
+    calls = [
+        env("CARGO_TARGET_DIR", "scratch.path()"),
+        ("args", '["build", "--manifest-path"]'),
+        ("unseen-arguments", '"Cargo.toml"'),
+        ("arg", "flag"),
+    ]
+    assert read_target(calls, TEMP_SOURCE).state == UNKNOWN
+
+
+def test_the_conditional_argument_reset_does_not_reach_the_unconditional_case() -> None:
+    """An option and its value written unconditionally are still read as such."""
+    unconditional = [
+        env("CARGO_TARGET_DIR", "scratch.path()"),
+        ("args", '["build", "--manifest-path"]'),
+        ("arg", '"Cargo.toml"'),
+    ]
+    assert read_target(unconditional, TEMP_SOURCE).state == PRIVATE
+
+
+def test_a_conditional_call_after_the_separator_leaves_the_target_inherited() -> None:
+    """After `--` the rest of the line is the program's, so no word is cargo's flag."""
+    calls = [
+        ("args", '["run", "--"]'),
+        ("unseen-arguments", ""),
+        ("arg", "flag"),
+    ]
+    assert read_target(calls, "").state == INHERITED
+
+
+def test_the_target_signature_keeps_an_argument_the_reader_cannot_read() -> None:
+    """A run that adds an unreadable argument may build somewhere else.
+
+    An all-literal call cannot change where the command builds, so unchanged
+    runs and harmless literal additions still collapse to one signature.
+    """
+    literal = ("args", '["build", "--frozen"]')
+    assert target_signature([literal]) == ()
+    assert target_signature([("arg", "flag")]) == (("arg", "flag"),)
+    assert target_signature([("unseen-arguments", "")]) == (("unseen-arguments", ""),)
+    assert target_signature([literal, ("arg", '"--release"')]) == ()
 
 
 def test_an_escaped_variable_name_is_not_its_text() -> None:
