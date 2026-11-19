@@ -289,8 +289,8 @@ def test_a_checkout_replaced_while_its_route_is_resolved_is_refused(
 
 
 @pytest.mark.skipif(
-    not hasattr(os, "geteuid") or os.geteuid() == 0,
-    reason="root and non-POSIX hosts bypass directory permissions",
+    not hasattr(os, "geteuid") or os.geteuid() == 0 or not getattr(os, "O_PATH", 0),
+    reason="search-only traversal needs a non-root host that provides O_PATH",
 )
 def test_a_search_only_intermediate_directory_is_still_walked(
     tmp_path: pathlib.Path,
@@ -301,6 +301,11 @@ def test_a_search_only_intermediate_directory_is_still_walked(
     directory that grants only search, and the audit would stop before reading
     the workflows it is allowed to read. Only the final `workflows` component
     needs a readable handle.
+
+    The guarantee rests on `O_PATH`, which is how the intermediate components
+    avoid needing read permission. A host without it opens them readably, so
+    the search-only case cannot be exercised there and the test is skipped
+    rather than asserting a behaviour that platform does not promise.
     """
     checkout = tmp_path / "repo"
     workflow_directory = checkout / ".github" / "workflows"
