@@ -24,14 +24,20 @@ configuration from a repository that needs none:
 - only **test code** counts: a file under `tests/`, `test_support/`, `testing/`
   or `ui/` (or named `*_test.rs` or `*_tests.rs`), or the braces of an item
   marked `#[cfg(test)]` in another file (production code after a closed
-  `mod tests` is not test code). `build.rs`, `xtask`, hidden, `target`,
+  `mod tests` is not test code). The marked item's first `{` or `;` is read at
+  bracket depth zero, so a `;` inside a signature (`[u8; 4]`, a type in
+  parentheses) does not end it early. `build.rs`, `xtask`, hidden, `target`,
   `vendor`, `node_modules`, `build`, `dist` and `venv` trees are skipped;
 - a `cargo` spawn counts only with a **compiling subcommand** (`build`,
   `check`, `test`, `run`, `package`, `clippy`, `doc`, `install`, `publish`,
   `bench`, `miri`, `nextest`, `llvm-cov`, `rustdoc`, `rustc`) among **the same
   command's** arguments, read from the spawn to the next `Command::new` or the
-  next function; a command bound to a name and handed to a function in the same
-  file is also read against that function's body. `cargo metadata` and
+  next function. A command bound to a name and handed to a helper defined once
+  in the same file is also read against that helper's body, even when the call
+  spans lines; only statements on the parameter that receives the command
+  count, so another command built in the helper does not contribute. A helper
+  defined more than once, or one whose parameter position, receiver or type is
+  not plain, is declined rather than guessed. `cargo metadata` and
   `cargo config` do not count;
 - a `rustc` spawn counts, unless an argument added to that same command is a
   version flag (`--version`, `-V`, `-vV`) or a `--print` of a table that needs
@@ -86,4 +92,6 @@ filtersets, or check that the timeout values are sensible: whether a period is
 long enough for a cold build is a sizing question for the repository. A
 compiler started through a library (`trybuild`, `ui_test`) or by a tool the
 test invokes is not seen; the Whitaker lints proposed in its RFC 0004 cover the
-typed-code half of the problem.
+typed-code half of the problem. The scan resolves no Rust names or types: when
+a helper's definition is ambiguous it declines the handoff, which can miss
+compiler work in that helper.

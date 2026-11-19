@@ -490,6 +490,115 @@ def test_a_bound_command_handed_to_a_query_helper_is_not_compiler_work(
     assert ids(tmp_path) == set()
 
 
+HANDED_ON_WRAPPED = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add_build_request(\n        &mut command,\n    );\n}\n"
+    "fn add_build_request(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_helper_call_that_spans_lines_is_still_read_with_the_helper(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A wrapped call with a trailing comma still hands on the bound command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HANDED_ON_WRAPPED)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+DUPLICATE_HELPER = (
+    "use std::process::Command;\n"
+    "mod b {\n"
+    "    use super::Command;\n"
+    "    pub fn add_build(command: &mut Command) {\n"
+    '        command.arg("build").status().unwrap();\n'
+    "    }\n}\n"
+    "mod a {\n"
+    "    use super::Command;\n"
+    "    fn add_build(command: &mut Command) {\n"
+    '        command.arg("metadata").output().unwrap();\n'
+    "    }\n"
+    "    #[test]\n"
+    "    fn reads() {\n"
+    '        let mut command = Command::new(env!("CARGO"));\n'
+    "        add_build(&mut command);\n"
+    "        command.status().unwrap();\n"
+    "    }\n}\n"
+)
+
+
+def test_a_helper_name_defined_twice_is_not_read_from_another_module(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A duplicated helper name declines rather than borrowing the other body."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", DUPLICATE_HELPER)
+    assert ids(tmp_path) == set()
+
+
+RECEIVER_BLIND_GIT = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add_metadata_request(&mut command);\n}\n"
+    "fn add_metadata_request(command: &mut Command) {\n"
+    '    Command::new("git").arg("build").status().unwrap();\n'
+    '    command.arg("metadata").output().unwrap();\n}\n'
+)
+
+
+def test_an_unrelated_command_in_a_helper_is_not_the_bound_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A git command that also takes `build` is not the cargo command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", RECEIVER_BLIND_GIT)
+    assert ids(tmp_path) == set()
+
+
+SECOND_COMMAND_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut other = Command::new("git");\n'
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add(&mut other, &mut command);\n}\n"
+    "fn add(first: &mut Command, second: &mut Command) {\n"
+    '    first.arg("build").status().unwrap();\n'
+    '    second.arg("metadata").output().unwrap();\n}\n'
+)
+
+
+def test_a_helper_argument_is_read_from_the_parameter_at_the_bound_position(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A second command parameter's `build` is not the bound command's argument."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SECOND_COMMAND_PARAMETER)
+    assert ids(tmp_path) == set()
+
+
+RENAMED_HELPER_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut cmd = Command::new(env!("CARGO"));\n'
+    "    add_build(&mut cmd);\n}\n"
+    "fn add_build(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_helper_parameter_named_differently_still_reads_its_arguments(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The formal parameter name, not the caller's binding, selects statements."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", RENAMED_HELPER_PARAMETER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
 def grouped_config(filter_expression: str) -> str:
     """Return a bounded configuration whose one grouped override uses a filter."""
     return CLEAN.replace("binary(ui)", filter_expression)
@@ -578,3 +687,38 @@ def test_test_scope_is_lexical_and_handed_on_commands_read_their_callee(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, path, source)
     assert ids(tmp_path) == expected
+
+
+MARKED_ARRAY_LENGTH = (
+    "use std::process::Command;\n"
+    "#[cfg(test)]\n"
+    "fn marked(len: [u8; 4]) {\n"
+    '    Command::new("cargo").arg("build").status().unwrap();\n'
+    "}\n"
+)
+MARKED_DECLARATION_THEN_PRODUCTION_BUILD = (
+    "#[cfg(test)]\n"
+    "mod tests;\n"
+    "use std::process::Command;\n"
+    "pub fn build() {\n"
+    '    Command::new("cargo").arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_semicolon_in_a_marked_signature_does_not_end_the_item(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An array length in a marked function's signature is not the item's end."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "src/lib.rs", MARKED_ARRAY_LENGTH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+def test_a_semicolon_only_marked_item_scopes_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`#[cfg(test)] mod tests;` is an item with no braces and no test code."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "src/lib.rs", MARKED_DECLARATION_THEN_PRODUCTION_BUILD)
+    assert ids(tmp_path) == set()
