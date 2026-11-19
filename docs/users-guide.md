@@ -1720,8 +1720,8 @@ were promoted to error severity.
 
 `--estate` and `--ledger` point the sweep at another manifest and ledger. Each
 ledger record names the evaluated package and the version read from that
-package's `rule.yaml`, so records from different rule packages never
-masquerade as one campaign.
+package's `rule.yaml`, so records from different rule packages never masquerade
+as one campaign.
 
 A manifest entry may pin a full forty-character commit SHA with `revision:`. A
 pinned entry is fetched at exactly that commit rather than at the

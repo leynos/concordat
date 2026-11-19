@@ -194,6 +194,7 @@ class TestRevisionCheckout:
         working_dirs: list[object] = []
 
         def fake_git(args: list[str], *, cwd: object = None, **_: object) -> str:
+            """Record each git invocation, answering `rev-parse` with the pin."""
             calls.append(list(args))
             working_dirs.append(cwd)
             return f"{_PIN}\n" if args[0] == "rev-parse" else ""
@@ -201,6 +202,7 @@ class TestRevisionCheckout:
         audited: list[str] = []
 
         def fake_run_rule(rule_package: str, _checkout: object) -> sweep.RuleRunResult:
+            """Record the package audited and return a clean verdict."""
             audited.append(rule_package)
             return sweep.RuleRunResult(
                 rule_package=rule_package,
@@ -236,8 +238,6 @@ class TestRevisionCheckout:
 def _result(package: str) -> sweep.RuleRunResult:
     """Return a clean result for *package*."""
     return sweep.RuleRunResult(rule_package=package, verdict="compliant", findings=())
-
-
 
 
 class TestCloneDestination:

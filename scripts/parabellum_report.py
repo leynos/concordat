@@ -277,8 +277,6 @@ def _title(package: str) -> str:
     return f"# Operation Parabellum `{package}` survey report"
 
 
-
-
 def render_report(
     ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH,
     package: str = RULE_PACKAGE,
@@ -374,7 +372,6 @@ def render_report(
     return "\n".join(lines)
 
 
-
 def _display_width(text: str) -> int:
     """Return *text*'s rendered column count, as `mdtablefix` measures it."""
     # `mdtablefix` sizes columns with the `unicode-width` crate, so a cell
@@ -423,4 +420,3 @@ def _aligned_table(rows: cabc.Sequence[tuple[str, ...]]) -> list[str]:
 
     delimiter = tuple("-" * width for width in widths)
     return [line(header), line(delimiter), *(line(row) for row in body)]
-# weave: run 'weave explain scripts/parabellum_report.py' for per-hunk detail, 'weave check' to verify your resolution

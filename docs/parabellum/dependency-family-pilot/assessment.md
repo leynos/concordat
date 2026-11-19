@@ -131,7 +131,7 @@ here.
 uv run python -m scripts.parabellum_sweep \
   --estate docs/parabellum/dependency-family-pilot/estate.yaml \
   --ledger docs/parabellum/dependency-family-pilot/ledger.jsonl \
-  --rule-package dependency-family-contracts
+  --package dependency-family-contracts
 uv run python -m scripts.parabellum_sweep report \
   --ledger docs/parabellum/dependency-family-pilot/ledger.jsonl \
   --output docs/parabellum/dependency-family-pilot/report.md

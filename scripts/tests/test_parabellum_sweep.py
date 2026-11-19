@@ -410,7 +410,6 @@ class TestSweep:
             "the error detail should carry the clone/audit failure message"
         )
 
-
     def test_a_pinned_entry_is_audited_at_its_revision(
         self,
         tmp_path: pathlib.Path,
