@@ -101,6 +101,11 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   its operand; `cat<<EOF` opens a here-document without spaces around the
   operator; and `program_position` unwraps wrappers, so `env $(CHECK)` expands
   the command the variable names. Five regression tests cover them.
+- A fifth review raised four more, all actioned: a parenthesized group runs
+  its contents; a backquoted substitution runs its command; a word split by a
+  backslash-newline is joined rather than broken; and an unquoted here-document
+  body is read for the substitutions it expands, while a quoted delimiter keeps
+  them literal. Five regression tests cover them.
 
 ## Lessons
 
@@ -142,6 +147,11 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   inside double quotes, and `\"` inside them is not the closing quote.
   Reconstructing a word after the quotes are gone cannot tell either case, so
   both are decided while the scanner still knows the quote state.
+- Skipping a region is not the same as ignoring it: a here-document body is
+  not commands, but an unquoted delimiter still expands the substitutions in
+  it, so the body is read for those while its lines stay data. The same
+  distinction decides whether a word is split: a backslash-newline joins its
+  two halves, a space does not.
 
 ## Estate survey (2026-11-19)
 

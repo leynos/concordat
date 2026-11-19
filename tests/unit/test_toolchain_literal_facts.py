@@ -762,3 +762,98 @@ def test_a_wrapped_command_variable_is_expanded(tmp_path: pathlib.Path) -> None:
     )
 
     assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_parenthesized_group_runs_its_command(tmp_path: pathlib.Path) -> None:
+    """`(cargo +nightly-...)` runs cargo in a subshell."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  (cargo +nightly-2026-10-30 check)
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_backquoted_command_substitution_runs_its_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A backquoted `` `cargo +nightly-...` `` executes cargo."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  version=`cargo +nightly-2026-10-30 --version`
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_line_continuation_does_not_break_the_word(tmp_path: pathlib.Path) -> None:
+    r"""A word split by backslash-newline is joined, so the override is read.
+
+    `car\<newline>go` is cargo, and the toolchain after it is selected.
+    """
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  car\\
+                  go +nightly-2026-10-30 test
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_an_unquoted_here_document_body_still_expands(tmp_path: pathlib.Path) -> None:
+    """An unquoted delimiter expands `$(cargo +nightly-...)` in its body."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  cat <<EOF
+                  $(cargo +nightly-2026-10-30 --version)
+                  EOF
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_quoted_here_document_body_does_not_expand(tmp_path: pathlib.Path) -> None:
+    """A quoted delimiter keeps `$(cargo +nightly-...)` literal."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  cat <<'EOF'
+                  $(cargo +nightly-2026-10-30 --version)
+                  EOF
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == []

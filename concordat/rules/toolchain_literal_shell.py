@@ -236,8 +236,10 @@ def _substitution_end(text: str, index: int) -> int:
     return len(text)
 
 
-def _skip_heredoc(text: str, index: int, delimiter: str, *, strip_tabs: bool) -> int:
-    """Return the index just past a here-document whose body ends at *delimiter*.
+def _heredoc_body(
+    text: str, index: int, delimiter: str, *, strip_tabs: bool
+) -> tuple[int, str]:
+    """Return the index past a here-document, and the body it delimits.
 
     *index* is where the operator stood. The body starts on the next line and
     runs to a line that is the delimiter alone, which is how a shell finds its
@@ -245,18 +247,55 @@ def _skip_heredoc(text: str, index: int, delimiter: str, *, strip_tabs: bool) ->
 
     Returns
     -------
-    int
+    tuple[int, str]
         The index of the first character after the terminator line, or the
-        end of the text when no terminator is written.
+        end of the text when no terminator is written, and the body itself.
     """
-    line_end = text.find("\n", index)
-    while line_end != -1:
-        next_end = text.find("\n", line_end + 1)
-        line = text[line_end + 1 : next_end if next_end != -1 else len(text)]
+    start = text.find("\n", index)
+    if start == -1:
+        return len(text), ""
+    start += 1
+    line_start = start
+    while True:
+        line_end = text.find("\n", line_start)
+        line = text[line_start : line_end if line_end != -1 else len(text)]
         if (line.lstrip("\t") if strip_tabs else line) == delimiter:
-            return len(text) if next_end == -1 else next_end + 1
-        line_end = next_end
-    return len(text)
+            return len(text) if line_end == -1 else line_end + 1, text[start:line_start]
+        if line_end == -1:
+            return len(text), text[start:]
+        line_start = line_end + 1
+
+
+def _body_substitutions(body: str) -> list[str]:
+    """Return the command substitutions an unquoted here-document body runs.
+
+    A body is input rather than commands, but `$(...)` and backticks in it
+    still execute, because the shell expands an unquoted delimiter's body.
+
+    Returns
+    -------
+    list[str]
+        The text of each substitution the body runs.
+    """
+    found: list[str] = []
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if char == "\\":
+            index += 2
+        elif _opens_substitution(body, index):
+            end = _substitution_end(body, index)
+            closed = body[end - 1 : end] == ")"
+            found.append(body[index + 2 : end - 1 if closed else end])
+            index = end
+        elif char == "`":
+            end = body.find("`", index + 1)
+            end = len(body) if end == -1 else end
+            found.append(body[index + 1 : end])
+            index = end + 1
+        else:
+            index += 1
+    return found
 
 
 @dataclasses.dataclass(slots=True)
@@ -265,8 +304,8 @@ class _Scan:
 
     The scanner's state lives here so the character loop stays a loop: a word
     ends at a separator, a command ends at a shell break, a here-document body
-    is skipped whole between the two, and a command substitution's text is
-    kept so the command it runs can be read separately.
+    is skipped between the two, and a command substitution's text is kept so
+    the command it runs can be read separately.
     """
 
     commands: list[list[str]] = dataclasses.field(default_factory=list)
@@ -276,6 +315,7 @@ class _Scan:
     delimiter: str = ""
     needs_delimiter: bool = False
     strip_tabs: bool = False
+    delimiter_quoted: bool = False
 
     def end_word(self) -> None:
         """Complete the word being read, using it as a delimiter when due."""
@@ -308,7 +348,13 @@ class _Scan:
             # A command after `;` on the declaration line still runs; the body
             # it feeds starts on the next line.
             delimiter, self.delimiter = self.delimiter, ""
-            return _skip_heredoc(text, index, delimiter, strip_tabs=self.strip_tabs)
+            quoted, self.delimiter_quoted = self.delimiter_quoted, False
+            end, body = _heredoc_body(
+                text, index, delimiter, strip_tabs=self.strip_tabs
+            )
+            if not quoted:
+                self.substitutions.extend(_body_substitutions(body))
+            return end
         return index + 1
 
     def open_heredoc(self, text: str, index: int) -> int:
@@ -324,6 +370,7 @@ class _Scan:
             self.end_word()
         self.strip_tabs = text.startswith("<<-", index)
         self.needs_delimiter = True
+        self.delimiter_quoted = False
         return index + (3 if self.strip_tabs else 2)
 
     def read_substitution(self, text: str, index: int) -> int:
@@ -340,6 +387,22 @@ class _Scan:
         self.current.append(text[index:end])
         return end
 
+    def read_backquote(self, text: str, index: int) -> int:
+        """Record the command a backquoted substitution runs and keep its text.
+
+        Returns
+        -------
+        int
+            The index after the closing backtick.
+        """
+        end = index + 1
+        while end < len(text) and text[end] != "`":
+            end += 2 if text[end] == "\\" else 1
+        closed = text[end : end + 1] == "`"
+        self.substitutions.append(text[index + 1 : end])
+        self.current.append(text[index : end + 1 if closed else end])
+        return end + 1 if closed else end
+
 
 def _read_quoted(
     text: str, index: int, quote: str, scan: _Scan
@@ -348,7 +411,7 @@ def _read_quoted(
 
     In double quotes a backslash protects the next character, so `\"` does not
     close the word, and a command substitution still runs even though its text
-    is quoted.
+    is quoted. In single quotes neither is true.
 
     Returns
     -------
@@ -358,11 +421,18 @@ def _read_quoted(
     char = text[index]
     if char == quote:
         return None, index + 1
-    if quote == '"' and char == "\\" and index + 1 < len(text):
-        scan.current.append(text[index + 1])
+    if quote != '"':
+        scan.current.append(char)
+        return quote, index + 1
+    if char == "\\" and index + 1 < len(text):
+        # A backslash-newline is removed outright rather than ending the word.
+        if text[index + 1] != "\n":
+            scan.current.append(text[index + 1])
         return quote, index + 2
-    if quote == '"' and _opens_substitution(text, index):
+    if _opens_substitution(text, index):
         return quote, scan.read_substitution(text, index)
+    if char == "`":
+        return quote, scan.read_backquote(text, index)
     scan.current.append(char)
     return quote, index + 1
 
@@ -375,28 +445,39 @@ def _comment_end(text: str, index: int) -> int:
 
 def _scan(text: str) -> _Scan:
     """Read *text* into its commands and the substitutions that run in them."""
-    folded = re.sub(r"\\\n[ \t]*", " ", text)
     scan = _Scan()
     quote: str | None = None
     index = 0
-    while index < len(folded):
-        char = folded[index]
+    while index < len(text):
+        char = text[index]
         if quote is not None:
-            quote, index = _read_quoted(folded, index, quote, scan)
+            quote, index = _read_quoted(text, index, quote, scan)
         elif char in "'\"":
+            # A quoted here-document delimiter suppresses its body's expansion.
+            scan.delimiter_quoted = scan.delimiter_quoted or scan.needs_delimiter
             quote = char
             index += 1
-        elif char == "\\" and index + 1 < len(folded):
-            scan.current.append(folded[index + 1])
+        elif char == "\\" and index + 1 < len(text):
+            # A backslash-newline is removed outright rather than ending the
+            # word, so `car\<newline>go` runs cargo.
+            if text[index + 1] != "\n":
+                scan.current.append(text[index + 1])
             index += 2
-        elif _opens_substitution(folded, index):
-            index = scan.read_substitution(folded, index)
+        elif _opens_substitution(text, index):
+            index = scan.read_substitution(text, index)
+        elif char == "`":
+            index = scan.read_backquote(text, index)
         elif char == "#" and not scan.current:
-            index = _comment_end(folded, index)
-        elif _opens_heredoc(folded, index):
-            index = scan.open_heredoc(folded, index)
+            index = _comment_end(text, index)
+        elif _opens_heredoc(text, index):
+            index = scan.open_heredoc(text, index)
+        elif char in "()":
+            # A parenthesized group runs its contents: `(cargo +nightly-...)`.
+            if scan.current:
+                scan.end_word()
+            index += 1
         elif char.isspace() or char in _SHELL_BREAKS:
-            index = scan.separate(folded, char, index)
+            index = scan.separate(text, char, index)
         else:
             scan.current.append(char)
             index += 1
@@ -412,11 +493,12 @@ def shell_commands(text: str) -> list[list[str]]:
     Quoted text stays inside one word and the quotes are dropped, so
     `echo "cargo +nightly-2026-10-30"` is an argument to `echo` rather than a
     selection, and `RUSTUP_TOOLCHAIN="$(PIN)"` is still the reference. An
-    unquoted `#` at a word boundary starts a comment. Backslash line
-    continuations are folded first, as they are in a recipe. A here-document
-    body is command input rather than commands, so it is skipped whole: a
-    date a script feeds to `cat` is not a date it selects. The operator need
-    not be spaced from the command, so `cat<<EOF` opens one too.
+    unquoted `#` at a word boundary starts a comment. A backslash-newline is
+    removed without ending the word, as it is in a recipe. A here-document
+    body is command input rather than commands, so it is skipped: a date a
+    script feeds to `cat` is not a date it selects. The operator need not be
+    spaced from the command, so `cat<<EOF` opens one too. A parenthesized
+    group and a backquoted substitution each run their own contents.
 
     Returns
     -------
