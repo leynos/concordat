@@ -623,7 +623,7 @@ CONDITIONAL_PROBE = (
     "use std::process::Command;\n"
     "fn compile_after_check() {\n"
     '    let mut command = Command::new(env!("RUSTC"));\n'
-    "    add_build(&mut command, true);\n}\n"
+    "    add_build(&mut command, false);\n}\n"
     "fn add_build(command: &mut Command, query: bool) {\n"
     "    if query {\n"
     '        command.arg("--version");\n'
@@ -1002,6 +1002,207 @@ def test_a_comparison_in_a_const_generic_keeps_parameter_positions(
     """The `<` of `1 < 2` is not a generic opener, so `target` stays second."""
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", CONST_COMPARISON_PARAMETER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SPACED_QUALIFIED_CALL = QUALIFIED_CALL.replace(
+    "support::configure(", "support:: configure("
+)
+
+
+def test_a_qualified_call_with_a_space_after_the_path_is_not_the_function(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Rust allows whitespace after `::`, so `support:: configure` is still a path."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SPACED_QUALIFIED_CALL)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SPACED_METHOD_CALL = QUALIFIED_CALL.replace(
+    "support::configure(", "harness . configure("
+)
+
+
+def test_a_method_call_with_a_space_before_the_name_is_not_the_function(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A receiver and a `.` name a method, however the call is spaced."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SPACED_METHOD_CALL)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+COMMENT_MARKERS_IN_A_LITERAL = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "add_build(&mut command);\n}\n"
+    "fn add_build(command: &mut Command) {\n"
+    '    command.env("RUSTDOC_LINK", "https://r/a").arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_comment_marker_in_a_string_is_not_a_comment(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `//` inside a string does not blank the argument that follows it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", COMMENT_MARKERS_IN_A_LITERAL)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SHORT_CIRCUITED_PROBE = (
+    "use std::process::Command;\n"
+    "fn compile_after_check() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    add_version(&mut command, query_only);\n"
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+    "fn add_version(command: &mut Command, query: bool) {\n"
+    '    query && command.arg("--version").status().is_ok();\n'
+    '    command.arg("input.rs");\n'
+    "    let _ = query;\n}\n"
+)
+SHORT_CIRCUITED_PROBE_IF = SHORT_CIRCUITED_PROBE.replace(
+    '    query && command.arg("--version").status().is_ok();\n',
+    '    if query && command.arg("--version").status().is_ok() {}\n',
+)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [SHORT_CIRCUITED_PROBE, SHORT_CIRCUITED_PROBE_IF],
+    ids=["in-a-let", "in-an-if-condition"],
+)
+def test_a_probe_behind_a_short_circuit_is_not_unconditional(
+    tmp_path: pathlib.Path, source: str
+) -> None:
+    """`query && command.arg("--version")` skips the flag when `query` is false."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", source)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+UNFINISHED_HELPER_BLOCK = (
+    "use std::process::Command;\n"
+    "fn probe_toolchain() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    add_version(&mut command, query_only);\n"
+    '    command.arg("--version");\n'
+    "    command.status().unwrap();\n}\n"
+    "fn add_version(command: &mut Command, query: bool) {\n"
+    "    if query {\n"
+    '        command.arg("--version");\n'
+    '        let mut other = Command::new("git");\n'
+    '        other.arg("status");\n'
+    "    }\n"
+    "    let _ = query;\n}\n"
+)
+
+
+def test_a_helper_block_that_no_statement_closes_does_not_hide_a_later_probe(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper's `if` ends with its body, so the caller's probe is unconditional."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", UNFINISHED_HELPER_BLOCK)
+    assert ids(tmp_path) == set()
+
+
+REASSIGNED_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut git = Command::new("git");\n'
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add_metadata(&mut command, &mut git);\n}\n"
+    "fn add_metadata(command: &mut Command, other: &mut Command) {\n"
+    "    command = other;\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_an_argument_after_the_parameter_is_reassigned_is_not_the_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`command = ..` rebinds the parameter, so a later `build` is another command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", REASSIGNED_PARAMETER)
+    assert ids(tmp_path) == set()
+
+
+OTHER_RECEIVER_IN_METHOD_ARGUMENT = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add_metadata(&mut command, &mut other);\n}\n"
+    "fn add_metadata(command: &mut Command, other: &mut Command) {\n"
+    '    command.env("PROGRAM", other.arg("build").get_program());\n'
+    '    command.arg("metadata").output().unwrap();\n}\n'
+)
+
+
+def test_an_argument_of_another_command_is_not_the_commands_argument(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`build` is added to `other`, which is only read, not the cargo command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", OTHER_RECEIVER_IN_METHOD_ARGUMENT)
+    assert ids(tmp_path) == set()
+
+
+SHIFTED_ARRAY_LENGTH = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    "    let mut flag = [0u8; 2];\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add(flag, &mut command);\n}\n"
+    "fn add(flag: [u8; 4 >> 1], target: &mut Command) {\n"
+    '    target.arg("build").status().unwrap();\n'
+    "    let _ = flag;\n}\n"
+)
+
+
+def test_a_right_shift_in_an_array_length_keeps_parameter_positions(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `>` of `4 >> 1` closes no bracket, so `target` stays second."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SHIFTED_ARRAY_LENGTH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+MARKED_SHIFTED_ARRAY_LENGTH = (
+    "use std::process::Command;\n"
+    "#[cfg(test)]\n"
+    "fn marked(len: [u8; 4 >> 1]) {\n"
+    '    Command::new("cargo").arg("build").status().unwrap();\n'
+    "    let _ = len;\n"
+    "}\n"
+)
+
+
+def test_a_right_shift_in_a_marked_signature_does_not_end_the_item(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The first `>` of `4 >> 1` does not leave the signature unbalanced."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "src/lib.rs", MARKED_SHIFTED_ARRAY_LENGTH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+METHOD_CALLBACK_PARAMETER = CALLER_PARAMETER_SHADOWS_HELPER.replace(
+    "fn run(configure: fn(&mut Command)) {",
+    "fn run(&self, configure: fn(&mut Command)) {",
+)
+
+
+def test_a_methods_callback_parameter_shadows_the_helper_name(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A receiver does not hide the parameters that follow it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", METHOD_CALLBACK_PARAMETER)
     assert ids(tmp_path) == {"NC-004"}
 
 

@@ -5,8 +5,8 @@ it has to tell `,`, `;` and brackets that structure the item from the same
 characters inside a type. Generics hold commas (`Result<A, B, E>`), arrays hold
 semicolons (`[u8; 4]`), const blocks hold comparisons (`Flag<{ 1 < 2 }>`), and
 a return arrow's `>` closes no generic. Each question here is answered against
-one depth scan (:func:`_depths`) that tracks which opener is still unclosed, so
-`>` never closes a `]` and a brace at the top level is the item's own body.
+one depth scan (:func:`_depths`) that counts the openers still unclosed, so `>`
+closes only a `<` and a brace at the top level is the item's own body.
 
 A brace inside a const block is read as depth and not as structure, and inside
 a block only braces are read, because the scan's callers only ever look at a
@@ -18,8 +18,9 @@ from __future__ import annotations
 import re
 import typing as typ
 
-# A `self` receiver makes the parameter the command reaches ambiguous, so the
-# callee analysis is declined rather than guessed.
+# A `self` receiver makes the parameter the command reaches ambiguous, so a
+# helper's own list is declined rather than guessed. A caller's list is still
+# read past it, because a later parameter can shadow a helper name.
 SELF_RECEIVER: typ.Final = re.compile(r"\s*(?:&\s*(?:'\w+\s*)?)?(?:mut\s+)?self\b")
 # Only a plain `[mut] name: Type` parameter names a value the helper can use.
 PARAMETER: typ.Final = re.compile(
@@ -27,64 +28,53 @@ PARAMETER: typ.Final = re.compile(
 )
 
 
-def _join(depth: tuple[str, ...], closer: str) -> tuple[str, ...]:
-    """Return the bracket depth left after reading *closer*.
-
-    Each bracket has its own opener, so a `>` does not close a `]` and a
-    comparison inside a const block cannot be mistaken for a generic.
-
-    Returns
-    -------
-    tuple[str, ...]
-        The depth with the matching opener removed, or unchanged when openers
-        remain, or the unbalanced marker when *closer* matches nothing.
-    """
-    opened = _OPENER.get(closer)
-    if opened is None or not depth:
-        return depth
-    if depth[-1] == opened:
-        return depth[:-1]
-    opener = depth.index(opened) if opened in depth else None
-    return (_UNBALANCED,) if opener is None else depth[:opener]
-
-
 _OPENER: typ.Final = {")": "(", "]": "[", ">": "<"}
-# Marks a closer that matches nothing; no opener uses this string.
-_UNBALANCED: typ.Final = "!"
 
 
-def _depths(masked: str, start: int) -> typ.Iterator[tuple[int, tuple[str, ...]]]:
-    """Yield each offset from *start* with the bracket depth before it.
+def _depths(masked: str, start: int) -> typ.Iterator[tuple[int, int | None]]:
+    """Yield each offset from *start* with the number of openers before it.
 
     A const block (`Tag<{ 1 + 1 }>`) counts as one level, and inside it only
     braces are read, so a `<` there is a comparison and not a generic opener.
     A brace at the top level is the item's own body and is reported at depth
     zero rather than entered. A return arrow is skipped whole.
 
+    A `>` with no `<` open is an operator (`4 >> 1`), not a closer, so it is
+    ignored; a `)` or `]` that opens nothing ends the scan with an unknown
+    depth, because nothing after it can be trusted.
+
     Yields
     ------
-    tuple[int, tuple[str, ...]]
-        Each offset, with the openers still unclosed before it.
+    tuple[int, int | None]
+        Each offset, with the openers still unclosed before it, or ``None``
+        when a closer matched nothing.
     """
-    depth: tuple[str, ...] = ()
+    openers: list[str] = []
     index = start
     while index < len(masked):
-        yield index, depth
+        yield index, len(openers)
         char = masked[index]
         if masked.startswith("->", index):
             index += 2
             continue
-        inside_brace = bool(depth) and depth[-1] == "{"
+        inside_brace = bool(openers) and openers[-1] == "{"
         if char == "{":
-            if depth:
-                depth += ("{",)
+            if openers:
+                openers.append("{")
         elif char == "}":
             if inside_brace:
-                depth = depth[:-1]
+                openers.pop()
         elif char in "([<" and not inside_brace:
-            depth += (char,)
+            openers.append(char)
         elif char in ")]>" and not inside_brace:
-            depth = _join(depth, char)
+            opened = _OPENER[char]
+            if opened in openers:
+                while openers[-1] != opened:
+                    openers.pop()
+                openers.pop()
+            elif char != ">":
+                yield index, None
+                return
         index += 1
 
 
@@ -103,7 +93,7 @@ def top_level_item(masked: str, start: int) -> tuple[int, str] | None:
         close cleanly.
     """
     for index, depth in _depths(masked, start):
-        if depth == (_UNBALANCED,):
+        if depth is None:
             return None
         if depth:
             continue
@@ -128,7 +118,7 @@ def _parameter_open(masked: str, start: int) -> int | None:
         The offset of the `(`, or None when none follows at depth zero.
     """
     for index, depth in _depths(masked, start):
-        if depth == (_UNBALANCED,):
+        if depth is None:
             return None
         if masked[index] == "(" and not depth:
             return index
@@ -161,8 +151,9 @@ def _split_parameters(parameters: str) -> list[str]:
     A generic type (`Result<A, B, E>`), an array length (`[u8; 4]`) or a
     function-pointer return (`fn() -> ()`) keeps its commas, so a position
     still indexes the parameter the caller passed. The `>` of a return arrow
-    is not a generic closer, and a comparison inside a const block
-    (`Flag<{ 1 < 2 }>`) is not a generic opener.
+    is not a generic closer, a comparison inside a const block
+    (`Flag<{ 1 < 2 }>`) is not a generic opener, and the `>>` of an array
+    length (`[u8; 4 >> 1]`) is a shift, not a closer.
 
     Returns
     -------
@@ -173,7 +164,7 @@ def _split_parameters(parameters: str) -> list[str]:
     parts: list[str] = []
     start = 0
     for index, depth in _depths(parameters, 0):
-        if parameters[index] == "," and not depth:
+        if parameters[index] == "," and depth == 0:
             parts.append(parameters[start:index])
             start = index + 1
     parts.append(parameters[start:])
@@ -236,14 +227,15 @@ def parameter_names(masked: str, start: int) -> list[str]:
     """Return the plain `name: Type` parameters of the function after *start*.
 
     A caller's own parameter shadows a free function of the same name, so the
-    caller's list is read at the call site. A `self` receiver hides which value
-    the command reaches, so a method's list is not read at all.
+    caller's list is read at the call site. A `self` receiver names the value
+    the method is called on, not a callback, so it is skipped rather than
+    ending the list; a named parameter after it still shadows a helper.
 
     Returns
     -------
     list[str]
         The names of the plain parameters, in order; empty when the list cannot
-        be read or holds a receiver.
+        be read or holds only a receiver.
     """
     open_at = _parameter_open(masked, start)
     if open_at is None:
@@ -252,10 +244,11 @@ def parameter_names(masked: str, start: int) -> list[str]:
     if close_at is None:
         return []
     parameters = masked[open_at + 1 : close_at]
+    parts = _split_parameters(parameters)
     if SELF_RECEIVER.match(parameters):
-        return []
+        parts = parts[1:]
     names: list[str] = []
-    for part in _split_parameters(parameters):
+    for part in parts:
         found = PARAMETER.fullmatch(part)
         if found is not None:
             names.append(found["name"])

@@ -3052,39 +3052,50 @@ those). Test code is a test directory's whole file, or the braces of an item
 marked `#[cfg(test)]` (read from the masked source, so a marker in a comment or
 a brace in a string moves nothing). The marked item's first `{` or `;` is read
 at bracket depth zero, so a `;` inside a signature does not end it early, and
-production code after a closed `mod tests` is not test code. A compiling
-argument counts only when it belongs to the same command as the spawn: it is
-read from the spawn to the next `Command::new` or the next function item, and
-only before that command's first launch. A command bound to a name and handed
-to a helper defined once in the same file is also read against that helper's
-body, because the helper adds the arguments. The call may span lines, and only
-statements on the parameter that receives the command count, so another command
-built in the helper does not contribute. Those statements are read at the call
-site with the parameter's name taken to be the caller's binding, so a launch in
-the helper or the caller ends the arguments in the order they run, and a
-version flag added through a renamed parameter still probes the caller's
-command. A helper defined more than once, or one whose receiver or receiving
-parameter is not a plain `name: Type` binding, is declined rather than guessed;
-so is a call that a binding in the caller's own function shadows, a parameter
-included, a call written as a path or method (`support::configure(..)`), or a
-helper that redeclares the parameter's name. A callee in another file is not
-seen either. These declinations err towards not demanding configuration and can
-miss compiler work. The configuration facts are the ones netsuke and rstest-bdd
-converged on: a serial group, an override that uses it, an explicit
-`slow-timeout` (profile or override) and a `global-timeout` (any profile, since
-netsuke sets it on `ci`). A top-level test binary must also be named by a
-grouped override's filter, by binary or by one of its functions, which is how
-ortho-config's BDD suite is told apart from netsuke's. The package does not
-evaluate nextest filtersets: a name appearing in a grouped filter is the
-evidence, which is cheap and errs towards acceptance. The name must be a whole
-word inside a `binary()`, `binary_id()` or `test()` predicate, so
-`binary(ui_extra)` does not name `ui`, and a regex argument such as
-`/^name($|::)/` is read whole. Exemptions name a test source and follow the
-NC-001 convention: repository, path, rationale and review trigger, where a
-blank rationale or trigger suppresses nothing. The package ships at `warning`
-severity through a `severity` parameter, as `nested-cargo-offline-tests` does,
-because the estate survey found configuration gaps in a dozen repositories;
-promotion to `error` follows once they are clean.
+production code after a closed `mod tests` is not test code. A `>>` in an array
+length is a shift rather than a generic closer, so it does not unbalance the
+signature. A compiling argument counts only when it belongs to the same command
+as the spawn: it is read from the spawn to the next `Command::new` or the next
+function item, and only before that command's first launch. Arguments are read
+with comments blanked and literal contents kept, so a flag in a comment is not
+an argument while a `//` in a string does not hide the rest of the line, and
+each argument and launch is attributed to the receiver it is called on, so
+another command's `.arg(..)`, or one built inside an argument, is not this
+command's. A command bound to a name and handed to a helper defined once in the
+same file is also read against that helper's body, because the helper adds the
+arguments. The call may span lines, and only statements on the parameter that
+receives the command count, so another command built in the helper does not
+contribute. Those statements are read at the call site with the parameter's
+name taken to be the caller's binding, so a launch in the helper or the caller
+ends the arguments in the order they run, and a version flag added through a
+renamed parameter still probes the caller's command. A helper read that stops
+inside a block is closed before it is spliced, so a block the helper leaves
+open cannot hide a later unconditional flag. A helper defined more than once,
+or one whose receiving parameter is not a plain `name: Type` binding, is
+declined rather than guessed; so is a call that a binding in the caller's own
+function shadows (a parameter included, even one after a method's receiver), a
+call written as a path or method (`support::configure(..)`, however it is
+spaced around the separator), or a helper that reassigns the parameter or
+redeclares its name. A flag reached only on some paths, behind a `&&`/`||`
+short circuit or inside a block that may not run, does not make the command a
+probe. A callee in another file is not seen either. These declinations err
+towards not demanding configuration and can miss compiler work. The
+configuration facts are the ones netsuke and rstest-bdd converged on: a serial
+group, an override that uses it, an explicit `slow-timeout` (profile or
+override) and a `global-timeout` (any profile, since netsuke sets it on `ci`).
+A top-level test binary must also be named by a grouped override's filter, by
+binary or by one of its functions, which is how ortho-config's BDD suite is
+told apart from netsuke's. The package does not evaluate nextest filtersets: a
+name appearing in a grouped filter is the evidence, which is cheap and errs
+towards acceptance. The name must be a whole word inside a `binary()`,
+`binary_id()` or `test()` predicate, so `binary(ui_extra)` does not name `ui`,
+and a regex argument such as `/^name($|::)/` is read whole. Exemptions name a
+test source and follow the NC-001 convention: repository, path, rationale and
+review trigger, where a blank rationale or trigger suppresses nothing. The
+package ships at `warning` severity through a `severity` parameter, as
+`nested-cargo-offline-tests` does, because the estate survey found
+configuration gaps in a dozen repositories; promotion to `error` follows once
+they are clean.
 
 ##### Nested cargo cold build
 

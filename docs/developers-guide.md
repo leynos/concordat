@@ -775,13 +775,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
 - `policy-input/nested-cargo-nextest` —
   `nested_cargo_nextest_envelope.build_nested_cargo_nextest_envelope`. The scan
   for compiler-spawning tests lives in `nested_cargo_spawn` (test code only,
-  compiling subcommands only, files that name `Command`, 1 MiB cap), and the
-  bracket-depth reading of a signature and its body lives in
-  `nested_cargo_syntax`; the envelope reads `.config/nextest.toml` for serial
-  groups, whether an override uses one, `slow-timeout` in any profile or
-  override and `global-timeout` in any profile, and marks each top-level test
-  binary as named or not by the grouped filters. It runs neither Cargo nor
-  nextest and does not evaluate filtersets.
+  compiling subcommands only, files that name `Command`, 1 MiB cap), what a
+  found command does with its arguments — including a helper's body spliced in
+  at the call site — lives in `nested_cargo_arguments`, and the bracket-depth
+  reading of a signature and its body lives in `nested_cargo_syntax`; the
+  envelope reads `.config/nextest.toml` for serial groups, whether an override
+  uses one, `slow-timeout` in any profile or override and `global-timeout` in
+  any profile, and marks each top-level test binary as named or not by the
+  grouped filters. It runs neither Cargo nor nextest and does not evaluate
+  filtersets.
 - `policy-input/nested-cargo-ci-wiring` —
   `nested_cargo_wiring_envelope.build_nested_cargo_wiring_envelope`. It reuses
   the shared workflow reader of the CodeScene coverage envelope, then records
