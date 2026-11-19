@@ -94,6 +94,13 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   is skipped, `<<<` is a here string rather than a here-document, and a recipe
   prefix no longer hides an assignment before a command variable
   (`@RUSTUP_TOOLCHAIN=stable $(CHECK)`). Five regression tests cover them.
+- A fourth review raised five more, all actioned: a backslash-escaped `"` no
+  longer closes a double-quoted word; a command substitution is read as the
+  command it runs, even inside double quotes; wrapper option arities follow the
+  wrapper, so `sudo -n cargo` is read while `xargs -n 1 cargo` still consumes
+  its operand; `cat<<EOF` opens a here-document without spaces around the
+  operator; and `program_position` unwraps wrappers, so `env $(CHECK)` expands
+  the command the variable names. Five regression tests cover them.
 
 ## Lessons
 
@@ -128,7 +135,13 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   is data.
 - A wrapper's operand looks like a program to a reader that only unwraps
   options: `env -u RUSTUP_TOOLCHAIN cargo ...` must consume `-u`'s operand
-  before it decides what the program is.
+  before it decides what the program is. Each wrapper has its own arities,
+  though, so one shared table reads `sudo -n cargo ...` as `sudo -n` taking
+  `cargo` as an operand.
+- Quoting protects text from the shell, not from the reader: `$(...)` executes
+  inside double quotes, and `\"` inside them is not the closing quote.
+  Reconstructing a word after the quotes are gone cannot tell either case, so
+  both are decided while the scanner still knows the quote state.
 
 ## Estate survey (2026-11-19)
 

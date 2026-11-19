@@ -669,3 +669,96 @@ def test_a_prefixed_assignment_before_a_command_variable_is_read(
     )
 
     assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_an_escaped_quote_does_not_end_a_double_quoted_word(
+    tmp_path: pathlib.Path,
+) -> None:
+    r"""An escaped quote keeps the text inside the word it quotes.
+
+    `echo "\"; cargo +nightly-...; \""` prints the argument, so it selects
+    nothing.
+    """
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  echo "\\"; cargo +nightly-2026-10-30 test; \\""
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == []
+
+
+def test_a_command_substitution_runs_its_command(tmp_path: pathlib.Path) -> None:
+    """A quoted `$(cargo +nightly-...)` still executes cargo."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  version="$(cargo +nightly-2026-10-30 --version)"
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_wrapper_option_arity_follows_its_wrapper(tmp_path: pathlib.Path) -> None:
+    """`sudo -n` takes no operand, so the cargo after it is the program."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  sudo -n cargo +nightly-2026-10-30 test
+                  xargs -n 1 cargo +nightly-2026-09-01 test
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == [
+        "nightly-2026-10-30",
+        "nightly-2026-09-01",
+    ]
+
+
+def test_an_unspaced_here_document_hides_its_payload(tmp_path: pathlib.Path) -> None:
+    """`cat<<'EOF'` opens a here-document even without spaces around `<<`."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  cat<<'EOF'
+                  cargo +nightly-2026-09-01 check
+                  EOF
+                  cargo +nightly-2026-10-30 test
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_wrapped_command_variable_is_expanded(tmp_path: pathlib.Path) -> None:
+    """`env $(CHECK)` runs the command `CHECK` names, overrides included."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        "Makefile",
+        "CHECK = cargo +nightly-2026-10-30 test\n\ntest:\n\tenv $(CHECK)\n",
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]

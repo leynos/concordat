@@ -461,13 +461,12 @@ def _expanded_commands(
 def _recipe_texts(text: str, table: VariableTable) -> list[str]:
     """Return the literal texts to report for one recipe line."""
     raw = shown(text)
-    texts: list[str] = []
+    texts = [
+        value
+        for selection in command_selections(raw)
+        for value in _reported_texts(selection, table)
+    ]
     for words in shell_commands(raw):
-        texts.extend(
-            value
-            for selection in selection_in(words)
-            for value in _reported_texts(selection, table)
-        )
         expanded = _expanded_commands(words, table)
         if expanded is None:
             continue

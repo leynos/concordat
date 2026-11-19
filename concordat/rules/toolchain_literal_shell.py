@@ -80,31 +80,63 @@ _ENV_PREFIXES: typ.Final = frozenset({
 # Make's recipe prefixes: silent, ignore-error, and always-run.
 _MAKE_PREFIXES: typ.Final = "@-+"
 _ASSIGNMENT: typ.Final = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=")
-# `<<<` is a here string, whose operand is one word, not a body; the negative
-# lookahead keeps it out of the here-document branch.
-_HEREDOC_OPERATOR: typ.Final = re.compile(r"^(?P<operator><<-?)(?!<)(?P<name>.*)$")
-# Wrapper options that take the next word as their operand, so that word is not
-# the program: `env -u NAME cargo ...`, `sudo -u user cargo ...`.
-_WRAPPER_VALUE_OPTIONS: typ.Final = frozenset({
-    "-a",
-    "--arg-file",
-    "-C",
-    "--chdir",
-    "-d",
-    "--delimiter",
-    "-g",
-    "--group",
-    "-I",
-    "--replace",
-    "-n",
-    "--max-args",
-    "-s",
-    "--max-chars",
-    "-u",
-    "--unset",
-    "-U",
-    "--list-user",
-})
+# Each wrapper has its own arities, so `sudo -n cargo` is passwordless sudo
+# running cargo while `xargs -n 1 cargo` passes cargo one argument at a time.
+# Only the options that take a separate operand are listed; a short option's
+# attached form (`-uNAME`) is one word and needs no operand.
+_NO_OPERANDS: typ.Final = frozenset()
+_WRAPPER_VALUE_OPTIONS: typ.Final[dict[str, frozenset[str]]] = {
+    "env": frozenset({"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}),
+    "exec": frozenset({"-a", "--argv0"}),
+    "nice": frozenset({"-n", "--adjustment"}),
+    "nohup": _NO_OPERANDS,
+    "command": _NO_OPERANDS,
+    "sudo": frozenset({
+        "-C",
+        "--close-from",
+        "-D",
+        "--chdir",
+        "-g",
+        "--group",
+        "-h",
+        "--host",
+        "-p",
+        "--prompt",
+        "-R",
+        "--chroot",
+        "-r",
+        "--role",
+        "-T",
+        "--command-timeout",
+        "-t",
+        "--type",
+        "-U",
+        "--other-user",
+        "-u",
+        "--user",
+    }),
+    "xargs": frozenset({
+        "-a",
+        "--arg-file",
+        "-d",
+        "--delimiter",
+        "-E",
+        "-e",
+        "--eof",
+        "-I",
+        "-i",
+        "--replace",
+        "-L",
+        "-l",
+        "--max-lines",
+        "-n",
+        "--max-args",
+        "-P",
+        "--max-procs",
+        "-s",
+        "--max-chars",
+    }),
+}
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -134,20 +166,74 @@ def _assignment_selection(word: str) -> Selection | None:
     return Selection(text=value, is_reference=reference_name(value) is not None)
 
 
-def _heredoc_delimiter(word: str) -> tuple[bool, str] | None:
-    """Return whether *word* opens a here-document, and its delimiter.
+def _opens_substitution(text: str, index: int) -> bool:
+    """Return whether `$(` at *index* starts a command substitution.
+
+    `$((` is arithmetic rather than a command, so it opens no substitution.
 
     Returns
     -------
-    tuple[bool, str] | None
-        ``(needs_next_word, delimiter)`` for a `<<`/`<<-` word, or None when
-        the word opens no here-document. ``needs_next_word`` is true for a
-        bare operator, whose delimiter is the word that follows it.
+    bool
+        Whether *index* starts a command substitution.
     """
-    match = _HEREDOC_OPERATOR.match(word)
-    if match is None:
-        return None
-    return not match.group("name"), match.group("name")
+    return text.startswith("$(", index) and not text.startswith("$((", index)
+
+
+def _opens_heredoc(text: str, index: int) -> bool:
+    """Return whether `<<` at *index* opens a here-document.
+
+    `<<<` is a here string, whose operand is one word rather than a body, so
+    the second and third `<` of one open nothing.
+
+    Returns
+    -------
+    bool
+        Whether *index* opens a here-document.
+    """
+    return (
+        text.startswith("<<", index)
+        and not text.startswith("<<<", index)
+        and text[index - 1 : index] != "<"
+    )
+
+
+def _substitution_end(text: str, index: int) -> int:
+    """Return the index just past the `)` that closes the substitution at *index*.
+
+    The parentheses are balanced across nested substitutions, and quoted text
+    inside the substitution does not close it, so `$(echo ")")` is whole.
+
+    Returns
+    -------
+    int
+        The index after the closing `)`, or the end of the text when the
+        substitution is never closed.
+    """
+    depth = 1
+    scan = index + 2
+    quote: str | None = None
+    while scan < len(text):
+        char = text[scan]
+        if quote is not None:
+            if char == "\\" and quote == '"':
+                scan += 2
+                continue
+            if char == quote:
+                quote = None
+            scan += 1
+            continue
+        if char in "'\"":
+            quote = char
+        elif char == "\\":
+            scan += 1
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return scan + 1
+        scan += 1
+    return len(text)
 
 
 def _skip_heredoc(text: str, index: int, delimiter: str, *, strip_tabs: bool) -> int:
@@ -178,11 +264,13 @@ class _Scan:
     """The commands read so far, and the word being read.
 
     The scanner's state lives here so the character loop stays a loop: a word
-    ends at a separator, a command ends at a shell break, and a here-document
-    body is skipped whole between the two.
+    ends at a separator, a command ends at a shell break, a here-document body
+    is skipped whole between the two, and a command substitution's text is
+    kept so the command it runs can be read separately.
     """
 
     commands: list[list[str]] = dataclasses.field(default_factory=list)
+    substitutions: list[str] = dataclasses.field(default_factory=list)
     words: list[str] = dataclasses.field(default_factory=list)
     current: list[str] = dataclasses.field(default_factory=list)
     delimiter: str = ""
@@ -190,15 +278,11 @@ class _Scan:
     strip_tabs: bool = False
 
     def end_word(self) -> None:
-        """Complete the word being read and record any here-document it opens."""
+        """Complete the word being read, using it as a delimiter when due."""
         word = "".join(self.current)
         self.words.append(word)
         self.current = []
-        heredoc = _heredoc_delimiter(word)
-        if heredoc is not None:
-            self.needs_delimiter, self.delimiter = heredoc
-            self.strip_tabs = word.startswith("<<-")
-        elif self.needs_delimiter:
+        if self.needs_delimiter:
             self.needs_delimiter = False
             self.delimiter = word
 
@@ -207,6 +291,119 @@ class _Scan:
         if self.words:
             self.commands.append(self.words)
             self.words = []
+
+    def separate(self, text: str, char: str, index: int) -> int:
+        """End the word and command at *char*, skipping a here-document body.
+
+        Returns
+        -------
+        int
+            The index to resume reading from.
+        """
+        if self.current:
+            self.end_word()
+        if char in _SHELL_BREAKS:
+            self.end_command()
+        if self.delimiter and char == "\n":
+            # A command after `;` on the declaration line still runs; the body
+            # it feeds starts on the next line.
+            delimiter, self.delimiter = self.delimiter, ""
+            return _skip_heredoc(text, index, delimiter, strip_tabs=self.strip_tabs)
+        return index + 1
+
+    def open_heredoc(self, text: str, index: int) -> int:
+        """Start a here-document at its operator.
+
+        Returns
+        -------
+        int
+            The index after the `<<` or `<<-` operator.
+        """
+        if self.current:
+            # `cat<<EOF` writes the operator against the command.
+            self.end_word()
+        self.strip_tabs = text.startswith("<<-", index)
+        self.needs_delimiter = True
+        return index + (3 if self.strip_tabs else 2)
+
+    def read_substitution(self, text: str, index: int) -> int:
+        """Record the command a `$(...)` substitution runs and keep its text.
+
+        Returns
+        -------
+        int
+            The index after the substitution.
+        """
+        end = _substitution_end(text, index)
+        closed = text[end - 1 : end] == ")"
+        self.substitutions.append(text[index + 2 : end - 1 if closed else end])
+        self.current.append(text[index:end])
+        return end
+
+
+def _read_quoted(
+    text: str, index: int, quote: str, scan: _Scan
+) -> tuple[str | None, int]:
+    r"""Read one character of a quoted word.
+
+    In double quotes a backslash protects the next character, so `\"` does not
+    close the word, and a command substitution still runs even though its text
+    is quoted.
+
+    Returns
+    -------
+    tuple[str | None, int]
+        The quote still open, if any, and the index to resume reading from.
+    """
+    char = text[index]
+    if char == quote:
+        return None, index + 1
+    if quote == '"' and char == "\\" and index + 1 < len(text):
+        scan.current.append(text[index + 1])
+        return quote, index + 2
+    if quote == '"' and _opens_substitution(text, index):
+        return quote, scan.read_substitution(text, index)
+    scan.current.append(char)
+    return quote, index + 1
+
+
+def _comment_end(text: str, index: int) -> int:
+    """Return the index of the newline that ends the comment at *index*."""
+    end = text.find("\n", index)
+    return len(text) if end == -1 else end
+
+
+def _scan(text: str) -> _Scan:
+    """Read *text* into its commands and the substitutions that run in them."""
+    folded = re.sub(r"\\\n[ \t]*", " ", text)
+    scan = _Scan()
+    quote: str | None = None
+    index = 0
+    while index < len(folded):
+        char = folded[index]
+        if quote is not None:
+            quote, index = _read_quoted(folded, index, quote, scan)
+        elif char in "'\"":
+            quote = char
+            index += 1
+        elif char == "\\" and index + 1 < len(folded):
+            scan.current.append(folded[index + 1])
+            index += 2
+        elif _opens_substitution(folded, index):
+            index = scan.read_substitution(folded, index)
+        elif char == "#" and not scan.current:
+            index = _comment_end(folded, index)
+        elif _opens_heredoc(folded, index):
+            index = scan.open_heredoc(folded, index)
+        elif char.isspace() or char in _SHELL_BREAKS:
+            index = scan.separate(folded, char, index)
+        else:
+            scan.current.append(char)
+            index += 1
+    if scan.current:
+        scan.end_word()
+    scan.end_command()
+    return scan
 
 
 def shell_commands(text: str) -> list[list[str]]:
@@ -218,58 +415,15 @@ def shell_commands(text: str) -> list[list[str]]:
     unquoted `#` at a word boundary starts a comment. Backslash line
     continuations are folded first, as they are in a recipe. A here-document
     body is command input rather than commands, so it is skipped whole: a
-    date a script feeds to `cat` is not a date it selects.
+    date a script feeds to `cat` is not a date it selects. The operator need
+    not be spaced from the command, so `cat<<EOF` opens one too.
 
     Returns
     -------
     list[list[str]]
         One word list per command, in the order written.
     """
-    folded = re.sub(r"\\\n[ \t]*", " ", text)
-    scan = _Scan()
-    quote: str | None = None
-    index = 0
-    while index < len(folded):
-        char = folded[index]
-        if quote is not None:
-            if char == quote:
-                quote = None
-            else:
-                scan.current.append(char)
-            index += 1
-            continue
-        if char in "'\"":
-            quote = char
-            index += 1
-            continue
-        if char == "\\" and index + 1 < len(folded):
-            scan.current.append(folded[index + 1])
-            index += 2
-            continue
-        if char == "#" and not scan.current:
-            while index < len(folded) and folded[index] != "\n":
-                index += 1
-            continue
-        if char.isspace() or char in _SHELL_BREAKS:
-            if scan.current:
-                scan.end_word()
-            if char in _SHELL_BREAKS:
-                scan.end_command()
-            if scan.delimiter and char == "\n":
-                # A command after `;` on the declaration line still runs; the
-                # body it feeds starts on the next line.
-                index = _skip_heredoc(
-                    folded, index, scan.delimiter, strip_tabs=scan.strip_tabs
-                )
-                scan.delimiter = ""
-                continue
-        else:
-            scan.current.append(char)
-        index += 1
-    if scan.current:
-        scan.end_word()
-    scan.end_command()
-    return scan.commands
+    return _scan(text).commands
 
 
 def _is_tool(word: str) -> bool:
@@ -361,11 +515,54 @@ def _prefix_end(words: list[str]) -> int:
     return index
 
 
+def _executable(words: list[str]) -> tuple[int, str, list[Selection]] | None:
+    """Return the program one command runs, unwrapping its wrappers.
+
+    `env`, `sudo`, `command` and the rest move the real program to the right
+    of their own options, and an option that takes an operand moves it one
+    word further still: `env -u NAME cargo ...` runs cargo.
+
+    Returns
+    -------
+    tuple[int, str, list[Selection]] | None
+        The program's index in *words*, its word with Make's recipe prefixes
+        removed, and the `RUSTUP_TOOLCHAIN=` assignments read on the way; None
+        when the command has no program.
+    """
+    words = _without_recipe_prefix(words)
+    index = _prefix_end(words)
+    if index >= len(words):
+        return None
+    program = words[index].lstrip(_MAKE_PREFIXES)
+    index += 1
+    while program in _ENV_PREFIXES and index < len(words):
+        options = _WRAPPER_VALUE_OPTIONS.get(program, _NO_OPERANDS)
+        while index < len(words) and (
+            words[index].startswith("-") or _is_assignment(words[index])
+        ):
+            takes_operand = words[index] in options
+            index += 1
+            if takes_operand and index < len(words):
+                index += 1
+        if index >= len(words):
+            return None
+        program = words[index].lstrip(_MAKE_PREFIXES)
+        index += 1
+    selections = [
+        selection
+        for word in words[:index]
+        if _is_assignment(word)
+        if (selection := _assignment_selection(word)) is not None
+    ]
+    return index - 1, program, selections
+
+
 def program_position(words: list[str]) -> tuple[int, str] | None:
-    """Return a command's program word and its index, recipe prefixes removed.
+    """Return a command's program word and its index, wrappers unwrapped.
 
     An assignment prefix and a shell keyword (`if`, `!`, `{`) come before the
-    program. A command that is only assignments and keywords has no program.
+    program, and a wrapper's own options and operands come before the program
+    it runs. A command that has no program has no position.
 
     Returns
     -------
@@ -373,11 +570,8 @@ def program_position(words: list[str]) -> tuple[int, str] | None:
         The program's index in *words*, and the program word with Make's
         `@`, `-` and `+` prefixes stripped; None when there is no program.
     """
-    stripped = _without_recipe_prefix(words)
-    index = _prefix_end(stripped)
-    if index >= len(stripped):
-        return None
-    return index, stripped[index].lstrip(_MAKE_PREFIXES)
+    found = _executable(words)
+    return None if found is None else found[:2]
 
 
 def _program(words: list[str]) -> tuple[list[Selection], str | None, list[str]]:
@@ -389,35 +583,11 @@ def _program(words: list[str]) -> tuple[list[Selection], str | None, list[str]]:
         The `RUSTUP_TOOLCHAIN=` assignments the command carries, the program
         word with Make's recipe prefixes removed, and the arguments.
     """
-    words = _without_recipe_prefix(words)
-    end = _prefix_end(words)
-    selections = [
-        selection
-        for word in words[:end]
-        if (selection := _assignment_selection(word)) is not None
-    ]
-    index = end
-    if index >= len(words):
-        return selections, None, []
-    program = words[index].lstrip(_MAKE_PREFIXES)
-    index += 1
-    while program in _ENV_PREFIXES and index < len(words):
-        while index < len(words) and (
-            words[index].startswith("-") or _is_assignment(words[index])
-        ):
-            takes_operand = words[index] in _WRAPPER_VALUE_OPTIONS
-            selection = _assignment_selection(words[index])
-            if selection is not None:
-                selections.append(selection)
-            index += 1
-            if takes_operand and index < len(words):
-                # `env -u NAME cargo ...` names its program after the operand.
-                index += 1
-        if index >= len(words):
-            return selections, None, []
-        program = words[index].lstrip(_MAKE_PREFIXES)
-        index += 1
-    return selections, program, words[index:]
+    found = _executable(words)
+    if found is None:
+        return [], None, []
+    index, program, selections = found
+    return selections, program, words[index + 1 :]
 
 
 def selection_in(words: list[str]) -> cabc.Iterator[Selection]:
@@ -462,11 +632,19 @@ def command_selections(text: str) -> list[Selection]:
     other. A value that is a reference is returned as one, so the caller can
     decide whether the reference is a declaration.
 
+    A command substitution runs its own command, even inside double quotes, so
+    `VERSION="$(cargo +nightly-... --version)"` selects that toolchain. Its
+    selections follow the selections of the text that contains it.
+
     Returns
     -------
     list[Selection]
         The selected toolchains, in the order the text writes them.
     """
-    return [
-        selection for words in shell_commands(text) for selection in selection_in(words)
+    scan = _scan(text)
+    selections = [
+        selection for words in scan.commands for selection in selection_in(words)
     ]
+    for inner in scan.substitutions:
+        selections.extend(command_selections(inner))
+    return selections
