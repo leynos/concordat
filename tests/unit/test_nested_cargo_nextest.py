@@ -663,6 +663,171 @@ def test_a_launch_after_a_helper_block_is_not_lost(
     assert ids(tmp_path) == {"NC-004"}
 
 
+SHADOWED_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add_metadata(&mut command);\n}\n"
+    "fn add_metadata(command: &mut Command) {\n"
+    '    command.arg("metadata").output().unwrap();\n'
+    "    let mut command = clone_command();\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_local_declaration_that_shadows_the_parameter_is_not_the_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `build` added after the parameter is rebound belongs to the new value."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SHADOWED_PARAMETER)
+    assert ids(tmp_path) == set()
+
+
+GENERIC_ARROW_PARAMETERS = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut git = Command::new("git");\n'
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add(noop, &mut git, &mut command);\n}\n"
+    "fn add(hook: Result<fn() -> (), ()>, first: &mut Command, "
+    "second: &mut Command) {\n"
+    '    first.arg("build").status().unwrap();\n'
+    '    second.arg("metadata").output().unwrap();\n'
+    "    let _ = hook;\n}\n"
+)
+
+
+def test_a_comma_after_a_function_pointer_return_keeps_parameter_positions(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The arrow's `>` does not close `Result`, so index two is still `second`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", GENERIC_ARROW_PARAMETERS)
+    assert ids(tmp_path) == set()
+
+
+GENERIC_ARROW_SIGNATURE = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add(&mut command, noop);\n}\n"
+    "fn add<F: Fn() -> ()>(command: &mut Command, hook: F) {\n"
+    '    command.arg("build").status().unwrap();\n'
+    "    let _ = hook;\n}\n"
+)
+
+
+def test_a_generic_return_arrow_does_not_hide_the_parameter_list(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `()` of `Fn() -> ()` is a return type, not the parameter list."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", GENERIC_ARROW_SIGNATURE)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+HELPER_PROBE_BEFORE_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn probe_then_compile() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    add_version(&mut command);\n"
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+    "fn add_version(command: &mut Command) {\n"
+    '    command.arg("--version");\n}\n'
+)
+
+
+def test_a_helper_probe_is_applied_before_the_caller_launch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A version flag added by the helper is still the command's argument."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELPER_PROBE_BEFORE_LAUNCH)
+    assert ids(tmp_path) == set()
+
+
+HELPER_COMPILE_BEFORE_CALLER_PROBE = (
+    "use std::process::Command;\n"
+    "fn compile_then_probe() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    add_input(&mut command);\n"
+    '    command.arg("--version").status().unwrap();\n}\n'
+    "fn add_input(command: &mut Command) {\n"
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+)
+
+
+def test_a_helper_launch_still_ends_arguments_before_a_later_probe(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The caller's probe follows the helper's launch, so it does not hide it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELPER_COMPILE_BEFORE_CALLER_PROBE)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SHADOWED_CALLEE = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    '    let configure = |cmd: &mut Command| { cmd.arg("metadata"); };\n'
+    "    configure(&mut command);\n"
+    "    command.status().unwrap();\n}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_closure_that_shadows_the_helper_name_is_not_the_free_function(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A local closure named `configure` is not the `fn configure` beside it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SHADOWED_CALLEE)
+    assert ids(tmp_path) == set()
+
+
+PROBE_THROUGH_RENAMED_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn probe_toolchain() {\n"
+    '    let mut cmd = Command::new(env!("RUSTC"));\n'
+    "    add_version(&mut cmd);\n"
+    "    cmd.status().unwrap();\n}\n"
+    "fn add_version(command: &mut Command) {\n"
+    '    command.arg("--version");\n}\n'
+)
+
+
+def test_a_helper_probe_counts_against_the_callers_binding(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper's `command` and the caller's `cmd` are the same command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBE_THROUGH_RENAMED_PARAMETER)
+    assert ids(tmp_path) == set()
+
+
+RECEIVER_AFTER_IF = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add_build(&mut command, true);\n}\n"
+    "fn add_build(command: &mut Command, enabled: bool) {\n"
+    '    if enabled { command.arg("build").status().unwrap() }\n'
+    "    let _ = enabled;\n}\n"
+)
+
+
+def test_a_helper_argument_after_a_block_opener_is_retained(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`if enabled { command.arg("build") ... }` still adds the argument."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", RECEIVER_AFTER_IF)
+    assert ids(tmp_path) == {"NC-004"}
+
+
 def grouped_config(filter_expression: str) -> str:
     """Return a bounded configuration whose one grouped override uses a filter."""
     return CLEAN.replace("binary(ui)", filter_expression)

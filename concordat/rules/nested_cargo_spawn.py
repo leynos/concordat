@@ -27,10 +27,15 @@ from a repository that needs none.
   `let mut command = Command::new(cargo); add_build(&mut command)` sees
   `add_build`'s `arg("build")`. The call may span lines. Only statements on
   the parameter that receives the command count, so another command built in
-  the helper does not contribute. The helper must be defined exactly once in
-  the file and receive the command at a position whose parameter is a plain
-  `name: Type`; otherwise the handoff is declined rather than guessed, and
-  compiler work in a declined shape can be missed.
+  the helper does not contribute; those statements are read at the call site,
+  and the parameter's name is taken to be the caller's binding. A launch in
+  the helper or the caller therefore ends the arguments in the order they run,
+  and a version flag added through a renamed parameter still probes the
+  caller's command. The helper must be defined exactly once in the file and
+  receive the command at a position whose parameter is a plain `name: Type`;
+  a local binding that shadows the helper's name, or a later declaration of
+  the parameter's name inside the helper, declines the handoff rather than
+  guessing. Compiler work in a declined shape can be missed.
 - Python tests that spawn `cargo` are outside the scan: pytest, not nextest,
   bounds them.
 - A file must name `Command`, so `env!("CARGO")` read for a path alone is not a
@@ -243,8 +248,9 @@ def _argument_position(before: str | None) -> int | None:
 def _parameter_open(masked: str, start: int) -> int | None:
     """Return the offset of the `(` that opens a parameter list after *start*.
 
-    Generics may hold their own parentheses (`F: Fn()`), so only a `(` at
-    bracket depth zero opens the parameter list.
+    Generics may hold their own parentheses (`F: Fn()`) and return arrows
+    (`F: Fn() -> ()`), so only a `(` at bracket depth zero opens the parameter
+    list, and the `>` of an arrow does not close a generic.
 
     Returns
     -------
@@ -252,14 +258,19 @@ def _parameter_open(masked: str, start: int) -> int | None:
         The offset of the `(`, or None when none follows at depth zero.
     """
     depth = 0
-    for index in range(start, len(masked)):
-        char = masked[index]
-        if char == "(" and depth == 0:
-            return index
-        if char in "[{<":
-            depth += 1
-        elif char in "]}>":
-            depth = max(0, depth - 1)
+    index = start
+    while index < len(masked):
+        match masked[index]:
+            case "(" if depth == 0:
+                return index
+            case "-" if masked.startswith("->", index):
+                index += 2
+                continue
+            case "[" | "{" | "<":
+                depth += 1
+            case "]" | "}" | ">":
+                depth = max(0, depth - 1)
+        index += 1
     return None
 
 
@@ -286,8 +297,10 @@ def _parameter_close(masked: str, open_at: int) -> int | None:
 def _split_parameters(parameters: str) -> list[str]:
     """Split a parameter list on the commas that sit outside brackets.
 
-    A generic type (`Result<A, B, E>`) or an array length (`[u8; 4]`) keeps its
-    commas, so a position still indexes the parameter the caller passed.
+    A generic type (`Result<A, B, E>`), an array length (`[u8; 4]`) or a
+    function-pointer return (`fn() -> ()`) keeps its commas, so a position
+    still indexes the parameter the caller passed. The `>` of a return arrow
+    is not a generic closer.
 
     Returns
     -------
@@ -298,7 +311,12 @@ def _split_parameters(parameters: str) -> list[str]:
     parts: list[str] = []
     depth = 0
     start = 0
-    for index, char in enumerate(parameters):
+    index = 0
+    while index < len(parameters):
+        char = parameters[index]
+        if char == "-" and parameters.startswith("->", index):
+            index += 2
+            continue
         if char in "([{<":
             depth += 1
         elif char in ")]}>":
@@ -306,6 +324,7 @@ def _split_parameters(parameters: str) -> list[str]:
         elif char == "," and depth == 0:
             parts.append(parameters[start:index])
             start = index + 1
+        index += 1
     parts.append(parameters[start:])
     return parts
 
@@ -363,64 +382,104 @@ def _body_span(
 
 
 def _receiver_statements(
-    text: str, masked: str, span: tuple[int, int], parameter: str
+    text: str, masked: str, span: tuple[int, int], parameter: str, receiver: str
 ) -> str:
     """Return the body statements that add arguments to *parameter*.
 
-    A statement on another receiver — another command, or a `Command::new`
-    built inside the helper — is not the bound command's argument, so its code
-    is left out. The statements are split on `;` in the masked text and read
-    back from the original, so literal arguments survive.
+    A statement that calls the parameter is that command's argument, wherever
+    the call sits (`if enabled { command.arg("build") }` included). The
+    statements are split on `;` in the masked text and read back from the
+    original, so literal arguments survive. The parameter's name is replaced by
+    the caller's binding, because the probe consumer reads the helper's
+    statements as part of the caller's window.
 
-    Every statement's braces are kept, because a later statement's block depth
-    decides whether its probe flag is unconditional. A statement may also
-    follow the closing brace of a block; the brace is emitted before it so the
-    statement is still read at the depth it really sits at.
+    Every statement's braces are kept, in place, because a later statement's
+    block depth decides whether its probe flag is unconditional; a statement
+    that follows the closing brace of a block keeps that brace in front of it.
+    A later declaration of the parameter's name, or another command built in
+    the helper, means the name no longer denotes the caller's command, so
+    nothing after that statement is read. That declines a helper the scan
+    cannot attribute, which can miss compiler work rather than invent it.
 
     Returns
     -------
     str
-        The matching statements, semicolon-separated, with the braces of the
-        omitted statements retained.
+        The statements that call the parameter, semicolon-separated, with the
+        braces of the statements between them retained.
     """
     start, end = span
-    own = re.compile(rf"\s*{re.escape(parameter)}\s*\.")
+    own = re.compile(rf"\b{re.escape(parameter)}\s*\.")
+    shadow = re.compile(
+        rf"\bfor\s+(?:mut\s+)?{re.escape(parameter)}\b"
+        rf"|\blet\b[^=;]*\b{re.escape(parameter)}\b"
+        rf"|\|\s*(?:mut\s+)?{re.escape(parameter)}\s*(?:\||:)"
+    )
     pieces: list[str] = []
     offset = start
     for statement in masked[start:end].split(";"):
-        lead = len(statement) - len(statement.lstrip())
-        remainder = statement[lead:]
-        closing = len(remainder) - len(remainder.lstrip("}"))
-        stripped = remainder[closing:]
-        core = stripped.lstrip()
-        if own.match(core) and not COMMAND_NEW.match(core):
-            pieces.extend(["}" for _ in range(closing)])
-            body = offset + lead + closing + len(stripped) - len(core)
-            pieces.append(text[body : offset + len(statement)])
+        if COMMAND_NEW.search(statement) or shadow.search(statement):
+            break
+        found = own.search(statement)
+        if found is None:
+            pieces.append("{" * statement.count("{") + "}" * statement.count("}"))
         else:
-            opens = statement.count("{")
-            closes = statement.count("}")
-            pieces.append("{" * opens + "}" * closes)
+            piece = text[offset : offset + len(statement)]
+            if receiver != parameter:
+                piece = f"{piece[: found.start()]}{receiver}.{piece[found.end() :]}"
+            pieces.append(piece)
         offset += len(statement) + 1
     return ";\n".join(pieces)
 
 
+def _shadowed(masked: str, name: str, at: int) -> bool:
+    """Report whether *name* may be a local binding at *at* rather than a `fn`.
+
+    A closure or binding with the helper's name shadows the free function, so
+    the call reaches something the scan cannot read. Both are written so that
+    the name is followed by `=`, `:` or `|` rather than `(`.
+
+    Returns
+    -------
+    bool
+        True when a binding of that name appears before *at*.
+    """
+    scope = [found.start() for found in FUNCTION_BOUNDARY.finditer(masked, 0, at)]
+    start = scope[-1] if scope else 0
+    binder = re.compile(
+        rf"\b(?:let\s+(?:mut\s+)?|const\s+|static\s+){re.escape(name)}\b"
+    )
+    return binder.search(masked, start, at) is not None
+
+
 def _callee_arguments(
-    text: str, masked: str, closers: dict[int, int], call: re.Match[str]
+    text: str,
+    masked: str,
+    closers: dict[int, int],
+    call: re.Match[str],
+    receiver: str,
+    base: int,
 ) -> str:
     """Return the statements a call hands to its helper's bound parameter.
 
     The helper must be defined exactly once in the file: with two definitions
     the caller's lexical scope is unknown, so no argument is read from either.
-    The definition's text still stops at the next function item, so a helper at
-    the end of the file cannot run into unrelated code.
+    A local binding of the helper's name before the call shadows it, so the
+    call is declined rather than resolved by name alone. The definition's text
+    still stops at the next function item, so a helper at the end of the file
+    cannot run into unrelated code.
+
+    *base* is the file offset of the window *call* was matched in, used to find
+    the caller's scope for the shadowing check.
 
     Returns
     -------
     str
-        The statements on the parameter that receives the command, or an empty
-        string when the helper is undefined, duplicated or shaped uncertainly.
+        The statements on the parameter that receives the command, rewritten to
+        *receiver*, or an empty string when the helper is undefined,
+        duplicated, shadowed or shaped uncertainly.
     """
+    if _shadowed(masked, call["callee"], base + call.start()):
+        return ""
     definitions = list(re.finditer(rf"\bfn\s+{re.escape(call['callee'])}\b", masked))
     if len(definitions) != 1:
         return ""
@@ -442,13 +501,13 @@ def _callee_arguments(
     end = min(end, limit)
     if end <= start:
         return ""
-    return _receiver_statements(text, masked, (start, end), parameter)
+    return _receiver_statements(text, masked, (start, end), parameter, receiver)
 
 
-def _callee_text(
-    text: str, masked: str, closers: dict[int, int], window: str, name: str
-) -> str:
-    """Return the arguments a helper adds to the command bound as *name*.
+def _callee_bodies(
+    text: str, masked: str, closers: dict[int, int], window: str, name: str, base: int
+) -> list[tuple[int, str]]:
+    """Return the helper statements each call adds, with the call's end offset.
 
     `let mut command = Command::new(cargo); add_build(&mut command)` adds its
     arguments in `add_build`, so those arguments are read from that function's
@@ -459,20 +518,20 @@ def _callee_text(
 
     Returns
     -------
-    str
-        The helper's statements on the bound command, joined; empty when the
-        helper is not defined once in this file or its shape is uncertain.
+    list[tuple[int, str]]
+        The offset in *window* just past each call, with the statements it adds;
+        empty when no helper is read.
     """
     passed = re.compile(
         rf"(?P<callee>\w+)\s*\(\s*(?:(?P<before>[^()]*),\s*)?"
         rf"(?:&(?:mut\s+)?)?{re.escape(name)}\s*[,)]"
     )
-    bodies: list[str] = []
+    bodies: list[tuple[int, str]] = []
     for call in passed.finditer(window):
-        body = _callee_arguments(text, masked, closers, call)
+        body = _callee_arguments(text, masked, closers, call, name, base)
         if body:
-            bodies.append(body)
-    return ";\n".join(bodies)
+            bodies.append((call.end(), body))
+    return bodies
 
 
 def _command_window(text: str, masked: str, closers: dict[int, int], start: int) -> str:
@@ -482,13 +541,16 @@ def _command_window(text: str, masked: str, closers: dict[int, int], start: int)
     next `Command::new` (another command) or the next function item, whichever
     comes first. A command bound to a name and handed to a function defined
     once in the same file is also read against that function's body, because
-    the callee adds the arguments. A window that ends early can miss an
-    argument, which errs towards not demanding configuration.
+    the callee adds the arguments. Those statements are inserted at the call
+    site, so a launch in either the helper or the caller ends the arguments in
+    the order they run. A window that ends early can miss an argument, which
+    errs towards not demanding configuration.
 
     Returns
     -------
     str
-        The text from the spawn to the end of the window, with any callee body.
+        The text from the spawn to the end of the window, with each callee body
+        spliced in at its call.
     """
     tail = text[start + 1 :]
     ends = [len(tail)]
@@ -503,9 +565,15 @@ def _command_window(text: str, masked: str, closers: dict[int, int], start: int)
     if bound is None:
         return window
     masked_window = masked[start : start + length]
-    return (
-        f"{window}\n{_callee_text(text, masked, closers, masked_window, bound['name'])}"
-    )
+    pieces: list[str] = []
+    previous = 0
+    for at, body in _callee_bodies(
+        text, masked, closers, masked_window, bound["name"], start
+    ):
+        pieces.extend((window[previous:at], f";\n{body};"))
+        previous = at
+    pieces.append(window[previous:])
+    return "".join(pieces)
 
 
 def _own_statements(text: str, start: int, window: str) -> list[tuple[str, int]]:
