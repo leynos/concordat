@@ -22,6 +22,17 @@ actionlint:
 	$(ACTIONLINT)
 ```
 
+A recipe may instead buffer the listing in a temporary file, so the linter
+starts only after Git has enumerated the whole tree:
+
+```make
+yamllint:
+	@tmp=$$(mktemp) || exit 1; \
+	trap 'rm -f "$$tmp"' EXIT; \
+	git ls-files -z '*.yml' '*.yaml' >"$$tmp" && \
+	xargs -0 -r $(YAMLLINT) --strict -- <"$$tmp"
+```
+
 with the estate base file copied to `.yamllint-estate.yml`, a thin
 `.yamllint.yml` that extends it, `.github/actionlint.yaml` declaring the estate
 runner labels, and a CI job that installs the pinned tools before it runs
@@ -39,15 +50,23 @@ repository root, as the Makefile's recipes do.
 ## Checks
 
 - **YL-001** (error): a recipe reachable from `lint` runs `yamllint --strict`
-  (or `-s`) over a `git ls-files` list piped to it through `xargs`, with every
-  pathspec in `yaml_pathspecs` (`*.yml` and `*.yaml` by default), and its exit
-  status reaches Make. `xargs` with short options is read through, because
-  yamllint has no Git mode; a `git ls-files` whose output is discarded does not
-  count. `-d`/`--config-data` (in every spelling), `-c`/`--config-file` naming
-  any file but `.yamllint.yml`, and `--no-warnings` are refused, because they
-  replace the estate configuration or hide what `--strict` fails on, and so is
-  a recipe that only prints `--version` or `--help`. A flag behind a Make
-  variable the policy cannot resolve is indeterminate.
+  (or `-s`) over a `git ls-files` list with every pathspec in `yaml_pathspecs`
+  (`*.yml` and `*.yaml` by default), and its exit status reaches Make. The list
+  may be piped to `xargs`, or buffered by the guarded form above. That form
+  needs all of: `mktemp` assigned under `|| exit N` with a non-zero status; the
+  same shell variable written by `git ls-files -z` and read by `xargs -0`; `&&`
+  between the redirection and `xargs`, so a failed or partial enumeration never
+  reaches the linter; and no trap other than `trap 'rm -f "$VAR"' EXIT`, which
+  may be omitted. `xargs` with short options is read through, because yamllint
+  has no Git mode; a `git ls-files` whose output is discarded does not count.
+  `$$` is shell syntax, not a Make reference, so `$$(mktemp)` is not an
+  unresolved variable, and a backslash-newline continuation is read as the one
+  shell line Make passes it as. `-d`/`--config-data` (in every spelling),
+  `-c`/`--config-file` naming any file but `.yamllint.yml`, and `--no-warnings`
+  are refused, because they replace the estate configuration or hide what
+  `--strict` fails on, and so is a recipe that only prints `--version` or
+  `--help`. A flag behind a Make variable the policy cannot resolve is
+  indeterminate.
 - **YL-002** (error): a recipe reachable from `lint` runs actionlint with a
   binding exit status and without an empty `-shellcheck` value (`-shellcheck=`,
   `-shellcheck ""`), which would switch off the script analysis that makes
@@ -75,7 +94,11 @@ repository root, as the Makefile's recipes do.
 A checkout with no YAML file is out of scope. Every check fails closed: a
 Makefile with includes, conditional rules on the lint path, dynamic recursive
 Make or a recovered parse, and a configuration or workflow that cannot be
-decoded, each produce an `indeterminate` finding rather than a pass.
+decoded, each produce an `indeterminate` finding rather than a pass. A guarded
+recipe that departs from the accepted shape is judged as an ordinary recipe, so
+a wrong or missing variable, a `;` instead of `&&`, a discarded or mismatched
+temporary file, or a trap that could mask the status is reported as a missing
+enumeration or a soft skip, never accepted.
 
 The checks that read the Makefile prove the shape of the lint path, not that
 the tools run to completion on the repository's YAML; that is what the lint

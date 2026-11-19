@@ -868,8 +868,9 @@ It applies when the checkout has any YAML file, and reports:
 - **YL-001**: a recipe reachable from `lint` runs `yamllint --strict` over a
   `git ls-files` list that names `*.yml` and `*.yaml`, and its exit status
   reaches Make. Write it as
-  `git ls-files -z '*.yml' '*.yaml' | xargs -0 -r $(YAMLLINT) --strict --`.
-  `-d`, `--config-data` and `--no-warnings` are reported.
+  `git ls-files -z '*.yml' '*.yaml' | xargs -0 -r $(YAMLLINT) --strict --`, or
+  buffer the listing in a temporary file (see below). `-d`, `--config-data` and
+  `--no-warnings` are reported.
 - **YL-002**: a recipe reachable from `lint` runs actionlint with a binding
   exit status, and does not switch off its shellcheck integration with an empty
   `-shellcheck=`.
@@ -885,6 +886,24 @@ It applies when the checkout has any YAML file, and reports:
   commit SHA, and no step installs yamllint, actionlint or shellcheck by hand
   or lints through a third-party action. A job that calls a reusable workflow
   makes the absence of a lint job indeterminate.
+
+A recipe may instead buffer the listing in a temporary file, so the linter runs
+only after Git has enumerated the whole tree:
+
+```make
+yamllint:
+	@tmp=$$(mktemp) || exit 1; \
+	trap 'rm -f "$$tmp"' EXIT; \
+	git ls-files -z '*.yml' '*.yaml' >"$$tmp" && \
+	xargs -0 -r $(YAMLLINT) --strict -- <"$$tmp"
+```
+
+The guarded form is accepted only with `mktemp` under `|| exit N`, the same
+shell variable on both redirections, `-z` and `-0` keeping the listing
+NUL-delimited, `&&` so a failed enumeration cannot reach the linter, and no
+trap other than the `rm -f` cleanup (which may be omitted). `$$` is shell
+syntax rather than a Make variable, so `$$(mktemp)` is not reported as
+unresolved.
 
 yamllint must run from the repository root, because it resolves `extends:`
 against the current directory.
