@@ -599,6 +599,70 @@ def test_a_helper_parameter_named_differently_still_reads_its_arguments(
     assert ids(tmp_path) == {"NC-004"}
 
 
+PROBE_AFTER_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn compile_then_probe() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    add_build(&mut command);\n}\n"
+    "fn add_build(command: &mut Command) {\n"
+    '    command.arg("input.rs").status().unwrap();\n'
+    '    command.arg("--version").status().unwrap();\n}\n'
+)
+
+
+def test_a_probe_after_a_helper_launch_does_not_hide_the_compile(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A version probe in a later helper statement is not the first launch."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBE_AFTER_LAUNCH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONDITIONAL_PROBE = (
+    "use std::process::Command;\n"
+    "fn compile_after_check() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    add_build(&mut command, true);\n}\n"
+    "fn add_build(command: &mut Command, query: bool) {\n"
+    "    if query {\n"
+    '        command.arg("--version");\n'
+    "    }\n"
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+)
+
+
+def test_a_probe_inside_a_helper_branch_does_not_hide_the_compile(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A flag added under an `if` is not an unconditional probe."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_PROBE)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+LAUNCH_AFTER_BLOCK = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add_build(&mut command);\n}\n"
+    "fn add_build(command: &mut Command) {\n"
+    "    if true {\n"
+    "        let marker = ();\n"
+    "    }\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_launch_after_a_helper_block_is_not_lost(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A statement that follows a closing brace still adds `build`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LAUNCH_AFTER_BLOCK)
+    assert ids(tmp_path) == {"NC-004"}
+
+
 def grouped_config(filter_expression: str) -> str:
     """Return a bounded configuration whose one grouped override uses a filter."""
     return CLEAN.replace("binary(ui)", filter_expression)

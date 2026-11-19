@@ -368,24 +368,41 @@ def _receiver_statements(
     """Return the body statements that add arguments to *parameter*.
 
     A statement on another receiver — another command, or a `Command::new`
-    built inside the helper — is not the bound command's argument, so it is
-    left out. The statements are split on `;` in the masked text and read back
-    from the original, so literal arguments survive.
+    built inside the helper — is not the bound command's argument, so its code
+    is left out. The statements are split on `;` in the masked text and read
+    back from the original, so literal arguments survive.
+
+    Every statement's braces are kept, because a later statement's block depth
+    decides whether its probe flag is unconditional. A statement may also
+    follow the closing brace of a block; the brace is emitted before it so the
+    statement is still read at the depth it really sits at.
 
     Returns
     -------
     str
-        The matching statements, joined.
+        The matching statements, semicolon-separated, with the braces of the
+        omitted statements retained.
     """
     start, end = span
     own = re.compile(rf"\s*{re.escape(parameter)}\s*\.")
-    statements: list[str] = []
+    pieces: list[str] = []
     offset = start
     for statement in masked[start:end].split(";"):
-        if own.match(statement) and not COMMAND_NEW.match(statement.lstrip()):
-            statements.append(text[offset : offset + len(statement)])
+        lead = len(statement) - len(statement.lstrip())
+        remainder = statement[lead:]
+        closing = len(remainder) - len(remainder.lstrip("}"))
+        stripped = remainder[closing:]
+        core = stripped.lstrip()
+        if own.match(core) and not COMMAND_NEW.match(core):
+            pieces.extend(["}" for _ in range(closing)])
+            body = offset + lead + closing + len(stripped) - len(core)
+            pieces.append(text[body : offset + len(statement)])
+        else:
+            opens = statement.count("{")
+            closes = statement.count("}")
+            pieces.append("{" * opens + "}" * closes)
         offset += len(statement) + 1
-    return "\n".join(statements)
+    return ";\n".join(pieces)
 
 
 def _callee_arguments(
@@ -455,7 +472,7 @@ def _callee_text(
         body = _callee_arguments(text, masked, closers, call)
         if body:
             bodies.append(body)
-    return "\n".join(bodies)
+    return ";\n".join(bodies)
 
 
 def _command_window(text: str, masked: str, closers: dict[int, int], start: int) -> str:
