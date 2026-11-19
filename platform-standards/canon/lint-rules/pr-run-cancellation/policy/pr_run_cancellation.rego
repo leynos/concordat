@@ -1037,9 +1037,11 @@ branch_always_truthy(branch) if branch_constant_literal(branch)
 
 branch_always_truthy(branch) if branch_provably_truthy(branch)
 
-# A trimmed literal-false expression is the one expression that provably does
-# not cancel. Anything else written as an expression may evaluate true on the
-# run it matters for, so it is treated as cancelling.
+# A trimmed literal-false expression provably does not cancel. So does an
+# expression the event makes false, such as a `&&` chain whose event guard
+# excludes it. Anything else written as an expression may evaluate true on the
+# run that matters, so it keeps the conservative reading and is treated as
+# cancelling.
 literal_false_expression(value) if {
 	is_expression(value)
 	trimmed := trim_space(value)
@@ -1064,10 +1066,54 @@ cancels_in_progress_at(value, event) if {
 # cancels only for the events those tests select: `${{ github.event_name ==
 # 'pull_request' }}` evaluates false on a `pull_request_target` run and never
 # cancels it. Any other expression may evaluate true on the run that matters,
-# so it stays conservatively cancelling.
+# so it stays conservatively cancelling unless the event proves it false.
 expression_cancels_at(value, event) if {
+	not expression_provably_falsy_at(value, event)
 	some body in expression_bodies(value)
 	not body_is_event_test(body)
+}
+
+# A `cancel-in-progress` expression the event makes false does not cancel that
+# event's run, whatever shape the rest of it has. `&&` short-circuits, so a
+# conjunction whose guard excludes this event — or whose guard is a literal
+# GitHub treats as falsy — is false whatever follows it. A `||` body is false
+# only when every branch is. The rule proves the cases it can read and keeps
+# the conservative reading for an expression it cannot settle.
+expression_provably_falsy_at(value, event) if {
+	bodies := expression_bodies(value)
+	count(bodies) > 0
+	every body in bodies {
+		branches := expression_branches(body)
+		count(branches) > 0
+		every branch in branches {
+			branch_provably_falsy_at(branch, event)
+		}
+	}
+}
+
+branch_provably_falsy_at(branch, _) if branch_provably_falsy(branch)
+
+branch_provably_falsy_at(branch, event) if {
+	conjunction := branch_conjunction(branch)
+	some guard in conjunction.guards
+	guard_provably_falsy_at(guard, event)
+}
+
+# A conjunction whose guards all hold is only as falsy as its value: in
+# `true && false` the literal after the guard is what GitHub returns.
+branch_provably_falsy_at(branch, _) if {
+	conjunction := branch_conjunction(branch)
+	every guard in conjunction.guards {
+		guard_proven_truthy(guard)
+	}
+	branch_provably_falsy(conjunction.value)
+}
+
+guard_provably_falsy_at(guard, _) if branch_provably_falsy(guard)
+
+guard_provably_falsy_at(guard, event) if {
+	test := event_test(guard)
+	not event_test_holds_at(test, event)
 }
 
 expression_cancels_at(value, event) if {

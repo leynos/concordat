@@ -730,6 +730,30 @@ test_a_guard_on_an_undeclared_event_does_not_cancel if {
 	profile(data.fixtures.push_guard_on_pull_request_workflow) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+# `&&` short-circuits, so an event guard that excludes the declared event makes
+# the whole expression false whatever follows it. The superseded run it would
+# have cancelled is left alone.
+test_a_provably_false_expression_does_not_cancel if {
+	profile(data.fixtures.provably_false_cancel_expression) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A `||` chain is false only when every branch is, and both event tests here
+# exclude the only declared event.
+test_a_disjunction_that_excludes_every_declared_event_does_not_cancel if {
+	profile(data.fixtures.provably_false_cancel_disjunction) == {["RC-001", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_guard_that_holds_for_the_declared_event_cancels if {
+	count(findings(data.fixtures.truthy_guard_cancel_expression)) == 0
+}
+
+# An expression the rule cannot prove false keeps the conservative reading: it
+# is treated as cancelling rather than reported as a defect the text does not
+# establish. The package README records this limitation.
+test_an_unsettled_expression_keeps_the_conservative_reading if {
+	count(findings(data.fixtures.unsettled_cancel_expression_stays_conservative)) == 0
+}
+
 test_an_event_test_with_the_event_name_first_cancels if {
 	count(findings(data.fixtures.reversed_event_test_cancels)) == 0
 }
