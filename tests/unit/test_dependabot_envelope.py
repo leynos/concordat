@@ -5,9 +5,11 @@ from __future__ import annotations
 import os
 import typing as typ
 
+import pygit2
 import pytest
 
 from concordat.errors import OperationalRuleError
+from concordat.rules import packages
 from concordat.rules.dependabot_envelope import (
     ENVELOPE_KIND,
     ENVELOPE_SCHEMA_VERSION,
@@ -54,6 +56,34 @@ def test_a_checkout_without_configuration_has_none(tmp_path: pathlib.Path) -> No
     assert envelope["kind"] == ENVELOPE_KIND
     assert envelope["config"] is None
     assert envelope["action_directories"] == []
+
+
+def test_the_builder_defaults_to_no_repository_name(tmp_path: pathlib.Path) -> None:
+    """The builder alone knows only a directory, so its identity stays None."""
+    envelope = build_dependabot_envelope(tmp_path)
+
+    assert envelope["repository"] == {"path": str(tmp_path), "name": None}
+
+
+def test_the_adapter_reads_the_origin_slug(tmp_path: pathlib.Path) -> None:
+    """The DB-005 adapter supplies the slug the private registry matches."""
+    pygit2.init_repository(str(tmp_path)).remotes.create(
+        "origin", "git@github.com:leynos/dev-env-rocky.git"
+    )
+
+    envelope = packages._dependabot_envelope(tmp_path)
+
+    assert envelope["repository"] == {
+        "path": str(tmp_path),
+        "name": "leynos/dev-env-rocky",
+    }
+
+
+def test_the_adapter_reports_none_without_a_repository(tmp_path: pathlib.Path) -> None:
+    """A checkout git cannot open has no identity, so it keeps the daily rule."""
+    envelope = packages._dependabot_envelope(tmp_path)
+
+    assert envelope["repository"]["name"] is None
 
 
 @pytest.mark.parametrize("name", ["dependabot.yml", "dependabot.yaml"])

@@ -278,3 +278,122 @@ test_uv_increase if {
   findings := policy.deny with input as data.fixtures.uv_increase
   count(findings) == 0
 }
+
+# -- Private cadence -----------------------------------------------------------
+
+# The shipped defaults: daily and weekly for a registered private repository,
+# with Monday named when a weekly entry names a day.
+shipped_parameters := {
+  "private_cadence": {
+    "accepted_intervals": ["daily", "weekly"],
+    "weekly_day": "monday",
+  },
+  "private_repositories": [{
+    "repository": "leynos/dev-env-rocky",
+    "rationale": "private CI runs on Ubicloud and GitHub bills private minutes",
+    "review_trigger": "review when the repository becomes public",
+  }],
+}
+
+# A weekly entry need not name a day; Dependabot then chooses.
+test_private_weekly_without_a_day_is_accepted if {
+  findings := policy.deny with input as data.fixtures.private_weekly_no_day with data.parameters as shipped_parameters
+  count(findings) == 0
+}
+
+test_private_weekly_on_monday_is_accepted if {
+  findings := policy.deny with input as data.fixtures.private_weekly_monday with data.parameters as shipped_parameters
+  count(findings) == 0
+}
+
+# A named day must be the configured one; a mismatch is reported and no
+# interval finding accompanies it.
+test_private_weekly_on_another_day_is_reported if {
+  findings := policy.deny with input as data.fixtures.private_weekly_tuesday with data.parameters as shipped_parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.day is tuesday, not monday"],
+  }
+}
+
+# The cadence exception does not relax the catch-all: the weekly entry is
+# accepted, and its group defect is still the one finding.
+test_private_weekly_bad_catch_all_keeps_the_group_finding if {
+  findings := policy.deny with input as data.fixtures.private_weekly_bad_catch_all with data.parameters as shipped_parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[2] (uv) group \"everything\" precedes the catch-all but is not narrower than it: it needs patterns, none of them a bare wildcard"],
+  }
+}
+
+test_private_monthly_is_reported_with_the_registry if {
+  findings := policy.deny with input as data.fixtures.private_monthly with data.parameters as shipped_parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.interval is monthly, not daily or weekly; private repository leynos/dev-env-rocky accepts daily, weekly"],
+  }
+}
+
+# A repository that is not in the registry keeps the public rule, so the
+# finding is the estate's daily message.
+test_unregistered_weekly_keeps_the_daily_rule if {
+  findings := policy.deny with input as data.fixtures.private_weekly_unregistered with data.parameters as shipped_parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.interval is weekly, not daily"],
+  }
+}
+
+test_null_repository_name_keeps_the_daily_rule if {
+  findings := policy.deny with input as data.fixtures.private_weekly_null_name with data.parameters as shipped_parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.interval is weekly, not daily"],
+  }
+}
+
+# The identity match is case-insensitive because it is lowered before the
+# comparison; the registry keeps its lower-case slug.
+test_case_mismatched_name_matches_the_record if {
+  identity := object.union(data.fixtures.private_weekly_monday, {"repository": {"path": ".", "name": "Leynos/Dev-Env-Rocky"}})
+  findings := policy.deny with input as identity with data.parameters as shipped_parameters
+  count(findings) == 0
+}
+
+# A record without a rationale asks nobody to revisit the exception, so it
+# registers nothing and the daily rule applies.
+test_blank_rationale_registers_nothing if {
+  parameters := object.union(shipped_parameters, {"private_repositories": [{
+    "repository": "leynos/dev-env-rocky",
+    "rationale": " ",
+    "review_trigger": "review when the repository becomes public",
+  }]})
+  findings := policy.deny with input as data.fixtures.private_weekly_no_day with data.parameters as parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.interval is weekly, not daily"],
+  }
+}
+
+test_absent_parameters_keep_the_daily_rule if {
+  findings := policy.deny with input as data.fixtures.private_weekly_no_day with data.parameters as {}
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.interval is weekly, not daily"],
+  }
+}
+
+# A non-array cadence is malformed, so the accepted set falls back to daily.
+# The repository is still registered, so the private message reports the
+# fallback set it actually applied.
+test_malformed_accepted_intervals_keep_the_daily_rule if {
+  parameters := object.union(shipped_parameters, {"private_cadence": {"accepted_intervals": "weekly", "weekly_day": "monday"}})
+  findings := policy.deny with input as data.fixtures.private_weekly_no_day with data.parameters as parameters
+  profile(findings) == {
+    ["noncompliant", ".github/dependabot.yml", "updates[0] (cargo) schedule.interval is weekly, not daily; private repository leynos/dev-env-rocky accepts daily"],
+  }
+}
+
+# Without a configured weekday the day check is disabled, so a weekly entry
+# naming any day is judged on its interval alone.
+test_absent_weekly_day_skips_the_day_check if {
+  parameters := {
+    "private_cadence": {"accepted_intervals": ["daily", "weekly"]},
+    "private_repositories": shipped_parameters.private_repositories,
+  }
+  findings := policy.deny with input as data.fixtures.private_weekly_tuesday with data.parameters as parameters
+  count(findings) == 0
+}

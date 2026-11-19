@@ -10,7 +10,9 @@ an action manifest (`action.yml` or `action.yaml`).
 
 Every `updates` entry must satisfy all of the following.
 
-- **Daily cadence.** `schedule.interval` is `daily`.
+- **Daily cadence.** `schedule.interval` is `daily`, except in a registered
+  private repository, which may also run `weekly` (see
+  [Private cadence](#private-cadence)).
 - **One catch-all, last.** The entry's last group has `patterns: ["*"]` and
   `update-types: [minor, patch]`, and no other key except the default
   `applies-to: version-updates`. The catch-all therefore groups no major: a
@@ -46,6 +48,46 @@ the shape of a configuration, not whether one exists. It also leaves ecosystem
 coverage to the Dependabot governance rules: a configuration with no
 `github-actions` entry at all is not judged on local actions.
 
+### Private cadence
+
+A private repository whose CI runs on a metered runner may batch its updates
+into one weekly run. The exception is opt-in per repository through the rule
+manifest's parameters:
+
+- `private_cadence.accepted_intervals` lists the intervals a registered
+  repository may use; the shipped default is `[daily, weekly]`.
+- `private_cadence.weekly_day` names the weekday a `weekly` entry must use when
+  it names one; the shipped default is `monday`.
+- `private_repositories` is the registry. Each record carries a `repository`
+  slug (`owner/name`), a `rationale`, and a `review_trigger`.
+
+The DB-005 adapter reads the checkout's identity from its Git `origin` remote.
+The slug is lower-cased before the comparison, so a checkout of
+`Leynos/Dev-Env-Rocky` matches the record `leynos/dev-env-rocky`. A record
+registers the repository only when both its rationale and its review trigger
+are non-blank; a record nobody must revisit is not a record.
+
+A registered repository accepts every interval in `accepted_intervals`. A
+`weekly` entry that names a `schedule.day` must name `weekly_day`, compared
+case-insensitively; an entry that omits `day` lets Dependabot choose and is
+accepted. The weekday is not checked when `weekly_day` is absent. Every other
+clause is unchanged: the catch-all, the narrow earlier groups, local-action
+coverage, and the Cargo versioning rule all still apply to a private repository.
+
+The exception fails closed. Any of the following keeps the daily rule:
+
+- no `origin` remote, so the identity is `None`;
+- a blank, non-string, unregistered or case-mismatched name (after
+  lower-casing, an unregistered name still has no record);
+- a registry record with a blank `rationale` or `review_trigger`;
+- absent, non-object or malformed parameters, including an
+  `accepted_intervals` value that is not a non-empty array of non-blank strings.
+
+In each case `accepted_intervals` falls back to `["daily"]`. The audit does not
+observe repository visibility. The registry is the only evidence it has, so a
+repository that later becomes public must be removed from the registry; its
+`review_trigger` records when that review is due.
+
 ## What the rule declines to judge
 
 - Multi-ecosystem groups (`multi-ecosystem-groups` and an entry's
@@ -53,6 +95,9 @@ coverage to the Dependabot governance rules: a configuration with no
   schedule from such a group reads as having none, and is reported.
 - Group names, labels, cooldowns, `open-pull-requests-limit` and the other
   keys are not audited.
+- Repository visibility is not observed. A repository is treated as private
+  only when its `origin` slug appears in `private_repositories`, so the
+  registry, not GitHub, decides the exception.
 - A symbolic link under `.github/actions` is not followed, so an action
   manifest reached only through one is not required to be covered.
 
@@ -74,4 +119,13 @@ conftest verify \
 ```
 
 Each fixture is named for the one decision it changes from the compliant
-configuration.
+configuration. The private-cadence fixtures are:
+
+- `private_weekly_no_day` and `private_weekly_monday` — accepted; the omitted
+  day and the configured day both pass.
+- `private_weekly_tuesday` — the weekday finding.
+- `private_weekly_bad_catch_all` — the weekly cadence is accepted and the
+  group finding remains.
+- `private_monthly` — the interval finding names the registry record.
+- `private_weekly_unregistered` and `private_weekly_null_name` — the daily
+  rule.

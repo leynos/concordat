@@ -8,9 +8,11 @@ description: >-
   own pull request; any group before it is narrower than `*`; github-actions
   updates cover the root and
   every local action under `.github/actions`; and cargo entries set
-  `versioning-strategy` only to `auto` or `lockfile-only`. A repository with
-  no configuration is compliant. Audit-only: this rule declares no mutations.
-version: 0.1.0
+  `versioning-strategy` only to `auto` or `lockfile-only`. A registered
+  private repository may run weekly instead, naming Monday when it names a
+  day. A repository with no configuration is compliant. Audit-only: this rule
+  declares no mutations.
+version: 0.2.0
 sensor:
   type: conftest
   input: policy-input/dependabot-update-shape
@@ -19,3 +21,72 @@ sensor:
     - policy/
   data:
     - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      private_cadence:
+        type: object
+        additionalProperties: false
+        properties:
+          accepted_intervals:
+            type: array
+            minItems: 1
+            items:
+              type: string
+            description: >-
+              The `schedule.interval` values a registered private repository
+              may use. The policy reads the list only when it is a non-empty
+              array of non-blank strings; anything else keeps the daily rule.
+          weekly_day:
+            type: string
+            description: >-
+              The weekday a private `weekly` entry must name when it names
+              one, compared case-insensitively. An entry that omits
+              `schedule.day` lets Dependabot choose and is accepted. The
+              weekday is not checked when this parameter is absent or blank.
+        description: >-
+          The cadence a registered private repository may use. Public
+          repositories, unregistered checkouts and malformed values all keep
+          the daily rule.
+      private_repositories:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            rationale:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Repositories permitted the private cadence. Each record names the
+          repository (`owner/name`, matched lower-cased against the checkout's
+          `origin` remote), the billing or runner reason for the exception,
+          and the trigger that sends it back for review. A record with a blank
+          rationale or review trigger registers nothing, so the checkout keeps
+          the daily rule.
+  defaults:
+    private_cadence:
+      accepted_intervals:
+        - daily
+        - weekly
+      weekly_day: monday
+    private_repositories:
+      - repository: leynos/dev-env-rocky
+        rationale: >-
+          Private repository CI runs on Ubicloud, and GitHub bills
+          private-repository minutes on either runner. A daily Dependabot
+          cadence therefore multiplies private minutes, so the repository
+          batches its updates into one Monday run instead. Public repositories
+          are unaffected and keep the daily rule.
+        review_trigger: >-
+          Review when the repository becomes public, when GitHub stops billing
+          private-repository minutes for this runner, or when the runner or
+          billing policy changes.

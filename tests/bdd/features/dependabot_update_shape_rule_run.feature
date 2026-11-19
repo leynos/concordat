@@ -34,3 +34,21 @@ Feature: Dependabot update-shape rule run
     When I audit the checkout for its Dependabot update shape
     Then the audit exit status is 1
     And the audit output reports "could not be read"
+
+  Scenario: a registered private repository's weekly Monday entries are audited clean
+    Given a checkout registered as the private repository with weekly Monday entries
+    When I audit the checkout for its Dependabot update shape
+    Then the audit exit status is 0
+    And the audit table reports zero findings
+
+  Scenario: the same weekly configuration in another repository is reported
+    Given a checkout whose origin is another repository with a weekly configuration
+    When I audit the checkout for its Dependabot update shape
+    Then the audit exit status is 1
+    And the audit output reports "schedule.interval is weekly, not daily"
+
+  Scenario: a registered private repository's ungrouped-majors wildcard is reported
+    Given a checkout registered as the private repository with a weekly ungrouped-majors wildcard
+    When I audit the checkout for its Dependabot update shape
+    Then the audit exit status is 1
+    And the audit output reports "is not the catch-all"

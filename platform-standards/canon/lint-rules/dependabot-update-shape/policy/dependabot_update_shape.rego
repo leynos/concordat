@@ -8,6 +8,14 @@
 # repository with no configuration is compliant: this rule judges the shape of
 # a configuration, not its presence. A configuration that cannot be decoded is
 # indeterminate rather than clean.
+#
+# Private repositories may run weekly instead of daily. The exception is
+# opt-in by name: a repository registered in `private_repositories` with a
+# non-blank rationale and review trigger accepts the `private_cadence`
+# intervals, and a `weekly` entry there may name the configured weekday. The
+# catch-all, narrow-group, action-coverage and Cargo clauses do not relax for
+# a private repository. Every other checkout, including one whose identity or
+# parameters are absent or malformed, keeps the daily rule.
 package canon.lint_rules.dependabot_update_shape
 
 import rego.v1
@@ -97,6 +105,76 @@ entries contains index if {
 
 # -- Cadence ------------------------------------------------------------------
 
+# Tunables reach the policy through `data.parameters`. Everything here fails
+# closed: an absent, non-object or malformed parameter is read as the narrowest
+# answer, so a checkout the rule cannot identify or configure keeps the daily
+# rule rather than gaining an exception by accident.
+parameters := data.parameters if is_object(data.parameters)
+
+parameters := {} if not is_object(data.parameters)
+
+private_cadence := value if {
+  value := object.get(parameters, "private_cadence", null)
+  is_object(value)
+}
+
+private_cadence := {} if {
+  not is_object(object.get(parameters, "private_cadence", null))
+}
+
+private_repositories := value if {
+  value := object.get(parameters, "private_repositories", null)
+  is_array(value)
+}
+
+private_repositories := [] if {
+  not is_array(object.get(parameters, "private_repositories", null))
+}
+
+# The repository identity comes from the checkout's `origin` remote. A missing,
+# blank or non-string name cannot match a record.
+repository_name := name if {
+  is_object(input.repository)
+  name := object.get(input.repository, "name", null)
+  is_string(name)
+  trim_space(name) != ""
+}
+
+# A registered repository is private by contract. The registry is the only
+# visibility evidence the audit has, so a record must carry both the rationale
+# that justifies the exception and the trigger that sends it back for review.
+is_private_repository if {
+  some record in private_repositories
+  is_object(record)
+  record.repository == lower(repository_name)
+  is_string(record.rationale)
+  trim_space(record.rationale) != ""
+  is_string(record.review_trigger)
+  trim_space(record.review_trigger) != ""
+}
+
+default accepted_intervals := ["daily"]
+
+accepted_intervals := intervals if {
+  is_private_repository
+  intervals := object.get(private_cadence, "accepted_intervals", null)
+  is_array(intervals)
+  count(intervals) > 0
+  every interval in intervals {
+    is_string(interval)
+    trim_space(interval) != ""
+  }
+}
+
+# `weekly_day` is deliberately undefined when the parameter is absent, so the
+# weekday check below cannot fire against a value nobody configured.
+weekly_day := day if {
+  is_private_repository
+  day := object.get(private_cadence, "weekly_day", null)
+  is_string(day)
+  trim_space(day) != ""
+}
+
 interval(entry) := value if {
   schedule := object.get(entry, "schedule", null)
   is_object(schedule)
@@ -108,17 +186,67 @@ interval(entry) := null if {
   not is_object(schedule)
 }
 
+schedule_day(entry) := value if {
+  schedule := object.get(entry, "schedule", null)
+  is_object(schedule)
+  value := object.get(schedule, "day", null)
+}
+
+schedule_day(entry) := null if {
+  not is_object(object.get(entry, "schedule", null))
+}
+
+interval_is_accepted(value) if {
+  some accepted in accepted_intervals
+  value == accepted
+}
+
+accepted_summary := concat(" or ", accepted_intervals)
+
+accepted_list := concat(", ", accepted_intervals)
+
 deny contains finding("noncompliant", config_path, msg) if {
   envelope_ok
   some index in entries
   value := interval(updates[index])
-  value != "daily"
-  msg := sprintf("%s schedule.interval is %s, not daily", [entry_label(index), interval_text(value)])
+  not interval_is_accepted(value)
+  msg := cadence_message(index, value)
 }
 
-interval_text(null) := "missing"
+# A public repository keeps the estate-wide daily rule and the message the
+# estate already reports. A registered private repository may accept another
+# cadence, so its finding names the repository and the intervals in force.
+cadence_message(index, value) := sprintf("%s schedule.interval is %s, not daily", [entry_label(index), value_text(value)]) if {
+  not is_private_repository
+}
 
-interval_text(value) := sprintf("%v", [value]) if value != null
+cadence_message(index, value) := sprintf("%s schedule.interval is %s, not %s; private repository %s accepts %s", [entry_label(index), value_text(value), accepted_summary, repository_name, accepted_list]) if {
+  is_private_repository
+}
+
+# A private `weekly` entry may name a weekday, and when it does it must be the
+# configured one. Omitting `day` lets Dependabot choose, which the exception
+# accepts; naming a different day silently runs on a cadence the registry did
+# not approve.
+matches_weekly_day(value) if {
+  lower(value) == lower(weekly_day)
+}
+
+deny contains finding("noncompliant", config_path, msg) if {
+  envelope_ok
+  some index in entries
+  is_private_repository
+  interval(updates[index]) == "weekly"
+  value := schedule_day(updates[index])
+  value != null
+  weekly_day
+  not matches_weekly_day(value)
+  msg := sprintf("%s schedule.day is %s, not %s", [entry_label(index), value_text(value), weekly_day])
+}
+
+value_text(null) := "missing"
+
+value_text(value) := sprintf("%v", [value]) if value != null
 
 # -- Groups ---------------------------------------------------------------------
 
