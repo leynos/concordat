@@ -685,6 +685,50 @@ test_strict_elsewhere if {
   }
 }
 
+# The shell removes one outer quote pair, so `"'*.yml'"` reaches Git with the
+# apostrophes and matches no ordinary YAML file.
+test_nested_quoted_pathspec if {
+  findings := policy.deny with input as data.fixtures.nested_quoted_pathspec
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
+test_guarded_nested_quoted_pathspec if {
+  findings := policy.deny with input as data.fixtures.guarded_nested_quoted_pathspec
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# The expansion runs before the redirection is opened, so `((tmp=0))` can point
+# xargs at another file than the one Git wrote.
+test_guarded_arithmetic_argument if {
+  findings := policy.deny with input as data.fixtures.guarded_arithmetic_argument
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# Equal argument tokens from a later invocation do not make the fed one bind.
+test_pipeline_evidence_elsewhere if {
+  findings := policy.deny with input as data.fixtures.pipeline_evidence_elsewhere
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe soft-skips yamllint; its exit status cannot fail the target"],
+  }
+}
+
+# Without -0, xargs splits the NUL-delimited listing and misreads any name
+# with a space, quote or backslash.
+test_pipeline_no_null if {
+  findings := policy.deny with input as data.fixtures.pipeline_no_null
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
 # Printing a command is not running it.
 test_echo_decoy if {
   findings := policy.deny with input as data.fixtures.echo_decoy

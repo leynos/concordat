@@ -182,6 +182,16 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     # A strict flag in a second yamllint invocation does not make the fed
     # invocation strict.
     "strict_elsewhere": Scenario(makefile="strict-elsewhere"),
+    # One outer quote pair is all the shell removes, so nested quotes reach Git
+    # literally; arithmetic expansion can reassign the temporary-file variable;
+    # and a fed invocation whose status is masked is not the binding one.
+    "nested_quoted_pathspec": Scenario(makefile="nested-quoted-pathspec"),
+    "guarded_nested_quoted_pathspec": Scenario(
+        makefile="guarded-nested-quoted-pathspec"
+    ),
+    "guarded_arithmetic_argument": Scenario(makefile="guarded-arithmetic-argument"),
+    "pipeline_evidence_elsewhere": Scenario(makefile="pipeline-evidence-elsewhere"),
+    "pipeline_no_null": Scenario(makefile="pipeline-no-null"),
     "config_file_other": Scenario(makefile="config-file-other"),
     "config_file_attached": Scenario(makefile="config-file-attached"),
     "config_short_attached": Scenario(makefile="config-short-attached"),

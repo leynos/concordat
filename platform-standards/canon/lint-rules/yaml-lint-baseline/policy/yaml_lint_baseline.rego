@@ -533,25 +533,28 @@ informational(tool, tokens) if {
 # tracked YAML was listed.
 ls_files_safe_options := {"-z", "-c", "--cached", "--full-name", "--"}
 
-# Arguments as shell words with one layer of quoting removed, so `'*.yml'`,
-# `"*.yml"` and `*.yml` name the same pathspec. The pathspecs are matched as
-# whole words: a file named `*.yml.bak` is not a YAML pathspec.
+# Arguments as shell words with exactly one matching outer quote pair removed,
+# so `'*.yml'`, `"*.yml"` and `*.yml` name the same pathspec. `trim` would
+# remove every quote character, letting `"'*.yml'"` compare equal to `*.yml`
+# even though the shell passes the inner apostrophes to Git. The pathspecs are
+# matched as whole words: a file named `*.yml.bak` is not a YAML pathspec.
 ls_files_arguments(text) := {argument |
 	some token in split(trim_space(text), " ")
-	argument := trim(token, "'\"")
+	argument := shell_unquote(token)
 	argument != ""
 }
 
 # Matching quotes keep the shell from expanding a glob before Git sees it.
 is_shell_quoted(token) if {
-	startswith(token, "'")
-	endswith(token, "'")
+	count(token) >= 2
+	quote := substring(token, 0, 1)
+	quote in {"'", `"`}
+	substring(token, count(token) - 1, 1) == quote
 }
 
-is_shell_quoted(token) if {
-	startswith(token, `"`)
-	endswith(token, `"`)
-}
+shell_unquote(token) := substring(token, 1, count(token) - 2) if is_shell_quoted(token)
+
+shell_unquote(token) := token if not is_shell_quoted(token)
 
 # An unquoted glob is expanded by the shell first, so the pathspec Git receives
 # is whatever the working directory happened to contain, not the glob.
@@ -615,25 +618,48 @@ xargs_options_are_safe(text) if {
 # list could be discarded and one file linted by name.
 # The final capture holds the arguments of the yamllint invocation that the
 # listing is piped to, so those flags are judged against that invocation alone.
-git_fed_yamllint_pattern := `git[[:space:]]+ls-files([^;|&]*)\|[[:space:]]*xargs(([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*)[[:space:]]+([^[:space:];|&()]*/)?yamllint([[:space:]]|$)([^;|&]*)`
+git_fed_pipeline_prefix := `git[[:space:]]+ls-files([^;|&]*)\|[[:space:]]*xargs(([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*)[[:space:]]+([^[:space:];|&()]*/)?yamllint([[:space:]]|$)`
+
+git_fed_yamllint_pattern := sprintf("%s([^;|&]*)", [git_fed_pipeline_prefix])
+
+# The same shape, anchored so that only `&&` tails may follow the fed
+# invocation: that invocation's status is then the one reaching Make. Matching
+# its argument tokens against another invocation's tokens is not enough,
+# because a later yamllint can repeat the same arguments and supply the status.
+git_fed_binding_pattern := sprintf(
+	"%s([^;|&]*)(?:&&[^;|&]*)*$",
+	[git_fed_pipeline_prefix],
+)
+
+# The checks shared by the existence and binding matches. `-0`/`--null` is
+# required because the producer emits NUL-terminated names; without it xargs
+# splits on blanks and misreads any name with a space, quote or backslash.
+pipeline_match_arguments(match) := tokens if {
+	ls_files_covers_tracked_yaml(match[1])
+	xargs_options_are_safe(match[2])
+	some option in argument_tokens(match[2])
+	option in {"-0", "--null"}
+	tokens := argument_tokens(match[7])
+}
 
 pipeline_enumeration_arguments(recipe) := {tokens |
 	some match in regex.find_all_string_submatch_n(
 		git_fed_yamllint_pattern, expand(recipe_text(recipe)), -1,
 	)
-	ls_files_covers_tracked_yaml(match[1])
-	xargs_options_are_safe(match[2])
-	tokens := argument_tokens(match[7])
+	tokens := pipeline_match_arguments(match)
 }
 
 recipe_selects_tracked_yaml(recipe) if count(pipeline_enumeration_arguments(recipe)) > 0
 
 # A flag counts only when it belongs to the fed invocation and that
-# invocation's status reaches Make. A second yamllint elsewhere in the recipe
-# may carry `--strict`, but it did not receive the listing.
+# invocation's status reaches Make.
 pipeline_evidence(recipe) := {tokens |
-	some tokens in pipeline_enumeration_arguments(recipe)
-	tokens in binding_arguments(recipe, "yamllint")
+	not recipe_is_comment(recipe)
+	recipe.ignore_errors == false
+	some match in regex.find_all_string_submatch_n(
+		git_fed_binding_pattern, expand(recipe_text(recipe)), -1,
+	)
+	tokens := pipeline_match_arguments(match)
 }
 
 # -- guarded enumeration ------------------------------------------------------
@@ -684,6 +710,51 @@ guarded_cleanup := sprintf(
 
 guarded_xargs_options := `((?:[[:space:]]+-[^[:space:]]+(?:[[:space:]]+[0-9]+)?)*)`
 
+# The shell expands the guarded arguments before it opens the redirection, so a
+# substitution, arithmetic expansion or escape in them can reassign the
+# temporary-file variable. A whole token naming one Make variable stays
+# visible, so the indeterminate finding can report the unresolved flag; every
+# other expansion is refused.
+unresolved_argument_reference(token) if {
+	regex.match(`^\$[({][A-Za-z_][A-Za-z0-9_]*[)}]$`, token)
+}
+
+guarded_unsafe_argument(token) if {
+	not unresolved_argument_reference(token)
+	contains(token, shell_dollar)
+}
+
+guarded_unsafe_argument(token) if {
+	not unresolved_argument_reference(token)
+	contains(token, "$")
+}
+
+guarded_unsafe_argument(token) if {
+	not unresolved_argument_reference(token)
+	contains(token, "`")
+}
+
+guarded_unsafe_argument(token) if {
+	not unresolved_argument_reference(token)
+	contains(token, "(")
+}
+
+guarded_unsafe_argument(token) if {
+	not unresolved_argument_reference(token)
+	contains(token, ")")
+}
+
+guarded_unsafe_argument(token) if {
+	not unresolved_argument_reference(token)
+	contains(token, "\\")
+}
+
+guarded_arguments_are_literal(text) if {
+	every token in argument_tokens(text) {
+		not guarded_unsafe_argument(token)
+	}
+}
+
 guarded_recipe_pattern(tool) := sprintf(
 	"^[[:space:]]*[@+]?[[:space:]]*%s%s%s%s>%s[[:space:]]*&&[[:space:]]*xargs%s[[:space:]]+%s%s<%s[[:space:]]*$",
 	[
@@ -716,12 +787,13 @@ guarded_enumeration_arguments(recipe, tool) := {tokens |
 	count(names) > 0
 	count({name | some name in names; name != names[0]}) == 0
 	ls_files_covers_tracked_yaml(match[3])
+	guarded_arguments_are_literal(match[3])
 	options := trim_space(match[6])
-	option_tokens := [token | some token in split(options, " "); token != ""]
+	option_tokens := argument_tokens(options)
 	"-0" in option_tokens
 	xargs_options_are_safe(options)
-	arguments := trim_space(match[7])
-	tokens := [token | some token in split(arguments, " "); token != ""]
+	guarded_arguments_are_literal(match[7])
+	tokens := argument_tokens(match[7])
 }
 
 # The yamllint invocations carrying tracked-YAML evidence: a binding pipeline
@@ -860,6 +932,23 @@ deny contains f if {
 	f := finding(
 		"YL-001", "noncompliant", makefile_path, recipe.location.start_line,
 		sprintf("%q-path recipe runs yamllint without a `git ls-files` list covering %s; select tracked YAML only", [lint_target, concat(" and ", yaml_pathspecs)]),
+	)
+}
+
+# The listing is piped to yamllint, but that invocation is not the one whose
+# status reaches Make: a later command supplies the exit status. The later
+# invocation can repeat the fed one's arguments, so token equality alone does
+# not identify which invocation received the listing.
+deny contains f if {
+	closure_provable(lint_target)
+	some recipe in path_recipes(lint_target)
+	not recipe_satisfies("YL-001", recipe)
+	recipe.ignore_errors == false
+	count(pipeline_enumeration_arguments(recipe)) > 0
+	count(pipeline_evidence(recipe)) == 0
+	f := finding(
+		"YL-001", "noncompliant", makefile_path, recipe.location.start_line,
+		sprintf("%q-path recipe soft-skips yamllint; its exit status cannot fail the target", [lint_target]),
 	)
 }
 

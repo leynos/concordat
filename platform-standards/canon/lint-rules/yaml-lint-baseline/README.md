@@ -54,27 +54,32 @@ repository root, as the Makefile's recipes do.
   (`*.yml` and `*.yaml` by default), and its exit status reaches Make. The list
   may be piped to `xargs`, or buffered by the guarded form above. That form
   needs all of: one `mktemp` invocation assigned under `|| exit N` with a
-  non-zero status (arguments such as `-t yaml.XXXXXX` are allowed, but a
-  separator or redirection inside the substitution is not); the same shell
-  variable written by `git ls-files -z` and read by `xargs -0`; `&&` between
-  the redirection and `xargs`, so a failed or partial enumeration never reaches
-  the linter; and no trap other than `trap 'rm -f "$VAR"' EXIT`, which may be
-  omitted. A `git ls-files` whose output is discarded does not count. Pathspecs
-  are compared as whole arguments, so `*.yml.bak` is not `*.yml`, and a
-  wildcard must be quoted so the shell never expands it before Git runs.
-  `git ls-files` options other than `-z`, `-c`/`--cached`, `--full-name` and
-  `--` are refused, because they select another set or annotate the names.
-  `xargs` may use only `-0`/`--null`, `-r`/`--no-run-if-empty`, `-n`, `-L`,
-  `-P` or `-s` with a numeric operand, `-t`/`--verbose` and `-x`/`--exit`;
-  anything else is refused, because `-a`/`--arg-file` reads another list,
-  `-d`/`--delimiter` replaces the NUL delimiter, `-I`/`-i`/`--replace` stops
-  the names being appended, and `--help`, `--show-limits` and `--version` print
-  and exit. Options must be spelled in full: `getopt` accepts long-option
-  abbreviations and grouped short options such as `-raother.list`, and the
-  shell removes quotes from `--"help"`. `--strict` is read from the invocation
-  that receives the listing, so a second `yamllint --strict good.yml` does not
-  make an unfed invocation compliant. `$$` is shell syntax, not a Make
-  reference, so `$$(mktemp)` is not an unresolved variable, and a
+  non-zero status (plain arguments such as `-t yaml.XXXXXX` are allowed, but a
+  separator, redirection or expansion inside the substitution is not); the same
+  shell variable written by `git ls-files -z` and read by `xargs -0`; `&&`
+  between the redirection and `xargs`, so a failed or partial enumeration never
+  reaches the linter; and no trap other than `trap 'rm -f "$VAR"' EXIT`, which
+  may be omitted. A `git ls-files` whose output is discarded does not count.
+  Pathspecs are compared as whole arguments after one matching outer quote pair
+  is removed, so `*.yml.bak` is not `*.yml`, nested quoting such as `"'*.yml'"`
+  is refused, and a wildcard must be quoted so the shell never expands it
+  before Git runs. `git ls-files` options other than `-z`, `-c`/`--cached`,
+  `--full-name` and `--` are refused, because they select another set or
+  annotate the names. `--strict` is read from the fed invocation, and that
+  invocation must be the one whose exit status reaches Make; a second
+  `yamllint --strict good.yml` does not stand in for it. Guarded tool arguments
+  must be plain words, because an expansion such as `$((tmp=0))` runs before
+  the redirection opens and can point it at another file. `xargs` may use only
+  `-0`/`--null`, `-r`/`--no-run-if-empty`, `-n`, `-L`, `-P` or `-s` with a
+  numeric operand, `-t`/`--verbose` and `-x`/`--exit`; anything else is
+  refused, because `-a`/`--arg-file` reads another list, `-d`/`--delimiter`
+  replaces the NUL delimiter, `-I`/`-i`/`--replace` stops the names being
+  appended, and `--help`, `--show-limits` and `--version` print and exit.
+  Options must be spelled in full: `getopt` accepts long-option abbreviations
+  and grouped short options such as `-raother.list`, and the shell removes
+  quotes from `--"help"`. The piped form also needs `-0` or `--null`, so the
+  NUL-delimited listing is split as Git wrote it. `$$` is shell syntax, not a
+  Make reference, so `$$(mktemp)` is not an unresolved variable, and a
   backslash-newline continuation is read as the one shell line Make passes it
   as. `-d`/`--config-data` (in every spelling), `-c`/`--config-file` naming any
   file but `.yamllint.yml`, and `--no-warnings` are refused, because they
