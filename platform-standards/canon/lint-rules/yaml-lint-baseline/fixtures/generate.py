@@ -169,6 +169,19 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "xargs_long_arg_file": Scenario(makefile="xargs-long-arg-file"),
     "guarded_unquoted_pathspec": Scenario(makefile="guarded-unquoted-pathspec"),
     "unquoted_pathspec": Scenario(makefile="unquoted-pathspec"),
+    # Grouped short options, quoted long options, replacement modes and a
+    # compound mktemp substitution are further ways to hide an unsafe xargs
+    # option or to point the temporary file somewhere else.
+    "guarded_xargs_cluster": Scenario(makefile="guarded-xargs-cluster"),
+    "xargs_cluster": Scenario(makefile="xargs-cluster"),
+    "guarded_mktemp_extra": Scenario(makefile="guarded-mktemp-extra"),
+    "guarded_xargs_replace": Scenario(makefile="guarded-xargs-replace"),
+    "xargs_replace": Scenario(makefile="xargs-replace"),
+    "guarded_xargs_quoted_help": Scenario(makefile="guarded-xargs-quoted-help"),
+    "xargs_quoted_help": Scenario(makefile="xargs-quoted-help"),
+    # A strict flag in a second yamllint invocation does not make the fed
+    # invocation strict.
+    "strict_elsewhere": Scenario(makefile="strict-elsewhere"),
     "config_file_other": Scenario(makefile="config-file-other"),
     "config_file_attached": Scenario(makefile="config-file-attached"),
     "config_short_attached": Scenario(makefile="config-short-attached"),

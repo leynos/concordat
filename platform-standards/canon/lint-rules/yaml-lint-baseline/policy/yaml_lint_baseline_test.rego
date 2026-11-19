@@ -615,6 +615,76 @@ test_unquoted_pathspec if {
   }
 }
 
+# GNU short-option grouping puts the argument-file option after `-r` in one
+# token, where a check that only looks at a token's first letters misses it.
+test_guarded_xargs_cluster if {
+  findings := policy.deny with input as data.fixtures.guarded_xargs_cluster
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+test_xargs_cluster if {
+  findings := policy.deny with input as data.fixtures.xargs_cluster
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
+# A second command in the substitution changes what the variable holds, so the
+# temporary file is no longer the one the listing was written to.
+test_guarded_mktemp_extra if {
+  findings := policy.deny with input as data.fixtures.guarded_mktemp_extra
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+# In replacement mode xargs does not append the names, so only the fixed
+# argument is linted.
+test_guarded_xargs_replace if {
+  findings := policy.deny with input as data.fixtures.guarded_xargs_replace
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+test_xargs_replace if {
+  findings := policy.deny with input as data.fixtures.xargs_replace
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
+# The shell strips the quotes before xargs sees the token, so `--"help"` is
+# still the informational option.
+test_guarded_xargs_quoted_help if {
+  findings := policy.deny with input as data.fixtures.guarded_xargs_quoted_help
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+  not mentions_mktemp(findings)
+}
+
+test_xargs_quoted_help if {
+  findings := policy.deny with input as data.fixtures.xargs_quoted_help
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
+}
+
+# The fed invocation has no --strict and its status is masked by the following
+# command; --strict from the second yamllint must not stand in for it.
+test_strict_elsewhere if {
+  findings := policy.deny with input as data.fixtures.strict_elsewhere
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe soft-skips yamllint; its exit status cannot fail the target"],
+  }
+}
+
 # Printing a command is not running it.
 test_echo_decoy if {
   findings := policy.deny with input as data.fixtures.echo_decoy

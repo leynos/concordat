@@ -53,28 +53,34 @@ repository root, as the Makefile's recipes do.
   (or `-s`) over a `git ls-files` list with every pathspec in `yaml_pathspecs`
   (`*.yml` and `*.yaml` by default), and its exit status reaches Make. The list
   may be piped to `xargs`, or buffered by the guarded form above. That form
-  needs all of: `mktemp` assigned under `|| exit N` with a non-zero status; the
-  same shell variable written by `git ls-files -z` and read by `xargs -0`; `&&`
-  between the redirection and `xargs`, so a failed or partial enumeration never
-  reaches the linter; and no trap other than `trap 'rm -f "$VAR"' EXIT`, which
-  may be omitted. `xargs` with short options is read through, because yamllint
-  has no Git mode; a `git ls-files` whose output is discarded does not count.
-  Pathspecs are compared as whole arguments, so `*.yml.bak` is not `*.yml`, and
-  a wildcard must be quoted so the shell never expands it before Git runs.
+  needs all of: one `mktemp` invocation assigned under `|| exit N` with a
+  non-zero status (arguments such as `-t yaml.XXXXXX` are allowed, but a
+  separator or redirection inside the substitution is not); the same shell
+  variable written by `git ls-files -z` and read by `xargs -0`; `&&` between
+  the redirection and `xargs`, so a failed or partial enumeration never reaches
+  the linter; and no trap other than `trap 'rm -f "$VAR"' EXIT`, which may be
+  omitted. A `git ls-files` whose output is discarded does not count. Pathspecs
+  are compared as whole arguments, so `*.yml.bak` is not `*.yml`, and a
+  wildcard must be quoted so the shell never expands it before Git runs.
   `git ls-files` options other than `-z`, `-c`/`--cached`, `--full-name` and
   `--` are refused, because they select another set or annotate the names.
-  `xargs` may not use `-a`/`--arg-file` or `-d`/`--delimiter`, because they
-  read another list or replace the NUL delimiter, nor `--help`, `--show-limits`
-  or `--version`, which print and exit without running the linter; long options
-  are matched by prefix, because `getopt_long` accepts any unambiguous
-  abbreviation. `$$` is shell syntax, not a Make reference, so `$$(mktemp)` is
-  not an unresolved variable, and a backslash-newline continuation is read as
-  the one shell line Make passes it as. `-d`/`--config-data` (in every
-  spelling), `-c`/`--config-file` naming any file but `.yamllint.yml`, and
-  `--no-warnings` are refused, because they replace the estate configuration or
-  hide what `--strict` fails on, and so is a recipe that only prints
-  `--version` or `--help`. A flag behind a Make variable the policy cannot
-  resolve is indeterminate.
+  `xargs` may use only `-0`/`--null`, `-r`/`--no-run-if-empty`, `-n`, `-L`,
+  `-P` or `-s` with a numeric operand, `-t`/`--verbose` and `-x`/`--exit`;
+  anything else is refused, because `-a`/`--arg-file` reads another list,
+  `-d`/`--delimiter` replaces the NUL delimiter, `-I`/`-i`/`--replace` stops
+  the names being appended, and `--help`, `--show-limits` and `--version` print
+  and exit. Options must be spelled in full: `getopt` accepts long-option
+  abbreviations and grouped short options such as `-raother.list`, and the
+  shell removes quotes from `--"help"`. `--strict` is read from the invocation
+  that receives the listing, so a second `yamllint --strict good.yml` does not
+  make an unfed invocation compliant. `$$` is shell syntax, not a Make
+  reference, so `$$(mktemp)` is not an unresolved variable, and a
+  backslash-newline continuation is read as the one shell line Make passes it
+  as. `-d`/`--config-data` (in every spelling), `-c`/`--config-file` naming any
+  file but `.yamllint.yml`, and `--no-warnings` are refused, because they
+  replace the estate configuration or hide what `--strict` fails on, and so is
+  a recipe that only prints `--version` or `--help`. A flag behind a Make
+  variable the policy cannot resolve is indeterminate.
 - **YL-002** (error): a recipe reachable from `lint` runs actionlint with a
   binding exit status and without an empty `-shellcheck` value (`-shellcheck=`,
   `-shellcheck ""`), which would switch off the script analysis that makes

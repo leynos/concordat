@@ -418,6 +418,13 @@ binding_arguments(recipe, tool) := {tokens |
 
 invocation_binds(recipe, tool, tokens) if tokens in binding_arguments(recipe, tool)
 
+# Collapse padding and empty fields so two spellings of the same argument list
+# compare as the same token list.
+argument_tokens(text) := [token |
+	some token in split(trim_space(text), " ")
+	token != ""
+]
+
 # A token such as `$(YAMLLINT_PATHS)` left in the argument list names a
 # variable the policy could not resolve; the flags behind it are unproven.
 unresolved_tokens(tokens) := {name |
@@ -576,31 +583,29 @@ ls_files_covers_tracked_yaml(text) if {
 	}
 }
 
-# `-a`/`--arg-file` makes xargs read a different list, `-d`/`--delimiter`
-# overrides the NUL delimiter that `-0` establishes, and `--help`,
-# `--show-limits` and `--version` make xargs print and exit without running the
-# linter. getopt_long accepts any unambiguous prefix, so long options are
-# matched by prefix too; an invalid abbreviation makes xargs fail instead.
-xargs_unsafe_option(option) if startswith(option, "-a")
+# xargs options that leave the linter reading the enumerated names: none of
+# them selects another input source (`-a`/`--arg-file`), changes the delimiter
+# (`-d`/`--delimiter`), substitutes names into fixed arguments (`-I`/`-i`/
+# `--replace`), or prints and exits (`--help`, `--show-limits`, `--version`).
+# Only these exact spellings are accepted. GNU getopt_long accepts unambiguous
+# long-option prefixes, groups short options into one token (`-raother.list`),
+# and drops quotes the shell added (`--"help"`), so prefix or first-letter
+# checks can each be bypassed by a spelling that still reaches the refused
+# option. An unrecognized token is refused rather than decoded.
+xargs_safe_options := {
+	"-0", "-r", "-n", "-L", "-P", "-s", "-t", "-x",
+	"--null", "--no-run-if-empty", "--max-args", "--max-lines",
+	"--max-procs", "--max-chars", "--verbose", "--exit",
+}
 
-xargs_unsafe_option(option) if startswith(option, "-d")
+xargs_safe_token(token) if token in xargs_safe_options
 
-xargs_unsafe_option(option) if startswith(option, "--a")
-
-xargs_unsafe_option(option) if startswith(option, "--d")
-
-xargs_unsafe_option(option) if startswith(option, "--h")
-
-xargs_unsafe_option(option) if startswith(option, "--s")
-
-xargs_unsafe_option(option) if startswith(option, "--v")
+# A bare number is the operand of the option spelled before it.
+xargs_safe_token(token) if regex.match(`^[0-9]+$`, token)
 
 xargs_options_are_safe(text) if {
-	every option in {token |
-		some token in split(trim_space(text), " ")
-		startswith(token, "-")
-	} {
-		not xargs_unsafe_option(option)
+	every token in argument_tokens(text) {
+		xargs_safe_token(token)
 	}
 }
 
@@ -608,14 +613,27 @@ xargs_options_are_safe(text) if {
 # producer's arguments, so the lint covers the tracked YAML and nothing from
 # vendored or ignored trees. Co-occurrence in one recipe is not enough: the
 # list could be discarded and one file linted by name.
-git_fed_yamllint_pattern := `git[[:space:]]+ls-files([^;|&]*)\|[[:space:]]*xargs(([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*)[[:space:]]+([^[:space:];|&()]*/)?yamllint([[:space:]]|$)`
+# The final capture holds the arguments of the yamllint invocation that the
+# listing is piped to, so those flags are judged against that invocation alone.
+git_fed_yamllint_pattern := `git[[:space:]]+ls-files([^;|&]*)\|[[:space:]]*xargs(([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*)[[:space:]]+([^[:space:];|&()]*/)?yamllint([[:space:]]|$)([^;|&]*)`
 
-recipe_selects_tracked_yaml(recipe) if {
+pipeline_enumeration_arguments(recipe) := {tokens |
 	some match in regex.find_all_string_submatch_n(
 		git_fed_yamllint_pattern, expand(recipe_text(recipe)), -1,
 	)
 	ls_files_covers_tracked_yaml(match[1])
 	xargs_options_are_safe(match[2])
+	tokens := argument_tokens(match[7])
+}
+
+recipe_selects_tracked_yaml(recipe) if count(pipeline_enumeration_arguments(recipe)) > 0
+
+# A flag counts only when it belongs to the fed invocation and that
+# invocation's status reaches Make. A second yamllint elsewhere in the recipe
+# may carry `--strict`, but it did not receive the listing.
+pipeline_evidence(recipe) := {tokens |
+	some tokens in pipeline_enumeration_arguments(recipe)
+	tokens in binding_arguments(recipe, "yamllint")
 }
 
 # -- guarded enumeration ------------------------------------------------------
@@ -648,8 +666,12 @@ guarded_redirection := sprintf(
 	[shell_dollar_pattern, guarded_name, guarded_name],
 )
 
+# The substitution must be one `mktemp` invocation. Arguments such as
+# `-t yaml.XXXXXX` are fine, but a command separator or a redirection inside
+# the parentheses would leave the variable holding something other than the
+# temporary file's name, and the listing would be written elsewhere.
 guarded_assignment := sprintf(
-	`%s=%s\(mktemp[^()]*\)[[:space:]]*\|\|[[:space:]]*exit[[:space:]]+[1-9][0-9]*[[:space:]]*;[[:space:]]*`,
+	`%s=%s\(mktemp[^;|&<>\x60]*\)[[:space:]]*\|\|[[:space:]]*exit[[:space:]]+[1-9][0-9]*[[:space:]]*;[[:space:]]*`,
 	[guarded_name, shell_dollar_pattern],
 )
 
@@ -707,10 +729,7 @@ guarded_enumeration_arguments(recipe, tool) := {tokens |
 # to the invocation that supplied the evidence, so flags from one command
 # cannot be judged against another's enumeration.
 yamllint_evidence(recipe) := union({
-	{tokens |
-		some tokens in binding_arguments(recipe, "yamllint")
-		recipe_selects_tracked_yaml(recipe)
-	},
+	pipeline_evidence(recipe),
 	guarded_enumeration_arguments(recipe, "yamllint"),
 })
 

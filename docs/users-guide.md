@@ -898,18 +898,26 @@ yamllint:
 	xargs -0 -r $(YAMLLINT) --strict -- <"$$tmp"
 ```
 
-The guarded form is accepted only with `mktemp` under `|| exit N` where `N`
-makes the recipe fail, the same shell variable on both redirections, `-z` and
-`-0` keeping the listing NUL-delimited, `&&` so a failed enumeration cannot
-reach the linter, and no trap other than the `rm -f` cleanup (which may be
-omitted). The pathspecs must be whole arguments, so `*.yml.bak` does not count
-as `*.yml`, and a wildcard must be quoted so the shell does not expand it first.
-`git ls-files` may use only `-z`, `-c`/`--cached`, `--full-name` and `--`.
-`xargs` may not use `-a`/`--arg-file` or `-d`/`--delimiter`, because those
-change which files are read, nor `--help`, `--show-limits` or `--version`,
-which exit without running the linter; long options are matched by prefix,
-since any unambiguous abbreviation is accepted. `$$` is shell syntax rather
-than a Make variable, so `$$(mktemp)` is not reported as unresolved.
+The guarded form is accepted only with one `mktemp` invocation under
+`|| exit N` where `N` makes the recipe fail (arguments such as `-t yaml.XXXXXX`
+are allowed, but a separator or redirection inside the substitution is not),
+the same shell variable on both redirections, `-z` and `-0` keeping the listing
+NUL-delimited, `&&` so a failed enumeration cannot reach the linter, and no
+trap other than the `rm -f` cleanup (which may be omitted). The pathspecs must
+be whole arguments, so `*.yml.bak` does not count as `*.yml`, and a wildcard
+must be quoted so the shell does not expand it first. `git ls-files` may use
+only `-z`, `-c`/`--cached`, `--full-name` and `--`. `xargs` may use only
+`-0`/`--null`, `-r`/`--no-run-if-empty`, `-n`, `-L`, `-P` or `-s` with a
+numeric operand, `-t`/`--verbose` and `-x`/`--exit`; anything else is refused,
+because `-a`/`--arg-file` reads another list, `-d`/`--delimiter` replaces the
+NUL delimiter, `-I`/`-i`/`--replace` stops the names being appended, and
+`--help`, `--show-limits` and `--version` exit without running the linter.
+Options must be spelled in full, since `getopt` accepts abbreviations and
+grouped short options such as `-raother.list`, and the shell removes quotes from
+`--"help"`. The `--strict` flag is read from the invocation that receives the
+listing, so a second `yamllint --strict good.yml` does not make an unfed
+invocation compliant. `$$` is shell syntax rather than a Make variable, so
+`$$(mktemp)` is not reported as unresolved.
 
 yamllint must run from the repository root, because it resolves `extends:`
 against the current directory.
