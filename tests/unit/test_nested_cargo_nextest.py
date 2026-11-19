@@ -828,6 +828,70 @@ def test_a_helper_argument_after_a_block_opener_is_retained(
     assert ids(tmp_path) == {"NC-004"}
 
 
+CARGO_LAUNCH_BEFORE_LATER_ARGUMENT = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    probe(&mut command);\n"
+    "    add_build(&mut command);\n}\n"
+    "fn probe(command: &mut Command) {\n"
+    '    command.arg("--version").status().unwrap();\n}\n'
+    "fn add_build(command: &mut Command) {\n"
+    '    command.arg("build");\n}\n'
+)
+
+
+def test_a_compile_argument_after_a_helper_launch_is_not_the_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`build` is added after `cargo --version` has run, so it compiles nothing."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CARGO_LAUNCH_BEFORE_LATER_ARGUMENT)
+    assert ids(tmp_path) == set()
+
+
+LOOP_SHADOWS_HELPER = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    for add_build in [noop] {\n"
+    "        add_build(&mut command);\n"
+    "    }\n"
+    "    command.status().unwrap();\n}\n"
+    "fn add_build(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_loop_binding_that_shadows_the_helper_name_is_not_the_function(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A loop variable named `add_build` is not the `fn add_build` beside it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LOOP_SHADOWS_HELPER)
+    assert ids(tmp_path) == set()
+
+
+PROBE_AFTER_CLOSED_BLOCK = (
+    "use std::process::Command;\n"
+    "fn probe_toolchain() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    add_version(&mut command);\n"
+    "    command.status().unwrap();\n}\n"
+    "fn add_version(command: &mut Command) {\n"
+    '    if enabled() { setup(); } command.arg("--version");\n}\n'
+)
+
+
+def test_a_probe_after_a_closed_block_is_unconditional(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `--version` added after an `if` block closes runs on every path."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PROBE_AFTER_CLOSED_BLOCK)
+    assert ids(tmp_path) == set()
+
+
 def grouped_config(filter_expression: str) -> str:
     """Return a bounded configuration whose one grouped override uses a filter."""
     return CLEAN.replace("binary(ui)", filter_expression)

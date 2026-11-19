@@ -15,8 +15,9 @@ from a repository that needs none.
 - A `cargo` spawn counts only with a compiling subcommand in the arguments of
   that same command (`build`, `check`, `test`, `run`, `package`, ...);
   `cargo metadata` or `cargo config` do no compilation. The arguments are read
-  from the spawn to the next `Command::new` or the next function, so a
-  compiling argument elsewhere in the file (a production `cargo build`, say)
+  from the spawn to the next `Command::new` or the next function, and only up
+  to the command's first launch, so a compiling argument elsewhere in the file
+  (a production `cargo build`, say) or one added after the command has run
   does not turn a test's `cargo metadata` into compiler work. A `rustc` spawn
   counts unless one of its own arguments asks who the compiler is (`--version`,
   `-V`, `-vV`) or for a table that needs no compile (`--print` of `sysroot`,
@@ -434,9 +435,9 @@ def _receiver_statements(
 def _shadowed(masked: str, name: str, at: int) -> bool:
     """Report whether *name* may be a local binding at *at* rather than a `fn`.
 
-    A closure or binding with the helper's name shadows the free function, so
-    the call reaches something the scan cannot read. Both are written so that
-    the name is followed by `=`, `:` or `|` rather than `(`.
+    A closure, loop variable, `let`, `const` or `static` with the helper's name
+    shadows the free function, so the call reaches something the scan cannot
+    read.
 
     Returns
     -------
@@ -446,7 +447,8 @@ def _shadowed(masked: str, name: str, at: int) -> bool:
     scope = [found.start() for found in FUNCTION_BOUNDARY.finditer(masked, 0, at)]
     start = scope[-1] if scope else 0
     binder = re.compile(
-        rf"\b(?:let\s+(?:mut\s+)?|const\s+|static\s+){re.escape(name)}\b"
+        rf"\b(?:let\s+(?:mut\s+)?|const\s+|static\s+|for\s+(?:mut\s+)?)"
+        rf"{re.escape(name)}\b"
     )
     return binder.search(masked, start, at) is not None
 
@@ -630,7 +632,9 @@ def _unconditional_probe(statement: str, depth: int) -> bool:
 
     A flag added inside a block (`if query_only { cmd.arg("--print=cfg") }`),
     whether in the same statement or in one that follows the opening brace, may
-    not be there when the command runs, so it proves nothing.
+    not be there when the command runs, so it proves nothing. A block may also
+    close before the flag in the same statement, so the braces before the flag
+    are counted against the depth the statement starts at.
 
     Returns
     -------
@@ -638,7 +642,31 @@ def _unconditional_probe(statement: str, depth: int) -> bool:
         True when the statement holds a probe flag outside any block.
     """
     found = RUSTC_PROBE.search(statement)
-    return found is not None and depth == 0 and "{" not in statement[: found.start()]
+    if found is None:
+        return False
+    before = statement[: found.start()]
+    return depth + before.count("{") - before.count("}") == 0
+
+
+def _compiles(text: str, masked: str, closers: dict[int, int], start: int) -> bool:
+    """Report whether a cargo command adds compiling work before it runs.
+
+    Only statements that own the command count, and only up to its first
+    launch: an argument added after the command has run belongs to a reuse,
+    which compiles nothing. The statements include a helper's body, spliced in
+    at the call site, so a launch in either place ends the arguments.
+
+    Returns
+    -------
+    bool
+        True when an argument before the first launch selects a compiling
+        subcommand.
+    """
+    window = _command_window(text, masked, closers, start)
+    return any(
+        COMPILES.search(statement)
+        for statement, _depth in _own_statements(text, start, window)
+    )
 
 
 def _spawn_kind(
@@ -656,7 +684,7 @@ def _spawn_kind(
         ):
             return "rustc"
     compiles = any(
-        COMPILES.search(_command_window(text, masked, closers, match.start()))
+        _compiles(text, masked, closers, match.start())
         for match in CARGO_SPAWN.finditer(text)
         if _is_test_position(relative, spans, match.start())
     )

@@ -32,17 +32,17 @@ configuration from a repository that needs none:
   `check`, `test`, `run`, `package`, `clippy`, `doc`, `install`, `publish`,
   `bench`, `miri`, `nextest`, `llvm-cov`, `rustdoc`, `rustc`) among **the same
   command's** arguments, read from the spawn to the next `Command::new` or the
-  next function. A command bound to a name and handed to a helper defined once
-  in the same file is also read against that helper's body, even when the call
-  spans lines; only statements on the parameter that receives the command
-  count, so another command built in the helper does not contribute. Those
-  statements are read at the call site, and the parameter's name is taken to be
-  the caller's binding, so a launch on either side ends the arguments in the
-  order they run, and a version flag added through a renamed parameter still
-  probes the caller's command. A helper defined more than once, or one whose
-  parameter position, receiver or type is not plain, is declined rather than
-  guessed; so is a call the caller's own binding shadows. `cargo metadata` and
-  `cargo config` do not count;
+  next function, and only before that command's first launch. A command bound
+  to a name and handed to a helper defined once in the same file is also read
+  against that helper's body, even when the call spans lines; only statements
+  on the parameter that receives the command count, so another command built in
+  the helper does not contribute. Those statements are read at the call site,
+  and the parameter's name is taken to be the caller's binding, so a launch on
+  either side ends the arguments in the order they run, and a version flag
+  added through a renamed parameter still probes the caller's command. A helper
+  defined more than once, or one whose parameter position, receiver or type is
+  not plain, is declined rather than guessed; so is a call the caller's own
+  binding shadows. `cargo metadata` and `cargo config` do not count;
 - a `rustc` spawn counts, unless an argument added to that same command is a
   version flag (`--version`, `-V`, `-vV`) or a `--print` of a table that needs
   no compile (`sysroot`, `target-libdir`, `host-tuple`, `cfg`, `target-list`,
