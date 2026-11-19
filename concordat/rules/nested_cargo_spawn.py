@@ -34,9 +34,11 @@ from a repository that needs none.
   and a version flag added through a renamed parameter still probes the
   caller's command. The helper must be defined exactly once in the file and
   receive the command at a position whose parameter is a plain `name: Type`;
-  a local binding that shadows the helper's name, or a later declaration of
-  the parameter's name inside the helper, declines the handoff rather than
-  guessing. Compiler work in a declined shape can be missed.
+  a binding in the caller's function (its own parameters included) that
+  shadows the helper's name, a call written as a path or method
+  (`support::configure(..)`), or a later declaration of the parameter's name
+  inside the helper, declines the handoff rather than guessing. Compiler work
+  in a declined shape can be missed.
 - Python tests that spawn `cargo` are outside the scan: pytest, not nextest,
   bounds them.
 - A file must name `Command`, so `env!("CARGO")` read for a path alone is not a
@@ -49,6 +51,7 @@ at repository level only.
 
 from __future__ import annotations
 
+import bisect
 import os
 import pathlib
 import re
@@ -56,6 +59,12 @@ import typing as typ
 from itertools import starmap
 
 from .nested_cargo_source import brace_pairs
+from .nested_cargo_syntax import (
+    _body_span,
+    _parameter_at,
+    parameter_names,
+    top_level_item,
+)
 from .rust_source import mask_literals
 
 TEST_PATH: typ.Final = re.compile(
@@ -108,13 +117,6 @@ COMPILES: typ.Final = re.compile(
 )
 COMMAND_NEW: typ.Final = re.compile(r"Command::new\(")
 CFG_TEST: typ.Final = re.compile(r"#\[cfg\(test\)\]")
-# A `self` receiver makes the parameter the command reaches ambiguous, so the
-# callee analysis is declined rather than guessed.
-SELF_RECEIVER: typ.Final = re.compile(r"\s*(?:&\s*(?:'\w+\s*)?)?(?:mut\s+)?self\b")
-# Only a plain `[mut] name: Type` parameter names a value the helper can use.
-PARAMETER: typ.Final = re.compile(
-    r"\s*(?:mut\s+)?(?P<name>[A-Za-z_]\w*)\s*:\s*\S[\s\S]*"
-)
 BINDING: typ.Final = re.compile(
     r"let[ \t]+(?:mut[ \t]+)?(?P<name>\w+)[ \t]*(?::[^=;]+)?=[ \t]*$"
 )
@@ -147,35 +149,6 @@ class Spawner(typ.TypedDict):
     test_functions: list[str]
 
 
-def _top_level_item(masked: str, start: int) -> tuple[int, str] | None:
-    """Return the first `{` or `;` after *start* that sits outside any bracket.
-
-    A signature can hold a `;` inside an array length (`[u8; 4]`) or a
-    parenthesised type, so only a delimiter at depth zero ends the item. A
-    stray closing bracket or the end of the file leaves the item unfinished.
-
-    Returns
-    -------
-    tuple[int, str] | None
-        The offset and the character found, or None when the item does not
-        close cleanly.
-    """
-    depth = 0
-    for index in range(start, len(masked)):
-        match masked[index]:
-            case "(" | "[":
-                depth += 1
-            case ")" | "]":
-                depth -= 1
-                if depth < 0:
-                    return None
-            case "}" if depth == 0:
-                return None
-            case "{" | ";" if depth == 0:
-                return index, masked[index]
-    return None
-
-
 def _marked_block(
     masked: str, marker: re.Match[str], closers: dict[int, int]
 ) -> tuple[int, int] | None:
@@ -191,7 +164,7 @@ def _marked_block(
         The block as `(start, end)`, or None for a marked item with no braces
         (`mod tests;`, `use ..;`) or with unbalanced ones.
     """
-    item = _top_level_item(masked, marker.end())
+    item = top_level_item(masked, marker.end())
     if item is None or item[1] != "{":
         return None
     end = closers.get(item[0])
@@ -246,153 +219,35 @@ def _argument_position(before: str | None) -> int | None:
     return before.count(",") + 1
 
 
-def _parameter_open(masked: str, start: int) -> int | None:
-    """Return the offset of the `(` that opens a parameter list after *start*.
+class _Window(typ.NamedTuple):
+    """A command's statements in original and masked form, offset for offset.
 
-    Generics may hold their own parentheses (`F: Fn()`) and return arrows
-    (`F: Fn() -> ()`), so only a `(` at bracket depth zero opens the parameter
-    list, and the `>` of an arrow does not close a generic.
-
-    Returns
-    -------
-    int | None
-        The offset of the `(`, or None when none follows at depth zero.
+    Attributes
+    ----------
+    text:
+        The statements as written, so a flag inside a string is still readable.
+    masked:
+        The same statements with comments and literal bodies blanked, so a
+        brace or semicolon in a literal neither opens a block nor ends a
+        statement.
     """
-    depth = 0
-    index = start
-    while index < len(masked):
-        match masked[index]:
-            case "(" if depth == 0:
-                return index
-            case "-" if masked.startswith("->", index):
-                index += 2
-                continue
-            case "[" | "{" | "<":
-                depth += 1
-            case "]" | "}" | ">":
-                depth = max(0, depth - 1)
-        index += 1
-    return None
 
-
-def _parameter_close(masked: str, open_at: int) -> int | None:
-    """Return the offset of the `)` that closes the parameter list at *open_at*.
-
-    Returns
-    -------
-    int | None
-        The offset of the closing `)`, or None when the list never closes.
-    """
-    depth = 0
-    for index in range(open_at, len(masked)):
-        match masked[index]:
-            case "(":
-                depth += 1
-            case ")":
-                depth -= 1
-                if depth == 0:
-                    return index
-    return None
-
-
-def _split_parameters(parameters: str) -> list[str]:
-    """Split a parameter list on the commas that sit outside brackets.
-
-    A generic type (`Result<A, B, E>`), an array length (`[u8; 4]`) or a
-    function-pointer return (`fn() -> ()`) keeps its commas, so a position
-    still indexes the parameter the caller passed. The `>` of a return arrow
-    is not a generic closer.
-
-    Returns
-    -------
-    list[str]
-        The parameters in order; an empty trailing entry is kept so positions
-        do not shift.
-    """
-    parts: list[str] = []
-    depth = 0
-    start = 0
-    index = 0
-    while index < len(parameters):
-        char = parameters[index]
-        if char == "-" and parameters.startswith("->", index):
-            index += 2
-            continue
-        if char in "([{<":
-            depth += 1
-        elif char in ")]}>":
-            depth = max(0, depth - 1)
-        elif char == "," and depth == 0:
-            parts.append(parameters[start:index])
-            start = index + 1
-        index += 1
-    parts.append(parameters[start:])
-    return parts
-
-
-def _parameter_at(
-    masked: str, definition_end: int, position: int
-) -> tuple[str, int] | None:
-    """Return the parameter at *position* and the offset closing its list.
-
-    Only a plain `[mut] name: Type` parameter names the command the helper
-    receives. A `self` receiver or a more elaborate parameter hides which
-    value the command reaches, so the callee is declined instead of guessed.
-
-    Returns
-    -------
-    tuple[str, int] | None
-        The parameter's name and the offset of the closing `)`, or None when
-        the list cannot be read or the position holds no simple parameter.
-    """
-    open_at = _parameter_open(masked, definition_end)
-    if open_at is None:
-        return None
-    close_at = _parameter_close(masked, open_at)
-    if close_at is None:
-        return None
-    parameters = masked[open_at + 1 : close_at]
-    if SELF_RECEIVER.match(parameters):
-        return None
-    parts = _split_parameters(parameters)
-    if position >= len(parts):
-        return None
-    found = PARAMETER.fullmatch(parts[position])
-    return None if found is None else (found["name"], close_at)
-
-
-def _body_span(
-    masked: str, closers: dict[int, int], start: int
-) -> tuple[int, int] | None:
-    """Return the body offsets of a function whose signature ends at *start*.
-
-    The body is the matched brace pair, so a `;` in the signature or a brace
-    in a nested item cannot end it early.
-
-    Returns
-    -------
-    tuple[int, int] | None
-        The offsets just inside the braces, or None for a declaration (`fn
-        f(..);`) or an unbalanced body.
-    """
-    item = _top_level_item(masked, start)
-    if item is None or item[1] != "{":
-        return None
-    end = closers.get(item[0])
-    return None if end is None else (item[0] + 1, end - 1)
+    text: str
+    masked: str
 
 
 def _receiver_statements(
     text: str, masked: str, span: tuple[int, int], parameter: str, receiver: str
-) -> str:
+) -> _Window:
     """Return the body statements that add arguments to *parameter*.
 
     A statement that calls the parameter is that command's argument, wherever
-    the call sits (`if enabled { command.arg("build") }` included). The
-    statements are split on `;` in the masked text and read back from the
-    original, so literal arguments survive. The parameter's name is replaced by
-    the caller's binding, because the probe consumer reads the helper's
-    statements as part of the caller's window.
+    the call sits (`if enabled { command.arg("build") }` included). Statement
+    boundaries come from the masked text, so a `;` inside a string does not
+    split a statement, while each statement is also kept as written so a flag
+    in a string stays readable. The parameter's name is replaced by the
+    caller's binding in both forms, because the probe consumer reads the
+    helper's statements as part of the caller's window.
 
     Every statement's braces are kept, in place, because a later statement's
     block depth decides whether its probe flag is unconditional; a statement
@@ -404,7 +259,7 @@ def _receiver_statements(
 
     Returns
     -------
-    str
+    _Window
         The statements that call the parameter, semicolon-separated, with the
         braces of the statements between them retained.
     """
@@ -416,41 +271,88 @@ def _receiver_statements(
         rf"|\|\s*(?:mut\s+)?{re.escape(parameter)}\s*(?:\||:)"
     )
     pieces: list[str] = []
+    masked_pieces: list[str] = []
     offset = start
     for statement in masked[start:end].split(";"):
         if COMMAND_NEW.search(statement) or shadow.search(statement):
             break
         found = own.search(statement)
         if found is None:
-            pieces.append("{" * statement.count("{") + "}" * statement.count("}"))
+            braces = "{" * statement.count("{") + "}" * statement.count("}")
+            piece = masked_piece = braces
         else:
             piece = text[offset : offset + len(statement)]
+            masked_piece = statement
             if receiver != parameter:
                 piece = f"{piece[: found.start()]}{receiver}.{piece[found.end() :]}"
-            pieces.append(piece)
+                masked_piece = (
+                    f"{statement[: found.start()]}{receiver}.{statement[found.end() :]}"
+                )
+        pieces.append(piece)
+        masked_pieces.append(masked_piece)
         offset += len(statement) + 1
-    return ";\n".join(pieces)
+    return _Window(";\n".join(pieces), ";\n".join(masked_pieces))
 
 
-def _shadowed(masked: str, name: str, at: int) -> bool:
+class _FileIndex(typ.NamedTuple):
+    """The `fn` definitions and item boundaries of one masked source.
+
+    Attributes
+    ----------
+    definitions:
+        Each `fn` name with the matches that define it, in source order.
+    boundaries:
+        The start offset of every function item, in source order.
+    """
+
+    definitions: dict[str, list[re.Match[str]]]
+    boundaries: list[int]
+
+
+def _file_index(masked: str) -> _FileIndex:
+    """Index the `fn` definitions and item boundaries of *masked* once.
+
+    Each handoff in a file asks the same questions about the same text, so the
+    names and boundaries are collected once rather than rescanned per call.
+
+    Returns
+    -------
+    _FileIndex
+        The definitions by name and the ordered boundary offsets.
+    """
+    definitions: dict[str, list[re.Match[str]]] = {}
+    for found in re.finditer(r"\bfn\s+(?P<name>\w+)", masked):
+        definitions.setdefault(found["name"], []).append(found)
+    return _FileIndex(
+        definitions, [found.start() for found in FUNCTION_BOUNDARY.finditer(masked)]
+    )
+
+
+def _shadowed(masked: str, name: str, at: int, index: _FileIndex) -> bool:
     """Report whether *name* may be a local binding at *at* rather than a `fn`.
 
-    A closure, loop variable, `let`, `const` or `static` with the helper's name
-    shadows the free function, so the call reaches something the scan cannot
-    read.
+    A parameter of the caller's own function, a closure, loop variable, `let`,
+    `const` or `static` with the helper's name shadows the free function, so
+    the call reaches something the scan cannot read. The caller's parameter
+    list is read because `fn run(configure: fn(&mut Command))` calls the
+    argument, not the free function.
 
     Returns
     -------
     bool
-        True when a binding of that name appears before *at*.
+        True when a binding of that name is in scope at *at*.
     """
-    scope = [found.start() for found in FUNCTION_BOUNDARY.finditer(masked, 0, at)]
-    start = scope[-1] if scope else 0
+    at = min(at, len(masked))
+    boundary = bisect.bisect_left(index.boundaries, at) - 1
+    start = index.boundaries[boundary] if boundary >= 0 else 0
+    pattern = rf"\b{re.escape(name)}\b"
     binder = re.compile(
-        rf"\b(?:let\s+(?:mut\s+)?|const\s+|static\s+|for\s+(?:mut\s+)?)"
-        rf"{re.escape(name)}\b"
+        rf"\b(?:let\s+(?:mut\s+)?|const\s+|static\s+|for\s+(?:mut\s+)?){pattern}"
+        rf"|\|\s*(?:mut\s+)?{pattern}\s*(?:\||:)"
     )
-    return binder.search(masked, start, at) is not None
+    if binder.search(masked, start, at) is not None:
+        return True
+    return name in parameter_names(masked, start)
 
 
 def _callee_arguments(
@@ -460,7 +362,8 @@ def _callee_arguments(
     call: re.Match[str],
     receiver: str,
     base: int,
-) -> str:
+    index: _FileIndex,
+) -> _Window | None:
     """Return the statements a call hands to its helper's bound parameter.
 
     The helper must be defined exactly once in the file: with two definitions
@@ -475,40 +378,45 @@ def _callee_arguments(
 
     Returns
     -------
-    str
+    _Window | None
         The statements on the parameter that receives the command, rewritten to
-        *receiver*, or an empty string when the helper is undefined,
-        duplicated, shadowed or shaped uncertainly.
+        *receiver*, or None when the helper is undefined, duplicated, shadowed
+        or shaped uncertainly.
     """
-    if _shadowed(masked, call["callee"], base + call.start()):
-        return ""
-    definitions = list(re.finditer(rf"\bfn\s+{re.escape(call['callee'])}\b", masked))
+    if _shadowed(masked, call["callee"], base + call.start(), index):
+        return None
+    definitions = index.definitions.get(call["callee"], [])
     if len(definitions) != 1:
-        return ""
+        return None
     definition = definitions[0]
     position = _argument_position(call["before"])
     if position is None:
-        return ""
+        return None
     found = _parameter_at(masked, definition.end(), position)
     if found is None:
-        return ""
+        return None
     parameter, close_at = found
     span = _body_span(masked, closers, close_at + 1)
     if span is None:
-        return ""
-    tail = masked[definition.end() :]
-    boundary = FUNCTION_BOUNDARY.search(tail)
-    limit = definition.end() + (boundary.start() if boundary else len(tail))
+        return None
+    later = bisect.bisect_right(index.boundaries, definition.end())
+    limit = index.boundaries[later] if later < len(index.boundaries) else len(masked)
     start, end = span
     end = min(end, limit)
     if end <= start:
-        return ""
+        return None
     return _receiver_statements(text, masked, (start, end), parameter, receiver)
 
 
 def _callee_bodies(
-    text: str, masked: str, closers: dict[int, int], window: str, name: str, base: int
-) -> list[tuple[int, str]]:
+    text: str,
+    masked: str,
+    closers: dict[int, int],
+    window: str,
+    name: str,
+    base: int,
+    index: _FileIndex,
+) -> list[tuple[int, _Window]]:
     """Return the helper statements each call adds, with the call's end offset.
 
     `let mut command = Command::new(cargo); add_build(&mut command)` adds its
@@ -516,28 +424,36 @@ def _callee_bodies(
     body. Only statements on the parameter that receives the command count, so
     another command built in the helper does not contribute. A callee defined
     in another file is not seen, which errs towards not demanding
-    configuration.
+    configuration, and a call written as a path (`support::configure(..)`) or a
+    method (`self.configure(..)`) names something else, so it is not read as
+    this file's free function.
 
     Returns
     -------
-    list[tuple[int, str]]
+    list[tuple[int, _Window]]
         The offset in *window* just past each call, with the statements it adds;
         empty when no helper is read.
     """
     passed = re.compile(
-        rf"(?P<callee>\w+)\s*\(\s*(?:(?P<before>[^()]*),\s*)?"
+        rf"(?<![.:\w])(?P<callee>\w+)\s*\(\s*(?:(?P<before>[^()]*),\s*)?"
         rf"(?:&(?:mut\s+)?)?{re.escape(name)}\s*[,)]"
     )
-    bodies: list[tuple[int, str]] = []
+    bodies: list[tuple[int, _Window]] = []
     for call in passed.finditer(window):
-        body = _callee_arguments(text, masked, closers, call, name, base)
-        if body:
+        body = _callee_arguments(text, masked, closers, call, name, base, index)
+        if body is not None:
             bodies.append((call.end(), body))
     return bodies
 
 
-def _command_window(text: str, masked: str, closers: dict[int, int], start: int) -> str:
-    """Return the text of the command built at *start*, up to a likely end.
+def _command_window(
+    text: str,
+    masked: str,
+    closers: dict[int, int],
+    start: int,
+    index: _FileIndex,
+) -> _Window:
+    """Return the statements of the command built at *start*, up to a likely end.
 
     A command's arguments follow its construction, so the window runs to the
     next `Command::new` (another command) or the next function item, whichever
@@ -550,9 +466,9 @@ def _command_window(text: str, masked: str, closers: dict[int, int], start: int)
 
     Returns
     -------
-    str
-        The text from the spawn to the end of the window, with each callee body
-        spliced in at its call.
+    _Window
+        The statements from the spawn to the end of the window, in original and
+        masked form, with each callee body spliced in at its call.
     """
     tail = text[start + 1 :]
     ends = [len(tail)]
@@ -563,22 +479,27 @@ def _command_window(text: str, masked: str, closers: dict[int, int], start: int)
     )
     length = 1 + min(ends)
     window = text[start : start + length]
+    masked_window = masked[start : start + length]
     bound = BINDING.search(text[max(0, start - 120) : start])
     if bound is None:
-        return window
-    masked_window = masked[start : start + length]
+        return _Window(window, masked_window)
     pieces: list[str] = []
+    masked_pieces: list[str] = []
     previous = 0
     for at, body in _callee_bodies(
-        text, masked, closers, masked_window, bound["name"], start
+        text, masked, closers, masked_window, bound["name"], start, index
     ):
-        pieces.extend((window[previous:at], f";\n{body};"))
+        pieces.extend((window[previous:at], f";\n{body.text};"))
+        masked_pieces.extend((masked_window[previous:at], f";\n{body.masked};"))
         previous = at
     pieces.append(window[previous:])
-    return "".join(pieces)
+    masked_pieces.append(masked_window[previous:])
+    return _Window("".join(pieces), "".join(masked_pieces))
 
 
-def _own_statements(text: str, start: int, window: str) -> list[tuple[str, int]]:
+def _own_statements(
+    text: str, start: int, window: _Window
+) -> list[tuple[str, str, int]]:
     """Return the statements of *window* that can add arguments to the command.
 
     A command built in one chain owns only its first statement. A command bound
@@ -587,33 +508,63 @@ def _own_statements(text: str, start: int, window: str) -> list[tuple[str, int]]
     `.spawn()`); another command's `.arg(..)`, or an argument added when the
     command is reused after a launch, is not its argument.
 
+    Statement boundaries and block depth come from the masked window, so a
+    brace in a string literal does not make a later flag look conditional,
+    while each statement is also returned as written so a flag in a string can
+    still be read.
+
     Returns
     -------
-    list[tuple[str, int]]
-        Each statement, comments removed, with the number of blocks still open
-        where it starts (the window's own braces, counted from the command).
+    list[tuple[str, str, int]]
+        Each statement as written, its masked twin, and the number of blocks
+        still open where it starts (the window's own braces, counted from the
+        command).
     """
-    statements = COMMENT.sub("", window).split(";")
+    statements: list[tuple[str, str]] = []
+    offset = 0
+    for at, char in enumerate(window.masked):
+        if char == ";":
+            statements.append((
+                _blank_comments(window.text[offset:at]),
+                window.masked[offset:at],
+            ))
+            offset = at + 1
+    statements.append((_blank_comments(window.text[offset:]), window.masked[offset:]))
     bound = BINDING.search(text[max(0, start - 120) : start])
     if bound is None:
-        return [(statements[0], 0)]
+        first, masked_first = statements[0]
+        return [(first, masked_first, 0)]
     # A statement mentions the command when the name is followed by a method
     # call, wherever it sits (an `if` body included), so a launch in control
     # flow still ends the arguments.
     own = re.compile(rf"\b{re.escape(bound['name'])}\s*\.")
-    found: list[tuple[str, int]] = []
+    found: list[tuple[str, str, int]] = []
     depth = 0
-    for index, statement in enumerate(statements):
-        if index == 0 or own.search(statement):
-            found.append((statement, depth))
+    for index, (statement, masked_statement) in enumerate(statements):
+        if index == 0 or own.search(masked_statement):
+            found.append((statement, masked_statement, depth))
             # An argument added after the command has run belongs to a reuse.
-            if LAUNCH.search(statement):
+            if LAUNCH.search(masked_statement):
                 break
-        depth += statement.count("{") - statement.count("}")
+        depth += masked_statement.count("{") - masked_statement.count("}")
     return found
 
 
-def _is_probe(text: str, start: int, window: str) -> bool:
+def _blank_comments(text: str) -> str:
+    """Return *text* with every comment blanked, keeping offsets and literals.
+
+    A flag written in a comment is not an argument, but a flag in a string is,
+    so comments become spaces of the same length rather than being removed.
+
+    Returns
+    -------
+    str
+        The text with the same length and line structure as *text*.
+    """
+    return COMMENT.sub(lambda found: re.sub(r"[^\n]", " ", found.group()), text)
+
+
+def _is_probe(text: str, start: int, window: _Window) -> bool:
     """Report whether a `rustc` command only asks a question and compiles nothing.
 
     Only arguments added to this command count, so a `"--version"` in a comment,
@@ -627,14 +578,15 @@ def _is_probe(text: str, start: int, window: str) -> bool:
     return any(starmap(_unconditional_probe, _own_statements(text, start, window)))
 
 
-def _unconditional_probe(statement: str, depth: int) -> bool:
+def _unconditional_probe(statement: str, masked_statement: str, depth: int) -> bool:
     """Report whether a statement adds a probe flag on every path through it.
 
     A flag added inside a block (`if query_only { cmd.arg("--print=cfg") }`),
     whether in the same statement or in one that follows the opening brace, may
     not be there when the command runs, so it proves nothing. A block may also
     close before the flag in the same statement, so the braces before the flag
-    are counted against the depth the statement starts at.
+    are counted against the depth the statement starts at. The braces are
+    counted in the masked statement, so one in a string is not a block.
 
     Returns
     -------
@@ -644,11 +596,17 @@ def _unconditional_probe(statement: str, depth: int) -> bool:
     found = RUSTC_PROBE.search(statement)
     if found is None:
         return False
-    before = statement[: found.start()]
+    before = masked_statement[: found.start()]
     return depth + before.count("{") - before.count("}") == 0
 
 
-def _compiles(text: str, masked: str, closers: dict[int, int], start: int) -> bool:
+def _compiles(
+    text: str,
+    masked: str,
+    closers: dict[int, int],
+    start: int,
+    index: _FileIndex,
+) -> bool:
     """Report whether a cargo command adds compiling work before it runs.
 
     Only statements that own the command count, and only up to its first
@@ -662,10 +620,10 @@ def _compiles(text: str, masked: str, closers: dict[int, int], start: int) -> bo
         True when an argument before the first launch selects a compiling
         subcommand.
     """
-    window = _command_window(text, masked, closers, start)
+    window = _command_window(text, masked, closers, start, index)
     return any(
         COMPILES.search(statement)
-        for statement, _depth in _own_statements(text, start, window)
+        for statement, _masked, _depth in _own_statements(text, start, window)
     )
 
 
@@ -675,16 +633,17 @@ def _spawn_kind(
     """Return `rustc` or `cargo` if the file spawns a compiler in test code."""
     if "Command" not in text:
         return None
+    index = _file_index(masked)
     spans = _test_spans(masked, closers)
     for match in RUSTC_SPAWN.finditer(text):
         if _is_test_position(relative, spans, match.start()) and not _is_probe(
             text,
             match.start(),
-            _command_window(text, masked, closers, match.start()),
+            _command_window(text, masked, closers, match.start(), index),
         ):
             return "rustc"
     compiles = any(
-        _compiles(text, masked, closers, match.start())
+        _compiles(text, masked, closers, match.start(), index)
         for match in CARGO_SPAWN.finditer(text)
         if _is_test_position(relative, spans, match.start())
     )

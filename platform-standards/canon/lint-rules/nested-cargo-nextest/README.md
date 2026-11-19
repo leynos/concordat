@@ -40,9 +40,11 @@ configuration from a repository that needs none:
   and the parameter's name is taken to be the caller's binding, so a launch on
   either side ends the arguments in the order they run, and a version flag
   added through a renamed parameter still probes the caller's command. A helper
-  defined more than once, or one whose parameter position, receiver or type is
-  not plain, is declined rather than guessed; so is a call the caller's own
-  binding shadows. `cargo metadata` and `cargo config` do not count;
+  defined more than once, or one whose receiver or receiving parameter is not a
+  plain `name: Type` binding, is declined rather than guessed; so is a call
+  that a binding in the caller's own function shadows, a parameter included, or
+  a call written as a path or method (`support::configure(..)`).
+  `cargo metadata` and `cargo config` do not count;
 - a `rustc` spawn counts, unless an argument added to that same command is a
   version flag (`--version`, `-V`, `-vV`) or a `--print` of a table that needs
   no compile (`sysroot`, `target-libdir`, `host-tuple`, `cfg`, `target-list`,

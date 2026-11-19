@@ -3063,12 +3063,13 @@ built in the helper does not contribute. Those statements are read at the call
 site with the parameter's name taken to be the caller's binding, so a launch in
 the helper or the caller ends the arguments in the order they run, and a
 version flag added through a renamed parameter still probes the caller's
-command. A helper defined more than once, or one whose parameter position,
-receiver or type is not plain, is declined rather than guessed; so is a call
-that a binding in the caller's own function shadows, or a helper that
-redeclares the parameter's name. A callee in another file is not seen either.
-These declinations err towards not demanding configuration and can miss
-compiler work. The configuration facts are the ones netsuke and rstest-bdd
+command. A helper defined more than once, or one whose receiver or receiving
+parameter is not a plain `name: Type` binding, is declined rather than guessed;
+so is a call that a binding in the caller's own function shadows, a parameter
+included, a call written as a path or method (`support::configure(..)`), or a
+helper that redeclares the parameter's name. A callee in another file is not
+seen either. These declinations err towards not demanding configuration and can
+miss compiler work. The configuration facts are the ones netsuke and rstest-bdd
 converged on: a serial group, an override that uses it, an explicit
 `slow-timeout` (profile or override) and a `global-timeout` (any profile, since
 netsuke sets it on `ci`). A top-level test binary must also be named by a

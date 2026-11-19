@@ -892,6 +892,119 @@ def test_a_probe_after_a_closed_block_is_unconditional(
     assert ids(tmp_path) == set()
 
 
+CALLER_PARAMETER_SHADOWS_HELPER = (
+    "use std::process::Command;\n"
+    "fn run(configure: fn(&mut Command)) {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    configure(&mut command);\n"
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("--version");\n}\n'
+)
+
+
+def test_a_caller_parameter_that_shadows_the_helper_name_is_not_the_function(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A callback parameter named `configure` is not the `fn configure`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CALLER_PARAMETER_SHADOWS_HELPER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+FIRST_ITEM_SHADOWS_HELPER = CALLER_PARAMETER_SHADOWS_HELPER.removeprefix(
+    "use std::process::Command;\n"
+)
+
+
+def test_a_parameter_shadows_the_helper_before_any_leading_item(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The caller is found even when its `fn` is the file's first item."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", FIRST_ITEM_SHADOWS_HELPER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONST_GENERIC_RETURN = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    configure(&mut command);\n}\n"
+    "fn configure(target: &mut Command) -> Tag<{ 1 + 1 }> {\n"
+    '    target.arg("build").status().unwrap();\n'
+    "    Tag\n}\n"
+)
+
+
+def test_a_const_generic_return_brace_is_not_the_helper_body(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `{` of `Tag<{ 1 + 1 }>` is not the body that follows it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONST_GENERIC_RETURN)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+QUALIFIED_CALL = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    support::configure(&mut command);\n"
+    '    command.arg("input.rs").status().unwrap();\n}\n'
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("--version");\n}\n'
+)
+
+
+def test_a_qualified_call_is_not_the_same_file_function(tmp_path: pathlib.Path) -> None:
+    """`support::configure` is not the free `fn configure` in this file."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", QUALIFIED_CALL)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+BRACE_IN_LITERAL = (
+    "use std::process::Command;\n"
+    "fn probe_toolchain() {\n"
+    '    let mut command = Command::new(env!("RUSTC"));\n'
+    "    add_version(&mut command);\n"
+    "    command.status().unwrap();\n}\n"
+    "fn add_version(command: &mut Command) {\n"
+    '    command.env("KEY", "{");\n'
+    '    command.arg("--version");\n}\n'
+)
+
+
+def test_a_brace_in_a_literal_does_not_make_a_probe_conditional(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `{` in `env("KEY", "{")` opens no block, so the probe still counts."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", BRACE_IN_LITERAL)
+    assert ids(tmp_path) == set()
+
+
+CONST_COMPARISON_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    "    let flag = Flag;\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    configure(flag, &mut command);\n}\n"
+    "fn configure(_: Flag<{ 1 < 2 }>, target: &mut Command) {\n"
+    '    target.arg("build").status().unwrap();\n}\n'
+)
+
+
+def test_a_comparison_in_a_const_generic_keeps_parameter_positions(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `<` of `1 < 2` is not a generic opener, so `target` stays second."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONST_COMPARISON_PARAMETER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
 def grouped_config(filter_expression: str) -> str:
     """Return a bounded configuration whose one grouped override uses a filter."""
     return CLEAN.replace("binary(ui)", filter_expression)
