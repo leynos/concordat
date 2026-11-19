@@ -519,7 +519,12 @@ def _toolchain_policy_envelope(
     ToolchainPolicyEnvelope
         The `policy-input/rust-toolchain-policy` document for *checkout*.
     """
-    return build_toolchain_policy_envelope(checkout, parameters, today=today_provider())
+    return build_toolchain_policy_envelope(
+        checkout,
+        parameters,
+        today=today_provider(),
+        inspect=inspect_makefile_observed,
+    )
 
 
 def _spelling_envelope(
