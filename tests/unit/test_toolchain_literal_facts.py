@@ -579,3 +579,93 @@ def test_an_exported_toolchain_is_a_selection(tmp_path: pathlib.Path) -> None:
     )
 
     assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_wrapper_option_operand_is_not_the_program(tmp_path: pathlib.Path) -> None:
+    """`env -u NAME` takes an operand; the program after it still selects."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  env -u RUSTUP_TOOLCHAIN cargo +nightly-2026-10-30 test
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_an_assignment_after_a_shell_keyword_is_read(tmp_path: pathlib.Path) -> None:
+    """`if NAME=value cmd` still assigns, so the command is read."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  if RUSTUP_TOOLCHAIN=nightly-2026-10-30 cargo test; then true; fi
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_command_on_the_here_document_line_still_runs(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cat <<EOF; cargo ...` runs the command before the body is read."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  cat <<EOF; cargo +nightly-2026-10-30 test
+                  cargo +nightly-2026-09-01 check
+                  EOF
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_here_string_is_not_a_here_document(tmp_path: pathlib.Path) -> None:
+    """`<<<` feeds one word; it does not open a body that hides commands."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        _workflow(
+            """\
+              - run: |
+                  cat <<< "hello"
+                  cargo +nightly-2026-10-30 test
+            """
+        ),
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+
+
+def test_a_prefixed_assignment_before_a_command_variable_is_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`@RUSTUP_TOOLCHAIN=stable $(CHECK)` still expands `CHECK`."""
+    _rust_repository(tmp_path)
+    _write(
+        tmp_path,
+        "Makefile",
+        "CHECK = cargo +nightly-2026-10-30 check\n"
+        "\n"
+        "test:\n"
+        "\t@RUSTUP_TOOLCHAIN=stable $(CHECK)\n",
+    )
+
+    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]

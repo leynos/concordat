@@ -87,6 +87,13 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   `RUSTUP_TOOLCHAIN=` assignment; and an expanded command variable is tokenized
   as a shell command, so a quoted override and several commands in one variable
   are read. Six regression tests cover them.
+- A third review raised five more, all actioned: a wrapper option's operand is
+  not the program (`env -u RUSTUP_TOOLCHAIN cargo +nightly-...`), an assignment
+  after a shell keyword is still read (`if RUSTUP_TOOLCHAIN=... cargo test`), a
+  command on a here-document's declaration line still runs while only the body
+  is skipped, `<<<` is a here string rather than a here-document, and a recipe
+  prefix no longer hides an assignment before a command variable
+  (`@RUSTUP_TOOLCHAIN=stable $(CHECK)`). Five regression tests cover them.
 
 ## Lessons
 
@@ -115,6 +122,13 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   position, a here-document body, a recipe prefix — that a simpler reader
   mistook. Splitting the scanning state into `_Scan` keeps the character loop
   within pylint's branch limit without hiding the rules it applies.
+- A here-document body starts on the line *after* its declaration, so the
+  skip must run at the newline and not at every separator:
+  `cat <<EOF; cargo +nightly-… test` still runs `cargo`, and the body after it
+  is data.
+- A wrapper's operand looks like a program to a reader that only unwraps
+  options: `env -u RUSTUP_TOOLCHAIN cargo ...` must consume `-u`'s operand
+  before it decides what the program is.
 
 ## Estate survey (2026-11-19)
 

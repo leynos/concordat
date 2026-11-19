@@ -80,7 +80,31 @@ _ENV_PREFIXES: typ.Final = frozenset({
 # Make's recipe prefixes: silent, ignore-error, and always-run.
 _MAKE_PREFIXES: typ.Final = "@-+"
 _ASSIGNMENT: typ.Final = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=")
-_HEREDOC_OPERATOR: typ.Final = re.compile(r"^(?P<operator><<-?)(?P<name>.*)$")
+# `<<<` is a here string, whose operand is one word, not a body; the negative
+# lookahead keeps it out of the here-document branch.
+_HEREDOC_OPERATOR: typ.Final = re.compile(r"^(?P<operator><<-?)(?!<)(?P<name>.*)$")
+# Wrapper options that take the next word as their operand, so that word is not
+# the program: `env -u NAME cargo ...`, `sudo -u user cargo ...`.
+_WRAPPER_VALUE_OPTIONS: typ.Final = frozenset({
+    "-a",
+    "--arg-file",
+    "-C",
+    "--chdir",
+    "-d",
+    "--delimiter",
+    "-g",
+    "--group",
+    "-I",
+    "--replace",
+    "-n",
+    "--max-args",
+    "-s",
+    "--max-chars",
+    "-u",
+    "--unset",
+    "-U",
+    "--list-user",
+})
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -229,15 +253,16 @@ def shell_commands(text: str) -> list[list[str]]:
         if char.isspace() or char in _SHELL_BREAKS:
             if scan.current:
                 scan.end_word()
-            if scan.delimiter:
+            if char in _SHELL_BREAKS:
                 scan.end_command()
+            if scan.delimiter and char == "\n":
+                # A command after `;` on the declaration line still runs; the
+                # body it feeds starts on the next line.
                 index = _skip_heredoc(
                     folded, index, scan.delimiter, strip_tabs=scan.strip_tabs
                 )
                 scan.delimiter = ""
                 continue
-            if char in _SHELL_BREAKS:
-                scan.end_command()
         else:
             scan.current.append(char)
         index += 1
@@ -302,6 +327,40 @@ def _rustup_arguments(rest: list[str]) -> cabc.Iterator[Selection]:
         yield _toolchain_word(name)
 
 
+def _without_recipe_prefix(words: list[str]) -> list[str]:
+    """Return *words* with Make's `@`, `-` and `+` stripped from the first word.
+
+    Make removes those prefixes from a recipe line before the shell sees it,
+    so `@RUSTUP_TOOLCHAIN=...` is still an assignment and `@cargo` a program.
+
+    Returns
+    -------
+    list[str]
+        The words, with the first word's leading recipe prefixes removed.
+    """
+    return [words[0].lstrip(_MAKE_PREFIXES), *words[1:]] if words else words
+
+
+def _prefix_end(words: list[str]) -> int:
+    """Return the index of the first word that is neither assignment nor keyword.
+
+    Shell keywords (`if`, `!`, `{`, `do`) and `NAME=value` assignments may
+    interleave before the program: `if RUSTUP_TOOLCHAIN=... cargo test`.
+
+    Returns
+    -------
+    int
+        The index of the first word that is the program, or of the word after
+        the last prefix when the command has no program.
+    """
+    index = 0
+    while index < len(words) and (
+        _is_assignment(words[index]) or words[index] in _SHELL_KEYWORDS
+    ):
+        index += 1
+    return index
+
+
 def program_position(words: list[str]) -> tuple[int, str] | None:
     """Return a command's program word and its index, recipe prefixes removed.
 
@@ -314,14 +373,11 @@ def program_position(words: list[str]) -> tuple[int, str] | None:
         The program's index in *words*, and the program word with Make's
         `@`, `-` and `+` prefixes stripped; None when there is no program.
     """
-    index = 0
-    while index < len(words) and (
-        _is_assignment(words[index]) or words[index] in _SHELL_KEYWORDS
-    ):
-        index += 1
-    if index >= len(words):
+    stripped = _without_recipe_prefix(words)
+    index = _prefix_end(stripped)
+    if index >= len(stripped):
         return None
-    return index, words[index].lstrip(_MAKE_PREFIXES)
+    return index, stripped[index].lstrip(_MAKE_PREFIXES)
 
 
 def _program(words: list[str]) -> tuple[list[Selection], str | None, list[str]]:
@@ -333,18 +389,14 @@ def _program(words: list[str]) -> tuple[list[Selection], str | None, list[str]]:
         The `RUSTUP_TOOLCHAIN=` assignments the command carries, the program
         word with Make's recipe prefixes removed, and the arguments.
     """
-    selections: list[Selection] = []
-    # Make removes `@`, `-` and `+` from a recipe line's first word before the
-    # shell sees it, so `@RUSTUP_TOOLCHAIN=...` is still an assignment.
-    words = [words[0].lstrip(_MAKE_PREFIXES), *words[1:]] if words else words
-    index = 0
-    while index < len(words) and _is_assignment(words[index]):
-        selection = _assignment_selection(words[index])
-        if selection is not None:
-            selections.append(selection)
-        index += 1
-    while index < len(words) and words[index] in _SHELL_KEYWORDS:
-        index += 1
+    words = _without_recipe_prefix(words)
+    end = _prefix_end(words)
+    selections = [
+        selection
+        for word in words[:end]
+        if (selection := _assignment_selection(word)) is not None
+    ]
+    index = end
     if index >= len(words):
         return selections, None, []
     program = words[index].lstrip(_MAKE_PREFIXES)
@@ -353,10 +405,14 @@ def _program(words: list[str]) -> tuple[list[Selection], str | None, list[str]]:
         while index < len(words) and (
             words[index].startswith("-") or _is_assignment(words[index])
         ):
+            takes_operand = words[index] in _WRAPPER_VALUE_OPTIONS
             selection = _assignment_selection(words[index])
             if selection is not None:
                 selections.append(selection)
             index += 1
+            if takes_operand and index < len(words):
+                # `env -u NAME cargo ...` names its program after the operand.
+                index += 1
         if index >= len(words):
             return selections, None, []
         program = words[index].lstrip(_MAKE_PREFIXES)
