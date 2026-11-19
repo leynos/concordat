@@ -50,7 +50,7 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
 - [x] README, users' guide, developers' guide, design doc, migration guide.
 - [x] Manifest hashes and package version (`0.2.0`).
 - [x] Estate survey recorded.
-- [ ] Commit gates, CodeRabbit, draft pull request.
+- [x] Commit gates, CodeRabbit, draft pull request.
 
 ## Progress
 
