@@ -304,6 +304,20 @@ def test_a_literal_that_completes_the_flag_starts_its_own_run() -> None:
     assert target_signature([dangling, value]) == (dangling, value)
 
 
+def test_an_empty_argument_call_leaves_the_flag_waiting() -> None:
+    """An empty argument call supplies no word, so the value is still pending.
+
+    The run before it left `--target-dir` waiting, and `args([])` neither
+    supplies the value nor ends the expectation. A literal added after it is
+    therefore that value, and must keep the later run apart.
+    """
+    dangling = ("args", '["build", "--frozen", "--target-dir"]')
+    empty = ("args", "[]")
+    value = ("arg", '"/tmp/nested-target"')
+    assert target_signature([dangling, empty]) == (dangling, empty)
+    assert target_signature([dangling, empty, value]) == (dangling, empty, value)
+
+
 def test_a_literal_added_with_no_pending_flag_still_collapses() -> None:
     """Nothing awaits a value, so a literal addition cannot change the target."""
     literal = ("args", '["build", "--frozen"]')

@@ -509,20 +509,29 @@ def _has_unreadable_item(payload: str) -> bool:
     return any(not _is_plain_literal(item) for item in argument_items(payload))
 
 
-def _awaits_flag_value(payload: str) -> bool:
+def _awaits_flag_value(payload: str, *, awaits_flag_value: bool) -> bool:
     """Report whether an argument call leaves `--target-dir` waiting for a value.
 
     A later run that adds that value builds where the earlier one did not, so
     the value is target evidence even though it is a plain literal. The inline
     form (`--target-dir=/tmp/x`) already carries its value, and a `--` before
     the flag ends cargo's reading of the line, so neither leaves one pending.
+    An empty call passes no word at all, so it neither supplies the value nor
+    ends the expectation: the state carries across it unchanged.
+
+    Parameters
+    ----------
+    payload:
+        The call's argument text.
+    awaits_flag_value:
+        Whether the call before this one left `--target-dir` waiting.
 
     Returns
     -------
     bool
-        True when the next argument word is this call's pending flag value.
+        True when the next argument word is a pending flag's value.
     """
-    is_awaiting = False
+    is_awaiting = awaits_flag_value
     is_after_separator = False
     for item in argument_items(payload):
         if item == _SEPARATOR:
@@ -586,7 +595,7 @@ def target_signature(
     harmless literal addition still collapse. It is kept when it names
     `--target-dir` or `--manifest-path`, because either moves where cargo
     builds, when it holds an item the reader cannot read, and when its first
-    word completes a `--target-dir` the run before left waiting.
+    word completes a `--target-dir` an earlier call left waiting.
 
     Returns
     -------
@@ -601,7 +610,9 @@ def target_signature(
         if _may_change_target(method, payload, awaits_flag_value=awaits_flag_value):
             kept.append((method, payload))
         if method in {"arg", "args"}:
-            awaits_flag_value = _awaits_flag_value(payload)
+            awaits_flag_value = _awaits_flag_value(
+                payload, awaits_flag_value=awaits_flag_value
+            )
     return tuple(kept)
 
 

@@ -191,6 +191,32 @@ def test_a_literal_that_completes_the_flag_is_judged_as_its_own_run(
     ]
 
 
+# The empty call supplies no word, so the literal added for the second run
+# still supplies the value the first run left `--target-dir` waiting for.
+REUSED_COMMAND_EMPTY_CALL = """\
+fn build_twice() {
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.args(["build", "--frozen", "--target-dir"]);
+    cmd.args([]);
+    cmd.status().unwrap();
+    cmd.arg("/tmp/nested-target");
+    cmd.status().unwrap();
+}
+"""
+
+
+def test_an_empty_argument_call_does_not_end_the_flag_wait(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`args([])` adds no word, so the literal after it is still the flag value."""
+    put(tmp_path, "tests/twice.rs", REUSED_COMMAND_EMPTY_CALL)
+    spawns = build_nested_cargo_cold_envelope(tmp_path)["spawns"]
+    assert [(spawn["state"], spawn["target_state"]) for spawn in spawns] == [
+        ("offline", "inherited"),
+        ("offline", "unknown"),
+    ]
+
+
 def test_a_run_that_completes_the_flag_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:
