@@ -288,6 +288,34 @@ def test_a_checkout_replaced_while_its_route_is_resolved_is_refused(
     )
 
 
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid") or os.geteuid() == 0,
+    reason="root and non-POSIX hosts bypass directory permissions",
+)
+def test_a_search_only_intermediate_directory_is_still_walked(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`.github` needs search permission, not read permission, to be walked.
+
+    Opening an intermediate component read-only would fail with `EACCES` on a
+    directory that grants only search, and the audit would stop before reading
+    the workflows it is allowed to read. Only the final `workflows` component
+    needs a readable handle.
+    """
+    checkout = tmp_path / "repo"
+    workflow_directory = checkout / ".github" / "workflows"
+    workflow_directory.mkdir(parents=True)
+    (workflow_directory / "ci.yml").write_text("on: push\n", encoding="utf-8")
+    github_directory = checkout / ".github"
+    original_mode = github_directory.stat().st_mode
+    github_directory.chmod(0o111)
+    try:
+        facts = load_workflows(checkout)
+    finally:
+        github_directory.chmod(original_mode)
+    assert [fact["path"] for fact in facts] == [".github/workflows/ci.yml"], facts
+
+
 def test_an_entry_that_appears_after_the_open_failure_is_refused(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
