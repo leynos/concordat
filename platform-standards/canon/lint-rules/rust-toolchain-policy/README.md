@@ -3,7 +3,8 @@
 Audits the Rust toolchain a repository builds with. The audit is read-only. It
 evaluates an envelope built by `concordat artefact rule run`: the pin, the
 Cargo packages, the Dependabot `rust-toolchain` entries, the toolchains the
-workflows name, a recorded exception, and the date the audit runs.
+workflows name, the dated nightlies the workflows and root `Makefile` spell
+out, a recorded exception, and the date the audit runs.
 
 ## RT-022
 
@@ -53,19 +54,51 @@ clause indeterminate. The estate's cost rule for the MSRV job is
 No workflow names a dated nightly other than the pinned one. Numeric toolchains
 are not compared: they are usually a host tool's toolchain.
 
+## RT-028
+
+No workflow or root `Makefile` restates a dated nightly literal. A date spelled
+out in the file drifts the moment Dependabot moves the pin, and in a
+nightly-pinned repository it moves daily, so the rule reports every restated
+date — including one that is correct today, because that is what makes the
+drift silent tomorrow. `ci.yml` adding the Cranelift component to
+`nightly-2026-10-30` while the pin was `nightly-2026-11-05`, and `release.yml`
+naming the nightly twice, are the two shapes this clause exists for.
+
+The reader parses rather than matching lines: a workflow is walked as a decoded
+document, so a nightly in a comment or a step's name is not CI using it, and a
+reformat does not change the verdict. Only the places a workflow selects a
+toolchain are read: a step's `run` command, a toolchain action's `toolchain`
+input, and the action's own ref. The `Makefile` is read from `makeutil`'s
+report, with each recipe read as written.
+
+A literal is declared as deliberately separate by binding it to a name: a
+Makefile variable assigned the date itself
+(`DEV_FAST_TOOLCHAIN ?= nightly-2026-08-23`, used as `$(DEV_FAST_TOOLCHAIN)`),
+or a workflow `env` entry. Such a literal draws no finding, which is how cuprum
+keeps a fast toolchain beside a `rust/` directory pinned to stable. A date
+reached through one variable from another is reported, because it is not
+declared where it is used; so is a literal written inline.
+
+Severity is `literal_severity` (`warning` by default, promoting to `error` once
+the estate has been surveyed). A workflow or `Makefile` that cannot be read is
+indeterminate.
+
 ## Exceptions
 
 A repository whose nightly cannot move (whitaker, coupled to `ra_ap_syntax` and
 a vendored `clippy_utils`) records a section in `docs/developers-guide.md`
 whose heading contains "Toolchain policy" and which names the pinned channel.
-That exempts RT-023, RT-024 and RT-025 for as long as the section names the
-current pin, so each move of the pin re-justifies it: a nightly coupled to
+That exempts RT-023, RT-024, RT-025 and RT-028 for as long as the section names
+the current pin, so each move of the pin re-justifies it: a nightly coupled to
 compiler internals cannot build on a stable release, so there is no stable MSRV
-to declare. RT-022, RT-026 and RT-027 still apply.
+to declare, and the toolchain moves with something other than the pin. RT-022,
+RT-026 and RT-027 still apply.
 
 ## What the rule declines to judge
 
 - Workspace members the `.concordat` file does not declare as Rust surfaces.
 - Toolchain files below the root, and local actions under `.github/actions`.
+- Makefiles below the root. RT-028 reads the root `Makefile` only, which is the
+  one the repository's own recipes run from.
 - Whether a Dependabot bump pull request has merged: the audit reads the
   repository, not the pull request list.

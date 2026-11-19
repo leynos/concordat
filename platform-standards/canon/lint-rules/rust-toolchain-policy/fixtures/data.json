@@ -36,6 +36,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -89,6 +94,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -141,6 +151,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -193,6 +208,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -238,6 +258,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -290,6 +315,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -342,6 +372,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -392,6 +427,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -451,6 +491,11 @@
         }
       ],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -512,6 +557,11 @@
         }
       ],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -562,6 +612,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -614,6 +669,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -664,6 +724,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -714,6 +779,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -765,6 +835,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -815,6 +890,326 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "literal_declared_separately": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "literal_excepted": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "body_lines": 4,
+              "channels_named": [
+                "nightly-2026-03-26"
+              ],
+              "heading": "Toolchain policy exception",
+              "level": 2,
+              "line": 10,
+              "path": "docs/developers-guide.md"
+            }
+          ]
+        }
+      ],
+      "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [
+          {
+            "kind": "makefile",
+            "path": "Makefile",
+            "text": "nightly-2026-03-26"
+          }
+        ],
+        "reads_pin": true
+      },
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-03-26",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "literal_in_a_makefile": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [
+          {
+            "kind": "makefile",
+            "path": "Makefile",
+            "text": "nightly-2026-10-30"
+          }
+        ],
+        "reads_pin": true
+      },
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "literal_makefile_unreadable": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [
+          {
+            "path": "Makefile",
+            "reason": "makeutil is required but was not found on PATH"
+          }
+        ],
+        "literals": [],
+        "reads_pin": true
+      },
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "literal_restates_the_pin": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [
+          {
+            "kind": "workflow",
+            "path": ".github/workflows/release.yml",
+            "text": "nightly-2026-09-20"
+          }
+        ],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -863,6 +1258,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": "1.85",
       "repository": {
         "name": null,
@@ -913,6 +1313,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -965,6 +1370,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1017,6 +1427,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1067,6 +1482,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1119,6 +1539,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": false
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1164,6 +1589,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1209,6 +1639,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1261,6 +1696,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": false
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1308,6 +1748,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": false
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1353,6 +1798,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": "1.93",
       "repository": {
         "name": null,
@@ -1403,6 +1853,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1464,6 +1919,11 @@
         }
       ],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1514,6 +1974,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1566,6 +2031,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": false
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1618,6 +2088,16 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [
+          {
+            "path": ".github/workflows/ci.yml",
+            "reason": "invalid YAML: boom"
+          }
+        ],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1670,6 +2150,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/rust-toolchain-policy",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,
@@ -1722,6 +2207,11 @@
       "evaluated_on": "2026-10-11",
       "exceptions": [],
       "kind": "policy-input/dependabot-update-shape",
+      "literals": {
+        "errors": [],
+        "literals": [],
+        "reads_pin": true
+      },
       "pin_minor": null,
       "repository": {
         "name": null,

@@ -1,4 +1,4 @@
-"""Behavioural tests for `concordat artefact rule run` on RT-022 to RT-027.
+"""Behavioural tests for `concordat artefact rule run` on RT-022 to RT-028.
 
 These scenarios run the real policy over a real checkout through `cli.main`,
 so they cover the whole boundary an operator meets: files on disk, the envelope
@@ -115,6 +115,45 @@ def given_excepted_pin(toolchain_checkout: pathlib.Path) -> None:
     )
 
 
+@given("a fresh pin whose workflow names the pinned date")
+def given_restated_pin_in_a_workflow(toolchain_checkout: pathlib.Path) -> None:
+    """Write a fresh pin and a workflow that spells the same date out."""
+    channel = _nightly(7)
+    _write(toolchain_checkout, "Cargo.toml", _MANIFEST)
+    _write(toolchain_checkout, "rust-toolchain.toml", _pin(channel))
+    _write(toolchain_checkout, ".github/dependabot.yml", _DEPENDABOT)
+    _write(
+        toolchain_checkout,
+        ".github/workflows/ci.yml",
+        "jobs:\n  test:\n    steps:\n      - run: |\n"
+        "          rustup component add rustc-codegen-cranelift-preview "
+        f"--toolchain {channel}\n",
+    )
+
+
+@given("a fresh pin whose Makefile names a dated nightly")
+def given_restated_pin_in_a_makefile(toolchain_checkout: pathlib.Path) -> None:
+    """Write a fresh pin and a recipe naming a nightly inline."""
+    _write(toolchain_checkout, "Cargo.toml", _MANIFEST)
+    _write(toolchain_checkout, "rust-toolchain.toml", _pin(_nightly(7)))
+    _write(toolchain_checkout, ".github/dependabot.yml", _DEPENDABOT)
+    _write(toolchain_checkout, "Makefile", f"test:\n\tcargo +{_nightly(90)} test\n")
+
+
+@given("a fresh pin whose Makefile declares its nightly in a variable")
+def given_declared_makefile_pin(toolchain_checkout: pathlib.Path) -> None:
+    """Write a fresh pin and a recipe that reads a declared nightly variable."""
+    _write(toolchain_checkout, "Cargo.toml", _MANIFEST)
+    _write(toolchain_checkout, "rust-toolchain.toml", _pin(_nightly(7)))
+    _write(toolchain_checkout, ".github/dependabot.yml", _DEPENDABOT)
+    _write(
+        toolchain_checkout,
+        "Makefile",
+        f"DEV_FAST_TOOLCHAIN ?= {_nightly(90)}\n"
+        "test:\n\tRUSTUP_TOOLCHAIN=$(DEV_FAST_TOOLCHAIN) cargo test\n",
+    )
+
+
 @when("I audit the checkout for its toolchain policy")
 def when_audit_checkout(
     toolchain_checkout: pathlib.Path,
@@ -148,7 +187,7 @@ def then_audit_clean(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the table names the compliant verdict and no findings."""
     stdout = cli_invocation["result"].stdout
     assert re.search(r"\bcompliant\b", stdout), stdout
-    assert not re.search(r"RT-02[2-7]", stdout), stdout
+    assert not re.search(r"RT-02[2-8]", stdout), stdout
 
 
 @then(parsers.cfparse('the toolchain audit output reports "{rule}" and "{message}"'))

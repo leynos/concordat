@@ -1,5 +1,6 @@
-# RT-022 to RT-027: the Rust toolchain is pinned exactly, kept fresh, movable
-# by Dependabot, and its MSRV is declared and exercised.
+# RT-022 to RT-028: the Rust toolchain is pinned exactly, kept fresh, movable
+# by Dependabot, its MSRV is declared and exercised, CI does not compete with
+# the pin, and no workflow or Makefile restates the pin's date.
 #
 # The Python envelope has already read the pin, the Cargo packages, the
 # Dependabot `rust-toolchain` entries and the toolchains the workflows name,
@@ -226,4 +227,31 @@ deny contains finding("RT-027", "error", "noncompliant", workflows_path, msg) if
   some nightly in input.ci.dated_nightlies
   nightly != channel
   msg := sprintf("a workflow names %s but rust-toolchain.toml pins %s: CI and the file must not disagree about the toolchain", [nightly, channel])
+}
+
+# -- RT-028: a dated literal restates the pin -----------------------------------
+
+# RT-027 compares the toolchain CI resolves with the pin; this clause is about
+# how the file is written. A date spelled out in a workflow or Makefile drifts
+# the moment Dependabot moves the pin, and Dependabot moves it daily in a
+# nightly-pinned repository. The rule therefore reports every restated date,
+# including one that is correct today, because correctness today is what makes
+# the drift silent tomorrow. A literal is declared as deliberately separate by
+# binding it to a named Make variable or a workflow `env` entry; the envelope
+# has already removed those, so every literal here is undefended.
+literal_severity := object.get(data.parameters, "literal_severity", "warning")
+
+deny contains finding("RT-028", literal_severity, "indeterminate", error.path, msg) if {
+  applies
+  has_pin
+  some error in input.literals.errors
+  msg := sprintf("%s could not be read, so a dated toolchain literal there cannot be ruled out: %s", [error.path, error.reason])
+}
+
+deny contains finding("RT-028", literal_severity, "noncompliant", literal.path, msg) if {
+  applies
+  has_pin
+  not exempt
+  some literal in input.literals.literals
+  msg := sprintf("%s selects %s, but the toolchain is pinned in rust-toolchain.toml (%s): read the channel from that file, or declare the literal in a named variable to say the pin is deliberately separate", [literal.path, literal.text, channel])
 }
