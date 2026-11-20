@@ -89,6 +89,8 @@ class TestSweepCommand:
             str(estate_path),
             "--ledger",
             str(ledger_path),
+            "--package",
+            "dependency-family-contracts",
         ])
 
         assert exit_code == 0, exit_code
@@ -100,6 +102,7 @@ class TestSweepCommand:
             only=frozenset({"statelet"}),
             limit=1,
             force=True,
+            package="dependency-family-contracts",
         ), call["options"]
 
     @pytest.mark.parametrize(

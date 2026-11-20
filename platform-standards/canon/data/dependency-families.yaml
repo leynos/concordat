@@ -2,65 +2,112 @@
 #
 # Each entry records a relationship that a repository in the estate has
 # declared or documented, not a guess from package names. A relationship
-# applies to a repository only when the repository declares every member. No
-# entry prescribes a version number: `same-group` asks Dependabot to move the
-# members together, and `upper-bound-or-ignore` asks that one member carries a
-# documented ceiling or an `ignore` rule, because a group cannot select
-# mutually compatible latest versions of independently versioned packages.
-# A repository may deliberately stay on an older generation: record an
-# exception in `.concordat` under `dependencies.family_exceptions`, with a
-# rationale and a review trigger.
-schema_version: 1
+# applies to a repository only when the repository declares every member, or
+# when it contracts to the relationship in `.concordat` under
+# `dependencies.family_contracts`. No entry prescribes a version number: a
+# `family` asks Dependabot to move the members together, a `type-identity`
+# asks that the lock resolves one identity for the exchanged type, and a
+# `tuple` asks that one member carries a documented ceiling or an `ignore`
+# rule because a group cannot select mutually compatible latest versions of
+# independently versioned packages. A repository may deliberately stay on an
+# older generation: record an exception in `.concordat` under
+# `dependencies.family_exceptions`, with a rationale and a review trigger.
+#
+# `boundary.exchanged` names the types whose identity must agree and
+# `boundary.providers` names the members that supply them. `migrations` links
+# the consumer or shared-tooling evidence a behavioural failure needs before
+# its grouping is changed.
+schema_version: 2
 relationships:
   - id: pyo3-build-config-family
     kind: family
-    members: [pyo3, pyo3-build-config]
+    members:
+      - {package: pyo3, ecosystem: cargo}
+      - {package: pyo3-build-config, ecosystem: cargo}
     relation: same-group
     owner: tei-rapporteur
+    migrations:
+      - https://github.com/leynos/tei-rapporteur/issues/185
     provenance:
       - tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version
       - leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)
   - id: pyo3-serde-bridge
     kind: type-identity
-    members: [pyo3, serde-pyobject]
+    members:
+      - {package: pyo3, ecosystem: cargo}
+      - {package: serde-pyobject, ecosystem: cargo}
     relation: same-group
+    boundary:
+      exchanged: [PyObject, Bound, PyAny]
+      providers: [pyo3, serde-pyobject]
     owner: tei-rapporteur
+    migrations:
+      - https://github.com/leynos/shared-actions/issues/588
     provenance:
       - tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name
       - serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together
   - id: maturin-pyo3
     kind: tuple
-    members: [maturin, pyo3]
+    members:
+      - {package: maturin, ecosystem: pip}
+      - {package: pyo3, ecosystem: cargo}
     relation: upper-bound-or-ignore
     owner: cuprum
+    migrations:
+      - https://github.com/leynos/shared-actions/issues/588
     provenance:
       - cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)
       - femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0
+      - cuprum#593 and cuprum#562 record the maturin and PyO3 updates that motivated the bound
   - id: ortho-config-fluent-bundle
     kind: type-identity
-    members: [ortho_config, fluent-bundle]
+    members:
+      - {package: ortho_config, ecosystem: cargo}
+      - {package: fluent-bundle, ecosystem: cargo}
     relation: same-group
+    boundary:
+      exchanged: [FluentValue]
+      providers: [ortho_config, fluent-bundle]
     owner: netsuke
+    migrations:
+      - https://github.com/leynos/netsuke/issues/477
     provenance:
       - netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ
   - id: rustcrypto-digest-family
-    kind: family
-    members: [digest, sha2, sha1, md-5]
+    kind: type-identity
+    members:
+      - {package: digest, ecosystem: cargo}
+      - {package: sha2, ecosystem: cargo}
+      - {package: sha1, ecosystem: cargo}
+      - {package: md-5, ecosystem: cargo}
     relation: same-group
+    boundary:
+      exchanged: [Digest, DigestMut]
+      providers: [sha2, sha1, md-5]
     owner: netsuke
+    migrations:
+      - https://github.com/leynos/netsuke/issues/477
     provenance:
       - netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)
+      - the hashers implement the digest traits, so a split digest version yields two incompatible Digests
   - id: pylint-astroid
     kind: family
-    members: [pylint, astroid]
+    members:
+      - {package: pylint, ecosystem: pip}
+      - {package: astroid, ecosystem: pip}
     relation: same-group
     owner: cuprum
     provenance:
       - cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together
   - id: pytest-pytest-bdd
     kind: tuple
-    members: [pytest, pytest-bdd]
+    members:
+      - {package: pytest, ecosystem: pip}
+      - {package: pytest-bdd, ecosystem: pip}
     relation: upper-bound-or-ignore
     owner: cuprum
+    migrations:
+      - https://github.com/leynos/cuprum/issues/384
     provenance:
       - cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)
+      - leynos/concordat#34 records the pytest update that broke the plugin without a companion bump

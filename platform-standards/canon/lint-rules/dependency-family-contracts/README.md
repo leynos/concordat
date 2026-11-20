@@ -22,22 +22,37 @@ contacts no registry.
   narrow Dependabot group takes ahead of the catch-all, and no narrow group
   could. Repair: add a group for the family.
 - **DF-002** A `tuple` of independently versioned packages (for example maturin
-  with PyO3) with no upper bound, no `ignore` rule on any member and no shared
-  multi-ecosystem group. A group cannot select mutually compatible latest
-  versions, and an exact pin is the thing a version update replaces. An
+  with PyO3) with no upper bound, no `ignore` rule that holds a member back and
+  no shared multi-ecosystem group. A group cannot select mutually compatible
+  latest versions, and an exact pin is the thing a version update replaces. An
   `ignore` rule must name the published package, not an alias.
 - **DF-003** A narrow group matches every member of a family, but an earlier
   group takes one of them first. Repair: move it ahead of the shadowing group.
+- **DF-004** A derived input declared in `.concordat` no longer matches its
+  canonical value: a copied Makefile variable, recipe, workflow environment
+  value or action input has drifted. Repair: update the occurrence, or record
+  an override with a rationale and a review trigger.
+- **DF-005** A documented compatibility bound in `.concordat` is no longer held
+  by the declaration: the declaration now admits a version the bound excluded,
+  or has removed its ceiling. Repair: restore the bound, or record the
+  migration evidence and update the bound.
 - **DF-006** The facts could not be established: no decodable Dependabot
   configuration, a manifest or lock that cannot be read, a Cargo manifest
   outside the governed Rust surfaces that declares a package some relationship
   names or cannot be read (a repository that has not declared
-  `language.rust.surfaces` is read at its root only), or an exception without a
-  rationale and a review trigger. Always indeterminate, never compliant.
-
-DF-004 (derived-input equality between a tool pin and its generated inputs) and
-DF-005 (a documented bound relaxed without migration evidence) are not yet
-implemented.
+  `language.rust.surfaces` is read at its root only), an exception without a
+  rationale and a review trigger, or a type identity the lock records no edge
+  for. Always indeterminate, never compliant.
+- **DF-007** A `type-identity` relationship whose lock resolves an exchanged
+  type at more than one identity, or whose declaration resolves to a different
+  identity from the one the lock links. Repair: align the requirement with the
+  version the other members were built against.
+- **DF-008** A Python or Cargo surface is not monitored by its native
+  ecosystem, or the same Python requirements are covered by both `pip` and `uv`
+  entries. Repair: keep one native entry per surface.
+- **DF-009** An action the repository pins by full SHA is not in the reviewed
+  SHAs recorded in `.concordat`. Repair: record the review that approved the
+  pin, or move to a reviewed commit.
 
 ## Exceptions
 
@@ -54,6 +69,67 @@ dependencies:
 
 An exception that lacks any of the three fields is reported (DF-006) and does
 not exempt the relationship.
+
+A repository that documents a relationship without declaring every member
+locally can name it in `family_contracts`; the rule then applies it and reports
+a missing member (DF-006) rather than silently skipping it.
+
+## Documented bounds
+
+Record a compatibility bound the repository relies on:
+
+```yaml
+dependencies:
+  protected_bounds:
+    - relationship: pyo3-build-config-family
+      package: pyo3
+      bound: "<0.29"
+      rationale: the extension relies on the 0.28 build interface
+      review_trigger: review when the extension migrates to 0.30
+```
+
+`manifest` and `evidence` are optional. A bound this audit cannot parse, or a
+package that is not a member of the named relationship, is indeterminate
+(DF-006), never held.
+
+## Derived inputs
+
+Record a canonical value and every place it is copied:
+
+```yaml
+dependencies:
+  derived_inputs:
+    - id: pyo3-version
+      comparator: satisfies
+      canonical:
+        manifest: Cargo.toml
+        package: pyo3
+      selectors:
+        - kind: makefile-variable
+          path: Makefile
+          variable: PYO3_VERSION
+      rationale: one PyO3 line across the build
+      review_trigger: review when PyO3 0.29 is adopted
+```
+
+`comparator` is `equal` or `satisfies`. Selector kinds are `makefile-variable`,
+`makefile-recipe`, `workflow-env`, `action-input` and `action-ref`; each names
+the file and the variable, tool or action it reads. A selector the audit cannot
+resolve (an unexpanded expression, a missing file, two disagreeing occurrences)
+is indeterminate (DF-006). An occurrence may carry an `override` with
+`override_rationale` and `override_review_trigger`.
+
+For an action pin, `canonical` names the action instead of a manifest:
+
+```yaml
+      canonical:
+        action:
+          uses: actions/checkout
+          path: .github/workflows/ci.yml
+      reviewed:
+        - sha: 0123456789abcdef0123456789abcdef01234567
+          provenance: reviewed in the pinning change
+```
 
 ## Adding a relationship
 
@@ -77,6 +153,8 @@ data carries no estate-wide version number.
   entries cover a directory the rule reads the first one that processes the
   package: a group entry for what its `patterns` take, otherwise one that does
   not ignore it.
+- Only the identities and edges the lock records are read; no registry is
+  contacted and no updater is run.
 - Whether a failure would follow from an unprotected relationship (runtime
   compatibility) is a matter for the consumer's canary, not this rule.
 

@@ -483,19 +483,21 @@ artifacts:
     path: >-
       platform-standards/canon/lint-rules/dependency-family-contracts/policy/dependency_family_contracts.rego
     description: >
-      Report-only DF-001 to DF-003 and DF-006 policy checking recorded dependency relationships against Dependabot grouping.
-    sha256: 6143be98de41bd3749904d396537b57fa8c55ca2debcc2a763ab32478133a9e6
+      Report-only DF-001 to DF-009 policy checking recorded dependency relationships,
+      Dependabot grouping and monitoring, resolved lock identities, and documented
+      bounds, derived inputs and action pins.
+    sha256: fc7768e1b6db8a305f4c8aa69fb00a885622d59abf8407b5a9a90c99fda2624e
   - id: lint-rule-dependency-family-contracts-manifest
     type: lint-config
     path: >-
       platform-standards/canon/lint-rules/dependency-family-contracts/rule.yaml
     description: >
       Rule package manifest for the dependency-family contracts policy.
-    sha256: 45b258c0f47415f3d2ec6dbac478c137025f51e894a2bf04a2ea947c17752432
+    sha256: e47de5ed599ebc09b8a08fb5a7a45ecdb84c6ff0f0737678339e6f52a00fca7d
   - id: dependency-families-data
     type: lint-config
     path: >-
       platform-standards/canon/data/dependency-families.yaml
     description: >
       Versioned relationships between dependencies, with owner and provenance, read by the dependency-family contracts rule.
-    sha256: 09efa4573629a18bb4be7e74ed36b8f47c145c983b8259d208accb223eba7cc0
+    sha256: 530fd6e2d52a6047fe85cd9a7405aff4d39d59ee1e39c5274e7684628abde1a4

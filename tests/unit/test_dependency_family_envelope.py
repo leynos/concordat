@@ -17,13 +17,14 @@ import pytest
 from concordat.rules.dependency_family_envelope import (
     ENVELOPE_KIND,
     ENVELOPE_SCHEMA_VERSION,
-    Declaration,
     DependencyFamilyEnvelope,
     build_dependency_family_envelope,
 )
 
 if typ.TYPE_CHECKING:
     import pathlib
+
+    from concordat.rules.dependency_family_facts import Declaration
 
 _CONFIG = """\
 version: 2
@@ -154,11 +155,11 @@ def test_a_workspace_inherited_requirement_is_resolved_from_the_root(
 
     assert pyo3["workspace_inherited"] is True
     assert pyo3["requirement"] == "0.28.3"
-    assert pyo3["resolved"] == {
-        "versions": ["0.28.3"],
-        "lock": "rust/Cargo.lock",
-        "reason": None,
-    }
+    resolved = pyo3["resolved"]
+    assert resolved["versions"] == ["0.28.3"]
+    assert resolved["lock"] == "rust/Cargo.lock"
+    assert resolved["reason"] is None
+    assert resolved["package_id"] == "pyo3 0.28.3"
 
 
 def test_a_member_is_covered_through_its_workspace_root(layout: pathlib.Path) -> None:
@@ -231,7 +232,7 @@ def test_an_absent_lock_is_a_reason_not_a_pass(layout: pathlib.Path) -> None:
     ]["resolved"]
 
     assert resolved["versions"] == []
-    assert resolved["reason"] == "uv.lock is absent"
+    assert resolved["reason"] == "no supported lock"
 
 
 def test_without_a_configuration_every_declaration_says_why(
@@ -414,11 +415,15 @@ def test_a_directory_the_scan_cannot_list_is_a_problem(
     )
 
 
-def test_a_declared_surface_list_is_authoritative(layout: pathlib.Path) -> None:
-    """A repository that declares its surfaces is not second-guessed."""
+def test_a_declared_surface_list_does_not_hide_a_related_manifest(
+    layout: pathlib.Path,
+) -> None:
+    """Declared surfaces add facts; they cannot make a related manifest invisible."""
     _write(layout, "other/Cargo.toml", _MEMBER)
 
-    assert build_dependency_family_envelope(layout)["problems"] == []
+    problems = build_dependency_family_envelope(layout)["problems"]
+
+    assert [p for p in problems if p.startswith("other/Cargo.toml")]
 
 
 def test_a_nested_python_project_is_read_against_its_own_directory(
@@ -540,6 +545,8 @@ def test_an_exception_needs_a_rationale_and_a_review_trigger(
             "relationship": "pyo3-build-config-family",
             "rationale": "older generation",
             "review_trigger": "PyO3 0.30",
+            "manifest": None,
+            "owner": None,
         }
     ]
     assert len(envelope["problems"]) == 1
@@ -549,10 +556,12 @@ def test_the_estate_relationships_are_loaded(layout: pathlib.Path) -> None:
     """The versioned data ships with the canon and reaches the envelope."""
     envelope = build_dependency_family_envelope(layout)
 
-    assert envelope["relationships_version"] == 1
+    assert envelope["relationships_version"] == 2
     ids = {item["id"] for item in envelope["relationships"]}
     assert {
         "pyo3-build-config-family",
         "maturin-pyo3",
         "ortho-config-fluent-bundle",
+        "pyo3-serde-bridge",
+        "rustcrypto-digest-family",
     } <= ids

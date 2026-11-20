@@ -1239,15 +1239,31 @@ requirement and whether that is an exact pin or an explicit upper bound, its
 locked versions from `Cargo.lock` or `uv.lock`, and Dependabot's treatment of
 it (covering entry, first matching group in document order, narrow groups that
 match, `ignore` rule). The estate's relationship data is read from
-`platform-standards/canon/data/dependency-families.yaml` and the repository's
-exceptions from `.concordat`. When `language.rust.surfaces` is undeclared the
+`platform-standards/canon/data/dependency-families.yaml`, and the repository's
+exceptions, contracts, documented bounds, derived inputs and reviewed action
+pins from `.concordat`. When `language.rust.surfaces` is undeclared the
 resolver falls back to the root `Cargo.toml`, so the builder walks the tree
 (skipping hidden directories and `target`, `vendor`, `node_modules`, `venv`,
 `build` and `dist`) and reads every other `Cargo.toml` loosely, naming it as a
 problem when it cannot be decoded or declares a package (by published name)
-that a relationship lists; a declared list stays authoritative. That discovery
-lives in `dependency_family_discovery.py` and the Dependabot coverage reader in
-`dependency_family_coverage.py`. The same walk finds nested `pyproject.toml`
+that a relationship lists. A declared surface list governs what is read in
+full, but the same walk still runs: a manifest outside the governed surfaces
+that declares a related package is named and makes the result indeterminate, so
+declaring surfaces cannot hide a related manifest. That discovery lives in
+`dependency_family_discovery.py`; `dependency_family_declarations.py` turns the
+discovered Cargo surfaces and locks into declaration facts, delegating
+workspace inheritance to `dependency_family_workspaces.py`; and
+`dependency_family_python.py` does the same for every `pyproject.toml`. The two
+collectors share the declaration shape and requirement helpers in
+`dependency_family_facts.py`; the Dependabot coverage reader lives in
+`dependency_family_coverage.py`; and resolved lock identities in
+`dependency_family_resolution.py`. `dependency_family_versions.py` holds the
+version-range comparison shared by the bound and derived-input facts, and
+`dependency_family_update_types.py` classifies update types for Dependabot
+groups. `dependency_family_derived.py` resolves the `.concordat` selectors
+(Makefile variables and recipes, workflow environment values, action inputs and
+pins) against the checkout; a value it cannot expand stays an unresolved fact
+rather than an assumed match. The same walk finds nested `pyproject.toml`
 files, and a directory it cannot list is a problem rather than a shorter
 result. A manifest the surface resolver rejects, a Python project outside the
 root, an unreadable lock and a missing configuration become `problems` or
@@ -1741,10 +1757,10 @@ codebase are:
 ### Manifest schema and identifier validation
 
 The estate manifest (`docs/parabellum/estate.yaml` by default) is a mapping
-with an `owner` key and a `repositories` list of `{name, excluded?}` entries
-(`load_estate`, `Estate`, `EstateEntry`). Both `owner` and each repository
-`name` are validated against dedicated patterns before being used to build a
-URL or a clone-directory path:
+with an `owner` key and a `repositories` list of `{name, excluded?, revision?}`
+entries (`load_estate`, `Estate`, `EstateEntry`). Both `owner` and each
+repository `name` are validated against dedicated patterns before being used to
+build a URL or a clone-directory path:
 
 - `_OWNER_PATTERN` — GitHub-owner shaped: alphanumerics and hyphens, no
   leading/trailing hyphen, capped at 39 characters (GitHub's own owner length
@@ -1755,11 +1771,18 @@ URL or a clone-directory path:
   characters, with at least one non-dot character (so `.` and `..` cannot be
   smuggled in as a "repository name" that later becomes a clone-directory
   component).
+- `_REVISION_PATTERN` — exactly forty lowercase hexadecimal characters, the
+  form `git rev-parse` prints. A pin is passed to `git fetch` as a positional
+  argument, so an abbreviated, uppercase, or non-hex value is rejected at
+  manifest load rather than being interpreted by git as a ref name.
 
-Both are checked again in `clone_and_audit` immediately before the values are
-interpolated into a clone URL and a scratch-directory path, not only at
-manifest-load time — belt and braces for any caller reaching `clone_and_audit`
-directly rather than through `load_estate`.
+The owner and name patterns are checked again in `clone_and_audit` immediately
+before the values are interpolated into a clone URL and a scratch-directory
+path, not only at manifest-load time — belt and braces for any caller reaching
+`clone_and_audit` directly rather than through `load_estate`. A revision needs
+no second shape check there: it is only ever a `git fetch` positional argument,
+and the checkout verifies with `git rev-parse HEAD` that the fetched commit is
+exactly the pin before auditing it.
 
 ### The append-only ledger and its idempotency rule
 
@@ -1826,15 +1849,37 @@ shells out to the `git` binary (`subprocess.run`, fixed argv, no shell) with a
 `resource` for the resulting `OperationalRuleError` if the command is missing,
 times out, or exits non-zero. Two call sites build on `_git`:
 
-- `resolve_head(owner, name)` runs `git ls-remote <url> HEAD` to obtain the
-  default-branch head SHA **without cloning** — used to decide, cheaply,
-  whether a repository has already been ledgered at its current head before
-  paying for a clone.
-- `clone_and_audit(owner, name, package=RULE_PACKAGE)` performs a shallow,
-  single-branch clone (`git clone --depth 1 --quiet`) into a temporary
-  directory, resolves `HEAD` there with `git rev-parse HEAD`, and hands the
+- `resolve_head(owner, name, revision=None)` returns a pinned `revision`
+  unchanged, because the pin *is* the answer. Only an unpinned entry runs
+  `git ls-remote <url> HEAD` to obtain the default-branch head SHA **without
+  cloning** — used to decide, cheaply, whether a repository has already been
+  ledgered at its current head before paying for a clone.
+- `clone_and_audit(owner, name, *, package=RULE_PACKAGE, revision=None)` audits
+  either the default-branch head or exactly one pinned commit, then hands the
   checkout, with the selected package, to `concordat.rules.run_rule`. The sweep
   is audit-only: nothing here ever writes to an estate repository.
+
+  - An unpinned entry performs a shallow, single-branch clone
+    (`git clone --depth 1 --quiet`), resolves `HEAD` with
+    `git rev-parse HEAD`, and audits that checkout.
+  - A pinned entry uses `_checkout_revision`: `git init`, then
+    `git fetch --depth 1 <url> <sha>`, then
+    `git checkout --detach FETCH_HEAD`. Fetching the SHA itself, rather than a
+    branch tip, is what makes the audit reproducible after the default branch
+    has moved; the subsequent `git rev-parse HEAD` must equal the pin or the
+    audit is refused.
+
+`rule_version(package)` in `scripts/parabellum_ledger.py` reads the `version`
+from the installed rule package's `rule.yaml` through
+`concordat.rules.packages`. `run_sweep` resolves it once per run and every
+ledger record names the package and version that actually ran, rather than
+copying the module-level `RULE_PACKAGE`/`RULE_VERSION` constants, which stay as
+defaults for the `rust-makefile-baseline` campaign.
+
+The report-only dependency-family pilot pins each consumer's revision in its
+own manifest, `docs/parabellum/dependency-family-pilot/estate.yaml`, and runs
+with `--package dependency-family-contracts`, so its ledger and report never
+mix with the Rust baseline campaign.
 
 `run_sweep` resolves `rule_version(options.package)` before the first clone.
 That call also validates the package identifier (through
