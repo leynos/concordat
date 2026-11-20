@@ -217,6 +217,15 @@ def test_an_empty_argument_call_does_not_end_the_flag_wait(
     ]
 
 
+def test_a_run_after_an_empty_call_is_reported(tmp_path: pathlib.Path) -> None:
+    """The run that supplies the pending value is indeterminate to the policy."""
+    prepared_reused_command(tmp_path, REUSED_COMMAND_EMPTY_CALL)
+    found = findings(tmp_path)
+    assert [(f.rule_id, f.verdict, f.line) for f in found] == [
+        ("EN-001", "indeterminate", 2)
+    ]
+
+
 def test_a_run_that_completes_the_flag_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -252,4 +261,13 @@ def test_a_literal_manifest_path_between_runs_is_judged_as_its_own_run(
     assert spawn_states(tmp_path) == [
         ("offline", "private"),
         ("offline", "inherited"),
+    ]
+
+
+def test_a_manifest_path_run_is_judged_by_the_policy(tmp_path: pathlib.Path) -> None:
+    """Only the private first run is a finding; the manifest-path run inherits."""
+    prepared_reused_command(tmp_path, REUSED_COMMAND_MANIFEST_PATH)
+    found = findings(tmp_path)
+    assert [(f.rule_id, f.verdict, f.line) for f in found] == [
+        ("NC-009", "noncompliant", 3)
     ]
