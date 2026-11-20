@@ -14,8 +14,10 @@ the unconditional `build` still compiling, and it cannot fill an option's value
 slot either: the path that skips its block gives the next word as that value.
 A run with no unconditional subcommand at all is compiled when any path names
 one: a `metadata` in one block beside a `build` in another builds when only the
-build's block runs. A word the reader cannot see leaves the subcommand open,
-and then any compiling word before the launch is enough.
+build's block runs, and two conditional words before a topic are each read as a
+possible subcommand. An arm left as the only path after the other arm returns
+is read as given on every path. A word the reader cannot see leaves the
+subcommand open, and then any compiling word before the launch is enough.
 
 `-h` or `--help` makes the command compile nothing at all when it is given on
 every path, and each arm of a fully paired choice is read for its own
@@ -36,10 +38,10 @@ written across statements or on one line: a `-vV` in the `if` arm and a `-V` in
 its `else` arm reach the shared launch as a probe either way. An arm is read
 with the words given before the branch, so a `--print` in each arm is completed
 by a `cfg` after the choice. A short circuit inside an arm
-(`query && command.arg("-V")`) can still skip that arm's word, so the arm does
-not cover its path. An option given in a block of its own
-(`if verbose { command.arg("-v") }`) cannot change the subcommand, so it does
-not stop a paired choice beside it being read path by path.
+(`query && command.arg("-V").get_args().next().is_some()`) can still skip that
+arm's word, so the arm does not cover its path. An option given in a block of
+its own (`if verbose { command.arg("-v") }`) cannot change the subcommand, so
+it does not stop a paired choice beside it being read path by path.
 
 A word is the text its literal has at run time, so an escape cannot hide a
 compiling subcommand from the read. A Unicode escape's digits may be separated
@@ -81,12 +83,12 @@ from .nested_cargo_handoffs import (
     command_window,
 )
 from .nested_cargo_receivers import owns_call
-from .nested_cargo_statements import (
+from .nested_cargo_runs import (
     ArmChoices,
-    Statement,
+    Run,
     _track,
-    own_statements,
 )
+from .nested_cargo_statements import own_statements
 from .nested_cargo_text import argument_items
 from .nested_cargo_words import (
     _ARGUMENT_CALL,
@@ -112,22 +114,38 @@ SUBCOMMANDS: typ.Final = (
 _COMPILING: typ.Final = frozenset(SUBCOMMANDS.split("|"))
 
 
-def _launch_of(run: list[Statement]) -> tuple[int, ...] | None:
+def _without_brace(blocks: tuple[int, ...], brace: int | None) -> tuple[int, ...]:
+    """Return *blocks* without *brace*, or unchanged when it is not there.
+
+    Returns
+    -------
+    tuple[int, ...]
+        The blocks, with the surviving arm's brace left out.
+    """
+    if brace is None or brace not in blocks:
+        return blocks
+    return tuple(block for block in blocks if block != brace)
+
+
+def _launch_of(run: Run) -> tuple[int, ...] | None:
     """Return the blocks open at the run's launch, or None when it never launches.
+
+    The surviving arm is left out of the launch's blocks, as it is left out of
+    the words', so a launch inside that arm reads as no further choice.
 
     Returns
     -------
     tuple[int, ...] | None
         The launch's blocks, identified by their opening braces.
     """
-    for statement in run:
+    for statement in run.statements:
         if statement.launch_blocks is not None:
-            return statement.launch_blocks
+            return _without_brace(statement.launch_blocks, run.survivor)
     return None
 
 
 def _probe_words(
-    run: list[Statement], name: str | None, launch: tuple[int, ...] | None
+    run: Run, name: str | None, launch: tuple[int, ...] | None
 ) -> typ.Iterator[str | ConditionalWord | None]:
     """Yield the words a run gives the command, conditional ones marked.
 
@@ -151,7 +169,7 @@ def _probe_words(
     """
     if launch is None:
         return
-    for statement in run:
+    for statement in run.statements:
         open_blocks = list(statement.blocks)
         seen = 0
         for found in _ARGUMENT_CALL.finditer(statement.masked):
@@ -163,17 +181,21 @@ def _probe_words(
             seen = found.start()
             if not owns_call(statement.masked, found.start(), name):
                 continue
+            # The surviving arm is on every path that launches, so its brace
+            # is not a choice: a word inside it is given whenever the command
+            # runs, exactly as one written above the choice.
+            active = _without_brace(tuple(open_blocks), run.survivor)
             before = statement.masked[: found.start()]
             conditional = (
                 SHORT_CIRCUIT.search(before) is not None
-                or tuple(open_blocks) != launch[: len(open_blocks)]
+                or active != launch[: len(active)]
             )
             # A short circuit that sits inside the word's own block can skip
             # it on the path through that block, so the block does not
             # certainly give the word.
             inner = 0
-            if open_blocks and open_blocks[-1] >= statement.start:
-                inner = open_blocks[-1] - statement.start + 1
+            if active and active[-1] >= statement.start:
+                inner = active[-1] - statement.start + 1
             guarded = conditional and SHORT_CIRCUIT.search(before, inner) is not None
             open_at = found.end() - 1
             close = scan_balanced(statement.masked, open_at)
@@ -184,8 +206,7 @@ def _probe_words(
                 for item in argument_items(statement.text[open_at + 1 : close - 1])
             ]
             if conditional:
-                blocks = tuple(open_blocks)
-                yield from (ConditionalWord(blocks, word, guarded) for word in words)
+                yield from (ConditionalWord(active, word, guarded) for word in words)
             else:
                 yield from words
 
@@ -279,7 +300,12 @@ def _arm_paths(
             or len(word.blocks) != depth + 1
             or word.blocks[:depth] != launch
         ):
-            if word.guarded or not _is_option(word.word):
+            # A word that can hide the subcommand leaves a path uncertain, and
+            # so does a separator: a `--` given on one path sends every later
+            # word to the program, so the arms' help flags no longer excuse the
+            # run on that path. Only an option of a block of its own can be set
+            # aside here.
+            if word.guarded or not _is_option(word.word) or word.word == "--":
                 return None
             continue
         by_arm.setdefault(word.blocks[depth], []).append(word.word)
@@ -287,7 +313,11 @@ def _arm_paths(
     if order is None:
         # A block that holds only options cannot change the subcommand, so it
         # may sit beside the choice (`if verbose { arg("-v") }`) without being
-        # one of its arms.
+        # one of its arms. A separator is not such a word: it sends every word
+        # after it to the program, so a block that gives one is never set
+        # aside.
+        if any("--" in arm_words for arm_words in by_arm.values()):
+            return None
         arms_only = {
             arm: arm_words
             for arm, arm_words in by_arm.items()
@@ -463,7 +493,38 @@ def _before_a_separator(
     return kept
 
 
-def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> bool:
+def _a_conditional_word_compiles(
+    words: list[str | ConditionalWord | None],
+) -> bool:
+    """Report whether a conditional word can be the subcommand on some path.
+
+    A conditional word is absent on the path that skips its block, so the words
+    before it that every path gives are read on their own: if the word is the
+    first positional there, the path that gives it has that subcommand. Two
+    blocks in sequence are read apart this way even when neither is a paired
+    choice (`if a { arg("search") } if b { arg("install") } arg("ripgrep")`
+    gives `install` when only the second block runs). A word after an
+    unconditional subcommand is not read, because the subcommand is fixed
+    before it (`cargo help build` prints help rather than building).
+
+    Returns
+    -------
+    bool
+        True when some conditional word is a compiling subcommand on a path.
+    """
+    earlier: list[str | None] = []
+    for word in words:
+        if isinstance(word, ConditionalWord):
+            if word.word in _COMPILING and (
+                _first_positional([*earlier, word.word]) == word.word
+            ):
+                return True
+            continue
+        earlier.append(word)
+    return False
+
+
+def _run_compiles(run: Run, name: str | None, arms: ArmChoices) -> bool:
     """Report whether one run of the command adds compiling work before it launches.
 
     A help flag makes cargo print its help and exit, so a run that is given one
@@ -501,7 +562,7 @@ def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> b
         return False
     words = _cargo_options(
         word
-        for statement in run
+        for statement in run.statements
         for word in _argument_words(statement.text, statement.masked, name)
     )
     plain = list(_probe_words(run, name, launch))
@@ -522,8 +583,16 @@ def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> b
     if settled:
         # A conditional word before it may still be the subcommand on its own
         # path (`if a { arg("metadata") } arg("build")` builds when `a` is
-        # false), so both readings are consulted once one is settled.
-        return settled in _COMPILING or _first_positional(words) in _COMPILING
+        # false), so both readings are consulted once one is settled. A choice
+        # is not needed for this: each conditional word is read with the words
+        # before it that every path gives, so two blocks in sequence are read
+        # apart (`if a { arg("search") } if b { arg("install") } arg("ripgrep")`
+        # runs `cargo install ripgrep` when only the second block does).
+        return (
+            settled in _COMPILING
+            or _first_positional(words) in _COMPILING
+            or _a_conditional_word_compiles(unconditional)
+        )
     # No unconditional subcommand decides the run, so a compiling word on any
     # path may be the one that runs: a conditional `build` beside a conditional
     # `metadata` still builds when only the build's block runs. An unreadable

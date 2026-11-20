@@ -2,7 +2,9 @@
 
 The nested-cargo scan asks a command's arguments two questions -- whether a
 `cargo` command names compiling work, and whether a `rustc` command only asks
-the compiler who it is -- and both start here, with the literal text of each
+the compiler who it is (a `--print` of a table such as `sysroot` or
+`crate-name`, which exits before any input is built) -- and both start here,
+with the literal text of each
 word. A word is the text its literal has at run time, so an escape is decoded
 before the word is compared with `--version` or `build`: otherwise a word
 written with an escape would read as one the scan does not know, and a
@@ -41,8 +43,8 @@ from .rust_source import scan_balanced
 # an input. `link-args` and `native-static-libs` are deliberately absent: they
 # build the crate first.
 QUERY_PRINTS: typ.Final = (
-    "sysroot|target-libdir|host-tuple|cfg|target-list|target-cpus|target-features"
-    "|code-models|relocation-models|tls-models|file-names"
+    "sysroot|target-libdir|host-tuple|crate-name|cfg|target-list|target-cpus"
+    "|target-features|code-models|relocation-models|tls-models|file-names"
 )
 _QUERY_SET: typ.Final = frozenset(QUERY_PRINTS.split("|"))
 # A version flag, given as the word its literal has at run time. Anything

@@ -17,9 +17,15 @@ destructuring pattern (`let (configure,) = ..`, `let Hook(configure) = ..`), a
 helper name bound by a parameter pattern (`fn run((configure,): ..)`,
 `fn run(Callbacks { setup: configure }: ..)`) or rebound by a closure's own
 `|..|` list in any position (`|_: (), configure: fn(&mut Command)|`), a
-parameter reassigned or shadowed --
-is declined rather than guessed, because a false positive would demand
-configuration from a repository that needs none. A `let` binding is read even
+`const` or `static` item of that name anywhere in the caller's block (an item
+is in scope for its whole block, so one declared after the call still shadows
+it, while a `let` counts only before the call), a parameter reassigned or
+shadowed -- is declined rather than guessed, because a false positive would
+demand configuration from a repository that needs none. A call written inside a
+closure body is declined as well: the body runs when the closure is called, not
+where it is written, so `let deferred = |_| configure(&mut command);` adds
+nothing to the command until the closure is invoked, which the scan does not
+follow. A `let` binding is read even
 when its constructor begins on the next line, because Rust ends the name at the
 `=` rather than at the line, and the parameters read are those of the innermost
 function whose body holds the call, so a function item declared inside the
@@ -48,10 +54,12 @@ import typing as typ
 
 from .nested_cargo_receivers import LAUNCH, reaches_through
 from .nested_cargo_syntax import (
+    CLOSURE_HEADER,
     _binding_pattern,
     _body_span,
     _parameter_at,
     _split_parameters,
+    inside_closure,
     parameter_names,
     pattern_binds,
     top_level_item,
@@ -62,9 +70,6 @@ from .rust_source import scan_balanced
 SHORT_CIRCUIT: typ.Final = re.compile(r"&&|\|\|")
 # A `return` ends the path it sits on, so a call after it is conditional.
 _RETURN: typ.Final = re.compile(r"\breturn\b")
-# A closure's parameter list, from its opening `|` to its closing one. Rust
-# permits `move |..|`, and the list may name the helper's parameter anywhere.
-CLOSURE_HEADER: typ.Final = re.compile(r"(?:\bmove\s+)?\|(?P<params>[^|]*)\|")
 # A new command's arguments belong to it, not to the one before it.
 COMMAND_NEW: typ.Final = re.compile(r"Command::new\(")
 # The braces of a statement with no call on the command, the `else` (with the
@@ -179,8 +184,9 @@ def _receiver_statements(
     helper the scan cannot attribute, which can miss compiler work rather than
     invent it.
 
-    A flag behind a short circuit (`query && command.arg("--version")`) is not
-    on every path, so a statement with a `&&` or `||` before the call keeps a
+    A flag behind a short circuit
+    (`query && command.arg("--version").get_args().next().is_some()`) is not on
+    every path, so a statement with a `&&` or `||` before the call keeps a
     block open around the call; the caller's depth is closed again at the end,
     because the helper has returned by then. A closure parameter that names the
     command parameter (`|_: (), target: &mut Command| ..`) shadows it wherever
@@ -464,7 +470,10 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     A parameter of the caller's own function, a closure's own parameter (in
     any position), a loop variable, `let`, `const` or `static` with the
     helper's name shadows the free function, so the call reaches something the
-    scan cannot read. A `let` whose pattern destructures the name
+    scan cannot read. A `let` or a loop variable counts only before the call,
+    because a value bound later is not the one the call reaches, while a
+    `const` or `static` counts anywhere in the caller's block, because an item
+    is in scope for the whole block. A `let` whose pattern destructures the name
     (`let (configure,) = ..`) binds it too, and so does a binding that borrows
     the value (`let ref configure = ..`, `|ref mut configure|`): the name still
     denotes the borrowed value rather than the free function. The enclosing
@@ -487,10 +496,10 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     # `ref` and `mut` may each be present, in either combination, before the
     # name a pattern binds; neither changes which name is bound.
     binding = r"(?:(?:ref\s+)?mut\s+|ref\s+)?"
-    binder = re.compile(
-        rf"\b(?:let\s+{binding}|const\s+|static\s+|for\s+{binding}){pattern}"
-    )
+    binder = re.compile(rf"\b(?:let\s+{binding}|for\s+{binding}){pattern}")
     if binder.search(masked, start, at) is not None:
+        return True
+    if _item_shadows(masked, name, at, index):
         return True
     if _closure_binds(masked, start, at, name):
         return True
@@ -499,6 +508,38 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     if pattern_binds(masked, start, name):
         return True
     return name in parameter_names(masked, start)
+
+
+def _item_shadows(masked: str, name: str, at: int, index: FileIndex) -> bool:
+    """Report whether a `const` or `static` of *name* is in scope at *at*.
+
+    An item declaration is in scope for its whole block, so one written after
+    the call shadows the free function there just as one written before it
+    does: `configure(&mut command); const configure: fn(&mut Command) = noop;`
+    calls the constant, not the `fn` beside it. Only a declaration in the
+    caller's own block counts, because an inner block's item is not in scope
+    outside it, and the call is declined rather than read from the free
+    function when one is found.
+
+    Returns
+    -------
+    bool
+        True when an item of that name sits directly in the caller's block.
+    """
+    start = _enclosing_start(masked, at, index)
+    item = top_level_item(masked, start)
+    if item is None or item[1] != "{":
+        return False
+    close = scan_balanced(masked, item[0])
+    if close is None:
+        return False
+    declaration = re.compile(rf"\b(?:const|static)\s+\b{re.escape(name)}\b")
+    for found in declaration.finditer(masked, item[0], close):
+        opened = masked.count("{", item[0], found.start())
+        closed = masked.count("}", item[0], found.start())
+        if opened - closed == 1:
+            return True
+    return False
 
 
 def _imported(masked: str, name: str) -> bool:
@@ -621,6 +662,13 @@ def _callee_bodies(
     bodies: list[tuple[int, Window]] = []
     for call in passed.finditer(window):
         if reaches_through(window, call.start()):
+            continue
+        # A call inside a closure body runs when the closure is called, not
+        # where it is written, so the helper's statements are not the call
+        # site's. `let deferred = |_| configure(&mut command);` adds nothing to
+        # the command until `deferred` runs, which the scan does not follow.
+        at = base + call.start()
+        if inside_closure(masked, _enclosing_start(masked, at, index), at):
             continue
         body = _callee_arguments(text, masked, closers, call, name, base, index)
         if body is not None:

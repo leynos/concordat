@@ -784,46 +784,53 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   block open at it is also open at the run's launch, a branch condition's own
   arguments inherited by every run through it, each arm read with the words
   given before the branch, a subcommand or help flag read per arm of a fully
-  paired `if`/`else` (a help flag excuses only its own arm), a run with no
-  unconditional subcommand compiled when any path names one, an option in a
+  paired `if`/`else` (a help flag excuses only its own arm), an arm left as the
+  only path after the other arm returns read as given on every path, a run with
+  no unconditional subcommand compiled when any path names one, an option in a
   block of its own left beside a paired choice, a run that never reaches a
   launch starting nothing at all (so a `rustc` command is a probe only when its
   launched runs all ask a question), a `--print` query written to a file in
-  either form or asking for `file-names`, a help flag after a `--` that only
-  some path gives passed to the program rather than excusing the build, and
-  each word decoded from its literal's escapes, with a Unicode escape's digits
-  allowed to carry separators — is decided by `nested_cargo_arguments`. Its
-  word readers live in `nested_cargo_words`: each argument's literal and
-  decoded escapes, the split between options and option values (with a
-  conditional word passed over rather than taken as a value), the words after a
-  `--`, and the `--print` query forms. That module reads the statements through
-  `nested_cargo_statements`, which owns the run model: which statements are the
-  command's, where each run begins, which blocks surround each word, how a
-  statement that opens a branch is split so its condition is shared, how a
-  closure parameter's scope ends with the statement that writes the closure,
-  and how an `else` pairs with the block it closes (an `else` beside the
-  launched block begins the next run; one that closes an inner `if` the launch
-  is not in does not). It finds the statements through `nested_cargo_handoffs`
-  (windows, helper bodies and file indexes, with an item beginning on the
-  previous line, a helper naming the caller's binding, a helper name bound by a
-  tuple or struct parameter pattern, a constructor pattern in a `let`
-  (`let Hook(configure) = ..`) or a closure parameter in any position, and one
-  rebound by a closure's `|..|` list all declined, the innermost enclosing
-  function found for the caller's own parameters rather than the latest `fn`
-  declared, while a spliced fragment keeps the `else` between its braces and a
-  `return` inside the block it was written in, its tail guarded so the caller's
-  continuation stays on the returning path) and attributes them through
-  `nested_cargo_receivers` (declining fields, path items and namespace roots,
-  with a `Command` reached through `::` the constructor and a bare `Command`
-  counted only as the binding under study), and the bracket-depth reading of a
-  signature and its body lives in `nested_cargo_syntax` (where a struct
-  pattern's field comma stays inside its parameter and a const-block comparison
-  is an operator, not a generic); the envelope reads `.config/nextest.toml` for
-  serial groups, whether an override uses one, `slow-timeout` in any profile or
-  override and `global-timeout` in any profile, and marks each top-level test
-  binary as named or not by the grouped filters, where a negated predicate
-  names nothing. It runs neither Cargo nor nextest and does not evaluate
-  filtersets.
+  either form, asking for `file-names` or naming the crate (`crate-name`), a
+  help flag after a `--` that only some path gives passed to the program rather
+  than excusing the build, and each word decoded from its literal's escapes,
+  with a Unicode escape's digits allowed to carry separators — is decided by
+  `nested_cargo_arguments`. Its word readers live in `nested_cargo_words`: each
+  argument's literal and decoded escapes, the split between options and option
+  values (with a conditional word passed over rather than taken as a value),
+  the words after a `--`, and the `--print` query forms. That module reads the
+  statements through `nested_cargo_statements`, which decides which statements
+  are the command's, follows an `else` arm from the `if` beside it (inline as
+  well as across statements) so a word given in every arm covers both paths,
+  keeps a `;` inside a block argument of the command's own call from ending the
+  statement, blanks a closure's own span so only its body is shadowed and a
+  call beside it is still the caller's, and narrows a chain of returning arms
+  to the one that launches. The run model those readings feed lives in
+  `nested_cargo_runs`: where each run begins, which blocks surround each word,
+  how a statement that opens a branch is split so its condition is shared, and
+  whether a closing brace reaches the launched block or an inner one (an `else`
+  beside the launched block begins the next run; one that closes an inner `if`
+  the launch is not in does not). It finds the statements through
+  `nested_cargo_handoffs` (windows, helper bodies and file indexes, with an
+  item beginning on the previous line, a helper naming the caller's binding, a
+  helper name bound by a tuple or struct parameter pattern, a constructor
+  pattern in a `let` (`let Hook(configure) = ..`), a closure parameter in any
+  position, one rebound by a closure's `|..|` list, a `const` or `static` item
+  anywhere in the caller's block, and a call written inside a closure body all
+  declined, the innermost enclosing function found for the caller's own
+  parameters rather than the latest `fn` declared, while a spliced fragment
+  keeps the `else` between its braces and a `return` inside the block it was
+  written in, its tail guarded so the caller's continuation stays on the
+  returning path) and attributes them through `nested_cargo_receivers`
+  (declining fields, path items and namespace roots, with a `Command` reached
+  through `::` the constructor and a bare `Command` counted only as the binding
+  under study), and the bracket-depth reading of a signature and its body lives
+  in `nested_cargo_syntax` (where a struct pattern's field comma stays inside
+  its parameter and a const-block comparison is an operator, not a generic);
+  the envelope reads `.config/nextest.toml` for serial groups, whether an
+  override uses one, `slow-timeout` in any profile or override and
+  `global-timeout` in any profile, and marks each top-level test binary as
+  named or not by the grouped filters, where a negated predicate names nothing.
+  It runs neither Cargo nor nextest and does not evaluate filtersets.
 - `policy-input/nested-cargo-ci-wiring` —
   `nested_cargo_wiring_envelope.build_nested_cargo_wiring_envelope`. It reuses
   the shared workflow reader of the CodeScene coverage envelope, then records

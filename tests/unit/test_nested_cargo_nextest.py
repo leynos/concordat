@@ -3369,3 +3369,172 @@ def test_the_callers_compile_after_a_block_level_return_is_read(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", CALLER_COMPILE_AFTER_A_BLOCK_LEVEL_RETURN)
     assert ids(tmp_path) == {"NC-004"}
+
+
+SURVIVING_ARM_OF_A_RETURN = (
+    "use std::process::Command;\n"
+    "fn probe(skip: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    if skip { return; } else { command.arg("--version"); }\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_the_surviving_arm_of_a_return_is_the_only_path_to_the_launch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The path that skipped the return is the only one that launches."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SURVIVING_ARM_OF_A_RETURN)
+    assert ids(tmp_path) == set()
+
+
+CLOSURE_PARAMETER_BESIDE_A_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    let _ = (|command: &mut Command| {}, command.arg("build").status());\n'
+    "}\n"
+)
+
+
+def test_a_closure_parameter_does_not_hide_a_launch_beside_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The tuple's second element is the outer command, not the closure's."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CLOSURE_PARAMETER_BESIDE_A_LAUNCH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SEPARATOR_ON_ONE_PATH_BESIDE_A_PAIRED_HELP = (
+    "use std::process::Command;\n"
+    "fn run(forward: bool, alpha: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("test");\n'
+    '    if forward { command.arg("--"); }\n'
+    "    if alpha {\n"
+    '        command.arg("--help");\n'
+    '        command.arg("alpha");\n'
+    "    } else {\n"
+    '        command.arg("--help");\n'
+    '        command.arg("beta");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_separator_on_one_path_survives_the_paired_help(
+    tmp_path: pathlib.Path,
+) -> None:
+    """With `--` written, cargo passes `--help` to the test binary and compiles."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SEPARATOR_ON_ONE_PATH_BESIDE_A_PAIRED_HELP)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+TWO_CONDITIONAL_WORDS_BEFORE_A_TOPIC = (
+    "use std::process::Command;\n"
+    "fn run(search: bool, install: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    if search { command.arg("search"); }\n'
+    '    if install { command.arg("install"); }\n'
+    '    command.arg("ripgrep");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_each_conditional_word_can_be_the_subcommand(tmp_path: pathlib.Path) -> None:
+    """With `search` skipped, `install` is the subcommand and compiles."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", TWO_CONDITIONAL_WORDS_BEFORE_A_TOPIC)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SEMICOLON_INSIDE_A_BLOCK_ARGUMENT = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    command\n"
+    '        .arg("build")\n'
+    "        .arg({\n"
+    '            let flag = "--quiet";\n'
+    "            flag\n"
+    "        })\n"
+    "        .status()\n"
+    "        .unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_semicolon_inside_a_block_argument_does_not_end_the_chain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The block's own `;` is not a statement boundary, so the launch is read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SEMICOLON_INSIDE_A_BLOCK_ARGUMENT)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONST_DECLARED_AFTER_THE_CALL = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    configure(&mut command);\n"
+    '    command.arg("input.rs");\n'
+    "    command.status().unwrap();\n"
+    "    const configure: fn(&mut Command) = noop;\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("--version");\n'
+    "}\n"
+    "fn noop(_command: &mut Command) {}\n"
+)
+
+
+def test_a_const_declared_later_in_the_block_shadows_the_helper(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A block item is in scope throughout its block, before its declaration."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONST_DECLARED_AFTER_THE_CALL)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+DEFERRED_CLOSURE_HANDOFF = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    let deferred = |_: ()| configure(&mut command);\n"
+    "    drop(deferred);\n"
+    '    command.arg("input.rs");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("--version");\n'
+    "}\n"
+)
+
+
+def test_a_helper_called_only_inside_a_closure_is_not_spliced(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A closure body runs only when the closure is called, so it adds nothing."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", DEFERRED_CLOSURE_HANDOFF)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    ['.args(["--print", "crate-name"])', '.arg("--print=crate-name")'],
+)
+def test_a_crate_name_print_is_a_probe(arguments: str, tmp_path: pathlib.Path) -> None:
+    """`--print crate-name` prints the name and exits without compiling."""
+    source = RUSTC_TEST.replace('.arg("fixture.rs")', arguments)
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", source)
+    assert ids(tmp_path) == set()

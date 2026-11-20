@@ -81,7 +81,9 @@ configuration from a repository that needs none:
   `fn run(Callbacks { setup: configure }: ..)`, a name bound by a destructuring
   pattern such as `let (configure,) = ..` or `let Hook(configure) = ..`, a
   closure parameter in any position such as
-  `|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
+  `|_: (), configure: fn(&mut Command)|`, a `const` or `static` item of that
+  name anywhere in the caller's block (an item is in scope for its whole block,
+  even before its declaration), and a borrowed binding such as
   `let ref configure = ..`), a call written as a path or method
   (`support::configure(..)`, however it is spaced around the separator), a name
   a `use` item could import, or a helper that reassigns the parameter. The
@@ -96,8 +98,10 @@ configuration from a repository that needs none:
   that name would make the helper's own uses of it read as the caller's. So is
   a helper whose receiving parameter a closure rebinds in its own `|..|` list
   (`|_: (), target: &mut Command| target.arg(..)`), because that `target` is
-  the closure's argument, not the command the helper was given. A function item
-  ends the arguments however it is qualified (`unsafe fn`, `default fn`,
+  the closure's argument, not the command the helper was given. A call written
+  inside a closure body is declined as well, because the body runs when the
+  closure is called rather than where it is written. A function item ends the
+  arguments however it is qualified (`unsafe fn`, `default fn`,
   `extern "C" fn`), because the qualifiers do not change where the next scope
   begins, and it does so even when it begins on the line that ends the previous
   item (`} fn later(..)`): the boundary is the `fn` keyword, not the start of a
@@ -112,18 +116,24 @@ configuration from a repository that needs none:
   that leaves a branch still inherits the arguments given before it, because
   they are on every path that reaches it -- including those a branch condition
   adds, since the condition runs before either arm
-  (`if command.arg("--version").get_args().next().is_some() { .. }`). Every run
-  of a `rustc` command that launches must be a probe, while any run of a cargo
-  command that compiles is enough. A command must reach a launch inside its
-  read to count at all, for `cargo` and `rustc` alike: a command that is built
-  and given words but never run starts no child process, a `rustc` command with
-  no launch at all is not a probe, and a launch beyond the read is declined
-  rather than guessed at. A later declaration of the command's name shadows it
-  inside that block only, while an assignment to it ends the read wherever it
-  sits, because the block that ran it may have been entered; a closure
-  parameter's scope ends with the statement that writes the closure, so
+  (`if command.arg("--version").get_args().next().is_some() { .. }`), and when
+  one arm of an `if`/`else` returns, the other arm is the only path that
+  reaches the launch, so its words are read as given on every path. A `;`
+  inside a block argument of the command's own call does not end the statement,
+  so `command.arg({ let flag = "--quiet"; flag }).status()` keeps its launch.
+  Every run of a `rustc` command that launches must be a probe, while any run
+  of a cargo command that compiles is enough. A command must reach a launch
+  inside its read to count at all, for `cargo` and `rustc` alike: a command
+  that is built and given words but never run starts no child process, a
+  `rustc` command with no launch at all is not a probe, and a launch beyond the
+  read is declined rather than guessed at. A later declaration of the command's
+  name shadows it inside that block only, while an assignment to it ends the
+  read wherever it sits, because the block that ran it may have been entered; a
+  closure parameter's scope is the closure itself, so
   `let _noop = |command: &mut Command| {};` does not hide the command from the
-  statements after it. The subcommand is the first argument of the run that is
+  statements after it, while a launch written beside the closure in the same
+  statement (`(|command: &mut Command| {}, command.arg("build").status())`) is
+  still the caller's. The subcommand is the first argument of the run that is
   neither an option nor an option's value, so `--color always nextest run` runs
   `nextest` and `cargo help build` prints help rather than building; a value
   the reader cannot see fills its option's slot rather than ending the read. A
@@ -136,7 +146,9 @@ configuration from a repository that needs none:
   subcommand, so a `metadata` in the `if` arm does not hide the `build` in its
   `else` arm. A run with no unconditional subcommand at all is compiled when
   any path names one, so a `metadata` in one block beside a `build` in another
-  still compiles when only the build's block runs. A `-h` or `--help` given on
+  still compiles when only the build's block runs; two conditional words before
+  a topic are likewise each read as a possible subcommand, so an `install` in
+  one block beside a `search` in another compiles. A `-h` or `--help` given on
   every path prints help whatever the subcommand is, while one added inside a
   block does not excuse the build on the path that skips it. A help flag in one
   arm excuses only the path through that arm, so a `build --help` in the `if`
@@ -160,19 +172,20 @@ configuration from a repository that needs none:
   then no path reaches the launch without one. Each arm is read with the words
   given before the branch, so a `--print` in one arm and a `cfg` after the
   choice complete each other; a short circuit inside an arm
-  (`query && command.arg("-V")`) can still skip that arm's flag, so the arm
-  does not cover its path. `cargo metadata` and `cargo config` do not count;
+  (`query && command.arg("-V").get_args().next().is_some()`) can still skip
+  that arm's flag, so the arm does not cover its path. `cargo metadata` and
+  `cargo config` do not count;
 - a `rustc` spawn counts, unless every run of that same command is given a
   version flag (`--version`, `-V`, `-vV`), a help flag (`-h`, `--help`) or a
   `--print` of a table that needs no compile (`sysroot`, `target-libdir`,
-  `host-tuple`, `cfg`, `target-list`, `target-cpus`, `target-features`,
-  `code-models`, `relocation-models`, `tls-models`, `file-names`): such a probe
-  exits at once. A kind may name an output file after a second `=`, in the
-  joined form (`--print=cfg=out.txt`) or the two-word one (`--print`,
-  `cfg=out.txt`), which writes the answer there and still compiles nothing. A
-  `--print` query may be split across calls (`.arg("--print").arg("cfg")`),
-  which asks the same question as one array, but its two halves must be
-  adjacent: a word the reader cannot see between them
+  `host-tuple`, `crate-name`, `cfg`, `target-list`, `target-cpus`,
+  `target-features`, `code-models`, `relocation-models`, `tls-models`,
+  `file-names`): such a probe exits at once. A kind may name an output file
+  after a second `=`, in the joined form (`--print=cfg=out.txt`) or the
+  two-word one (`--print`, `cfg=out.txt`), which writes the answer there and
+  still compiles nothing. A `--print` query may be split across calls
+  (`.arg("--print").arg("cfg")`), which asks the same question as one array,
+  but its two halves must be adjacent: a word the reader cannot see between them
   (`.args(["--print", print_kind, "cfg"])`), or one given only inside a block
   (`.arg("--print")`, then `if link { .arg("link-args") }`, then
   `.arg("cfg")`), may be `link-args`, so the query is not a probe. Comments and

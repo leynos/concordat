@@ -17,6 +17,11 @@ names it binds, because `fn run((configure,): ..)` binds `configure` in the
 caller's scope just as a `let` does. A struct pattern's field colon
 (`Callbacks { setup: configure }: ..`) is not the delimiter before the type,
 and a pattern's own commas do not split the parameter from its neighbour.
+
+A closure's header and body are located here too, because two readers need the
+same span: one blanks it so a parameter of the command's name shadows the name
+only inside the closure, and the other declines a helper call written inside a
+body that runs only when the closure is called.
 """
 
 from __future__ import annotations
@@ -24,6 +29,11 @@ from __future__ import annotations
 import re
 import typing as typ
 
+from .rust_source import scan_balanced
+
+# A closure's parameter list, from its opening `|` to its closing one. Rust
+# permits `move |..|`, and the list may name a parameter anywhere within it.
+CLOSURE_HEADER: typ.Final = re.compile(r"(?:\bmove\s+)?\|(?P<params>[^|]*)\|")
 # A `self` receiver makes the parameter the command reaches ambiguous, so a
 # helper's own list is declined rather than guessed. A caller's list is still
 # read past it, because a later parameter can shadow a helper name.
@@ -342,3 +352,80 @@ def parameter_names(masked: str, start: int) -> list[str]:
         if found is not None:
             names.append(found["name"])
     return names
+
+
+def closure_end(masked: str, after: int) -> int:
+    """Return the offset just past the body of the closure that starts before it.
+
+    *after* is the offset just past the header's closing `|`. A block body is
+    its matched brace pair, so a `,` inside it does not end the closure; an
+    expression body ends at the first `,`, `)`, `]`, `}` or `;` outside the
+    body's own brackets.
+
+    Returns
+    -------
+    int
+        The offset just past the body, or the end of *masked* when it has none.
+    """
+    index = after
+    while index < len(masked) and masked[index].isspace():
+        index += 1
+    if index < len(masked) and masked[index] == "{":
+        close = scan_balanced(masked, index)
+        return len(masked) if close is None else close
+    depth = 0
+    while index < len(masked):
+        char = masked[index]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            if depth == 0:
+                return index
+            depth -= 1
+        elif char == "," and depth == 0:
+            return index
+        index += 1
+    return index
+
+
+def closure_scopes(masked: str, name: str) -> list[tuple[int, int]]:
+    """Return the spans a closure binding *name* hides the name in.
+
+    A closure's parameter names its own value only inside the closure, so the
+    header and body are blanked before an enclosing statement is read: a call
+    on the closure's parameter is not the caller's command, while a call
+    written beside the closure is. The binding may sit anywhere in the header
+    (`|_: (), command: &mut Command|`), as it may in a parameter list.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        The half-open spans to blank, in source order.
+    """
+    bound = re.compile(rf"\b{re.escape(name)}\b")
+    return [
+        (header.start(), closure_end(masked, header.end()))
+        for header in CLOSURE_HEADER.finditer(masked)
+        if any(
+            bound.search(_binding_pattern(part)) is not None
+            for part in _split_parameters(header["params"])
+        )
+    ]
+
+
+def inside_closure(masked: str, start: int, at: int) -> bool:
+    """Report whether *at* lies inside a closure written after *start*.
+
+    A closure body runs when the closure is called, not where it is written,
+    so a call inside one is not the handoff it looks like. Only a header
+    before *at* can hold it, so the headers after *at* are not read.
+
+    Returns
+    -------
+    bool
+        True when a closure's header and body hold *at*.
+    """
+    for header in CLOSURE_HEADER.finditer(masked, start, at):
+        if closure_end(masked, header.end()) > at:
+            return True
+    return False
