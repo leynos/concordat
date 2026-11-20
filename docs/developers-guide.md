@@ -784,9 +784,12 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   block open at it is also open at the run's launch, a branch condition's own
   arguments inherited by every run through it, each arm read with the words
   given before the branch, a subcommand or help flag read per arm of a fully
-  paired `if`/`else` (a help flag excuses only its own arm), an arm left as the
-  only path after the other arm returns read as given on every path, a run with
-  no unconditional subcommand compiled when any path names one, an option in a
+  paired `if`/`else` (a help flag excuses only its own arm, while an arm
+  holding only options is still a path when the choice is fully paired), a help
+  flag read with the conditional subcommand it shares a block with, an arm left
+  as the only path after the other arm returns read as given on every path (but
+  not when its `else if` gives the choice a further condition), a run with no
+  unconditional subcommand compiled when any path names one, an option in a
   block of its own left beside a paired choice, a run that never reaches a
   launch starting nothing at all (so a `rustc` command is a probe only when its
   launched runs all ask a question), a `--print` query written to a file in
@@ -803,34 +806,44 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   well as across statements) so a word given in every arm covers both paths,
   keeps a `;` inside a block argument of the command's own call from ending the
   statement, blanks a closure's own span so only its body is shadowed and a
-  call beside it is still the caller's, and narrows a chain of returning arms
-  to the one that launches. The run model those readings feed lives in
+  call beside it is still the caller's (finding the span in the text before the
+  statement, because a `;` inside the body ends the statement and leaves the
+  rest of the body in the next one), and narrows a chain of returning arms to
+  the one that launches, without promoting an arm whose `else if` gives the
+  choice a further condition. The run model those readings feed lives in
   `nested_cargo_runs`: where each run begins, which blocks surround each word,
   how a statement that opens a branch is split so its condition is shared, and
   whether a closing brace reaches the launched block or an inner one (an `else`
   beside the launched block begins the next run; one that closes an inner `if`
-  the launch is not in does not). It finds the statements through
+  the launch is not in does not), with a statement that begins by closing a
+  block read at the depth it is reached at. It finds the statements through
   `nested_cargo_handoffs` (windows, helper bodies and file indexes, with an
   item beginning on the previous line, a helper naming the caller's binding, a
   helper name bound by a tuple or struct parameter pattern, a constructor
   pattern in a `let` (`let Hook(configure) = ..`), a closure parameter in any
-  position, one rebound by a closure's `|..|` list, a `const` or `static` item
-  anywhere in the caller's block, and a call written inside a closure body all
-  declined, the innermost enclosing function found for the caller's own
-  parameters rather than the latest `fn` declared, while a spliced fragment
-  keeps the `else` between its braces and a `return` inside the block it was
-  written in, its tail guarded so the caller's continuation stays on the
-  returning path) and attributes them through `nested_cargo_receivers`
-  (declining fields, path items and namespace roots, with a `Command` reached
-  through `::` the constructor and a bare `Command` counted only as the binding
-  under study), and the bracket-depth reading of a signature and its body lives
-  in `nested_cargo_syntax` (where a struct pattern's field comma stays inside
-  its parameter and a const-block comparison is an operator, not a generic);
-  the envelope reads `.config/nextest.toml` for serial groups, whether an
-  override uses one, `slow-timeout` in any profile or override and
-  `global-timeout` in any profile, and marks each top-level test binary as
-  named or not by the grouped filters, where a negated predicate names nothing.
-  It runs neither Cargo nor nextest and does not evaluate filtersets.
+  position, one rebound by a closure's `|..|` list, one bound by a `match`
+  arm's pattern, a `const` or `static` item in the caller's block or a block
+  enclosing it (a sibling block's item shadows nothing), and a call written
+  inside a closure body all declined, the innermost enclosing function found
+  for the caller's own parameters rather than the latest `fn` declared, while a
+  spliced fragment keeps the `else` between its braces and a `return` inside
+  the block it was written in, its tail guarded so the caller's continuation
+  stays on the returning path), the arm patterns and enclosing braces those
+  decisions read living in `nested_cargo_shadows`, and attributes them through
+  `nested_cargo_receivers` (declining fields, path items and namespace roots,
+  with a `Command` reached through `::` the constructor and a bare `Command`
+  counted only as the binding under study), and the bracket-depth reading of a
+  signature and its body lives in `nested_cargo_syntax` (where a struct
+  pattern's field comma stays inside its parameter, a const-block comparison is
+  an operator rather than a generic, a pipe after an operand is bitwise or
+  rather than a closure header, and a closure's return type is part of its
+  signature rather than its body); the envelope reads `.config/nextest.toml`
+  for serial groups, whether an override uses one, `slow-timeout` in any
+  profile or override and `global-timeout` in any profile, and marks each
+  top-level test binary as named or not by the grouped filters, where a negated
+  predicate names nothing and a group of predicates inside one negation
+  excludes every name it holds. It runs neither Cargo nor nextest and does not
+  evaluate filtersets.
 - `policy-input/nested-cargo-ci-wiring` —
   `nested_cargo_wiring_envelope.build_nested_cargo_wiring_envelope`. It reuses
   the shared workflow reader of the CodeScene coverage envelope, then records

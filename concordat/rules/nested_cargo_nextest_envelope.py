@@ -18,9 +18,11 @@ override's filter names the binary or one of its tests; the other
 spawners (helpers under `src/` or `tests/support/`) are judged at repository
 level only. A predicate the filter negates (`not(binary(ui))`, `!test(ui)`)
 excludes that name rather than selecting it, so it does not count as naming
-the spawner. The scan for spawners lives in `nested_cargo_spawn` and is
-conservative by design. A configuration that cannot be decoded stays a fact, so
-the policy answers indeterminate.
+the spawner; a group of predicates inside one negation
+(`!(binary(ui) | binary(other))`) excludes every name it holds. The scan for
+spawners lives in `nested_cargo_spawn` and is conservative by design. A
+configuration that cannot be decoded stays a fact, so the policy answers
+indeterminate.
 """
 
 from __future__ import annotations
@@ -189,6 +191,35 @@ PREDICATE: typ.Final = re.compile(r"\b(?:binary|binary_id|test)\(")
 # before the predicate. The exclusion names the same tests, so a name inside it
 # says nothing about which tests the override places in the group.
 NEGATION: typ.Final = re.compile(r"(?:!\s*\(?\s*|\bnot\s*\(?\s*)$")
+# A group of predicates inside one negation: `not(a | b)` or `!(a | b)`. Every
+# predicate in the group is excluded, not only the one written beside the `!`.
+NEGATION_GROUP: typ.Final = re.compile(r"(?:!|\bnot)\s*\(")
+
+
+def _negated_spans(text: str) -> list[tuple[int, int]]:
+    """Return the spans a negation's parentheses hold.
+
+    A filter can exclude a group of predicates at once
+    (`!(binary(ui) | binary(other))`), and each of them names a test the
+    override does not place in the group. The span runs from the group's
+    opening `(` to its balancing `)`, counted rather than matched lazily
+    because a regex argument holds parentheses of its own.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        The half-open spans held by each negated group.
+    """
+    spans: list[tuple[int, int]] = []
+    for found in NEGATION_GROUP.finditer(text):
+        open_at = found.end() - 1
+        depth = 0
+        for offset in range(open_at, len(text)):
+            depth += (text[offset] == "(") - (text[offset] == ")")
+            if depth == 0:
+                spans.append((open_at, offset))
+                break
+    return spans
 
 
 def _predicate_arguments(text: str) -> list[str]:
@@ -196,7 +227,9 @@ def _predicate_arguments(text: str) -> list[str]:
 
     A filter such as `not(binary(ui))` or `!test(/^ui/)` excludes those names
     rather than selecting them, so their arguments are not returned: an
-    override that only excludes `ui` does not place it in the group. The
+    override that only excludes `ui` does not place it in the group. A
+    negated group excludes every predicate it holds, not only the first, so
+    `!(binary(other) | binary(ui))` does not name `ui` either. The
     parentheses are balanced rather than matched lazily, because a regex
     argument such as `/^name($|::)/` holds parentheses of its own.
 
@@ -206,8 +239,11 @@ def _predicate_arguments(text: str) -> list[str]:
         The text between the parentheses of each predicate that is not
         negated.
     """
+    excluded = _negated_spans(text)
     found: list[str] = []
     for match in PREDICATE.finditer(text):
+        if any(start < match.start() < stop for start, stop in excluded):
+            continue
         if NEGATION.search(text[: match.start()]) is not None:
             continue
         depth, start = 1, match.end()

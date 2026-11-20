@@ -21,7 +21,10 @@ and a pattern's own commas do not split the parameter from its neighbour.
 A closure's header and body are located here too, because two readers need the
 same span: one blanks it so a parameter of the command's name shadows the name
 only inside the closure, and the other declines a helper call written inside a
-body that runs only when the closure is called.
+body that runs only when the closure is called. A `|` that follows an operand
+is bitwise or rather than a header, so `a | command.arg("build") | b` holds no
+closure, and a return type before the body is part of the closure, so the body
+begins after the type rather than at its first comma.
 """
 
 from __future__ import annotations
@@ -354,22 +357,89 @@ def parameter_names(masked: str, start: int) -> list[str]:
     return names
 
 
+# An expression can end in an operand before a `|`: a name, a call, an index,
+# a literal. A closure's opening pipe instead stands where an expression
+# begins, so the operator chains that merely look like `|..|` are told apart by
+# what precedes them.
+_OPERAND_END: typ.Final = frozenset(")]}\"'")
+
+
+def _opens_a_closure(masked: str, found: re.Match[str]) -> bool:
+    """Report whether the `|..|` at *found* is a closure header.
+
+    A single `|` is also bitwise or, so `a | command.arg("build") | b` looks
+    like a header whose parameter is `command`. A header's opening pipe stands
+    where an expression begins -- after `=`, `(`, `[`, `{`, `,`, `;`, `:`, a
+    comparison or an arrow -- while a bitwise chain's pipe follows the operand
+    it operates on. A pipe after a name, a call's `)`, an index's `]` or a
+    literal's quote is therefore read as an operator, not a header.
+
+    Returns
+    -------
+    bool
+        True when the match is a closure header.
+    """
+    if found.group().startswith("move"):
+        return True
+    before = masked[: found.start()].rstrip()
+    if not before:
+        return True
+    last = before[-1]
+    return last != "_" and not (last.isalnum() or last in _OPERAND_END)
+
+
+def _body_start(masked: str, after: int) -> int:
+    """Return the offset where the body written after *after* begins.
+
+    The body may be preceded by a return type (`|x: u32| -> Result<(), ()> { .. }`),
+    whose commas and parentheses are part of the signature: reading the body as
+    the words after the header would end it at the type's first comma and
+    leave the rest of the closure unread. The arrow is followed past the type,
+    and any whitespace after it is skipped.
+
+    Returns
+    -------
+    int
+        The offset of the first character of the body.
+    """
+    index = after
+    while index < len(masked) and masked[index].isspace():
+        index += 1
+    if not masked.startswith("->", index):
+        return index
+    index += 2
+    depth = 0
+    while index < len(masked):
+        char = masked[index]
+        if char in "([<":
+            depth += 1
+        elif char in ")]>":
+            if depth == 0:
+                break
+            depth -= 1
+        elif depth == 0 and char in ",;{":
+            break
+        index += 1
+    while index < len(masked) and masked[index].isspace():
+        index += 1
+    return index
+
+
 def closure_end(masked: str, after: int) -> int:
     """Return the offset just past the body of the closure that starts before it.
 
     *after* is the offset just past the header's closing `|`. A block body is
     its matched brace pair, so a `,` inside it does not end the closure; an
     expression body ends at the first `,`, `)`, `]`, `}` or `;` outside the
-    body's own brackets.
+    body's own brackets. A return type written before the body is part of the
+    closure and not of its expression.
 
     Returns
     -------
     int
         The offset just past the body, or the end of *masked* when it has none.
     """
-    index = after
-    while index < len(masked) and masked[index].isspace():
-        index += 1
+    index = _body_start(masked, after)
     if index < len(masked) and masked[index] == "{":
         close = scan_balanced(masked, index)
         return len(masked) if close is None else close
@@ -406,7 +476,8 @@ def closure_scopes(masked: str, name: str) -> list[tuple[int, int]]:
     return [
         (header.start(), closure_end(masked, header.end()))
         for header in CLOSURE_HEADER.finditer(masked)
-        if any(
+        if _opens_a_closure(masked, header)
+        and any(
             bound.search(_binding_pattern(part)) is not None
             for part in _split_parameters(header["params"])
         )
@@ -426,6 +497,6 @@ def inside_closure(masked: str, start: int, at: int) -> bool:
         True when a closure's header and body hold *at*.
     """
     for header in CLOSURE_HEADER.finditer(masked, start, at):
-        if closure_end(masked, header.end()) > at:
+        if _opens_a_closure(masked, header) and closure_end(masked, header.end()) > at:
             return True
     return False

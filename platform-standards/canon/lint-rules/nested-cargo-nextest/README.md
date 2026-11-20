@@ -81,17 +81,19 @@ configuration from a repository that needs none:
   `fn run(Callbacks { setup: configure }: ..)`, a name bound by a destructuring
   pattern such as `let (configure,) = ..` or `let Hook(configure) = ..`, a
   closure parameter in any position such as
-  `|_: (), configure: fn(&mut Command)|`, a `const` or `static` item of that
-  name anywhere in the caller's block (an item is in scope for its whole block,
-  even before its declaration), and a borrowed binding such as
-  `let ref configure = ..`), a call written as a path or method
-  (`support::configure(..)`, however it is spaced around the separator), a name
-  a `use` item could import, or a helper that reassigns the parameter. The
-  parameters read are those of the innermost function whose body holds the
-  call, so a function item declared inside the caller is not mistaken for its
-  scope. The scan does not resolve imports, and a `use` may name an inline
-  module in the same file (`use self::support::configure`) as easily as a
-  helper in another file, so an imported name is declined either way; a glob
+  `|_: (), configure: fn(&mut Command)|`, a name bound by a `match` arm's
+  pattern such as `match callback { configure => configure(&mut command) }`, a
+  `const` or `static` item of that name in the caller's block or a block
+  enclosing it (an item is in scope for its whole block, even before its
+  declaration, while a sibling block's item is not in scope at the call), and a
+  borrowed binding such as `let ref configure = ..`), a call written as a path
+  or method (`support::configure(..)`, however it is spaced around the
+  separator), a name a `use` item could import, or a helper that reassigns the
+  parameter. The parameters read are those of the innermost function whose body
+  holds the call, so a function item declared inside the caller is not mistaken
+  for its scope. The scan does not resolve imports, and a `use` may name an
+  inline module in the same file (`use self::support::configure`) as easily as
+  a helper in another file, so an imported name is declined either way; a glob
   import (`use support::*`, `use support::{*}`) spells no name but could bring
   any in, so it declines every handoff in the file. A helper whose body names
   the caller's binding is declined too: rewriting its receiving parameter to
@@ -118,60 +120,71 @@ configuration from a repository that needs none:
   adds, since the condition runs before either arm
   (`if command.arg("--version").get_args().next().is_some() { .. }`), and when
   one arm of an `if`/`else` returns, the other arm is the only path that
-  reaches the launch, so its words are read as given on every path. A `;`
-  inside a block argument of the command's own call does not end the statement,
-  so `command.arg({ let flag = "--quiet"; flag }).status()` keeps its launch.
-  Every run of a `rustc` command that launches must be a probe, while any run
-  of a cargo command that compiles is enough. A command must reach a launch
-  inside its read to count at all, for `cargo` and `rustc` alike: a command
-  that is built and given words but never run starts no child process, a
-  `rustc` command with no launch at all is not a probe, and a launch beyond the
-  read is declined rather than guessed at. A later declaration of the command's
-  name shadows it inside that block only, while an assignment to it ends the
-  read wherever it sits, because the block that ran it may have been entered; a
-  closure parameter's scope is the closure itself, so
+  reaches the launch, so its words are read as given on every path; an
+  `else if` is a condition of its own, so the arm after it is not the only
+  path. A `;` inside a block argument of the command's own call does not end
+  the statement, so `command.arg({ let flag = "--quiet"; flag }).status()`
+  keeps its launch. Every run of a `rustc` command that launches must be a
+  probe, while any run of a cargo command that compiles is enough. A command
+  must reach a launch inside its read to count at all, for `cargo` and `rustc`
+  alike: a command that is built and given words but never run starts no child
+  process, a `rustc` command with no launch at all is not a probe, and a launch
+  beyond the read is declined rather than guessed at. A later declaration of
+  the command's name shadows it inside that block only, while an assignment to
+  it ends the read wherever it sits, because the block that ran it may have
+  been entered; a closure parameter's scope is the closure itself, so
   `let _noop = |command: &mut Command| {};` does not hide the command from the
   statements after it, while a launch written beside the closure in the same
   statement (`(|command: &mut Command| {}, command.arg("build").status())`) is
-  still the caller's. The subcommand is the first argument of the run that is
-  neither an option nor an option's value, so `--color always nextest run` runs
-  `nextest` and `cargo help build` prints help rather than building; a value
-  the reader cannot see fills its option's slot rather than ending the read. A
-  conditional word never fills an option's value slot, because the path that
-  skips its block gives the next word as the value: `--color`, a conditional
-  `never`, then `always` is `--color always` on the path that skips the block.
-  A conditional word likewise cannot hide the subcommand on the path that skips
-  its block, so a `help` inside an `if` leaves an unconditional `build` still
-  compiling, and each arm of a fully paired chain is read for its own
-  subcommand, so a `metadata` in the `if` arm does not hide the `build` in its
-  `else` arm. A run with no unconditional subcommand at all is compiled when
-  any path names one, so a `metadata` in one block beside a `build` in another
-  still compiles when only the build's block runs; two conditional words before
-  a topic are likewise each read as a possible subcommand, so an `install` in
-  one block beside a `search` in another compiles. A `-h` or `--help` given on
-  every path prints help whatever the subcommand is, while one added inside a
-  block does not excuse the build on the path that skips it. A help flag in one
-  arm excuses only the path through that arm, so a `build --help` in the `if`
-  arm does not excuse the `check` its `else` arm runs, while a help flag in
-  every arm excuses the whole run. Words after a `--` belong to the program the
-  command runs, not to cargo, and a `--` given only on some path is still a
-  separator on that path, so a help flag written after it is passed to the
-  program and does not excuse the build. A word is the text its string literal
-  has at run time, so an escape (`\x64`, `\u{64}`) is decoded and cannot hide
-  `build` or `--version` from the read, and an escaped quote does not end the
-  literal early. A word counts as unconditional only when every block open at
-  it is also open at the run's launch, so a flag in the branch that launches is
-  on the run's path while one in a sibling block that has already closed is
-  not. An option given in a block of its own
-  (`if verbose { command.arg("-v") }`) cannot change the subcommand, so it does
-  not stop a paired choice beside it being read arm by arm. A flag added on
-  only some paths, behind a `&&`/`||` short circuit or inside a block that may
-  not run, does not make a run a probe -- except when one fully paired
-  `if`/`else` chain gives a probe in every arm, whether that choice is written
-  across statements or on one line (`let _ = if c { .. } else { .. };`), since
-  then no path reaches the launch without one. Each arm is read with the words
-  given before the branch, so a `--print` in one arm and a `cfg` after the
-  choice complete each other; a short circuit inside an arm
+  still the caller's; a `;` inside the body splits the statement, not the
+  closure's scope, so
+  `|command: &mut Command| { command.arg("x"); command.status(); }` stays
+  hidden to its closing brace. A statement that begins by closing a block
+  (`} command.arg("-v")`) is read at the depth it is reached at, so its
+  argument is on every path that reaches it rather than only inside the block
+  it leaves. The subcommand is the first argument of the run that is neither an
+  option nor an option's value, so `--color always nextest run` runs `nextest`
+  and `cargo help build` prints help rather than building; a value the reader
+  cannot see fills its option's slot rather than ending the read. A conditional
+  word never fills an option's value slot, because the path that skips its
+  block gives the next word as the value: `--color`, a conditional `never`, then
+  `always` is `--color always` on the path that skips the block. A conditional
+  word likewise cannot hide the subcommand on the path that skips its block, so
+  a `help` inside an `if` leaves an unconditional `build` still compiling, and
+  each arm of a fully paired chain is read for its own subcommand, so a
+  `metadata` in the `if` arm does not hide the `build` in its `else` arm. A run
+  with no unconditional subcommand at all is compiled when any path names one,
+  so a `metadata` in one block beside a `build` in another still compiles when
+  only the build's block runs; two conditional words before a topic are
+  likewise each read as a possible subcommand, so an `install` in one block
+  beside a `search` in another compiles. A `-h` or `--help` given on every path
+  prints help whatever the subcommand is, while one added inside a block does
+  not excuse the build on the path that skips it. A help flag given in the
+  block that also holds a conditional subcommand travels with that subcommand,
+  so `if show { command.args(["build", "--help"]); }` compiles nothing. A help
+  flag in one arm excuses only the path through that arm, so a `build --help`
+  in the `if` arm does not excuse the `check` its `else` arm runs, while a help
+  flag in every arm excuses the whole run; an arm that holds only options is
+  still a path when the choice is fully paired, so two such arms excuse each
+  other's sibling words. Words after a `--` belong to the program the command
+  runs, not to cargo, and a `--` given only on some path is still a separator
+  on that path, so a help flag written after it is passed to the program and
+  does not excuse the build. A word is the text its string literal has at run
+  time, so an escape (`\x64`, `\u{64}`) is decoded and cannot hide `build` or
+  `--version` from the read, and an escaped quote does not end the literal
+  early. A word counts as unconditional only when every block open at it is
+  also open at the run's launch, so a flag in the branch that launches is on
+  the run's path while one in a sibling block that has already closed is not.
+  An option given in a block of its own (`if verbose { command.arg("-v") }`)
+  cannot change the subcommand, so it does not stop a paired choice beside it
+  being read arm by arm. A flag added on only some paths, behind a `&&`/`||`
+  short circuit or inside a block that may not run, does not make a run a probe
+  -- except when one fully paired `if`/`else` chain gives a probe in every arm,
+  whether that choice is written across statements or on one line
+  (`let _ = if c { .. } else { .. };`), since then no path reaches the launch
+  without one. Each arm is read with the words given before the branch, so a
+  `--print` in one arm and a `cfg` after the choice complete each other; a
+  short circuit inside an arm
   (`query && command.arg("-V").get_args().next().is_some()`) can still skip
   that arm's flag, so the arm does not cover its path. `cargo metadata` and
   `cargo config` do not count;
@@ -206,8 +219,10 @@ configuration from a repository that needs none:
   named, by binary or by one of its `fn` names, in the filter of an override
   that uses a serial group. A predicate the filter negates (`not(binary(ui))`,
   `!test(compiles)`) excludes that name rather than selecting it, so it does
-  not name the spawner. Helpers under `src/` or `tests/support/`, and
-  `main.rs`/`mod.rs`, are judged at repository level only.
+  not name the spawner, and a group of predicates inside one negation
+  (`!(binary(ui) | binary(other))`) excludes every name it holds. Helpers under
+  `src/` or `tests/support/`, and `main.rs`/`mod.rs`, are judged at repository
+  level only.
 - **EN-001** (indeterminate; an error for an envelope defect, the configured
   severity otherwise): the envelope is not a schema-1
   `policy-input/nested-cargo-nextest` document, the configuration cannot be

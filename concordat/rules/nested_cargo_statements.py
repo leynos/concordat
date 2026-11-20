@@ -23,13 +23,19 @@ body, so the closure's own span is blanked before the statement is read and the
 rest of the statement is still the command's, wherever in the `|..|` list the
 parameter sits. A launch beside the closure is therefore read
 (`(|command: &mut Command| {}, command.arg("build").status())`), while a launch
-on the closure's own parameter is not.
+on the closure's own parameter is not. The body outlives a `;` written inside
+it, and the statement reader splits there, so the span is found in the text
+before the statement rather than in the statement alone; the statements after
+the body closes are the command's again.
 
 The identity of the open braces pairs an `else` arm with the `if` arm beside
 it -- inline (`let _ = if c { .. } else { .. };`) as well as across statements
 -- which is what lets a probe given in every arm cover both paths. When a
 `return` ends one arm of an `if`/`else`, the other arm is the only path that
 reaches the launch, so that arm's statements are read as given on every path.
+An `else if` is a condition of its own rather than the pair's second arm, so
+the arm after it is not the only path and its words are not read as
+unconditional.
 A `;` inside a block argument of the command's own call does not end the
 statement, so the chain's launch is still read
 (`command.arg({ let flag = "--quiet"; flag }).status()`).
@@ -102,9 +108,9 @@ def _rebinding(name: str | None) -> re.Pattern[str] | None:
     no name to move.
 
     A closure's own parameter is not read here: it shadows the name only
-    inside the closure body, which ends with its statement, so
-    :meth:`_StatementRead.feed` declines the statement instead of moving the
-    name for everything after it.
+    inside the closure body, and :meth:`_StatementRead.feed` blanks that span
+    before the statement is read, so the pattern never sees it and the name is
+    not moved for everything after it.
 
     Returns
     -------
@@ -175,6 +181,45 @@ def _entry_depth(masked_statement: str, start_depth: int) -> int:
             break
         depth -= 1
     return depth
+
+
+def _closure_hiding(
+    masked: str, name: str, start: int, stop: int
+) -> list[tuple[int, int]]:
+    """Return the closure spans around *name*, rebased onto a statement.
+
+    The spans are found in *masked*, the whole read so far, rather than in the
+    statement alone. A closure's body outlives a `;` written inside it
+    (`|command: &mut Command| { let _ = 1; command.arg("--version"); }`) and
+    the statement reader splits there, so the statement after the `;` holds no
+    header of its own. Reading the spans over everything before the statement
+    keeps the later half of the body hidden, while a statement after the body
+    closes is not hidden at all. A body still open at *stop* hides the rest of
+    the statement, because the closure is not finished.
+
+    Parameters
+    ----------
+    masked:
+        The masked source up to the end of the current statement.
+    name:
+        The command's name, as bound at the spawn.
+    start:
+        The offset where the current statement begins.
+    stop:
+        The offset where the current statement ends.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        The part of each span that lies inside the statement, relative to
+        *start*, in source order.
+    """
+    hidden: list[tuple[int, int]] = []
+    for begin, end in closure_scopes(masked, name):
+        if end <= start or begin >= stop:
+            continue
+        hidden.append((max(begin, start) - start, min(end, stop) - start))
+    return hidden
 
 
 def _blank_spans(masked: str, spans: list[tuple[int, int]]) -> str:
@@ -276,8 +321,11 @@ class _StatementRead:
         # but only inside the closure: a call beside the closure in the same
         # statement is still the caller's. The closure's header and body are
         # therefore blanked rather than the whole statement being declined.
+        # The spans are read over the whole text before this statement, since
+        # a `;` inside the body ends the statement and leaves the rest of the
+        # body in a later one.
         scopes = (
-            closure_scopes(masked_statement, self._name)
+            _closure_hiding(self._window.masked[:at], self._name, self._offset, at)
             if self._name is not None
             else []
         )
@@ -420,10 +468,14 @@ class _StatementRead:
 
         A `return` inside one arm of an `if`/`else` leaves the other arm as the
         only path reaching the launch, so the words given there are given on
-        every path that runs the command. When that other arm returns as well,
-        the choice before it is walked in turn, so a chain of returning arms
-        narrows to the arm that does launch; an arm whose own block merely
-        holds a return, and no pairing, leaves the paths open.
+        every path that runs the command. The arm is the only path, though,
+        only when the `else` beside it carries no condition: an `else if` has a
+        path of its own beyond the pair, and the arm after it is not reached
+        when that condition is false. When that other arm returns as well, the
+        choice before it is walked in turn, so a chain of returning arms
+        narrows to the arm that does launch; every step of the walk takes the
+        returning arm out of the paths, so only the pair the surviving arm is
+        promoted from must cover both.
 
         Returns
         -------
@@ -437,9 +489,24 @@ class _StatementRead:
             if paired is None:
                 return None
             if paired not in self._returns:
-                return paired
+                return paired if self._pair_is_exhaustive(brace, paired) else None
             brace = paired
         return None
+
+    def _pair_is_exhaustive(self, brace: int, paired: int) -> bool:
+        """Report whether the choice between *brace* and *paired* has no other path.
+
+        An `if` arm of an `if`/`else` chain is the key of the pair, and only a
+        pair whose `else` carries no condition is exhaustive. A pair whose
+        `else` is another `if` leaves the path beyond that arm open.
+
+        Returns
+        -------
+        bool
+            True when every path through the choice enters one of the two arms.
+        """
+        key = brace if brace in self._arms else paired
+        return key in self._exhaustive
 
     def _paired(self, brace: int) -> int | None:
         """Return the arm paired with *brace*, on either side of its `else`.

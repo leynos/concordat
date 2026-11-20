@@ -15,13 +15,15 @@ body names the caller's binding as well as its receiving parameter, a caller
 binding that shadows the helper by `let` or `let ref`, by a parameter or by a
 destructuring pattern (`let (configure,) = ..`, `let Hook(configure) = ..`), a
 helper name bound by a parameter pattern (`fn run((configure,): ..)`,
-`fn run(Callbacks { setup: configure }: ..)`) or rebound by a closure's own
-`|..|` list in any position (`|_: (), configure: fn(&mut Command)|`), a
-`const` or `static` item of that name anywhere in the caller's block (an item
-is in scope for its whole block, so one declared after the call still shadows
-it, while a `let` counts only before the call), a parameter reassigned or
-shadowed -- is declined rather than guessed, because a false positive would
-demand configuration from a repository that needs none. A call written inside a
+`fn run(Callbacks { setup: configure }: ..)`), rebound by a closure's own
+`|..|` list in any position (`|_: (), configure: fn(&mut Command)|`) or bound
+by a `match` arm's pattern, a `const` or `static` item of that name in the
+caller's block or a block enclosing it (an item is in scope for its whole
+block, so one declared after the call still shadows it, while a `let` counts
+only before the call, and an item in a nested block that does not hold the call
+shadows nothing), a parameter reassigned or shadowed -- is declined rather
+than guessed, because a false positive would demand configuration from a
+repository that needs none. A call written inside a
 closure body is declined as well: the body runs when the closure is called, not
 where it is written, so `let deferred = |_| configure(&mut command);` adds
 nothing to the command until the closure is invoked, which the scan does not
@@ -53,6 +55,7 @@ import re
 import typing as typ
 
 from .nested_cargo_receivers import LAUNCH, reaches_through
+from .nested_cargo_shadows import match_arm_binds, open_braces
 from .nested_cargo_syntax import (
     CLOSURE_HEADER,
     _binding_pattern,
@@ -499,6 +502,8 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     binder = re.compile(rf"\b(?:let\s+{binding}|for\s+{binding}){pattern}")
     if binder.search(masked, start, at) is not None:
         return True
+    if match_arm_binds(masked, name, start, at):
+        return True
     if _item_shadows(masked, name, at, index):
         return True
     if _closure_binds(masked, start, at, name):
@@ -516,15 +521,17 @@ def _item_shadows(masked: str, name: str, at: int, index: FileIndex) -> bool:
     An item declaration is in scope for its whole block, so one written after
     the call shadows the free function there just as one written before it
     does: `configure(&mut command); const configure: fn(&mut Command) = noop;`
-    calls the constant, not the `fn` beside it. Only a declaration in the
-    caller's own block counts, because an inner block's item is not in scope
-    outside it, and the call is declined rather than read from the free
-    function when one is found.
+    calls the constant, not the `fn` beside it. A declaration in a block that
+    encloses the call counts too, because that block's items are in scope
+    throughout it: the call is declined rather than read from the free
+    function. The block that declares the item is matched by the offset of its
+    opening brace against the blocks open at the call, so a sibling block's
+    item -- which is not in scope at the call -- does not shadow it.
 
     Returns
     -------
     bool
-        True when an item of that name sits directly in the caller's block.
+        True when an item of that name is in scope at *at*.
     """
     start = _enclosing_start(masked, at, index)
     item = top_level_item(masked, start)
@@ -533,11 +540,11 @@ def _item_shadows(masked: str, name: str, at: int, index: FileIndex) -> bool:
     close = scan_balanced(masked, item[0])
     if close is None:
         return False
+    at_blocks = open_braces(masked, item[0], at)
     declaration = re.compile(rf"\b(?:const|static)\s+\b{re.escape(name)}\b")
     for found in declaration.finditer(masked, item[0], close):
-        opened = masked.count("{", item[0], found.start())
-        closed = masked.count("}", item[0], found.start())
-        if opened - closed == 1:
+        declarer = open_braces(masked, item[0], found.start())
+        if not declarer or declarer[-1] == item[0] or declarer[-1] in at_blocks:
             return True
     return False
 

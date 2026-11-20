@@ -24,6 +24,8 @@ from concordat.rules.nested_cargo_receivers import (
     call_chains,
     owns_chain,
 )
+from concordat.rules.nested_cargo_statements import _closure_hiding
+from concordat.rules.nested_cargo_syntax import closure_scopes
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -2370,12 +2372,18 @@ UNSAFE_FUNCTION_AFTER_A_COMMAND = (
     "}\n"
     "unsafe fn later(command: &mut Command) {\n"
     '    command.arg("build");\n'
+    "    command.status().unwrap();\n"
     "}\n"
 )
 
 
 def test_an_unsafe_function_ends_the_command_window(tmp_path: pathlib.Path) -> None:
-    """The next function item is another scope, however it is qualified."""
+    """The next function item is another scope, however it is qualified.
+
+    The second function launches the command its own parameter names, so a
+    window that ran past the item would take that launch for the first
+    command's and report it as compiling.
+    """
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", UNSAFE_FUNCTION_AFTER_A_COMMAND)
     assert ids(tmp_path) == set()
@@ -2624,6 +2632,8 @@ def test_help_given_in_every_arm_compiles_nothing(tmp_path: pathlib.Path) -> Non
         "not (test(/^compiles($|::)/))",
         "!test(compiles)",
         "not(binary(ui)) | binary(other)",
+        "!(binary(other) | binary(ui))",
+        "not(binary(other) | binary(ui))",
     ],
 )
 def test_a_negated_predicate_does_not_name_the_spawner(
@@ -2973,7 +2983,7 @@ def test_a_helper_else_arm_survives_the_splice(tmp_path: pathlib.Path) -> None:
     assert ids(tmp_path) == set()
 
 
-QUALIFIED_CONSTRUCTOR = (
+QUALIFIED_CONSTRUCTOR_IN_A_CHAIN = (
     "use std::process::Command;\n"
     "#[test]\nfn compiles() {\n"
     '    std::process::Command::new("cargo")\n'
@@ -2987,7 +2997,7 @@ QUALIFIED_CONSTRUCTOR = (
 def test_a_qualified_constructor_launches_its_command(tmp_path: pathlib.Path) -> None:
     """`std::process::Command` is the constructor, so its launch ends the run."""
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
-    put(tmp_path, "tests/ui.rs", QUALIFIED_CONSTRUCTOR)
+    put(tmp_path, "tests/ui.rs", QUALIFIED_CONSTRUCTOR_IN_A_CHAIN)
     assert ids(tmp_path) == {"NC-004"}
 
 
@@ -3538,3 +3548,218 @@ def test_a_crate_name_print_is_a_probe(arguments: str, tmp_path: pathlib.Path) -
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", source)
     assert ids(tmp_path) == set()
+
+
+ARGUMENT_AFTER_A_LEADING_BRACE = (
+    "use std::process::Command;\n"
+    "fn run(a: bool, b: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    if a { setup(); } command.arg("--version");\n'
+    "    if b {\n"
+    '        command.arg("input.rs");\n'
+    "        command.status().unwrap();\n"
+    "    } else {\n"
+    '        command.arg("other.rs");\n'
+    "        command.status().unwrap();\n"
+    "    }\n"
+    "}\n"
+    "fn setup() {}\n"
+)
+
+
+def test_an_argument_after_a_leading_brace_is_on_every_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`} command.arg(..)` closes a block, so its argument is not conditional."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ARGUMENT_AFTER_A_LEADING_BRACE)
+    assert ids(tmp_path) == set()
+
+
+def test_a_closure_return_type_does_not_end_its_span() -> None:
+    """A `-> Result<(), ()>` body is part of the closure, commas and all."""
+    source = (
+        "let f = |command: &mut Command| -> Result<(), ()> "
+        '{ command.arg("--version"); Ok(()) };'
+    )
+    ((start, stop),) = closure_scopes(source, "command")
+    assert start < source.index("command.arg") < stop
+
+
+CLOSURE_RUNNING_LATER_IN_ITS_BODY = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    command.arg("input.rs");\n'
+    "    let _later = |command: &mut Command| {\n"
+    '        command.arg("other.rs");\n'
+    "        command.status().unwrap();\n"
+    "    };\n"
+    "}\n"
+)
+
+
+def test_a_closure_body_keeps_hiding_across_its_own_semicolon(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `;` inside the body splits the statement, not the closure's scope."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CLOSURE_RUNNING_LATER_IN_ITS_BODY)
+    assert ids(tmp_path) == set()
+
+
+def test_closure_hiding_reads_the_text_before_the_statement() -> None:
+    """A statement after a body's `;` is hidden by the header before it."""
+    source = 'let f = |command: &mut Command| { command.arg("x");\ncommand.status(); };'
+    begin = source.index("command.status")
+    stop = source.index(";", begin)
+    ((start, end),) = _closure_hiding(source[:stop], "command", begin, stop)
+    assert (start, end) == (0, stop - begin)
+
+
+HELP_BESIDE_A_CONDITIONAL_SUBCOMMAND = (
+    "use std::process::Command;\n"
+    "fn run(show: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    if show { command.args(["build", "--help"]); }\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_help_flag_beside_a_conditional_subcommand_excuses_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The block that gives `build` gives `--help` with it, so nothing builds."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELP_BESIDE_A_CONDITIONAL_SUBCOMMAND)
+    assert ids(tmp_path) == set()
+
+
+BITWISE_OR_AROUND_A_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn run(a: bool, b: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    let ok = a | command.arg("build").status().unwrap().success() | b;\n'
+    "    let _ = ok;\n"
+    "}\n"
+)
+
+
+def test_a_bitwise_or_is_not_a_closure_header(tmp_path: pathlib.Path) -> None:
+    """A `|` between two operands is an operator, not a parameter list."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", BITWISE_OR_AROUND_A_LAUNCH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+HELP_ONLY_ARMS_BESIDE_AN_OPTION = (
+    "use std::process::Command;\n"
+    "fn run(quiet: bool, verbose: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("build");\n'
+    '    if quiet { command.arg("--help"); } else { command.arg("-h"); }\n'
+    '    if verbose { command.arg("-v"); }\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_help_only_arms_survive_an_option_only_block_beside_them(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Both arms of the choice give help; the `-v` block beside it is not an arm."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELP_ONLY_ARMS_BESIDE_AN_OPTION)
+    assert ids(tmp_path) == set()
+
+
+CONST_IN_THE_ARM_THAT_CALLS = (
+    "use std::process::Command;\n"
+    "fn run(flag: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    if flag {\n"
+    "        const configure: fn(&mut Command) = noop;\n"
+    "        configure(&mut command);\n"
+    "    } else {\n"
+    "        configure(&mut command);\n"
+    "    }\n"
+    '    command.arg("input.rs");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+    'fn configure(command: &mut Command) { command.arg("--version"); }\n'
+    "fn noop(_command: &mut Command) {}\n"
+)
+
+
+def test_a_const_in_the_arms_block_shadows_the_helper(tmp_path: pathlib.Path) -> None:
+    """An item is in scope throughout its block, so that arm calls the constant."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONST_IN_THE_ARM_THAT_CALLS)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONST_IN_A_SIBLING_BLOCK = (
+    "use std::process::Command;\n"
+    "fn run(flag: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    if flag {\n"
+    "        configure(&mut command);\n"
+    "    } else {\n"
+    "        configure(&mut command);\n"
+    "    }\n"
+    "    { const configure: fn(&mut Command) = noop; }\n"
+    '    command.arg("input.rs");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+    'fn configure(command: &mut Command) { command.arg("--version"); }\n'
+    "fn noop(_command: &mut Command) {}\n"
+)
+
+
+def test_a_const_in_a_sibling_block_does_not_shadow_the_helper(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The constant's block opens and closes apart from the calls it does not hold."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONST_IN_A_SIBLING_BLOCK)
+    assert ids(tmp_path) == set()
+
+
+MATCH_ARM_BINDING = (
+    "use std::process::Command;\n"
+    "fn run(callback: fn(&mut Command)) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    match callback { configure => configure(&mut command) }\n"
+    '    command.arg("metadata").status().unwrap();\n'
+    "}\n"
+    'fn configure(command: &mut Command) { command.arg("build"); }\n'
+)
+
+
+def test_a_match_arm_binding_hides_the_helper(tmp_path: pathlib.Path) -> None:
+    """The arm's pattern binds `configure` to the callback, not the free `fn`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", MATCH_ARM_BINDING)
+    assert ids(tmp_path) == set()
+
+
+ELSE_IF_ARM_IS_NOT_THE_ONLY_PATH = (
+    "use std::process::Command;\n"
+    "fn run(a: bool, b: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if a { return; }\n"
+    '    else if b { command.arg("--help"); }\n'
+    '    else { command.arg("build"); }\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_an_else_if_arm_is_not_the_only_path_to_the_launch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`a` returning leaves `b` or the final `else`, so the help is conditional."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ELSE_IF_ARM_IS_NOT_THE_ONLY_PATH)
+    assert ids(tmp_path) == {"NC-004"}

@@ -22,14 +22,17 @@ subcommand open, and then any compiling word before the launch is enough.
 `-h` or `--help` makes the command compile nothing at all when it is given on
 every path, and each arm of a fully paired choice is read for its own
 subcommand and its own help flag, so one arm's `metadata` does not hide the
-other arm's `build`. A `--` given on only some path is still a separator on
-that path, so a help flag written after it is passed to the program the command
-runs and does not excuse the build. A `--print` query asks the compiler what it
-is only when its two halves are adjacent: an unreadable or conditional word
-between `--print` and `cfg` may be `link-args`, which builds the crate, so the
-query is not read as a probe. A kind may name an output file after a second
-`=`, in the joined form (`--print=cfg=out.txt`) or the two-word one (`--print`,
-`cfg=out.txt`), which writes the answer there; the query is the kind before the
+other arm's `build`. A help flag given in the block that also holds the word
+it excuses covers that word as well, so the path that gives a conditional
+subcommand gives the flag with it. A `--` given on only some path is still a
+separator on that path, so a help flag written after it is passed to the
+program the command runs and does not excuse the build. A `--print` query asks
+the compiler what it is only when its two halves are adjacent: an unreadable
+or conditional word between `--print` and `cfg` may be `link-args`, which
+builds the crate, so the query is not read as a probe. A kind may name an
+output file after a second `=`, in the joined form (`--print=cfg=out.txt`) or
+the two-word one (`--print`, `cfg=out.txt`), which writes the answer there; the
+query is the kind before the
 path, and the tables that need no compile include `file-names`. A
 probe flag in a block counts only when every block open at the flag is also
 open at the launch; a flag in a sibling block that has already closed does not.
@@ -41,7 +44,10 @@ by a `cfg` after the choice. A short circuit inside an arm
 (`query && command.arg("-V").get_args().next().is_some()`) can still skip that
 arm's word, so the arm does not cover its path. An option given in a block of
 its own (`if verbose { command.arg("-v") }`) cannot change the subcommand, so
-it does not stop a paired choice beside it being read path by path.
+it does not stop a paired choice beside it being read path by path. An arm
+that holds only options is still a path when the choice is fully paired: it
+gives the word a help flag rather than a subcommand, and dropping it would
+leave the sibling arm's subcommand looking unconditional.
 
 A word is the text its literal has at run time, so an escape cannot hide a
 compiling subcommand from the read. A Unicode escape's digits may be separated
@@ -313,15 +319,18 @@ def _arm_paths(
     if order is None:
         # A block that holds only options cannot change the subcommand, so it
         # may sit beside the choice (`if verbose { arg("-v") }`) without being
-        # one of its arms. A separator is not such a word: it sends every word
-        # after it to the program, so a block that gives one is never set
-        # aside.
+        # one of its arms. A block paired with another is still an arm, even
+        # when it holds only options: `if quiet { arg("--help") } else {
+        # arg("-h") }` is the choice, and setting its arms aside would drop
+        # the help that excuses both paths. A separator is not set aside
+        # either: it sends every word after it to the program.
         if any("--" in arm_words for arm_words in by_arm.values()):
             return None
+        paired = set(arms.next_arm) | set(arms.next_arm.values())
         arms_only = {
             arm: arm_words
             for arm, arm_words in by_arm.items()
-            if not all(_is_option(word) for word in arm_words)
+            if arm in paired or not all(_is_option(word) for word in arm_words)
         }
         if len(arms_only) == len(by_arm):
             return None
@@ -507,21 +516,62 @@ def _a_conditional_word_compiles(
     unconditional subcommand is not read, because the subcommand is fixed
     before it (`cargo help build` prints help rather than building).
 
+    A path that is also given a help flag compiles nothing, so the flag is
+    kept beside the word it travels with: a conditional `build` and a
+    conditional `--help` written in the same block reach cargo together, and
+    the block's path prints help rather than building. The flag may sit in a
+    block that encloses the word's (`if a { arg("--help"); if b { arg("build") } }`),
+    because that block runs whenever the word's does.
+
     Returns
     -------
     bool
         True when some conditional word is a compiling subcommand on a path.
     """
+    helping = _helping_blocks(words)
     earlier: list[str | None] = []
     for word in words:
         if isinstance(word, ConditionalWord):
-            if word.word in _COMPILING and (
-                _first_positional([*earlier, word.word]) == word.word
+            if (
+                word.word in _COMPILING
+                and _first_positional([*earlier, word.word]) == word.word
+                and not _a_path_asks(helping, word)
             ):
                 return True
             continue
         earlier.append(word)
     return False
+
+
+def _helping_blocks(
+    words: typ.Iterable[str | ConditionalWord | None],
+) -> list[tuple[int, ...]]:
+    """Return the blocks a conditional help flag is given in.
+
+    Returns
+    -------
+    list[tuple[int, ...]]
+        The blocks open at each conditional help flag, in order.
+    """
+    return [
+        word.blocks
+        for word in words
+        if isinstance(word, ConditionalWord) and word.word in _HELP_FLAGS
+    ]
+
+
+def _a_path_asks(helping: list[tuple[int, ...]], word: ConditionalWord) -> bool:
+    """Report whether the path giving *word* is also given a help flag.
+
+    A help flag in a block that encloses the word's is given whenever the
+    word's block runs, so the path asks for help rather than compiling.
+
+    Returns
+    -------
+    bool
+        True when a conditional help flag is on the word's path.
+    """
+    return any(word.blocks[: len(blocks)] == blocks for blocks in helping)
 
 
 def _run_compiles(run: Run, name: str | None, arms: ArmChoices) -> bool:
@@ -596,8 +646,11 @@ def _run_compiles(run: Run, name: str | None, arms: ArmChoices) -> bool:
     # No unconditional subcommand decides the run, so a compiling word on any
     # path may be the one that runs: a conditional `build` beside a conditional
     # `metadata` still builds when only the build's block runs. An unreadable
-    # word leaves the same question open.
-    return _may_compile(words)
+    # word leaves the same question open. The probe words are read rather than
+    # the plain sequence, because a conditional word keeps the blocks it was
+    # given in: a `--help` beside a `build` in the same block is on that
+    # build's path.
+    return _may_compile(plain)
 
 
 def _may_compile(
@@ -610,9 +663,12 @@ def _may_compile(
     bool
         True when a plain or conditional word is a compiling subcommand.
     """
+    listed = list(words)
+    helping = _helping_blocks(listed)
     return any(
         (word.word if isinstance(word, ConditionalWord) else word) in _COMPILING
-        for word in words
+        and not (isinstance(word, ConditionalWord) and _a_path_asks(helping, word))
+        for word in listed
     )
 
 

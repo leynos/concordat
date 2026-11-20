@@ -11,7 +11,10 @@ A block is identified by the offset of its opening brace rather than by its
 depth, so two sibling blocks that both closed before the launch are told
 apart. That identity also decides whether a closing brace reaches the launch's
 branch or merely closes a nested block, so an `else` inside the launched block
-is code after the run rather than another path.
+is code after the run rather than another path. A statement that begins by
+closing a block (`} command.arg("-v")`) is judged by the depth its first kept
+character is reached at, so its argument is on every path that reaches it
+rather than only inside the block it leaves.
 
 A statement that opens the branch its launch runs in (`if cond {`, `} else {`)
 is recorded as two: the text before the branch's brace, which runs on every
@@ -162,21 +165,50 @@ def _opens(statement: Statement, brace: int) -> bool:
     return 0 <= index < len(statement.masked) and statement.masked[index] == "{"
 
 
+def _entry_depth(statement: Statement) -> int:
+    """Return the depth the statement's first kept character sits at.
+
+    A statement that begins by closing a block (`} command.arg("-v")`) starts
+    at the depth inside that block but its text runs at the depth outside it.
+    The leading braces are applied before anything is read, so the rest of the
+    statement is judged by where it is reached rather than where its leading
+    `}` was written.
+
+    Returns
+    -------
+    int
+        The number of blocks still open once the leading braces close.
+    """
+    leading = 0
+    for char in statement.masked:
+        if char.isspace():
+            continue
+        if char != "}":
+            break
+        leading += 1
+    return max(statement.start_depth - leading, 0)
+
+
 def _entirely_above(statement: Statement, depth: int) -> bool:
     """Report whether a statement begins and ends above *depth*.
 
-    A statement that opens or closes a block at *depth* belongs to a branch,
-    so its arguments are not on every path through that branch and are not
-    carried into the run that leaves it.
+    A statement that opens a block at *depth* belongs to a branch, so its
+    arguments are not on every path through that branch and are not carried
+    into the run that leaves it. The statement's entry depth is what tells the
+    two apart: a statement that closes the branch's block begins inside it but
+    is written outside, so its arguments are on every path that reaches it.
 
     Returns
     -------
     bool
         True when the statement is wholly above the branch.
     """
-    start_depth = statement.start_depth
-    end_depth = start_depth + statement.masked.count("{") - statement.masked.count("}")
-    return start_depth < depth and end_depth < depth
+    end_depth = (
+        statement.start_depth
+        + statement.masked.count("{")
+        - statement.masked.count("}")
+    )
+    return _entry_depth(statement) < depth and end_depth < depth
 
 
 class _Launch(typ.NamedTuple):
