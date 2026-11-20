@@ -269,12 +269,14 @@ Use the Dependabot file as a seed, then enumerate the repository's actual
 ecosystems and directories. Add every Cargo root, every local action directory
 holding an action manifest, and other ecosystems such as `uv`, `gomod`, or
 `opentofu` where present. Remove inapplicable entries. Preserve the DB-005
-daily cadence and final minor-and-patch catch-all on every entry; add a narrow
-earlier group only for a dependency family that must update together. Create
-the dependency and ecosystem labels before using them in Dependabot. Reconcile
-label names, descriptions, and colours idempotently against the selected label
-snapshot, preserving unrelated repository labels. The separate priority model
-and its future Projects synchronization remain under roadmap section 3.
+cadence and final minor-and-patch catch-all on every entry; a public repository
+keeps the daily cadence, while a registered private repository may use the
+weekly cadence described below. Add a narrow earlier group only for a
+dependency family that must update together. Create the dependency and
+ecosystem labels before using them in Dependabot. Reconcile label names,
+descriptions, and colours idempotently against the selected label snapshot,
+preserving unrelated repository labels. The separate priority model and its
+future Projects synchronization remain under roadmap section 3.
 
 Use `scripts/canon_artifacts.py` to compare a published platform-standards
 checkout against the template and optionally copy missing/outdated artefacts.
@@ -372,7 +374,9 @@ concordat artefact rule run dependabot-update-shape --repo /path/to/checkout
 
 It requires that every `updates` entry:
 
-- runs daily (`schedule.interval: daily`);
+- runs daily (`schedule.interval: daily`), unless the repository is registered
+  as private, where `weekly` is also accepted and a named `schedule.day` must
+  be the configured weekday (Monday by default);
 - ends with one catch-all group, `patterns: ["*"]` and
   `update-types: [minor, patch]`, with no other key but the default
   `applies-to: version-updates`, so a major update arrives in its own pull
@@ -389,6 +393,23 @@ for example with `directories: ["/", "/.github/actions/*"]`. `*` matches one
 path segment and `**` any number, as in Dependabot. A repository without a
 Dependabot configuration passes, and a configuration that cannot be decoded is
 reported as indeterminate.
+
+The private cadence is opt-in per repository. The rule manifest's
+`private_repositories` parameter lists each accepted repository by `owner/name`
+slug, with a rationale and a review trigger. The checkout's Git `origin` remote
+supplies the slug, and the match is case-insensitive. A checkout with no
+`origin`, a name the registry does not list, a record with a blank rationale or
+review trigger, or absent or malformed parameters all keep the daily rule; the
+accepted set falls back to `["daily"]`. The audit does not observe repository
+visibility, so the registry is the only evidence it has.
+
+To onboard a private repository, add a `private_repositories` record with its
+rationale and review trigger, bump the package version so a sweep re-audits
+previously covered commits, and update the canon digest. The private cadence
+itself is configured by `private_cadence.accepted_intervals` (shipped as
+`[daily, weekly]`) and `private_cadence.weekly_day` (shipped as `monday`). The
+catch-all, narrow-group, local-action and Cargo clauses do not relax for a
+private repository.
 
 `dependency-family-contracts` reports whether the dependency relationships the
 estate has recorded are protected by the Dependabot configuration (report-only):

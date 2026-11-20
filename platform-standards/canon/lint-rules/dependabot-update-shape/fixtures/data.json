@@ -3362,6 +3362,672 @@
       "action_directories": [
         "/.github/actions/setup"
       ]
+    },
+    "private_weekly_no_day": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": "leynos/dev-env-rocky"
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "weekly"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "private_weekly_monday": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": "leynos/dev-env-rocky"
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "weekly",
+                "day": "monday"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "private_weekly_tuesday": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": "leynos/dev-env-rocky"
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "weekly",
+                "day": "tuesday"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "private_weekly_bad_catch_all": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": "leynos/dev-env-rocky"
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "weekly"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "weekly"
+              },
+              "groups": {
+                "everything": {
+                  "patterns": [
+                    "*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "everything",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "private_monthly": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": "leynos/dev-env-rocky"
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "monthly"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "private_weekly_unregistered": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": "leynos/other-repository"
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "weekly"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "private_weekly_null_name": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "weekly"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
     }
   }
 }

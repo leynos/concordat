@@ -74,6 +74,7 @@ from .markdown_envelope import (
     with_action_pins,
 )
 from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
+from .nested_cargo import origin_slug
 from .nested_cargo_registry import BY_KIND as NESTED_CARGO_BY_KIND
 from .nested_cargo_registry import BY_PACKAGE as NESTED_CARGO_BY_PACKAGE
 from .nested_cargo_registry import NestedCargoEnvelope
@@ -457,17 +458,20 @@ def _dependabot_envelope(
     checkout: pathlib.Path,
     _parameters: cabc.Mapping[str, object] | None = None,
 ) -> DependabotEnvelope:
-    """Build the DB-005 Dependabot envelope, ignoring the manifest parameters.
+    """Build the DB-005 Dependabot envelope with the checkout's identity.
 
-    DB-005 declares no tunables: the update shape is estate policy rather
-    than something a repository may configure.
+    The policy reads its private-cadence tunables from `data.parameters`, so
+    the builder supplies only the repository identity: the `origin` slug lets
+    the registry name a private repository, and a checkout without one keeps
+    the daily rule. The parameters argument stays unused here because the
+    policy reads them directly.
 
     Returns
     -------
     DependabotEnvelope
         The `policy-input/dependabot-update-shape` document for *checkout*.
     """
-    return build_dependabot_envelope(checkout)
+    return build_dependabot_envelope(checkout, repository_name=origin_slug(checkout))
 
 
 def _dependency_family_envelope(
