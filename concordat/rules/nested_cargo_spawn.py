@@ -27,7 +27,10 @@ from a repository that needs none.
   `cfg`, `target-list`, ...): those compile nothing. `--print=link-args` and
   `--print=native-static-libs` build the crate, so they still count. A flag
   added on only some paths, behind a `&&`/`||` short circuit or inside a block
-  that may not run, does not make the command a probe.
+  that may not run, does not make the command a probe. A command must reach a
+  launch inside its read to count at all, for `cargo` and `rustc` alike: a
+  command that is built and given words but never run starts no child process,
+  and a launch beyond the read is declined rather than guessed at.
 - A command bound to a name and handed to a helper is read against the
   helper's body, so
   `let mut command = Command::new(cargo); add_build(&mut command)` sees
@@ -69,7 +72,7 @@ import pathlib
 import re
 import typing as typ
 
-from .nested_cargo_arguments import compiles, is_probe
+from .nested_cargo_arguments import compiles, is_probe, launches
 from .nested_cargo_handoffs import command_window, file_index
 from .nested_cargo_source import brace_pairs
 from .nested_cargo_syntax import top_level_item
@@ -175,16 +178,29 @@ def _is_test_position(
 def _spawn_kind(
     relative: str, text: str, masked: str, closers: dict[int, int]
 ) -> str | None:
-    """Return `rustc` or `cargo` if the file spawns a compiler in test code."""
+    """Return `rustc` or `cargo` if the file spawns a compiler in test code.
+
+    A command that never reaches a launch starts nothing, so its construction
+    alone is not a spawn: its arguments are no evidence of compiler work, and
+    guessing that the child process starts somewhere the read cannot see would
+    demand configuration a test may not need.
+
+    Returns
+    -------
+    str | None
+        `rustc` or `cargo` when the file spawns that compiler in test code,
+        else None.
+    """
     if "Command" not in text:
         return None
     index = file_index(masked)
     spans = _test_spans(masked, closers)
     for match in RUSTC_SPAWN.finditer(text):
-        if _is_test_position(relative, spans, match.start()) and not is_probe(
-            text,
-            match.start(),
-            command_window(text, masked, closers, match.start(), index),
+        if not _is_test_position(relative, spans, match.start()):
+            continue
+        window = command_window(text, masked, closers, match.start(), index)
+        if launches(text, match.start(), window) and not is_probe(
+            text, match.start(), window
         ):
             return "rustc"
     compiling = any(

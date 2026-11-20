@@ -3068,23 +3068,33 @@ module rather than the binding, while a single colon is a field initializer, so
 `Settings { status: command }` still passes the command as a value. A bare
 `Command` receiver is an ordinary name the caller may have bound
 (`fn probe(Command: &mut Command)`), so only a `Command` reached through `::`
-is the constructor's namespace. A launch may be spaced on either side of its
-dot or before its parenthesis (`command . status ()`). A command bound to a
-name and handed to a helper defined once in the same file is also read against
-that helper's body, because the helper adds the arguments. The call may span
-lines, and only statements on the parameter that receives the command count, so
-another command built in the helper does not contribute. Those statements are
-read at the call site with every use of the parameter's name taken to be the
-caller's binding, so a launch in the helper or the caller ends the arguments in
-the order they run, and a version flag added through a renamed parameter still
-probes the caller's command. A helper read that stops inside a block is closed
-before it is spliced, so a block the helper leaves open cannot hide a later
-unconditional flag. A helper defined more than once, or one whose receiving
-parameter is not a plain `name: Type` binding, is declined rather than guessed;
-so is a call that a binding in the caller's own function shadows (a parameter
-included, even one after a method's receiver, a name bound by a parameter
-pattern such as `fn run((configure,): ..)`, a name bound by a destructuring
-pattern such as `let (configure,) = ..`, and a borrowed binding such as
+is the constructor's namespace, and a path before it
+(`std::process::Command::new(..)`) is part of the type rather than another
+value; that bare name counts when it is the binding under study, as it is for
+`let mut Command = Command::new(..)`. A binding is read when its constructor
+starts on the next line, because the name ends at the `=`. A launch may be
+spaced on either side of its dot or before its parenthesis
+(`command . status ()`). A command bound to a name and handed to a helper
+defined once in the same file is also read against that helper's body, because
+the helper adds the arguments. The call may span lines, and only statements on
+the parameter that receives the command count, so another command built in the
+helper does not contribute. Those statements are read at the call site with
+every use of the parameter's name taken to be the caller's binding, so a launch
+in the helper or the caller ends the arguments in the order they run, and a
+version flag added through a renamed parameter still probes the caller's
+command. A helper read that stops inside a block is closed before it is
+spliced, so a block the helper leaves open cannot hide a later unconditional
+flag, and a spliced fragment with no call on the command keeps its braces in
+the order they were written, with the `else` between them, so the arms still
+pair rather than reading as code that runs one after the other. A helper
+defined more than once, or one whose receiving parameter is not a plain
+`name: Type` binding, is declined rather than guessed; so is a call that a
+binding in the caller's own function shadows (a parameter included, even one
+after a method's receiver, a name bound by a parameter pattern such as
+`fn run((configure,): ..)` or `fn run(Callbacks { setup: configure }: ..)`, a
+name bound by a destructuring pattern such as `let (configure,) = ..`, a
+closure parameter in any position such as
+`|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
 `let ref configure = ..`), a call written as a path or method
 (`support::configure(..)`, however it is spaced around the separator), a name a
 `use` item could import, or a helper that reassigns the parameter or redeclares
@@ -3116,23 +3126,28 @@ returns early does not hide the caller's later run, and each run that leaves a
 branch inherits the arguments given before it, because they are on every path
 that reaches it -- including those a branch condition adds, since the condition
 runs before either arm
-(`if command.arg("--version").get_program().is_some() { .. }`). Each run is
+(`if command.arg("--version").get_args().next().is_some() { .. }`). Each run is
 asked its own questions: a probe flag must be present on every run of a `rustc`
-command, while any run of a cargo command that compiles is enough. A flag
-reached only on some paths, behind a `&&`/`||` short circuit or inside a block
-that may not run, does not make a run a probe -- except when one fully paired
-`if`/`else` chain gives a probe in every arm, whether that choice is written
-across statements or on one line, since then no path reaches the launch without
-one. Each arm is read with the words given before the branch, so a `--print` in
-one arm is completed by a `cfg` after the choice, as cargo would see them; a
-short circuit inside an arm (`query && command.arg("-V")`) can still skip that
-arm's word, so the arm does not cover its path. A word is unconditional when
-every block open at it is also open at the run's launch, so the branch that
-launches contributes its flags while a sibling block that has already closed
-does not. A later declaration of the command's name shadows it inside that
-block only, while an assignment to it ends the read wherever it sits, because
-the block that ran it may have been entered. A cargo subcommand is the first
-word the arguments give that is neither an option nor an option's value
+command, while any run of a cargo command that compiles is enough. A run that
+never reaches a launch starts no child process, so it compiles nothing and
+spawns nothing, for `cargo` and `rustc` alike; a launch beyond the read is
+declined rather than guessed at. A flag reached only on some paths, behind a
+`&&`/`||` short circuit or inside a block that may not run, does not make a run
+a probe -- except when one fully paired `if`/`else` chain gives a probe in
+every arm, whether that choice is written across statements or on one line,
+since then no path reaches the launch without one. Each arm is read with the
+words given before the branch, so a `--print` in one arm is completed by a
+`cfg` after the choice, as cargo would see them; a short circuit inside an arm
+(`query && command.arg("-V")`) can still skip that arm's word, so the arm does
+not cover its path. A word is unconditional when every block open at it is also
+open at the run's launch, so the branch that launches contributes its flags
+while a sibling block that has already closed does not. An option given in a
+block of its own (`if verbose { command.arg("-v") }`) cannot change the
+subcommand, so it does not stop a paired choice beside it being read arm by
+arm. A later declaration of the command's name shadows it inside that block
+only, while an assignment to it ends the read wherever it sits, because the
+block that ran it may have been entered. A cargo subcommand is the first word
+the arguments give that is neither an option nor an option's value
 (`--color always nextest` runs `nextest`, while `cargo help build` prints
 help), so an option's value is not mistaken for the subcommand, and a value the
 reader cannot see fills its option's slot rather than ending the read. A
@@ -3148,30 +3163,34 @@ while a help flag in every arm excuses the whole run. A word after a `--`
 belongs to the program the command runs, not to cargo. A word is the text its
 string literal has at run time, so an escape (`\x64`, `\u{64}`) is decoded and
 cannot hide `build` or `--version` from the read, and an escaped quote does not
-end the literal early. A word the reader cannot see leaves the subcommand open,
-and then any compiling argument before the launch is enough. A `--print` query
-is read across the command's ordered arguments, so `.arg("--print").arg("cfg")`
-is the same probe as `.args(["--print", "cfg"])`, but its two halves must be
-adjacent: an unreadable word between them, or one given only inside a block,
-may be `link-args`, which builds the crate, so the query is not a probe. The
-configuration facts are the ones netsuke and rstest-bdd converged on: a serial
-group, an override that uses it, an explicit `slow-timeout` (profile or
-override) and a `global-timeout` (any profile, since netsuke sets it on `ci`).
-A top-level test binary must also be named by a grouped override's filter, by
-binary or by one of its functions, which is how ortho-config's BDD suite is
-told apart from netsuke's. The package does not evaluate nextest filtersets: a
-name appearing in a grouped filter is the evidence, which is cheap and errs
-towards acceptance. The name must be a whole word inside a `binary()`,
-`binary_id()` or `test()` predicate, so `binary(ui_extra)` does not name `ui`,
-and a regex argument such as `/^name($|::)/` is read whole. A predicate the
-filter negates (`not(binary(ui))`, `!test(compiles)`) excludes that name rather
-than selecting it, so it names nothing. Exemptions name a test source and
-follow the NC-001 convention: repository, path, rationale and review trigger,
-where a blank rationale or trigger suppresses nothing. The package ships at
-`warning` severity through a `severity` parameter, as
-`nested-cargo-offline-tests` does, because the estate survey found
-configuration gaps in a dozen repositories; promotion to `error` follows once
-they are clean.
+end the literal early. A Unicode escape's digits may be separated by
+underscores, which are not part of the number, and an escape longer than the
+six digits Rust allows is not decoded. A word the reader cannot see leaves the
+subcommand open, and then any compiling argument before the launch is enough. A
+`--print` query is read across the command's ordered arguments, so
+`.arg("--print").arg("cfg")` is the same probe as `.args(["--print", "cfg"])`,
+but its two halves must be adjacent: an unreadable word between them, or one
+given only inside a block, may be `link-args`, which builds the crate, so the
+query is not a probe. `--print=file-names` is a query too, and a kind may name
+an output file after a second `=` (`--print=cfg=out.txt`), which writes the
+answer there and still compiles nothing. The configuration facts are the ones
+netsuke and rstest-bdd converged on: a serial group, an override that uses it,
+an explicit `slow-timeout` (profile or override) and a `global-timeout` (any
+profile, since netsuke sets it on `ci`). A top-level test binary must also be
+named by a grouped override's filter, by binary or by one of its functions,
+which is how ortho-config's BDD suite is told apart from netsuke's. The package
+does not evaluate nextest filtersets: a name appearing in a grouped filter is
+the evidence, which is cheap and errs towards acceptance. The name must be a
+whole word inside a `binary()`, `binary_id()` or `test()` predicate, so
+`binary(ui_extra)` does not name `ui`, and a regex argument such as
+`/^name($|::)/` is read whole. A predicate the filter negates
+(`not(binary(ui))`, `!test(compiles)`) excludes that name rather than selecting
+it, so it names nothing. Exemptions name a test source and follow the NC-001
+convention: repository, path, rationale and review trigger, where a blank
+rationale or trigger suppresses nothing. The package ships at `warning`
+severity through a `severity` parameter, as `nested-cargo-offline-tests` does,
+because the estate survey found configuration gaps in a dozen repositories;
+promotion to `error` follows once they are clean.
 
 ##### Nested cargo cold build
 

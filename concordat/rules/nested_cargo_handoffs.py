@@ -14,14 +14,20 @@ file as easily as another file, which the scan does not resolve), a helper whose
 body names the caller's binding as well as its receiving parameter, a caller
 binding that shadows the helper by `let` or `let ref`, by a parameter or by a
 destructuring pattern (`let (configure,) = ..`), a helper name bound by a
-parameter pattern (`fn run((configure,): ..)`) or rebound by a closure's own
-`|..|` list, a parameter reassigned or shadowed -- is declined rather than
-guessed, because a false positive would demand configuration from a repository
-that needs none. A `return` in a helper is kept as a word, because it ends the
-helper's path and what follows runs only when the return was skipped, so the
-reader can split the caller's runs there. The reading is textual, and every
-boundary and brace is read from the masked source, so a `;` or a `{` in a
-string moves nothing.
+parameter pattern (`fn run((configure,): ..)`, `fn run(Callbacks { setup:
+configure }: ..)`) or rebound by a closure's own `|..|` list in any position
+(`|_: (), configure: fn(&mut Command)|`), a parameter reassigned or shadowed --
+is declined rather than guessed, because a false positive would demand
+configuration from a repository that needs none. A `let` binding is read even
+when its constructor begins on the next line, because Rust ends the name at the
+`=` rather than at the line. A `return` in a helper is kept as a word, because
+it ends the helper's path and what follows runs only when the return was
+skipped, so the reader can split the caller's runs there. A spliced fragment
+with no call on the parameter keeps its braces in the order they were written,
+with the `else` between them, so the caller still sees which arm the fragment
+belongs to rather than reading the arms as code that runs one after the other.
+The reading is textual, and every boundary and brace is read from the masked
+source, so a `;` or a `{` in a string moves nothing.
 
 :mod:`concordat.rules.nested_cargo_arguments` decides what the statements this
 module returns mean.
@@ -35,8 +41,10 @@ import typing as typ
 
 from .nested_cargo_receivers import reaches_through
 from .nested_cargo_syntax import (
+    _binding_pattern,
     _body_span,
     _parameter_at,
+    _split_patterns,
     parameter_names,
     pattern_binds,
 )
@@ -50,11 +58,15 @@ _RETURN: typ.Final = re.compile(r"\breturn\b")
 CLOSURE_HEADER: typ.Final = re.compile(r"(?:\bmove\s+)?\|(?P<params>[^|]*)\|")
 # A new command's arguments belong to it, not to the one before it.
 COMMAND_NEW: typ.Final = re.compile(r"Command::new\(")
+# The braces of a statement with no call on the command, and the `else` (with
+# the `if` that qualifies it) written between them. Keeping both in order is
+# what tells a spliced reader which arm a later statement belongs to.
+_BRACES_AND_ARMS: typ.Final = re.compile(r"\belse\s+if\b|\belse\b|[{}]")
 # A binding may name the constructor through a path (`std::process::Command`),
 # so the qualified path that follows `=` is part of the binding, not text
 # between it and the command.
 BINDING: typ.Final = re.compile(
-    r"let[ \t]+(?:mut[ \t]+)?(?P<name>\w+)[ \t]*(?::[^=;]+)?=[ \t]*"
+    r"let[ \t]+(?:mut[ \t]+)?(?P<name>\w+)[ \t]*(?::[^=;]+)?=\s*"
     r"(?:[A-Za-z_]\w*[ \t]*::[ \t]*)*$"
 )
 # A following item is another scope, so the command's arguments end there.
@@ -241,10 +253,14 @@ def _receiver_piece(
     """
     found = own.search(statement)
     if found is None:
-        # The braces place the statement in the caller's depth; a `return` is
-        # kept as a word, because it ends the helper's path and the caller
-        # reads what follows as the path that skipped it.
-        marker = "{" * statement.count("{") + "}" * statement.count("}")
+        # The braces place the statement in the caller's depth. They are kept
+        # in the order they were written, with the `else` (and any `if` that
+        # qualifies it) beside them, because a `else` written between them is
+        # what pairs the arms of a choice; dropping it makes the arms read as
+        # code that runs one after the other. A `return` is kept as a word,
+        # because it ends the helper's path and the caller reads what follows
+        # as the path that skipped it.
+        marker = "".join(token[0] for token in _BRACES_AND_ARMS.finditer(statement))
         if _RETURN.search(statement) is not None:
             marker += " return"
         return marker, marker
@@ -326,18 +342,43 @@ def _destructured(masked: str, name: str, start: int, at: int) -> bool:
     return False
 
 
+def _closure_binds(masked: str, start: int, at: int, name: str) -> bool:
+    """Report whether a closure header between *start* and *at* binds *name*.
+
+    A closure's own arguments are its values, not the caller's, so a call
+    written inside one reaches whatever the header bound. The binding may sit
+    anywhere in the list (`|_: (), configure: fn(&mut Command)|`), so every
+    parameter's binding is read, and only the text before its type delimiter
+    counts.
+
+    Returns
+    -------
+    bool
+        True when a `|..|` header before *at* binds *name*.
+    """
+    bound = re.compile(rf"\b{re.escape(name)}\b")
+    for header in CLOSURE_HEADER.finditer(masked, start, at):
+        if any(
+            bound.search(_binding_pattern(part)) is not None
+            for part in _split_patterns(header["params"])
+        ):
+            return True
+    return False
+
+
 def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     """Report whether *name* may be a local binding at *at* rather than a `fn`.
 
-    A parameter of the caller's own function, a closure, loop variable, `let`,
-    `const` or `static` with the helper's name shadows the free function, so
-    the call reaches something the scan cannot read. A `let` whose pattern
-    destructures the name (`let (configure,) = ..`) binds it too, and so does a
-    binding that borrows the value (`let ref configure = ..`, `|ref mut
-    configure|`): the name still denotes the borrowed value rather than the
-    free function. The caller's parameter list is read because
-    `fn run(configure: fn(&mut Command))` calls the argument, not the free
-    function. A parameter written as a pattern (`fn run((configure,): ..)`)
+    A parameter of the caller's own function, a closure's own parameter (in
+    any position), a loop variable, `let`, `const` or `static` with the
+    helper's name shadows the free function, so the call reaches something the
+    scan cannot read. A `let` whose pattern destructures the name
+    (`let (configure,) = ..`) binds it too, and so does a binding that borrows
+    the value (`let ref configure = ..`, `|ref mut configure|`): the name still
+    denotes the borrowed value rather than the free function. The caller's
+    parameter list is read because `fn run(configure: fn(&mut Command))` calls
+    the argument, not the free function. A parameter written as a pattern
+    (`fn run((configure,): ..)`, `fn run(Settings { hook: configure }: ..)`)
     binds names the plain reader cannot see, so the handoff is declined rather
     than guessed.
 
@@ -355,9 +396,10 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     binding = r"(?:(?:ref\s+)?mut\s+|ref\s+)?"
     binder = re.compile(
         rf"\b(?:let\s+{binding}|const\s+|static\s+|for\s+{binding}){pattern}"
-        rf"|\|\s*{binding}{pattern}\s*(?:\||:)"
     )
     if binder.search(masked, start, at) is not None:
+        return True
+    if _closure_binds(masked, start, at, name):
         return True
     if _destructured(masked, name, start, at):
         return True

@@ -14,7 +14,9 @@ signature or an item's first delimiter.
 
 A parameter that is a pattern rather than a plain `name: Type` is read for the
 names it binds, because `fn run((configure,): ..)` binds `configure` in the
-caller's scope just as a `let` does.
+caller's scope just as a `let` does. A struct pattern's field colon
+(`Callbacks { setup: configure }: ..`) is not the delimiter before the type,
+and a pattern's own commas do not split the parameter from its neighbour.
 """
 
 from __future__ import annotations
@@ -241,6 +243,65 @@ def _body_span(
     return None if end is None else (item[0] + 1, end - 1)
 
 
+def _binding_pattern(part: str) -> str:
+    """Return the binding a parameter writes before its type delimiter.
+
+    A struct pattern's first colon belongs to a field
+    (`Callbacks { setup: configure }: Callbacks`), so the delimiter is the
+    first `:` that no bracket holds. A `::` is a path separator, not the
+    delimiter, however it is spaced.
+
+    Returns
+    -------
+    str
+        The parameter's binding text, or the whole parameter when it holds no
+        delimiter.
+    """
+    depth = 0
+    for index, char in enumerate(part):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(depth - 1, 0)
+        elif char == ":" and depth == 0:
+            before = part[index - 1] if index else ""
+            after = part[index + 1] if index + 1 < len(part) else ""
+            if before != ":" and after != ":":
+                return part[:index]
+    return part
+
+
+def _split_patterns(parameters: str) -> list[str]:
+    """Split a parameter list on the commas outside any bracket, braces too.
+
+    :func:`_split_parameters` leaves a top-level brace alone because its
+    callers read a signature, where a brace at depth zero is the body. A
+    struct pattern inside the list is depth, so this reader counts it and a
+    pattern's own commas do not split the parameter.
+
+    Returns
+    -------
+    list[str]
+        The parameters in order.
+    """
+    parts: list[str] = []
+    start = 0
+    depth = 0
+    for index, char in enumerate(parameters):
+        if char == ">" and index and parameters[index - 1] == "-":
+            # The `>` of a return arrow closes no generic.
+            continue
+        if char in "([{<":
+            depth += 1
+        elif char in ")]}>":
+            depth = max(depth - 1, 0)
+        elif char == "," and depth == 0:
+            parts.append(parameters[start:index])
+            start = index + 1
+    parts.append(parameters[start:])
+    return parts
+
+
 def pattern_binds(masked: str, start: int, name: str) -> bool:
     """Report whether a parameter pattern binds *name*.
 
@@ -248,7 +309,8 @@ def pattern_binds(masked: str, start: int, name: str) -> bool:
     binds names the plain reader cannot see. When one of them is a helper's
     name, the caller's scope is uncertain and the handoff is declined rather
     than attributed to a same-file function. Only the text before the
-    parameter's `:` is a binding pattern; the type after it names no value.
+    parameter's type delimiter is a binding pattern; the type after it names no
+    value, and a struct pattern's field colon is not that delimiter.
 
     Returns
     -------
@@ -263,14 +325,14 @@ def pattern_binds(masked: str, start: int, name: str) -> bool:
     if close_at is None:
         return False
     parameters = masked[open_at + 1 : close_at]
-    parts = _split_parameters(parameters)
+    parts = _split_patterns(parameters)
     if SELF_RECEIVER.match(parameters):
         parts = parts[1:]
     bound = re.compile(rf"\b{re.escape(name)}\b")
     for part in parts:
         if not part.strip() or PARAMETER.fullmatch(part) is not None:
             continue
-        if bound.search(part.split(":", 1)[0]) is not None:
+        if bound.search(_binding_pattern(part)) is not None:
             return True
     return False
 

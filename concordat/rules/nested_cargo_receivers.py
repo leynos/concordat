@@ -17,9 +17,11 @@ arguments there. So is a receiver that is not a plain name
 (`(&command).arg(..)`, `build().arg(..)`). `Command::new(..)` is the one chain
 a command that is never bound to a name can be called on, so the constructor
 counts as the command's own receiver -- but only when `Command` is reached
-through `::`. A bare `Command` receiver is an ordinary name the caller may have
-bound (`fn probe(Command: &mut Command)`), so its calls are declined like any
-other name's.
+through `::`, and a path before it (`std::process::Command::new(..)`) is part
+of the type rather than another value. A bare `Command` receiver is an ordinary
+name the caller may have bound (`fn probe(Command: &mut Command)`), so it
+counts only when that is the binding under study, as it is for
+`let mut Command = Command::new(..)`.
 
 A launch is the command's `.status()`, `.output()` or `.spawn()`, with or
 without whitespace on either side of the dot or before the parenthesis, since
@@ -44,6 +46,10 @@ _CHAIN: typ.Final = re.compile(
     r"(?<![\w.])(?P<name>\w+)\s*\.\s*(?P<method>\w+)\s*\("
 )
 _OPENERS: typ.Final = {")": "(", "]": "[", "}": "{"}
+# The `Command::new(..)` namespace, kept apart from a plain name because the
+# caller may have bound a value called `Command` (`let mut Command = ..`). No
+# Rust identifier can contain a NUL, so the two never collide.
+_CONSTRUCTOR: typ.Final = "\0Command"
 
 
 def _reached_through_separator(before: str) -> bool:
@@ -85,33 +91,52 @@ def _matching_opener(masked: str, closer_at: int) -> int | None:
     return None
 
 
+def _skip_space(masked: str, index: int) -> int:
+    """Return the offset of the last non-space at or before *index*.
+
+    Returns
+    -------
+    int
+        The non-space offset, or -1 when only spaces precede *index*.
+    """
+    while index >= 0 and masked[index].isspace():
+        index -= 1
+    return index
+
+
 def _receiver_of(masked: str, at: int) -> str | None:
     """Return the name the method call at *at* is chained on.
 
     `command.arg(..)` is called on `command`, and
-    `Command::new("cargo").arg(..)` on `Command`, however many calls sit
+    `Command::new("cargo").arg(..)` on the constructor, however many calls sit
     between. A receiver reached through `.` or `::` names a field or a path
     item rather than the command's binding, so it is declined: the flag or
     launch belongs to some other value. A path root is declined too, unless it
     is the `Command` namespace itself, because `command::factory().arg(..)`
     calls a function on a type or module rather than on the binding. Only a
-    `Command` reached through `::` is that namespace: a bare `Command` receiver
-    is an ordinary name the caller may have bound (`fn probe(Command: &mut
-    Command)`), so it is declined like any other name. Rust allows whitespace
-    around `.` and `::`, so `holder . command` is read the same way as
-    `holder.command`; a single colon is a field initializer, not a separator,
-    so `Settings { status: command }` keeps the binding.
+    `Command` reached through `::` is that namespace, and it is reported as
+    :data:`_CONSTRUCTOR`; a name before it in the path
+    (`std::process::Command::new(..)`) does not change which type it is. A bare
+    `Command` is an ordinary name the caller may have bound
+    (`fn probe(Command: &mut Command)`, or `let mut Command =
+    Command::new(..)`), so it is reported like any other name and matched
+    against the binding under study. Rust allows whitespace around `.` and
+    `::`, so `holder . command` is read the same way as `holder.command`; a
+    single colon is a field initializer, not a separator, so
+    `Settings { status: command }` keeps the binding.
 
     Returns
     -------
     str | None
-        The receiver's name, or None when the text does not name a plain one.
+        The receiver's name, :data:`_CONSTRUCTOR`, or None when the text does
+        not name a plain one.
     """
     index = at - 1
     through_path = False
     while index >= 0:
-        while index >= 0 and masked[index].isspace():
-            index -= 1
+        # Rust allows whitespace around `.` and `::`, so a separator may be
+        # spaced away from the name on either side of it.
+        index = _skip_space(masked, index)
         if index < 0:
             return None
         char = masked[index]
@@ -119,9 +144,7 @@ def _receiver_of(masked: str, at: int) -> str | None:
             opener = _matching_opener(masked, index)
             if opener is None:
                 return None
-            index = opener - 1
-            while index >= 0 and masked[index].isspace():
-                index -= 1
+            index = _skip_space(masked, opener - 1)
             end = index
             while index >= 0 and (masked[index].isalnum() or masked[index] == "_"):
                 index -= 1
@@ -143,21 +166,20 @@ def _receiver_of(masked: str, at: int) -> str | None:
         # The separator that reaches a field or a path item may be spaced away
         # from the name it qualifies, so the whitespace before it is skipped
         # before the name is accepted as the command's own.
-        before = index
-        while before >= 0 and masked[before].isspace():
-            before -= 1
+        before = _skip_space(masked, index)
         field = before >= 0 and masked[before] == "."
         qualified = before > 0 and masked[before] == ":" and masked[before - 1] == ":"
-        if field or qualified:
+        if field:
             return None
         name = masked[index + 1 : end + 1]
         if through_path:
             # `std::process::Command::new(..)` is the constructor, and it is
-            # the only path root that is this command's own receiver.
-            return name if name == "Command" else None
-        # A bare `Command` is a name like any other, and the caller may have
-        # bound a value to it, so it is not the constructor's namespace.
-        return None if name == "Command" else name
+            # the only path root that is this command's own receiver. The
+            # path before the name is part of the type, not another value.
+            return _CONSTRUCTOR if name == "Command" else None
+        if qualified:
+            return None
+        return name
     return None
 
 
@@ -178,7 +200,7 @@ def owns_call(masked: str, at: int, name: str | None) -> bool:
     root = _receiver_of(masked, at)
     if root is None:
         return False
-    return root in ("Command", name)
+    return root in (_CONSTRUCTOR, name)
 
 
 def _statement_end(masked: str, start: int, end: int) -> int:
@@ -224,20 +246,22 @@ def owns_chain(chain: re.Match[str], name: str | None) -> bool:
     through a `.` or a `::` (`support::command.arg(..)`, `holder . command`) is
     declined here too, even when it spells the binding's own name. A single
     colon is a field initializer, so `Settings { status: command.arg(..) }`
-    keeps the binding. A `Command` root is only the constructor when the method
-    is `new`: `Command.anything(..)` names whatever the caller bound to
-    `Command`, not the command under study.
+    keeps the binding. A `Command` root is the constructor when the method is
+    `new` and the name is not a field (`std::process::Command::new(..)` is the
+    type, `holder.Command::new(..)` another value); `Command.anything(..)`
+    names whatever the caller bound to `Command`, so it matches only when that
+    binding is the command under study.
 
     Returns
     -------
     bool
         True for the command's own name or for `Command::new(..)`, reached
-        without a field or path separator.
+        without a field separator.
     """
+    if chain["name"] == "Command" and chain["method"] == "new":
+        return not chain["before"].rstrip().endswith(".")
     if _reached_through_separator(chain["before"]):
         return False
-    if chain["name"] == "Command":
-        return chain["method"] == "new"
     return chain["name"] == name
 
 

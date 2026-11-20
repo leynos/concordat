@@ -44,11 +44,15 @@ configuration from a repository that needs none:
   the binding, while a single colon is a field initializer, so
   `Settings { status: command }` still passes the command as a value. A bare
   `Command` receiver is a name like any other, so only a `Command` reached
-  through `::` is the constructor's namespace:
-  `fn probe(Command: &mut Command)` makes `Command.arg(..)` that parameter's
-  call, not the command being built. A launch may be spaced on either side of
-  its dot or before its parenthesis (`command . status ()`). A command bound to
-  a name and handed to a helper defined once in the same file is also read
+  through `::` is the constructor's namespace, and a path before it
+  (`std::process::Command::new(..)`) is part of the type rather than another
+  value: `fn probe(Command: &mut Command)` makes `Command.arg(..)` that
+  parameter's call, not the command being built, while
+  `let mut Command = Command::new(..)` makes `Command.arg(..)` the binding's
+  own call. A `let` binding is read when its constructor starts on the next
+  line, because the name ends at the `=`. A launch may be spaced on either side
+  of its dot or before its parenthesis (`command . status ()`). A command bound
+  to a name and handed to a helper defined once in the same file is also read
   against that helper's body, even when the call spans lines; only statements
   on the parameter that receives the command count, so another command built in
   the helper does not contribute. Those statements are read at the call site
@@ -56,13 +60,18 @@ configuration from a repository that needs none:
   on either side ends the arguments in the order they run, and a version flag
   added through a renamed parameter still probes the caller's command. A helper
   read that stops inside a block is closed before it is spliced, so a block the
-  helper leaves open cannot hide a later unconditional flag. A helper defined
-  more than once, or one whose receiving parameter is not a plain `name: Type`
-  binding, is declined rather than guessed; so is a call that a binding in the
-  caller's own function shadows (a parameter included, even one after a
-  method's receiver, a name bound by a parameter pattern such as
-  `fn run((configure,): ..)`, a name bound by a destructuring pattern such as
-  `let (configure,) = ..`, and a borrowed binding such as
+  helper leaves open cannot hide a later unconditional flag, and a spliced
+  fragment with no call on the command keeps its braces in the order they were
+  written, with the `else` between them, so the arms still pair rather than
+  reading as code that runs one after the other. A helper defined more than
+  once, or one whose receiving parameter is not a plain `name: Type` binding,
+  is declined rather than guessed; so is a call that a binding in the caller's
+  own function shadows (a parameter included, even one after a method's
+  receiver, a name bound by a parameter pattern such as
+  `fn run((configure,): ..)` or `fn run(Callbacks { setup: configure }: ..)`, a
+  name bound by a destructuring pattern such as `let (configure,) = ..`, a
+  closure parameter in any position such as
+  `|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
   `let ref configure = ..`), a call written as a path or method
   (`support::configure(..)`, however it is spaced around the separator), a name
   a `use` item could import, or a helper that reassigns the parameter. The scan
@@ -91,46 +100,53 @@ configuration from a repository that needs none:
   that leaves a branch still inherits the arguments given before it, because
   they are on every path that reaches it -- including those a branch condition
   adds, since the condition runs before either arm
-  (`if command.arg("--version").get_program().is_some() { .. }`). Every run of a
-  `rustc` command must be a probe, while any run of a cargo command that
-  compiles is enough. A later declaration of the command's name shadows it
-  inside that block only, while an assignment to it ends the read wherever it
-  sits, because the block that ran it may have been entered. The subcommand is
-  the first argument of the run that is neither an option nor an option's
-  value, so `--color always nextest run` runs `nextest` and `cargo help build`
-  prints help rather than building; a value the reader cannot see fills its
-  option's slot rather than ending the read. A conditional word cannot hide the
-  subcommand on the path that skips its block, so a `help` inside an `if`
-  leaves an unconditional `build` still compiling, and each arm of a fully
-  paired chain is read for its own subcommand, so a `metadata` in the `if` arm
-  does not hide the `build` in its `else` arm. A `-h` or `--help` given on
-  every path prints help whatever the subcommand is, while one added inside a
-  block does not excuse the build on the path that skips it. A help flag in one
-  arm excuses only the path through that arm, so a `build --help` in the `if`
-  arm does not excuse the `check` its `else` arm runs, while a help flag in
-  every arm excuses the whole run. Words after a `--` belong to the program the
-  command runs, not to cargo. A word is the text its string literal has at run
-  time, so an escape (`\x64`, `\u{64}`) is decoded and cannot hide `build` or
-  `--version` from the read, and an escaped quote does not end the literal
-  early. A word counts as unconditional only when every block open at it is
-  also open at the run's launch, so a flag in the branch that launches is on
-  the run's path while one in a sibling block that has already closed is not. A
-  flag added on only some paths, behind a `&&`/`||` short circuit or inside a
-  block that may not run, does not make a run a probe -- except when one fully
-  paired `if`/`else` chain gives a probe in every arm, whether that choice is
-  written across statements or on one line
-  (`let _ = if c { .. } else { .. };`), since then no path reaches the launch
-  without one. Each arm is read with the words given before the branch, so a
-  `--print` in one arm and a `cfg` after the choice complete each other; a
-  short circuit inside an arm (`query && command.arg("-V")`) can still skip
-  that arm's flag, so the arm does not cover its path. `cargo metadata` and
-  `cargo config` do not count;
+  (`if command.arg("--version").get_args().next().is_some() { .. }`). Every run
+  of a `rustc` command must be a probe, while any run of a cargo command that
+  compiles is enough. A command must reach a launch inside its read to count at
+  all, for `cargo` and `rustc` alike: a command that is built and given words
+  but never run starts no child process, and a launch beyond the read is
+  declined rather than guessed at. A later declaration of the command's name
+  shadows it inside that block only, while an assignment to it ends the read
+  wherever it sits, because the block that ran it may have been entered. The
+  subcommand is the first argument of the run that is neither an option nor an
+  option's value, so `--color always nextest run` runs `nextest` and
+  `cargo help build` prints help rather than building; a value the reader
+  cannot see fills its option's slot rather than ending the read. A conditional
+  word cannot hide the subcommand on the path that skips its block, so a `help`
+  inside an `if` leaves an unconditional `build` still compiling, and each arm
+  of a fully paired chain is read for its own subcommand, so a `metadata` in the
+  `if` arm does not hide the `build` in its `else` arm. A `-h` or `--help`
+  given on every path prints help whatever the subcommand is, while one added
+  inside a block does not excuse the build on the path that skips it. A help
+  flag in one arm excuses only the path through that arm, so a `build --help`
+  in the `if` arm does not excuse the `check` its `else` arm runs, while a help
+  flag in every arm excuses the whole run. Words after a `--` belong to the
+  program the command runs, not to cargo. A word is the text its string literal
+  has at run time, so an escape (`\x64`, `\u{64}`) is decoded and cannot hide
+  `build` or `--version` from the read, and an escaped quote does not end the
+  literal early. A word counts as unconditional only when every block open at
+  it is also open at the run's launch, so a flag in the branch that launches is
+  on the run's path while one in a sibling block that has already closed is
+  not. An option given in a block of its own
+  (`if verbose { command.arg("-v") }`) cannot change the subcommand, so it does
+  not stop a paired choice beside it being read arm by arm. A flag added on
+  only some paths, behind a `&&`/`||` short circuit or inside a block that may
+  not run, does not make a run a probe -- except when one fully paired
+  `if`/`else` chain gives a probe in every arm, whether that choice is written
+  across statements or on one line (`let _ = if c { .. } else { .. };`), since
+  then no path reaches the launch without one. Each arm is read with the words
+  given before the branch, so a `--print` in one arm and a `cfg` after the
+  choice complete each other; a short circuit inside an arm
+  (`query && command.arg("-V")`) can still skip that arm's flag, so the arm
+  does not cover its path. `cargo metadata` and `cargo config` do not count;
 - a `rustc` spawn counts, unless every run of that same command is given a
   version flag (`--version`, `-V`, `-vV`), a help flag (`-h`, `--help`) or a
   `--print` of a table that needs no compile (`sysroot`, `target-libdir`,
   `host-tuple`, `cfg`, `target-list`, `target-cpus`, `target-features`,
-  `code-models`, `relocation-models`, `tls-models`): such a probe exits at
-  once. A `--print` query may be split across calls
+  `code-models`, `relocation-models`, `tls-models`, `file-names`): such a probe
+  exits at once. A kind may name an output file after a second `=`
+  (`--print=cfg=out.txt`), which writes the answer there and still compiles
+  nothing. A `--print` query may be split across calls
   (`.arg("--print").arg("cfg")`), which asks the same question as one array,
   but its two halves must be adjacent: a word the reader cannot see between them
   (`.args(["--print", print_kind, "cfg"])`), or one given only inside a block

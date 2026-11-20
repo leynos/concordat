@@ -19,26 +19,36 @@ subcommand and its own help flag, so one arm's `metadata` does not hide the
 other arm's `build`. A `--print` query asks the compiler what it is only when
 its two halves are adjacent: an unreadable or conditional word between
 `--print` and `cfg` may be `link-args`, which builds the crate, so the query is
-not read as a probe. A probe flag in a block counts only when every block open
-at the flag is also open at the launch; a flag in a sibling block that has
-already closed does not. A choice whose arms are fully paired can still cover
-every path, whether it is written across statements or on one line: a `-vV` in
-the `if` arm and a `-V` in its `else` arm reach the shared launch as a probe
-either way. An arm is read with the words given before the branch, so a
-`--print` in each arm is completed by a `cfg` after the choice. A short circuit
-inside an arm (`query && command.arg("-V")`) can still skip that arm's word, so
-the arm does not cover its path.
+not read as a probe. A kind may name an output file after a second `=`
+(`--print=cfg=out.txt`), which writes the answer there; the query is the kind
+before the path, and the tables that need no compile include `file-names`. A
+probe flag in a block counts only when every block open at the flag is also
+open at the launch; a flag in a sibling block that has already closed does not.
+A choice whose arms are fully paired can still cover every path, whether it is
+written across statements or on one line: a `-vV` in the `if` arm and a `-V` in
+its `else` arm reach the shared launch as a probe either way. An arm is read
+with the words given before the branch, so a `--print` in each arm is completed
+by a `cfg` after the choice. A short circuit inside an arm
+(`query && command.arg("-V")`) can still skip that arm's word, so the arm does
+not cover its path. An option given in a block of its own
+(`if verbose { command.arg("-v") }`) cannot change the subcommand, so it does
+not stop a paired choice beside it being read path by path.
 
 A word is the text its literal has at run time, so an escape cannot hide a
-compiling subcommand from the read. A literal that ends at an escaped quote is
-still one literal, so an argument before a later `build` keeps its place as the
-subcommand.
+compiling subcommand from the read. A Unicode escape's digits may be separated
+by underscores, which are not part of the number, and an escape longer than the
+six digits Rust allows is not decoded. A literal that ends at an escaped quote
+is still one literal, so an argument before a later `build` keeps its place as
+the subcommand.
 
 A shape the scan cannot attribute -- a helper defined twice, a call reached
 through a path or method, a name a `use` item could import (a glob import names
 none but could bring any in), a receiver that is a field or a call, a parameter
 or binding reassigned or shadowed -- is declined rather than guessed, because a
-false positive would demand configuration from a repository that needs none.
+false positive would demand configuration from a repository that needs none. A
+run that never reaches a launch in the read starts no child process, so its
+words are no evidence of compiler work; a command launched beyond the read is
+declined for the same reason rather than guessed to compile.
 The reading is textual: comments are blanked and literal contents kept, and
 braces come from the masked source, so a `;` or a `{` in a string does not move
 a statement boundary.
@@ -76,7 +86,7 @@ from .rust_source import scan_balanced
 # build the crate first.
 QUERY_PRINTS: typ.Final = (
     "sysroot|target-libdir|host-tuple|cfg|target-list|target-cpus|target-features"
-    "|code-models|relocation-models|tls-models"
+    "|code-models|relocation-models|tls-models|file-names"
 )
 _QUERY_SET: typ.Final = frozenset(QUERY_PRINTS.split("|"))
 # A version flag, given as the word its literal has at run time. Anything
@@ -106,8 +116,9 @@ _SHORT_ESCAPES: typ.Final = {
     "0": "\0",
 }
 _HEX_ESCAPE: typ.Final = re.compile(r"[0-9A-Fa-f]{2}")
-# A `\u{..}` escape's braces and digits, read after the `u`.
-_UNICODE_ESCAPE: typ.Final = re.compile(r"\{([0-9A-Fa-f]{1,6})\}")
+# A `\u{..}` escape's braces and digits, read after the `u`. Underscores may
+# separate the digits, so they are removed before the number is counted.
+_UNICODE_ESCAPE: typ.Final = re.compile(r"\{([0-9A-Fa-f_]+)\}")
 # Options cargo reads one value for before the subcommand.
 _VALUE_OPTIONS: typ.Final = frozenset({
     "--color",
@@ -180,7 +191,12 @@ def _decode_escapes(literal: str) -> str | None:
             found = _UNICODE_ESCAPE.match(literal[index + 2 :])
             if found is None:
                 return None
-            code = int(found[1], 16)
+            digits = found[1].replace("_", "")
+            # Rust allows at most six hexadecimal digits, however many
+            # separators are written between them.
+            if not digits or len(digits) > 6:
+                return None
+            code = int(digits, 16)
             # Rust rejects a surrogate code point, so a literal holding one
             # cannot be the source of a word and is not guessed at.
             if code > 0x10FFFF or 0xD800 <= code <= 0xDFFF:
@@ -372,6 +388,23 @@ def _probe_words(
                 yield from words
 
 
+def _print_kind(word: str) -> str | None:
+    """Return the query kind a `--print=..` word names, or None.
+
+    A kind may be followed by an output path (`--print=cfg=out.txt`), which
+    writes the answer to that file; the query is the kind before the path, and
+    it still compiles nothing.
+
+    Returns
+    -------
+    str | None
+        The kind, or None when the word is not a `--print=` query.
+    """
+    if not word.startswith("--print="):
+        return None
+    return word[len("--print=") :].split("=", 1)[0]
+
+
 def _plain_asks(words: list[str | None]) -> bool:
     """Report whether a plain word sequence prints and exits.
 
@@ -388,7 +421,7 @@ def _plain_asks(words: list[str | None]) -> bool:
             continue
         if word in _VERSION_FLAGS or word in _HELP_FLAGS:
             return True
-        if word.startswith("--print=") and word[len("--print=") :] in _QUERY_SET:
+        if _print_kind(word) in _QUERY_SET:
             return True
         following = words[index + 1] if index + 1 < len(words) else None
         if word == "--print" and following in _QUERY_SET:
@@ -462,9 +495,12 @@ def _arm_paths(
     The paths are known only when every conditional word sits in an arm one
     block below the launch and those arms are the whole of one fully paired
     `if`/`else` chain: then each path's words are the unconditional ones plus
-    that arm's. A guarded word, or one nested deeper, leaves a path's words
-    uncertain, so no path is returned and the caller falls back to reading the
-    unconditional sequence.
+    that arm's. A guarded word, a word the reader cannot see, or one nested
+    deeper leaves a path's words uncertain, so no path is returned and the
+    caller falls back to reading the unconditional sequence. An option given
+    in a block of its own (`if verbose { command.arg("-v") }`) is the
+    exception: it cannot change the subcommand, so the choice beside it is
+    still read path by path.
 
     Returns
     -------
@@ -482,12 +518,41 @@ def _arm_paths(
             or len(word.blocks) != depth + 1
             or word.blocks[:depth] != launch
         ):
-            return None
+            if word.guarded or not _is_option(word.word):
+                return None
+            continue
         by_arm.setdefault(word.blocks[depth], []).append(word.word)
     order = _arm_chain(by_arm, arms)
     if order is None:
-        return None
+        # A block that holds only options cannot change the subcommand, so it
+        # may sit beside the choice (`if verbose { arg("-v") }`) without being
+        # one of its arms.
+        arms_only = {
+            arm: arm_words
+            for arm, arm_words in by_arm.items()
+            if not all(_is_option(word) for word in arm_words)
+        }
+        if len(arms_only) == len(by_arm):
+            return None
+        order = _arm_chain(arms_only, arms)
+        if order is None:
+            return None
     return {arm: _cargo_options(_plain_path(words, arm)) for arm in order}
+
+
+def _is_option(word: str | None) -> bool:
+    """Report whether *word* is written as an option rather than a subcommand.
+
+    A conditional option in a block of its own cannot change a choice's
+    subcommand, so it does not stop that choice being read path by path. A
+    word the reader cannot see might be one.
+
+    Returns
+    -------
+    bool
+        True when the word starts with `-` or `+`.
+    """
+    return word is not None and word.startswith(("-", "+"))
 
 
 def _path_compiles(path: list[str | None]) -> bool:
@@ -580,7 +645,7 @@ def _asks_a_question(
             continue
         if word in _VERSION_FLAGS or word in _HELP_FLAGS:
             return True
-        if word.startswith("--print=") and word[len("--print=") :] in _QUERY_SET:
+        if _print_kind(word) in _QUERY_SET:
             return True
         following = words[index + 1] if index + 1 < len(words) else None
         if word == "--print" and isinstance(following, str) and following in _QUERY_SET:
@@ -634,25 +699,31 @@ def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> b
     does not hide the `build` in the other, and a `--help` in the `if` arm
     excuses that arm alone, not the `build` its `else` arm runs.
 
+    A run that never reaches a launch starts no compiler, so it compiles
+    nothing whatever its arguments say. A command launched beyond the read
+    (stored and run later, or handed to something the scan declines) is
+    declined here for the same reason: the arguments alone are no evidence
+    that compiler work happens.
+
     Returns
     -------
     bool
         True when the run starts compiling work.
     """
+    launch = _launch_of(run)
+    if launch is None:
+        return False
     words = _cargo_options(
         word
         for statement in run
         for word in _argument_words(statement.text, statement.masked, name)
     )
-    launch = _launch_of(run)
     plain = list(_probe_words(run, name, launch))
-    if launch is not None:
-        paths = _arm_paths(plain, launch, arms)
-        if paths is not None:
-            return any(
-                _path_compiles(path) and not _asks_for_help(path)
-                for path in paths.values()
-            )
+    paths = _arm_paths(plain, launch, arms)
+    if paths is not None:
+        return any(
+            _path_compiles(path) and not _asks_for_help(path) for path in paths.values()
+        )
     unconditional = _cargo_options(plain)
     if any(isinstance(word, str) and word in _HELP_FLAGS for word in unconditional):
         return False
@@ -679,7 +750,8 @@ def compiles(
     building (`build` is the topic help is asked about), while `-h` or
     `--help` makes cargo print help whatever the subcommand is. Only calls on
     the command count, and only up to its first launch: an argument added after
-    the command has run belongs to a reuse, which compiles nothing. The calls
+    the command has run belongs to a reuse, which compiles nothing, and a run
+    that never reaches a launch starts no child process at all. The calls
     include a helper's body, spliced in at the call site, so a launch in either
     place ends the arguments.
 
@@ -692,3 +764,21 @@ def compiles(
     name = _bound_name(text, start)
     read = own_statements(text, start, window)
     return any(_run_compiles(run, name, read.arms) for run in read.runs)
+
+
+def launches(text: str, start: int, window: Window) -> bool:
+    """Report whether the command is launched inside its read.
+
+    A command that is built and given words but never launched starts no child
+    process, so its arguments are no evidence of compiler work. A command
+    launched beyond the read -- stored and run later, or handed to something the
+    scan declines -- is declined for the same reason rather than guessed at.
+
+    Returns
+    -------
+    bool
+        True when some run of the command reaches a launch.
+    """
+    return any(
+        _launch_of(run) is not None for run in own_statements(text, start, window).runs
+    )

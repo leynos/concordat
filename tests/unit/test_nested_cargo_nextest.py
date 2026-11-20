@@ -2432,7 +2432,7 @@ CONDITION_ARGUMENTS_ARE_ON_EVERY_PATH = (
     "use std::process::Command;\n"
     "fn probe() {\n"
     '    let mut command = Command::new("rustc");\n'
-    '    if command.arg("--version").get_program().is_some() {\n'
+    '    if command.arg("--version").get_args().next().is_some() {\n'
     '        command.arg("input.rs").status().unwrap();\n'
     "    } else {\n"
     '        command.arg("input.rs").status().unwrap();\n'
@@ -2470,7 +2470,7 @@ GUARDED_PROBE_IN_ONE_ARM = (
     "fn probe(query: bool, choice: bool) {\n"
     '    let mut command = Command::new("rustc");\n'
     "    if choice {\n"
-    '        query && command.arg("-V").get_program().is_some();\n'
+    '        query && command.arg("-V").get_args().next().is_some();\n'
     "    } else {\n"
     '        command.arg("-vV");\n'
     "    }\n"
@@ -2822,4 +2822,230 @@ def test_a_conditional_build_is_still_read_as_compiling(tmp_path: pathlib.Path) 
     """`build` is given on the path through the block, so the run may compile."""
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", CONDITIONAL_BUILD_ONLY)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+STRUCT_PATTERN_BINDS_THE_HELPER = (
+    "use std::process::Command;\n"
+    "struct Callbacks { setup: fn(&mut Command) }\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("--version");\n'
+    "}\n"
+    "fn run(Callbacks { setup: configure }: Callbacks) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    command.arg("input.rs");\n'
+    "    configure(&mut command);\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_struct_pattern_binds_the_helper_name(tmp_path: pathlib.Path) -> None:
+    """The pattern's `setup` field binds `configure`, so the call is not the fn."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", STRUCT_PATTERN_BINDS_THE_HELPER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+COMMAND_IS_THE_BINDING = (
+    "use std::process::Command;\n"
+    "#[test]\nfn compiles() {\n"
+    '    let mut Command = Command::new("cargo");\n'
+    '    Command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_binding_named_command_is_still_the_command(tmp_path: pathlib.Path) -> None:
+    """A parameter named `Command` is another value, but this binding is ours."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", COMMAND_IS_THE_BINDING)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CLOSURE_PARAMETER_AFTER_ITS_NEIGHBOUR = (
+    "use std::process::Command;\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+    "fn runs(choice: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    let callback = |_: (), configure: fn(&mut Command)| {\n"
+    "        configure(&mut command);\n"
+    "    };\n"
+    "    callback((), |_| {});\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_closure_parameter_after_the_first_hides_the_helper(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The closure's second parameter is still its own, not the free function."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CLOSURE_PARAMETER_AFTER_ITS_NEIGHBOUR)
+    assert ids(tmp_path) == set()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        '.arg("--print=cfg=out.txt")',
+        '.args(["--print=file-names", "--crate-name", "x"])',
+    ],
+)
+def test_a_print_query_written_to_a_file_compiles_nothing(
+    tmp_path: pathlib.Path, arguments: str
+) -> None:
+    """An output path after the query kind, and `file-names`, still only print."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(
+        tmp_path,
+        "tests/common/mod.rs",
+        "use std::process::Command;\n"
+        "fn probe() {\n"
+        '    Command::new("rustc")\n'
+        f"        {arguments}\n"
+        "        .status()\n"
+        "        .unwrap();\n"
+        "}\n",
+    )
+    assert ids(tmp_path) == set()
+
+
+UNICODE_SEPARATED_BUILD = (
+    "use std::process::Command;\n"
+    "#[test]\nfn compiles() {\n"
+    '    Command::new("cargo").arg("buil\\u{6_4}").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_unicode_escape_may_separate_its_digits(tmp_path: pathlib.Path) -> None:
+    """A digit separator is not part of the number, so the word is `build`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", UNICODE_SEPARATED_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+MULTILINE_BINDING = (
+    "use std::process::Command;\n"
+    "#[test]\nfn compiles() {\n"
+    "    let mut command =\n"
+    '        Command::new("cargo");\n'
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_binding_split_after_the_equals_is_read(tmp_path: pathlib.Path) -> None:
+    """The constructor on the next line still binds the name before it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", MULTILINE_BINDING)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+ELSE_ARM_KEPT_IN_A_HELPER = (
+    "use std::process::Command;\n"
+    "fn setup() {}\n"
+    "fn add(command: &mut Command, choice: bool) {\n"
+    "    if choice {\n"
+    '        command.arg("-V");\n'
+    "    } else {\n"
+    "        setup();\n"
+    '        command.arg("-vV");\n'
+    "    }\n"
+    "}\n"
+    "fn probe(choice: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    add(&mut command, choice);\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_helper_else_arm_survives_the_splice(tmp_path: pathlib.Path) -> None:
+    """A statement with no call on the parameter keeps the arm it belongs to."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ELSE_ARM_KEPT_IN_A_HELPER)
+    assert ids(tmp_path) == set()
+
+
+QUALIFIED_CONSTRUCTOR = (
+    "use std::process::Command;\n"
+    "#[test]\nfn compiles() {\n"
+    '    std::process::Command::new("cargo")\n'
+    '        .arg("build")\n'
+    "        .status()\n"
+    "        .unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_qualified_constructor_launches_its_command(tmp_path: pathlib.Path) -> None:
+    """`std::process::Command` is the constructor, so its launch ends the run."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", QUALIFIED_CONSTRUCTOR)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+BUILT_BUT_NEVER_LAUNCHED = (
+    "use std::process::Command;\n"
+    "#[test]\nfn builds_only() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("build");\n'
+    "}\n"
+)
+
+
+def test_a_command_that_never_launches_spawns_nothing(tmp_path: pathlib.Path) -> None:
+    """Arguments alone start no child process, so the test asks for no config."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", BUILT_BUT_NEVER_LAUNCHED)
+    assert ids(tmp_path) == set()
+
+
+RUSTC_BUILT_BUT_NEVER_LAUNCHED = (
+    "use std::process::Command;\n"
+    "#[test]\nfn builds_only() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    command.arg("input.rs");\n'
+    "}\n"
+)
+
+
+def test_a_rustc_command_that_never_launches_spawns_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `rustc` command starts no compiler until it is launched."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", RUSTC_BUILT_BUT_NEVER_LAUNCHED)
+    assert ids(tmp_path) == set()
+
+
+LATER_CONDITIONAL_OPTION = (
+    "use std::process::Command;\n"
+    "fn probe(choice: bool, verbose: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if choice {\n"
+    '        command.arg("metadata");\n'
+    "    } else {\n"
+    '        command.arg("build");\n'
+    "    }\n"
+    "    if verbose {\n"
+    '        command.arg("-v");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_later_conditional_option_keeps_the_arms_readable(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `-v` in its own block does not merge into the paired choice's arms."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LATER_CONDITIONAL_OPTION)
     assert ids(tmp_path) == {"NC-004"}
