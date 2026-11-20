@@ -13,18 +13,23 @@ none but could bring any in, and an import may name an inline module in the same
 file as easily as another file, which the scan does not resolve), a helper whose
 body names the caller's binding as well as its receiving parameter, a caller
 binding that shadows the helper by `let` or `let ref`, by a parameter or by a
-destructuring pattern (`let (configure,) = ..`), a helper name bound by a
-parameter pattern (`fn run((configure,): ..)`, `fn run(Callbacks { setup:
-configure }: ..)`) or rebound by a closure's own `|..|` list in any position
-(`|_: (), configure: fn(&mut Command)|`), a parameter reassigned or shadowed --
+destructuring pattern (`let (configure,) = ..`, `let Hook(configure) = ..`), a
+helper name bound by a parameter pattern (`fn run((configure,): ..)`,
+`fn run(Callbacks { setup: configure }: ..)`) or rebound by a closure's own
+`|..|` list in any position (`|_: (), configure: fn(&mut Command)|`), a
+parameter reassigned or shadowed --
 is declined rather than guessed, because a false positive would demand
 configuration from a repository that needs none. A `let` binding is read even
 when its constructor begins on the next line, because Rust ends the name at the
-`=` rather than at the line. A `return` in a helper is kept where it is
-written, because it ends the helper's path there and what follows runs only
-when the return was skipped; a return moved after its block would end every
-path instead, so the reader could not split the caller's runs there. A spliced
-fragment
+`=` rather than at the line, and the parameters read are those of the innermost
+function whose body holds the call, so a function item declared inside the
+caller is not mistaken for its scope. A `return` in a helper is kept where it is
+written, and the statements after it are wrapped in a block of their own and
+have the keyword blanked, because they run only when the return was skipped; a
+return moved after its block would end every path instead, so the reader could
+not split the caller's runs there. Guarding the tail rather than starting a new
+run at it is what keeps the caller's own statements after the call on the
+returning path too. A spliced fragment
 with no call on the parameter keeps its braces in the order they were written,
 with the `else` between them, so the caller still sees which arm the fragment
 belongs to rather than reading the arms as code that runs one after the other.
@@ -41,7 +46,7 @@ import bisect
 import re
 import typing as typ
 
-from .nested_cargo_receivers import reaches_through
+from .nested_cargo_receivers import LAUNCH, reaches_through
 from .nested_cargo_syntax import (
     _binding_pattern,
     _body_span,
@@ -49,7 +54,9 @@ from .nested_cargo_syntax import (
     _split_parameters,
     parameter_names,
     pattern_binds,
+    top_level_item,
 )
+from .rust_source import scan_balanced
 
 # A call behind `&&` or `||` does not run on every path to the launch.
 SHORT_CIRCUIT: typ.Final = re.compile(r"&&|\|\|")
@@ -179,6 +186,13 @@ def _receiver_statements(
     command parameter (`|_: (), target: &mut Command| ..`) shadows it wherever
     in the header it sits, so nothing after that statement is read.
 
+    A `return` ends the helper's path there, and the statements after it run
+    only when the return was skipped. They are therefore kept conditional, and
+    the keyword is blanked in the masked form so the caller's reader does not
+    start a new run at them: the caller's own statements after the call run on
+    both paths and stay in the run they belong to, which is what keeps a launch
+    after the call on the returning path's argument list.
+
     Rewriting the parameter to the caller's binding is only sound while that
     name means nothing else in the helper. A helper that receives the command
     as `target` and names another of its own parameters `cmd` would, once
@@ -222,12 +236,58 @@ def _receiver_statements(
         offset += len(statement) + 1
     if not pieces:
         return Window("", "")
+    pieces, guarded = _returning_tail(pieces, masked_pieces)
     # The read may stop inside a block the helper still holds open (a
     # `Command::new` in the block ends it), so the window is closed before it
     # is spliced, and the caller's own depth resumes after the call.
-    unclosed = sum(piece.count("{") - piece.count("}") for piece in masked_pieces)
+    unclosed = sum(piece.count("{") - piece.count("}") for piece in guarded)
     closers = "}" * max(unclosed, 0)
-    return Window(";\n".join([*pieces, closers]), ";\n".join([*masked_pieces, closers]))
+    return Window(";\n".join([*pieces, closers]), ";\n".join([*guarded, closers]))
+
+
+def _returning_tail(
+    pieces: list[str], masked_pieces: list[str]
+) -> tuple[list[str], list[str]]:
+    """Make a helper's statements after a `return` conditional for the caller.
+
+    A `return` ends the helper's path where it is written, and the statements
+    after it run only when the return was skipped. Left as they are, the masked
+    form would make the caller's reader start a new run at them and lose the
+    caller's own continuation from the returning path. Blanking the keyword in
+    the masked form (same length, so the two forms still index each other) and
+    wrapping the guarded statements in one block keeps them conditional, while
+    the caller's statements after the call stay in the run they belong to. The
+    wrapper braces are added to both forms at the same offsets, so a literal in
+    a guarded statement is still read from the text it was written in. A
+    top-level `return` is guarded the same way; its tail is unreachable, so
+    reading it as a path costs nothing.
+
+    Returns
+    -------
+    tuple[list[str], list[str]]
+        The statements as written and masked, with the returning path's tail in
+        a block of its own.
+    """
+    for index, piece in enumerate(masked_pieces):
+        if _RETURN.search(piece) is None:
+            continue
+        guarded = [
+            _RETURN.sub(lambda found: " " * len(found[0]), tail)
+            for tail in masked_pieces[index:]
+        ]
+        text_tail = list(pieces[index:])
+        # The guard ends at the helper's last statement, so a launch earlier on
+        # the returning path would sit in a block the guard's opening brace
+        # changes the identity of; the caller's continuation after the call
+        # would then be lost to that launch's path. Such a helper keeps the
+        # reader's own block boundary and only has the keyword blanked.
+        if not any(LAUNCH.search(before) for before in masked_pieces[: index + 1]):
+            text_tail[0] = "{" + text_tail[0]
+            guarded[0] = "{" + guarded[0]
+            text_tail[-1] += "}"
+            guarded[-1] += "}"
+        return [*pieces[:index], *text_tail], [*masked_pieces[:index], *guarded]
+    return pieces, masked_pieces
 
 
 def _receiver_piece(
@@ -323,11 +383,13 @@ def file_index(masked: str) -> FileIndex:
 def _destructured(masked: str, name: str, start: int, at: int) -> bool:
     """Report whether a `let` between *start* and *at* binds *name* by pattern.
 
-    A tuple, slice or struct pattern binds names without writing `let name`:
-    `let (configure,) = ..` and `let Settings { configure } = ..` both shadow
-    the free function of that name. The `let` pattern runs to the `=`, so a
-    call on the right-hand side (`let x = configure(..)`) is not mistaken for a
-    binding.
+    A tuple, slice, tuple-struct or struct pattern binds names without writing
+    `let name`: `let (configure,) = ..`, `let Hook(configure) = ..` and
+    `let Settings { configure } = ..` all shadow the free function of that
+    name. Any bracket before the `=` makes the pattern a destructuring one;
+    the `let` pattern runs to the `=`, so the initializer is not part of the
+    pattern and a call on the right-hand side (`let x = configure(..)`) is not
+    mistaken for a binding.
 
     Returns
     -------
@@ -338,7 +400,7 @@ def _destructured(masked: str, name: str, start: int, at: int) -> bool:
     bound = re.compile(rf"\b{re.escape(name)}\b")
     for found in pattern.finditer(masked, start, at):
         binding = found[1]
-        destructures = binding.lstrip().startswith(("(", "[")) or "{" in binding
+        destructures = any(char in binding for char in "([{")
         if destructures and bound.search(binding) is not None:
             return True
     return False
@@ -368,6 +430,34 @@ def _closure_binds(masked: str, start: int, at: int, name: str) -> bool:
     return False
 
 
+def _enclosing_start(masked: str, at: int, index: FileIndex) -> int:
+    """Return the start of the innermost function whose body holds *at*.
+
+    The latest `fn` before a call is not necessarily the caller's scope: a
+    function declared inside another one (`fn unrelated() {}`) is an item of
+    its own, so a call after it would otherwise be read against that inner
+    item and miss the enclosing function's parameters. The body is the first
+    `{` at bracket depth zero after the item starts, so the boundaries are
+    walked back from the call and the first whose body has not closed is the
+    one that holds it. A call outside every function keeps the whole file as
+    its scope.
+
+    Returns
+    -------
+    int
+        The start offset of the enclosing function, or 0 when none holds *at*.
+    """
+    boundary = bisect.bisect_left(index.boundaries, at)
+    for start in reversed(index.boundaries[:boundary]):
+        item = top_level_item(masked, start)
+        if item is None or item[1] != "{":
+            continue
+        close = scan_balanced(masked, item[0])
+        if close is not None and close > at:
+            return start
+    return 0
+
+
 def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     """Report whether *name* may be a local binding at *at* rather than a `fn`.
 
@@ -377,12 +467,14 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     scan cannot read. A `let` whose pattern destructures the name
     (`let (configure,) = ..`) binds it too, and so does a binding that borrows
     the value (`let ref configure = ..`, `|ref mut configure|`): the name still
-    denotes the borrowed value rather than the free function. The caller's
-    parameter list is read because `fn run(configure: fn(&mut Command))` calls
-    the argument, not the free function. A parameter written as a pattern
-    (`fn run((configure,): ..)`, `fn run(Settings { hook: configure }: ..)`)
-    binds names the plain reader cannot see, so the handoff is declined rather
-    than guessed.
+    denotes the borrowed value rather than the free function. The enclosing
+    function's parameter list is read because `fn run(configure: fn(&mut
+    Command))` calls the argument, not the free function; a function item
+    declared inside it is not the caller's scope, so the innermost enclosing
+    body is found rather than the latest declaration. A parameter written as a
+    pattern (`fn run((configure,): ..)`, `fn run(Settings { hook: configure }:
+    ..)`) binds names the plain reader cannot see, so the handoff is declined
+    rather than guessed.
 
     Returns
     -------
@@ -390,8 +482,7 @@ def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
         True when a binding of that name is in scope at *at*.
     """
     at = min(at, len(masked))
-    boundary = bisect.bisect_left(index.boundaries, at) - 1
-    start = index.boundaries[boundary] if boundary >= 0 else 0
+    start = _enclosing_start(masked, at, index)
     pattern = rf"\b{re.escape(name)}\b"
     # `ref` and `mut` may each be present, in either combination, before the
     # name a pattern binds; neither changes which name is bound.

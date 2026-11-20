@@ -30,7 +30,12 @@ command's, and neither is anything after it on that path: a declaration
 shadows the name inside its block, and attribution resumes once that block
 closes, while an assignment ends the read because the block that ran it may
 have been entered. A field assignment (`holder . command = ..`) moves the
-field rather than the binding, so it does not end the read.
+field rather than the binding, so it does not end the read. A closure parameter
+of that name is different again: it shadows the command only inside the closure
+body, so a statement that binds it in its `|..|` list is left unattributed and
+the read resumes with the next statement, wherever in the list the parameter
+sits. `let _noop = |command: &mut Command| {};` does not hide the caller's own
+`command.arg("build")`.
 
 :mod:`concordat.rules.nested_cargo_handoffs` finds the window and splices in a
 helper's body; this module reads the statements that window holds.
@@ -42,7 +47,7 @@ import re
 import typing as typ
 from itertools import pairwise
 
-from .nested_cargo_handoffs import Window, _bound_name
+from .nested_cargo_handoffs import Window, _bound_name, _closure_binds
 from .nested_cargo_receivers import (
     call_chains,
     launch_at,
@@ -79,21 +84,26 @@ def _owns_statement(masked: str, start: int, end: int, name: str | None) -> bool
 def _rebinding(name: str | None) -> re.Pattern[str] | None:
     """Return the pattern that moves *name* to another value, if it is bound.
 
-    A `let`, a loop variable, a closure parameter or a plain assignment to the
-    command's name gives it a new value: the caller's command is no longer what
-    the name denotes. A binding that borrows the value (`let ref command = ..`)
-    denotes the borrowed value, so it moves the name in the same way. A
-    declaration only moves the name inside the block that declares it, while an
-    assignment moves it for everything that follows,
-    wherever it sits, because the block it runs in may have been entered. The
-    assignment is therefore kept in its own group, which is how the reader tells
-    the two apart. An unbound command has no name to move.
+    A `let`, a loop variable or a plain assignment to the command's name gives
+    it a new value: the caller's command is no longer what the name denotes. A
+    binding that borrows the value (`let ref command = ..`) denotes the
+    borrowed value, so it moves the name in the same way. A declaration only
+    moves the name inside the block that declares it, while an assignment moves
+    it for everything that follows, wherever it sits, because the block it runs
+    in may have been entered. The assignment is therefore kept in its own
+    group, which is how the reader tells the two apart. An unbound command has
+    no name to move.
+
+    A closure's own parameter is not read here: it shadows the name only
+    inside the closure body, which ends with its statement, so
+    :meth:`_StatementRead.feed` declines the statement instead of moving the
+    name for everything after it.
 
     Returns
     -------
     re.Pattern[str] | None
-        The declaration, loop, closure or assignment pattern, or None when the
-        command is not bound to a name.
+        The declaration, loop or assignment pattern, or None when the command
+        is not bound to a name.
     """
     if name is None:
         return None
@@ -104,7 +114,6 @@ def _rebinding(name: str | None) -> re.Pattern[str] | None:
     return re.compile(
         rf"\blet\s+{binding}{identifier}\b"
         rf"|\bfor\s+{binding}{identifier}\b"
-        rf"|\|\s*{binding}{identifier}\s*(?:\||:)"
         # The name must be whole, so `my_command = ..` and `holder.command =
         # ..` move their own value rather than the command's.
         rf"|(?<![\w.])(?P<assign>{identifier})\s*=(?!=)"
@@ -345,19 +354,27 @@ class _StatementRead:
         blocks = tuple(self._blocks)
         self._note_else(masked_statement, blocks)
         _track(self._blocks, masked_statement, self._offset)
+        # A closure's own parameter names its value, not the caller's command,
+        # and its scope ends with the statement. The statement is therefore
+        # left unattributed -- its uses belong to the closure -- rather than
+        # ending the read as a declaration at the command's own level would.
+        closure_bound = self._name is not None and _closure_binds(
+            masked_statement, 0, len(masked_statement), self._name
+        )
         moved = (
             _moved(self._rebinding, masked_statement)
-            if self._offset > 0 and self._rebinding is not None
+            if self._offset > 0 and self._rebinding is not None and not closure_bound
             else None
         )
-        returned = _RETURN.search(masked_statement)
-        if moved is not None:
-            if self._depth == 0 or moved.group("assign") is not None:
-                self.stopped = True
+        returned = None if closure_bound else _RETURN.search(masked_statement)
+        if not closure_bound:
+            if moved is not None:
+                if self._depth == 0 or moved.group("assign") is not None:
+                    self.stopped = True
+                else:
+                    self._shadows.append(self._depth)
             else:
-                self._shadows.append(self._depth)
-        else:
-            self._attribute(masked_statement, start_depth, blocks)
+                self._attribute(masked_statement, start_depth, blocks)
         if returned is not None:
             depth = _depth_at(masked_statement, returned.start(), start_depth)
             if depth > 0:

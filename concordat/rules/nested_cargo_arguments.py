@@ -10,20 +10,23 @@ A cargo command's subcommand is the first word its arguments give that is
 neither an option nor an option's value, so `cargo help build` reads help as
 the subcommand and `build` as its topic. A conditional word cannot hide the
 subcommand on the path that skips its block, so a `help` inside an `if` leaves
-the unconditional `build` still compiling, and a run with no unconditional
-subcommand at all is compiled when any path names one: a `metadata` in one
-block beside a `build` in another builds when only the build's block runs. A
-word the reader cannot see leaves the subcommand open, and then any compiling
-word before the launch is enough.
+the unconditional `build` still compiling, and it cannot fill an option's value
+slot either: the path that skips its block gives the next word as that value.
+A run with no unconditional subcommand at all is compiled when any path names
+one: a `metadata` in one block beside a `build` in another builds when only the
+build's block runs. A word the reader cannot see leaves the subcommand open,
+and then any compiling word before the launch is enough.
 
 `-h` or `--help` makes the command compile nothing at all when it is given on
 every path, and each arm of a fully paired choice is read for its own
 subcommand and its own help flag, so one arm's `metadata` does not hide the
-other arm's `build`. A `--print` query asks the compiler what it is only when
-its two halves are adjacent: an unreadable or conditional word between
-`--print` and `cfg` may be `link-args`, which builds the crate, so the query is
-not read as a probe. A kind may name an output file after a second `=`, in the
-joined form (`--print=cfg=out.txt`) or the two-word one (`--print`,
+other arm's `build`. A `--` given on only some path is still a separator on
+that path, so a help flag written after it is passed to the program the command
+runs and does not excuse the build. A `--print` query asks the compiler what it
+is only when its two halves are adjacent: an unreadable or conditional word
+between `--print` and `cfg` may be `link-args`, which builds the crate, so the
+query is not read as a probe. A kind may name an output file after a second
+`=`, in the joined form (`--print=cfg=out.txt`) or the two-word one (`--print`,
 `cfg=out.txt`), which writes the answer there; the query is the kind before the
 path, and the tables that need no compile include `file-names`. A
 probe flag in a block counts only when every block open at the flag is also
@@ -52,7 +55,9 @@ or binding reassigned or shadowed -- is declined rather than guessed, because a
 false positive would demand configuration from a repository that needs none. A
 run that never reaches a launch in the read starts no child process, so its
 words are no evidence of compiler work; a command launched beyond the read is
-declined for the same reason rather than guessed to compile.
+declined for the same reason rather than guessed to compile. A probe is decided
+by the launched runs alone, so a `rustc` command with no launch at all is not a
+probe.
 The reading is textual: comments are blanked and literal contents kept, and
 braces come from the masked source, so a `;` or a `{` in a string does not move
 a statement boundary.
@@ -403,26 +408,59 @@ def is_probe(text: str, start: int, window: Window) -> bool:
 
     Only arguments added to this command count, so a `"--version"` in a comment,
     in an assertion after it or on another command is not its argument. Every
-    run of the command must ask its question: a version flag added on the path
-    that skips a compiling run says nothing about the run that compiles.
+    launched run of the command must ask its question: a version flag added on
+    the path that skips a compiling run says nothing about the run that
+    compiles. A run that never launches starts no process and so asks nothing;
+    a path that returns before it runs is no evidence either way, and ignoring
+    it is what lets the launched runs decide (`--version`, then `if skip {
+    return; }`, then the launch is still a probe).
 
     Returns
     -------
     bool
-        True when every run of the command is given a version or query flag.
+        True when the command launches and every launched run is given a
+        version or query flag.
     """
     name = _bound_name(text, start)
     read = own_statements(text, start, window)
-    runs = read.runs
-    if not runs:
-        return False
-    for run in runs:
+    launched = False
+    for run in read.runs:
         launch = _launch_of(run)
-        if launch is None or not _asks_a_question(
+        if launch is None:
+            continue
+        launched = True
+        if not _asks_a_question(
             list(_probe_words(run, name, launch)), launch, read.arms
         ):
             return False
-    return True
+    return launched
+
+
+def _before_a_separator(
+    words: list[str | ConditionalWord | None],
+) -> list[str | ConditionalWord | None]:
+    """Return the words that are cargo's however the conditional paths fall.
+
+    A `--` that only some path gives is still a separator on that path
+    (`if forward { command.arg("--") }`), so a word after it belongs to the
+    program the command runs when the separator is written -- `cargo test --
+    --help` passes `--help` to the test binary and compiles the tests. Such a
+    word is not certainly cargo's, so it cannot excuse compiling work, and the
+    words after any separator are left out of the reads that need a word on
+    every path.
+
+    Returns
+    -------
+    list[str | ConditionalWord | None]
+        The words before the first separator, conditional ones included.
+    """
+    kept: list[str | ConditionalWord | None] = []
+    for word in words:
+        text = word.word if isinstance(word, ConditionalWord) else word
+        if text == "--":
+            break
+        kept.append(word)
+    return kept
 
 
 def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> bool:
@@ -473,7 +511,12 @@ def _run_compiles(run: list[Statement], name: str | None, arms: ArmChoices) -> b
             _path_compiles(path) and not _asks_for_help(path) for path in paths.values()
         )
     unconditional = _cargo_options(plain)
-    if any(isinstance(word, str) and word in _HELP_FLAGS for word in unconditional):
+    # A help flag after a separator is not certainly cargo's: on the path that
+    # writes the `--`, cargo passes it to the program the command runs.
+    if any(
+        isinstance(word, str) and word in _HELP_FLAGS
+        for word in _cargo_options(_before_a_separator(plain))
+    ):
         return False
     settled = _first_positional(unconditional)
     if settled:

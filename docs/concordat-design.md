@@ -3088,9 +3088,14 @@ flag, and a spliced fragment with no call on the command keeps its braces in
 the order they were written, with the `else` between them, so the arms still
 pair rather than reading as code that runs one after the other, and a `return`
 stays inside the block it was written in, because moved after that block it
-would end every path. A parameter list is split on its own commas, so a struct
-pattern (`fn configure(Pair { first, command: other }: Pair, target: ..)`)
-keeps its field comma and a comparison inside a const block
+would end every path. A block-level `return` also marks the statements that
+follow it as the code of the path that skipped it; when the helper is spliced,
+that tail is wrapped in a block of its own and the keyword is blanked in the
+masked form, so the tail stays conditional and the caller's own statements
+after the call stay in the run the early-return path reached. A parameter list
+is split on its own commas, so a struct pattern
+(`fn configure(Pair { first, command: other }: Pair, target: ..)`) keeps its
+field comma and a comparison inside a const block
 (`fn run(flag: Flag<{ 1 < 2 }>, (configure,): ..)`) is not a generic that
 swallows the parameters after it. A helper defined more than once, or one whose
 receiving parameter is not a plain `name: Type` binding, is declined rather
@@ -3098,15 +3103,18 @@ than guessed; so is a call that a binding in the caller's own function shadows
 (a parameter included, even one after a method's receiver, a name bound by a
 parameter pattern such as `fn run((configure,): ..)` or
 `fn run(Callbacks { setup: configure }: ..)`, a name bound by a destructuring
-pattern such as `let (configure,) = ..`, a closure parameter in any position
-such as `|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
+pattern such as `let (configure,) = ..` or `let Hook(configure) = ..`, a
+closure parameter in any position such as
+`|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
 `let ref configure = ..`), a call written as a path or method
 (`support::configure(..)`, however it is spaced around the separator), a name a
 `use` item could import, or a helper that reassigns the parameter or redeclares
-its name. A helper whose body also names the caller's binding is declined too:
-rewriting its receiving parameter to that name would make the helper's own uses
-of it read as the caller's. So is a helper whose receiving parameter a closure
-rebinds in its own `|..|` list
+its name. The parameters read are those of the innermost function whose body
+holds the call, so a function item declared inside the caller is not mistaken
+for its scope. A helper whose body also names the caller's binding is declined
+too: rewriting its receiving parameter to that name would make the helper's own
+uses of it read as the caller's. So is a helper whose receiving parameter a
+closure rebinds in its own `|..|` list
 (`|_: (), target: &mut Command| target.arg(..)`), because that `target` is the
 closure's argument, not the command handed in. The scan does not resolve
 imports, and a `use` may name an inline module in the same file
@@ -3133,10 +3141,11 @@ that reaches it -- including those a branch condition adds, since the condition
 runs before either arm
 (`if command.arg("--version").get_args().next().is_some() { .. }`). Each run is
 asked its own questions: a probe flag must be present on every run of a `rustc`
-command, while any run of a cargo command that compiles is enough. A run that
-never reaches a launch starts no child process, so it compiles nothing and
-spawns nothing, for `cargo` and `rustc` alike; a launch beyond the read is
-declined rather than guessed at. A flag reached only on some paths, behind a
+command that launches, while any run of a cargo command that compiles is
+enough. A run that never reaches a launch starts no child process, so it
+compiles nothing and spawns nothing, for `cargo` and `rustc` alike, and a
+`rustc` command with no launch at all is not a probe; a launch beyond the read
+is declined rather than guessed at. A flag reached only on some paths, behind a
 `&&`/`||` short circuit or inside a block that may not run, does not make a run
 a probe -- except when one fully paired `if`/`else` chain gives a probe in
 every arm, whether that choice is written across statements or on one line,
@@ -3151,31 +3160,39 @@ block of its own (`if verbose { command.arg("-v") }`) cannot change the
 subcommand, so it does not stop a paired choice beside it being read arm by
 arm. A later declaration of the command's name shadows it inside that block
 only, while an assignment to it ends the read wherever it sits, because the
-block that ran it may have been entered. A cargo subcommand is the first word
-the arguments give that is neither an option nor an option's value
-(`--color always nextest` runs `nextest`, while `cargo help build` prints
-help), so an option's value is not mistaken for the subcommand, and a value the
-reader cannot see fills its option's slot rather than ending the read. A
-conditional word cannot hide the subcommand on the path that skips its block,
-so a `help` inside an `if` leaves an unconditional `build` still compiling, and
-each arm of a fully paired chain is read for its own subcommand, so a
-`metadata` in the `if` arm does not hide the `build` in its `else` arm. A run
-with no unconditional subcommand at all is compiled when any path names one, so
-a `metadata` in one block beside a `build` in another still compiles when only
-the build's block runs. A `-h` or `--help` given on every path makes cargo
-print help whatever the subcommand is, while one added inside a block does not
-excuse the build on the path that skips it. A help flag in one arm excuses only
-the path through that arm, so a `build --help` in the `if` arm does not excuse
-the `check` its `else` arm runs, while a help flag in every arm excuses the
-whole run. A word after a `--` belongs to the program the command runs, not to
-cargo. A word is the text its string literal has at run time, so an escape
-(`\x64`, `\u{64}`) is decoded and cannot hide `build` or `--version` from the
-read, and an escaped quote does not end the literal early. A Unicode escape's
-digits may be separated by underscores, which are not part of the number, and
-an escape longer than the six digits Rust allows is not decoded. A word the
-reader cannot see leaves the subcommand open, and then any compiling argument
-before the launch is enough. A `--print` query is read across the command's
-ordered arguments, so `.arg("--print").arg("cfg")` is the same probe as
+block that ran it may have been entered; a closure parameter's scope ends with
+the statement that writes the closure, so
+`let _noop = |command: &mut Command| {};` does not hide the command from the
+statements after it. A cargo subcommand is the first word the arguments give
+that is neither an option nor an option's value (`--color always nextest` runs
+`nextest`, while `cargo help build` prints help), so an option's value is not
+mistaken for the subcommand, and a value the reader cannot see fills its
+option's slot rather than ending the read. A conditional word never fills an
+option's value slot, because the path that skips its block gives the next word
+as the value: `--color`, a conditional `never`, then `always` is
+`--color always` on the path that skips the block. A conditional word likewise
+cannot hide the subcommand on the path that skips its block, so a `help` inside
+an `if` leaves an unconditional `build` still compiling, and each arm of a
+fully paired chain is read for its own subcommand, so a `metadata` in the `if`
+arm does not hide the `build` in its `else` arm. A run with no unconditional
+subcommand at all is compiled when any path names one, so a `metadata` in one
+block beside a `build` in another still compiles when only the build's block
+runs. A `-h` or `--help` given on every path makes cargo print help whatever
+the subcommand is, while one added inside a block does not excuse the build on
+the path that skips it. A help flag in one arm excuses only the path through
+that arm, so a `build --help` in the `if` arm does not excuse the `check` its
+`else` arm runs, while a help flag in every arm excuses the whole run. A word
+after a `--` belongs to the program the command runs, not to cargo, and a `--`
+given only on some path is still a separator on that path, so a help flag
+written after it is passed to the program and does not excuse the build. A word
+is the text its string literal has at run time, so an escape (`\x64`, `\u{64}`)
+is decoded and cannot hide `build` or `--version` from the read, and an escaped
+quote does not end the literal early. A Unicode escape's digits may be
+separated by underscores, which are not part of the number, and an escape
+longer than the six digits Rust allows is not decoded. A word the reader cannot
+see leaves the subcommand open, and then any compiling argument before the
+launch is enough. A `--print` query is read across the command's ordered
+arguments, so `.arg("--print").arg("cfg")` is the same probe as
 `.args(["--print", "cfg"])`, but its two halves must be adjacent: an unreadable
 word between them, or one given only inside a block, may be `link-args`, which
 builds the crate, so the query is not a probe. `--print=file-names` is a query

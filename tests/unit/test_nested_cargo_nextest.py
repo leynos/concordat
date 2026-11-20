@@ -3189,3 +3189,183 @@ def test_an_unconditional_metadata_beside_a_build_runs_metadata(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", UNCONDITIONAL_METADATA_BESIDE_BUILD)
     assert ids(tmp_path) == set()
+
+
+CONDITIONAL_SEPARATOR_BEFORE_HELP = (
+    "use std::process::Command;\n"
+    "fn run(forward: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("test");\n'
+    '    if forward { command.arg("--"); }\n'
+    '    command.arg("--help");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_help_flag_after_a_conditional_separator_still_compiles(
+    tmp_path: pathlib.Path,
+) -> None:
+    """On the path that writes `--`, cargo passes `--help` to the test binary."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_SEPARATOR_BEFORE_HELP)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CLOSURE_PARAMETER_SCOPE_ENDS_WITH_ITS_STATEMENT = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    let _noop = |command: &mut Command| {};\n"
+    '    command.arg("build");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_closure_parameter_shadows_only_its_own_body(tmp_path: pathlib.Path) -> None:
+    """`command` denotes the outer binding again once the closure has ended."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(
+        tmp_path, "tests/common/mod.rs", CLOSURE_PARAMETER_SCOPE_ENDS_WITH_ITS_STATEMENT
+    )
+    assert ids(tmp_path) == {"NC-004"}
+
+
+UNLAUNCHED_RETURN_PATH_IS_NOT_A_RUN = (
+    "use std::process::Command;\n"
+    "fn probe(skip: bool) {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    command.arg("--version");\n'
+    "    if skip { return; }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_returning_path_without_a_launch_is_not_a_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The path that returns starts no process, so it asks no probe question."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", UNLAUNCHED_RETURN_PATH_IS_NOT_A_RUN)
+    assert ids(tmp_path) == set()
+
+
+CONDITIONAL_OPTION_VALUE = (
+    "use std::process::Command;\n"
+    "fn run(verbose: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("--color");\n'
+    '    if verbose { command.arg("never"); }\n'
+    '    command.arg("always");\n'
+    '    command.arg("build");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_conditional_word_does_not_fill_an_option_value_slot(
+    tmp_path: pathlib.Path,
+) -> None:
+    """With the block skipped, `--color always` takes the value and `build` runs."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_OPTION_VALUE)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CLOSURE_PARAMETER_AFTER_THE_FIRST = (
+    "use std::process::Command;\n"
+    "fn probe() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    command.arg("input.rs");\n'
+    "    let _noop = |_: (), command: &mut Command| {\n"
+    "        command.status().unwrap()\n"
+    "    };\n"
+    "}\n"
+)
+
+
+def test_a_later_closure_parameter_also_shadows_the_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The closure's launch is its own, so the outer command never runs."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CLOSURE_PARAMETER_AFTER_THE_FIRST)
+    assert ids(tmp_path) == set()
+
+
+ENCLOSING_FUNCTION_OWNS_THE_PARAMETERS = (
+    "use std::process::Command;\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("--help");\n'
+    "}\n"
+    "fn run(configure: fn(&mut Command)) {\n"
+    "    fn unrelated() {}\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    configure(&mut command);\n"
+    '    command.arg("build");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_the_enclosing_function_owns_the_caller_parameters(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`configure` is `run`'s callback, so the call declines the free function."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ENCLOSING_FUNCTION_OWNS_THE_PARAMETERS)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+TUPLE_STRUCT_PATTERN_BINDS_THE_HELPER = (
+    "use std::process::Command;\n"
+    "struct Hook(fn(&mut Command));\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("--help");\n'
+    "}\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    let hook = Hook(noop);\n"
+    "    let Hook(configure) = hook;\n"
+    "    configure(&mut command);\n"
+    '    command.arg("build");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+    "fn noop(_command: &mut Command) {}\n"
+)
+
+
+def test_a_tuple_struct_pattern_binds_the_helper_name(tmp_path: pathlib.Path) -> None:
+    """`configure` is the callback the pattern bound, not the free function."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", TUPLE_STRUCT_PATTERN_BINDS_THE_HELPER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CALLER_COMPILE_AFTER_A_BLOCK_LEVEL_RETURN = (
+    "use std::process::Command;\n"
+    "fn configure(command: &mut Command, skip: bool) {\n"
+    "    if skip {\n"
+    "        return;\n"
+    "    }\n"
+    '    command.arg("--version");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    configure(&mut command, false);\n"
+    '    command.arg("input.rs");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_the_callers_compile_after_a_block_level_return_is_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper's probe does not excuse the caller's compiling launch."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CALLER_COMPILE_AFTER_A_BLOCK_LEVEL_RETURN)
+    assert ids(tmp_path) == {"NC-004"}

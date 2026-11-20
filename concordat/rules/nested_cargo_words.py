@@ -14,7 +14,9 @@ A cargo command's subcommand is the first word that is neither an option nor an
 option's value, and a word after a `--` belongs to the program the command runs
 rather than to cargo. The words are kept in the type they were read with, so a
 plain path stays plain while a run that reads an argument only on some paths
-keeps that argument marked as conditional.
+keeps that argument marked as conditional. Such a word is passed over rather
+than counted, both as the subcommand and as an option's value, because on the
+path that skips its block neither position is its.
 
 The reading is textual: comments are blanked and literal contents kept by the
 caller, and the argument calls are found in the masked source so a `;` or a `{`
@@ -211,7 +213,10 @@ def _first_positional(words: typ.Iterable[str | ConditionalWord | None]) -> str 
     answer at all -- unless it fills the value slot of the known option before
     it (`["--color", color, "build"]`), where its position alone rules it out.
     A conditional word is not on every path, so it is passed over rather than
-    read as the subcommand.
+    read as the subcommand, and it cannot fill an option's value slot either:
+    on the path that skips its block the next word is the value
+    (`--color`, a conditional `never`, `always`, `build` gives `--color
+    always` and the subcommand `build`).
 
     Returns
     -------
@@ -221,10 +226,10 @@ def _first_positional(words: typ.Iterable[str | ConditionalWord | None]) -> str 
     """
     skip_value = False
     for word in words:
+        if isinstance(word, ConditionalWord):
+            continue
         if skip_value:
             skip_value = False
-            continue
-        if isinstance(word, ConditionalWord):
             continue
         if word is None:
             return None
