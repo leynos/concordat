@@ -90,10 +90,13 @@ not read. The reading is one of five states:
   `--out-dir=x`); anywhere else (`[flag, path]`, `["--release", flag]`,
   `["--timings", flag]`, an option the reader has not heard of, `.args(extra)`,
   a handoff) it may be the flag. A `--` that already sent the rest of the line
-  to the program cargo runs ends the question. A helper's own parameter,
-  including every name a destructuring pattern binds, is unknown in the same
-  way: it holds what the caller passed, and an unrelated binding of the same
-  name in the caller is never read in its place.
+  to the program cargo runs ends the question. An option spelled out before a
+  conditional argument call is not relied on either: the call's own argument
+  may already have been the value the option was waiting for, so a later
+  unreadable word is taken as the flag rather than as that value. A helper's
+  own parameter, including every name a destructuring pattern binds, is unknown
+  in the same way: it holds what the caller passed, and an unrelated binding of
+  the same name in the caller is never read in its place.
 - `dedicated`: a fixed `target/...` directory inside the crate
   (`CARGO_MANIFEST_DIR` joined with `"target/..."`), or a fixed path under the
   system temporary directory (`env::temp_dir().join("scenario")`). It persists
@@ -209,8 +212,14 @@ timeout is long enough, are NC-004 and NC-005's business
   input to a nested build, not the code that starts one.
 - **Each process is judged by what the command carried when it started**, and a
   helper that returns a `Command` is read at its call sites, exactly as NC-007
-  reads them. A command a helper builds whose call sites live in another file
-  is read at its definition and its subcommand is `unknown`.
+  reads them. A run that adds an argument the reader cannot read is kept as its
+  own fact even when its offline state matches an earlier run, because the
+  unreadable word may select a different target. So is a run that adds a literal
+  `--target-dir` or `--manifest-path`, each of which moves where cargo builds,
+  or that supplies a `--target-dir` the run before left waiting: that word is
+  the flag's value, not a harmless addition. A command a helper builds whose
+  call sites live in another file is read at its definition and its subcommand
+  is `unknown`.
 - **Names resolve inside one function.** A target value is read through the
   `let` bindings of the function that builds the command, signature included (a
   parameter typed `TempDir` counts), so another test's binding of the same name

@@ -235,7 +235,7 @@ def _may_carry_flag(payload: str) -> bool:
     return False
 
 
-def _awaits_value(previous: str) -> bool:
+def _awaits_value(previous: str | None) -> bool:
     """Report whether the argument *previous* leaves the next one as its value.
 
     Only an option known to take a value, and not already given one inline
@@ -243,12 +243,15 @@ def _awaits_value(previous: str) -> bool:
     more, so `["--timings", flag]` and `["--release", flag]` leave `flag` free to
     be `--target-dir=...`, and so does any option the reader has not heard of.
 
+    `None` means the reader has no argument to rely on: a conditional call may
+    have consumed the value already, so the next word is free to be the flag.
+
     Returns
     -------
     bool
         True when *previous* is an option that consumes the next argument.
     """
-    if not _is_plain_literal(previous):
+    if previous is None or not _is_plain_literal(previous):
         return False
     return previous[1:-1] in _VALUE_OPTIONS
 
@@ -305,7 +308,9 @@ class _Replay:
         self._is_after_separator = False
         self._is_flag_value_next = False
         # The argument before this one, which says whether this one is a value.
-        self._previous = ""
+        # None after a conditional call, whose own argument may already have
+        # been the value the reader would otherwise expect.
+        self._previous: str | None = ""
 
     def hide(self) -> None:
         """Take on a call the reader cannot see through."""
@@ -321,9 +326,18 @@ class _Replay:
         of the line to the program cargo runs. Whether it did is kept apart from
         the environment calls: `--target-dir` beats every variable, so a later
         `env_clear()` or `CARGO_TARGET_DIR` cannot settle it.
+
+        The call also breaks the option/value chain. A conditional
+        `arg("Cargo.toml")` may have been the value an earlier
+        `--manifest-path` was waiting for, so the next unreadable argument is
+        free to be `--target-dir=...` rather than that value. Resetting the
+        previous argument to an option the reader cannot know clears only that
+        expectation; the separator, the pending flag value and the recorded
+        readings are left as they were.
         """
         if not self._is_after_separator and _may_carry_flag(payload):
             self.is_flag_unknown = True
+        self._previous = None
 
     def environment(self, payload: str) -> None:
         """Apply one `.env`/`.envs` call."""
@@ -481,6 +495,92 @@ def sets_target_variable(calls: typ.Iterable[tuple[str, str]]) -> bool:
     )
 
 
+def _has_unreadable_item(payload: str) -> bool:
+    """Report whether an argument call holds a word the reader cannot read.
+
+    Such a word may be `--target-dir=...`, so a run that adds one may build
+    somewhere the run before it did not.
+
+    Returns
+    -------
+    bool
+        True when any item is not a plain string literal.
+    """
+    return any(not _is_plain_literal(item) for item in argument_items(payload))
+
+
+def _awaits_flag_value(payload: str, *, awaits_flag_value: bool) -> bool:
+    """Report whether an argument call leaves `--target-dir` waiting for a value.
+
+    A later run that adds that value builds where the earlier one did not, so
+    the value is target evidence even though it is a plain literal. The inline
+    form (`--target-dir=/tmp/x`) already carries its value, and a `--` before
+    the flag ends cargo's reading of the line, so neither leaves one pending.
+    An empty call passes no word at all, so it neither supplies the value nor
+    ends the expectation: the state carries across it unchanged.
+
+    Parameters
+    ----------
+    payload:
+        The call's argument text.
+    awaits_flag_value:
+        Whether the call before this one left `--target-dir` waiting.
+
+    Returns
+    -------
+    bool
+        True when the next argument word is a pending flag's value.
+    """
+    is_awaiting = awaits_flag_value
+    is_after_separator = False
+    for item in argument_items(payload):
+        if item == _SEPARATOR:
+            is_after_separator = True
+        elif is_after_separator:
+            # The rest of the line belongs to the program cargo runs, so it
+            # neither supplies the flag's value nor clears the expectation.
+            continue
+        elif is_awaiting:
+            # The next word is the value, whatever word it is.
+            is_awaiting = False
+        else:
+            is_awaiting = item == TARGET_FLAG
+    return is_awaiting
+
+
+def _may_change_target(method: str, payload: str, *, awaits_flag_value: bool) -> bool:
+    """Report whether one recorded call can change where the command builds.
+
+    Parameters
+    ----------
+    method:
+        The recorded call's method name.
+    payload:
+        The call's argument text.
+    awaits_flag_value:
+        Whether the call before this one left `--target-dir` waiting for its
+        value, which this call may supply.
+
+    Returns
+    -------
+    bool
+        True for an environment, removal or working-directory call, a call the
+        reader could not see through, a call naming the target flag, and an
+        argument call that is unreadable or completes the pending flag value.
+    """
+    if method in ENVIRONMENT_METHODS:
+        return True
+    if method in {"env_remove", ENVIRONMENT_CLEAR, "current_dir", UNSEEN_CALL}:
+        return True
+    if method == UNSEEN_ARGUMENTS or "--target-dir" in payload:
+        return True
+    if _MANIFEST_PATH in payload:
+        return True
+    return method in {"arg", "args"} and (
+        awaits_flag_value or _has_unreadable_item(payload)
+    )
+
+
 def target_signature(
     calls: typ.Iterable[tuple[str, str]],
 ) -> tuple[tuple[str, str], ...]:
@@ -490,19 +590,30 @@ def target_signature(
     build in different places, so a reader that keeps one fact per distinct
     state must also tell them apart by this signature.
 
+    An `arg`/`args` call whose every item is a literal is usually left out,
+    because it cannot change the target: two runs that differ only by a
+    harmless literal addition still collapse. It is kept when it names
+    `--target-dir` or `--manifest-path`, because either moves where cargo
+    builds, when it holds an item the reader cannot read, and when its first
+    word completes a `--target-dir` an earlier call left waiting.
+
     Returns
     -------
     tuple[tuple[str, str], ...]
-        The environment, removal, working-directory and `--target-dir` calls, in
-        source order, and every call the reader could not see through.
+        The environment, removal, working-directory and `--target-dir` calls,
+        every argument call that may change the target, and every call the
+        reader could not see through, in source order.
     """
-    return tuple(
-        (method, payload)
-        for method, payload in calls
-        if method in ENVIRONMENT_METHODS
-        or method in {"env_remove", ENVIRONMENT_CLEAR, "current_dir", UNSEEN_CALL}
-        or "--target-dir" in payload
-    )
+    kept: list[tuple[str, str]] = []
+    awaits_flag_value = False
+    for method, payload in calls:
+        if _may_change_target(method, payload, awaits_flag_value=awaits_flag_value):
+            kept.append((method, payload))
+        if method in {"arg", "args"}:
+            awaits_flag_value = _awaits_flag_value(
+                payload, awaits_flag_value=awaits_flag_value
+            )
+    return tuple(kept)
 
 
 def is_test_rerun(program: str, text: str) -> bool:

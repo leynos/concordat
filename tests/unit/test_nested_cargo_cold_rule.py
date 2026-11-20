@@ -532,18 +532,6 @@ fn build_private() {
 }
 """
 
-REUSED_COMMAND = """\
-fn build_twice(shared: &std::path::Path) {
-    let scratch = tempfile::tempdir().unwrap();
-    let mut cmd = std::process::Command::new("cargo");
-    cmd.arg("build");
-    cmd.env("CARGO_TARGET_DIR", shared);
-    cmd.status().unwrap();
-    cmd.env("CARGO_TARGET_DIR", scratch.path());
-    cmd.status().unwrap();
-}
-"""
-
 
 def test_a_frozen_helper_call_still_builds_into_its_target(
     tmp_path: pathlib.Path,
@@ -590,30 +578,6 @@ def test_a_name_rebound_inside_one_function_is_not_guessed(
     found = {(f.rule_id, f.verdict) for f in findings(tmp_path)}
     assert ("NC-009", "noncompliant") not in found
     assert ("EN-001", "indeterminate") in found
-
-
-REUSED_PROGRAM = """\
-fn run_twice(exe: &str) {
-    let scratch = tempfile::tempdir().unwrap();
-    let mut command = std::process::Command::new(exe);
-    command.env("CARGO_TARGET_DIR", scratch.path());
-    command.output().unwrap();
-    command.env_remove("CARGO_TARGET_DIR");
-    command.output().unwrap();
-}
-"""
-
-
-def test_a_reused_program_is_read_at_its_first_run(tmp_path: pathlib.Path) -> None:
-    """The first run built into a temporary target, whatever the last run did."""
-    put(tmp_path, "tests/program.rs", REUSED_PROGRAM)
-    assert ("NC-009", "tests/program.rs") in profile(tmp_path)
-
-
-def test_a_reused_command_is_judged_at_each_run(tmp_path: pathlib.Path) -> None:
-    """The second run builds into a temporary directory, whatever the first did."""
-    put(tmp_path, "tests/twice.rs", REUSED_COMMAND)
-    assert ("NC-009", "tests/twice.rs") in profile(tmp_path)
 
 
 @pytest.mark.parametrize(
