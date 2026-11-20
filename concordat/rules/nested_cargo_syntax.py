@@ -30,8 +30,13 @@ where an expression begins even though it ends in a letter, so `async || { .. }`
 is a header just as `move ||` is. A return type before the
 body is part of the closure, so the body begins after the type rather than at
 its first comma, and the `>` of a function-pointer return inside that type
-closes no generic. A rejected header resumes at its own opening pipe, so the
-first pipe of a later `||` header is not consumed as a closing delimiter.
+closes no generic. A const block in the type (`Flag<{ 1 < 2 }>`) holds a
+comparison rather than a generic opener, so the body is still found after it,
+and a turbofish's type arguments are matched by bracket kind, so the `>` of a
+shift in an array length (`consume::<[u8; 4 >> 1]>(..)`) closes no generic and
+the call stays in the body. A rejected header resumes at its own opening pipe,
+so the first pipe of a later `||` header is not consumed as a closing
+delimiter.
 """
 
 from __future__ import annotations
@@ -381,7 +386,12 @@ def _opens_a_closure(masked: str, found: re.Match[str]) -> bool:
     it operates on. A pipe after a name, a call's `)`, an index's `]` or a
     literal's quote is therefore read as an operator, not a header. An `async`
     qualifier stands where an expression begins even though it ends in a
-    letter, so `async || { .. }` is a header just as `move ||` is.
+    letter, so `async || { .. }` is a header just as `move ||` is. A `return`
+    or `break` introduces the expression that follows it, so a header may
+    follow either keyword; a `break` label (`break 'outer`) writes no operand
+    of its own, so the label is skipped with the keyword. A keyword followed
+    by an operand (`break value`) has the operand in place, and its pipe is
+    read as the operator it is.
 
     Returns
     -------
@@ -395,8 +405,17 @@ def _opens_a_closure(masked: str, found: re.Match[str]) -> bool:
         return True
     if re.search(r"(?<!\w)async$", before) is not None:
         return True
+    if re.search(r"(?<!\w)(?:return|break)(?:\s+'[A-Za-z_]\w*)?$", before) is not None:
+        return True
     last = before[-1]
     return last != "_" and not (last.isalnum() or last in _OPERAND_END)
+
+
+# The closer each bracket opened in a return type is matched by. Bracket kinds
+# are tracked rather than a shared depth, so a `>` that is a shift
+# (`[u8; 4 >> 1]`) closes no generic that was never opened, and a `]` closes
+# the array it belongs to even when an ambiguous `<` sits inside it.
+_RETURN_TYPE_CLOSERS: typ.Final = {"(": ")", "[": "]", "<": ">"}
 
 
 def _body_start(masked: str, after: int) -> int:
@@ -408,7 +427,12 @@ def _body_start(masked: str, after: int) -> int:
     leave the rest of the closure unread. The arrow is followed past the type,
     and any whitespace after it is skipped. An arrow inside the type
     (`Result<fn() -> (), ()>`) is a function pointer's, not a generic's closer,
-    so the type is read whole rather than ending at its first comma.
+    so the type is read whole rather than ending at its first comma. Each
+    bracket is matched with its own kind, so a shift in an array's length
+    (`[u8; 4 >> 1]`) is not read as closing the type early. A brace inside the
+    type is a const block (`Flag<{ 1 < 2 }>`), and inside it only braces are
+    read, so the comparison's `<` opens no generic; the brace at the top level
+    is the body.
 
     Returns
     -------
@@ -421,7 +445,7 @@ def _body_start(masked: str, after: int) -> int:
     if not masked.startswith("->", index):
         return index
     index += 2
-    depth = 0
+    openers: list[str] = []
     while index < len(masked):
         if masked.startswith("->", index):
             # The `>` of a function-pointer return (`fn() -> ()`) closes no
@@ -429,13 +453,27 @@ def _body_start(masked: str, after: int) -> int:
             index += 2
             continue
         char = masked[index]
-        if char in "([<":
-            depth += 1
-        elif char in ")]>":
-            if depth == 0:
+        inside_brace = bool(openers) and openers[-1] == "{"
+        if char == "{":
+            if not openers:
                 break
-            depth -= 1
-        elif depth == 0 and char in ",;{":
+            openers.append("{")
+        elif inside_brace:
+            if char == "}":
+                openers.pop()
+        elif char in _RETURN_TYPE_CLOSERS:
+            openers.append(_RETURN_TYPE_CLOSERS[char])
+        elif char in ")]>":
+            if not openers:
+                break
+            # A closer with no matching opener (`4 >> 1`'s comparison inside
+            # an array's length) is an operator; one that matches an opener
+            # further down closes that bracket and anything still open inside
+            # it, such as an ambiguous `<` in `[u8; N < 4]`.
+            if char in openers:
+                while openers.pop() != char:
+                    pass
+        elif not openers and char in ",;":
             break
         index += 1
     while index < len(masked) and masked[index].isspace():
@@ -450,7 +488,12 @@ def closure_end(masked: str, after: int) -> int:
     its matched brace pair, so a `,` inside it does not end the closure; an
     expression body ends at the first `,`, `)`, `]`, `}` or `;` outside the
     body's own brackets. A return type written before the body is part of the
-    closure and not of its expression.
+    closure and not of its expression. A turbofish's type arguments
+    (`consume::<u8, u16>(..)`) are part of the call, so their commas separate
+    types rather than statements and do not end the body. The arguments are
+    matched by bracket kind, so the `>` of a shift in an array length
+    (`consume::<[u8; 4 >> 1]>(..)`) closes no generic and the call stays in
+    the body.
 
     Returns
     -------
@@ -462,7 +505,34 @@ def closure_end(masked: str, after: int) -> int:
         close = scan_balanced(masked, index)
         return len(masked) if close is None else close
     depth = 0
+    generics: list[str] = []
     while index < len(masked):
+        if generics:
+            if masked.startswith("->", index):
+                # A function-pointer return inside a type argument ends a
+                # generic with no `>` of its own.
+                index += 2
+                continue
+            char = masked[index]
+            if char == "<":
+                generics.append("<")
+            elif char == ">":
+                # Only an innermost `<` is a generic that `>` can close; a `[`
+                # or `(` opened inside one leaves the `>` to an array length's
+                # shift or a comparison.
+                if generics[-1] == "<":
+                    generics.pop()
+            elif char in "([{":
+                generics.append(_RETURN_TYPE_CLOSERS.get(char, "}"))
+            elif char in ")]}" and char in generics:
+                while generics.pop() != char:
+                    pass
+            index += 1
+            continue
+        if masked.startswith("::<", index):
+            generics.append("<")
+            index += 3
+            continue
         char = masked[index]
         if char in "([{":
             depth += 1
@@ -483,9 +553,12 @@ def _closure_headers(
 
     A bitwise chain can make the header pattern pair one `|` with the first
     pipe of a later `||` header (`a | b; let f = || ..`), consuming the pipe
-    that really opens the closure. A rejected match therefore resumes at its
-    own opening pipe rather than after it, so the second pipe of the `||` is
-    read as a header's opener. Bitwise expressions are rejected as before.
+    that really opens the closure. A rejected single-pipe match therefore
+    resumes at its own opening pipe rather than after it, so the second pipe
+    of the `||` is read as a header's opener. A rejected `||` match resumes
+    after both its pipes, because resuming on the second would pair it with
+    the next single `|` and swallow the source between them. Bitwise
+    expressions are rejected as before.
 
     *start* and *end* bound the scan, so a caller asking about one offset does
     not read the headers after it.
@@ -505,7 +578,7 @@ def _closure_headers(
             yield header
             index = header.end()
         else:
-            index = header.start() + 1
+            index = header.start() + (2 if header.group().startswith("||") else 1)
 
 
 def closure_spans(masked: str) -> list[tuple[int, int]]:

@@ -9,12 +9,15 @@ slow-timeout-only file, and the conservative cases that must stay quiet
 from __future__ import annotations
 
 import dataclasses
+import json
 import typing as typ
 
 import pygit2
 import pytest
 
+from concordat.rules import nested_cargo_statements as statement_reader
 from concordat.rules import packages, runner
+from concordat.rules.nested_cargo_handoffs import Window
 from concordat.rules.nested_cargo_nextest_envelope import (
     _predicate_arguments,
     build_nested_cargo_nextest_envelope,
@@ -24,9 +27,11 @@ from concordat.rules.nested_cargo_receivers import (
     call_chains,
     owns_chain,
 )
+from concordat.rules.nested_cargo_runs import Statement, _record_statement
 from concordat.rules.nested_cargo_shadows import file_index
-from concordat.rules.nested_cargo_statements import _closure_hiding
+from concordat.rules.nested_cargo_statements import _clip_spans, own_statements
 from concordat.rules.nested_cargo_syntax import closure_spans
+from concordat.rules.rust_source import mask_literals
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -701,8 +706,8 @@ GENERIC_ARROW_PARAMETERS = (
     "    add(noop, &mut git, &mut command);\n}\n"
     "fn add(hook: Result<fn() -> (), ()>, first: &mut Command, "
     "second: &mut Command) {\n"
-    '    first.arg("build").status().unwrap();\n'
-    '    second.arg("metadata").output().unwrap();\n'
+    '    first.arg("metadata").output().unwrap();\n'
+    '    second.arg("build").status().unwrap();\n'
     "    let _ = hook;\n}\n"
 )
 
@@ -710,10 +715,10 @@ GENERIC_ARROW_PARAMETERS = (
 def test_a_comma_after_a_function_pointer_return_keeps_parameter_positions(
     tmp_path: pathlib.Path,
 ) -> None:
-    """The arrow's `>` does not close `Result`, so index two is still `second`."""
+    """The arrow's `>` does not close `Result`, so `second` runs the build."""
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", GENERIC_ARROW_PARAMETERS)
-    assert ids(tmp_path) == set()
+    assert ids(tmp_path) == {"NC-004"}
 
 
 GENERIC_ARROW_SIGNATURE = (
@@ -1216,8 +1221,18 @@ def test_a_methods_callback_parameter_shadows_the_helper_name(
 
 
 def grouped_config(filter_expression: str) -> str:
-    """Return a bounded configuration whose one grouped override uses a filter."""
-    return CLEAN.replace("binary(ui)", filter_expression)
+    r"""Return a bounded configuration whose one grouped override uses a filter.
+
+    The filter is serialised as a TOML basic string, so a backslash in the
+    filter (`\)`, which the filter parser reads as data) survives the
+    configuration instead of being rejected as an unknown escape.
+
+    Returns
+    -------
+    str
+        The configuration text with the filter in place of `binary(ui)`.
+    """
+    return CLEAN.replace('"binary(ui)"', json.dumps(filter_expression))
 
 
 @pytest.mark.parametrize(
@@ -3645,7 +3660,7 @@ def test_closure_hiding_reads_the_text_before_the_statement() -> None:
     source = 'let f = |command: &mut Command| { command.arg("x");\ncommand.status(); };'
     begin = source.index("command.status")
     stop = source.index(";", begin)
-    ((start, end),) = _closure_hiding(source[:stop], begin, stop)
+    ((start, end),) = _clip_spans(closure_spans(source[:stop]), begin, stop)
     assert (start, end) == (0, stop - begin)
 
 
@@ -4202,12 +4217,12 @@ def test_a_cargo_lookup_as_the_constructor_argument_is_read(
 
 PARENTHESISED_ARM_EXPRESSION = (
     "use std::process::Command;\n"
-    "fn run(callback: fn(&mut Command)) {\n"
+    "fn run(callback: fn(&mut Command) -> usize) {\n"
     '    let mut command = Command::new("cargo");\n'
-    "    match callback { configure => noop() + configure(&mut command) }\n"
+    "    let _ = match callback { configure => noop() + configure(&mut command) };\n"
     '    command.arg("metadata").status().unwrap();\n'
     "}\n"
-    'fn configure(command: &mut Command) { command.arg("build"); }\n'
+    'fn configure(command: &mut Command) -> usize { command.arg("build"); 0 }\n'
     "fn noop() -> usize { 0 }\n"
 )
 
@@ -4248,3 +4263,519 @@ def test_an_async_closure_header_is_a_closure() -> None:
     source = "let _deferred = async || { configure(&mut command); };"
     ((start, stop),) = closure_spans(source)
     assert start < source.index("configure(&mut command)") < stop
+
+
+COMMENTED_BINDING_WITH_A_HELPER = (
+    "use std::process::Command;\n"
+    "fn probe_version() {\n"
+    '    let mut command = /* fixture */ Command::new("rustc");\n'
+    "    add_version(&mut command);\n"
+    '    command.arg("input.rs").status().unwrap();\n'
+    "}\n"
+    "fn add_version(command: &mut Command) {\n"
+    '    command.arg("--version");\n'
+    "}\n"
+)
+
+
+def test_a_helper_of_a_comment_bound_command_is_spliced(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper's `--version` is read, so the run is a probe, not a compile."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", COMMENTED_BINDING_WITH_A_HELPER)
+    assert ids(tmp_path) == set()
+
+
+SHORT_CIRCUITED_LAUNCH_THEN_A_BUILD = (
+    "use std::process::Command;\n"
+    "fn maybe_build(clean: bool) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    '    clean && command.arg("metadata").output().is_ok();\n'
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_the_path_that_skips_a_short_circuited_launch_still_builds(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`clean == false` skips the metadata run, so the later `build` is read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SHORT_CIRCUITED_LAUNCH_THEN_A_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONDITIONAL_HELP_TOPIC = (
+    "use std::process::Command;\n"
+    "fn maybe_help(show: bool) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    if show {\n"
+    '        command.args(["help", "build"]);\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_conditional_help_topic_is_not_a_conditional_build(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`help` is first in its block, so `build` is its topic on that path."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_HELP_TOPIC)
+    assert ids(tmp_path) == set()
+
+
+CONDITIONAL_VALUE_OPTION_BEFORE_A_BUILD = (
+    "use std::process::Command;\n"
+    "fn build_with_color(verbose_color: bool) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    if verbose_color {\n"
+    '        command.arg("--color");\n'
+    "    }\n"
+    '    command.args(["always", "build"]).status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_conditional_value_option_keeps_the_value_on_its_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`--color always build` builds when the option's block runs."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_VALUE_OPTION_BEFORE_A_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+DESTRUCTURED_LOCAL_COMMAND = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(other: &mut Command) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    {\n"
+    "        let (mut command,) = (other,);\n"
+    '        command.arg("build");\n'
+    "    }\n"
+    '    command.arg("metadata").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_destructured_local_command_shadows_only_inside_its_block(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The inner `build` belongs to `other`, so the outer command only reads."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", DESTRUCTURED_LOCAL_COMMAND)
+    assert ids(tmp_path) == set()
+
+
+@pytest.mark.parametrize("keyword", ["return", "break"])
+def test_an_expression_introducing_keyword_opens_a_closure(keyword: str) -> None:
+    """A closure may follow `return` or `break`, however the keyword ends."""
+    source = f"{keyword} |command: &mut Command| {{ configure(command); }};"
+    ((start, stop),) = closure_spans(source)
+    assert start < source.index("configure(command)") < stop
+
+
+def test_a_rejected_boolean_or_does_not_pair_with_a_later_closure() -> None:
+    """The second pipe of `a || b` is not a header's opening pipe."""
+    source = "let enabled = a || b; configure(command); let f = || ();"
+    call = source.index("configure(command)")
+    assert not any(start < call < stop for start, stop in closure_spans(source))
+
+
+def test_a_shift_in_an_array_return_type_keeps_the_body_in_the_closure() -> None:
+    """`4 >> 1` closes the array, not the closure's return type."""
+    source = "let f = || -> [u8; 4 >> 1] { configure(command); };"
+    ((start, stop),) = closure_spans(source)
+    assert start < source.index("configure(command)") < stop
+
+
+def test_a_turbofish_comma_keeps_the_expression_body_in_the_closure() -> None:
+    """The comma of `::<u8, u16>` separates types, not statements."""
+    source = 'let deferred = || consume::<u8, u16>(command.arg("build"));'
+    ((start, stop),) = closure_spans(source)
+    assert start < source.index("command.arg") < stop
+
+
+CLOSURE_PARAMETER_AFTER_THE_CLOSURE = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    let hook = |configure: fn(&mut Command)| {};\n"
+    "    configure(&mut command);\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_closure_parameter_does_not_shadow_the_name_after_the_closure(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The closure has ended, so the later call reaches the free function."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CLOSURE_PARAMETER_AFTER_THE_CLOSURE)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONDITIONAL_LET_BINDING = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    let hook = |_command: &mut Command| {};\n"
+    "    if let Some(configure) = Some(hook) {\n"
+    "        configure(&mut command);\n"
+    "    }\n"
+    "    configure(&mut command);\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_an_if_let_binding_ends_with_its_consequent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The call after the conditional reaches the free function again."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_LET_BINDING)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SELF_NAMED_INITIALIZER = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    let configure = configure(&mut command);\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_binding_does_not_shadow_its_own_initializer(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The initializer call still resolves to the free function."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SELF_NAMED_INITIALIZER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+EMPTY_LOOP_THEN_A_BLOCK = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    "    let hooks: [(); 1] = [()];\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    for configure in hooks {}\n"
+    "    {\n"
+    "        configure(&mut command);\n"
+    "    }\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_block_after_an_empty_loop_body_is_not_the_loop_body(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The loop binding has ended, so the later call reaches the helper."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", EMPTY_LOOP_THEN_A_BLOCK)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+def test_a_filter_with_an_escape_reaches_the_filter_parser(
+    tmp_path: pathlib.Path,
+) -> None:
+    r"""The TOML string keeps `\)` as filter data instead of rejecting it."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", BUILD_TEST)
+    put(
+        tmp_path,
+        ".config/nextest.toml",
+        grouped_config(r"binary(ui) | test(~a\)b)"),
+    )
+    assert ids(tmp_path) == set()
+
+
+RETURNING_ELSE_IF_THEN_A_SHARED_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(flag: bool, other: bool) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    if flag {\n"
+    "    } else if other {\n"
+    "        return;\n"
+    "    } else {\n"
+    '        command.arg("metadata");\n'
+    "    }\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_returning_else_if_does_not_promote_the_final_else(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The first arm reaches the launch without the final arm's `metadata`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", RETURNING_ELSE_IF_THEN_A_SHARED_LAUNCH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+GUARDED_CALLBACK_ONLY = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    let hook = |_command: &mut Command| {};\n"
+    "    if let Some(configure) = Some(hook) {\n"
+    "        configure(&mut command);\n"
+    "    }\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_guarded_callback_call_is_not_spliced(tmp_path: pathlib.Path) -> None:
+    """The only call reaches the guarded binding, so the helper is not read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", GUARDED_CALLBACK_ONLY)
+    assert ids(tmp_path) == set()
+
+
+SELF_NAMED_REBINDING_INITIALIZER = (
+    "use std::process::Command;\n"
+    "fn rebuild() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    '    let command = command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_rebinding_initializer_is_read_before_the_shadow(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The initializer still runs the old command, so its `build` counts."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SELF_NAMED_REBINDING_INITIALIZER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+def test_a_comparison_in_a_const_return_type_ends_the_closure() -> None:
+    """The body closes at its brace, so the later launch is not hidden."""
+    source = 'let f = || -> Flag<{ 1 < 2 }> { Flag }; command.arg("build").status();'
+    body = source.index("Flag };")
+    later = source.index("command.arg")
+    ((start, stop),) = closure_spans(source)
+    assert start < body < stop < later
+
+
+def test_a_shift_in_a_turbofish_keeps_the_call_in_the_closure() -> None:
+    """`4 >> 1` stays inside the type arguments, so the call is deferred."""
+    source = 'let deferred = || consume::<[u8; 4 >> 1]>(command.arg("build").status());'
+    ((start, stop),) = closure_spans(source)
+    assert start < source.index("command.arg") < stop
+
+
+BLOCK_VALUED_LOOP_ITERATOR = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    for configure in { [noop as fn(&mut Command)] } {\n"
+    "        configure(&mut command);\n"
+    "    }\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+    "fn noop(_command: &mut Command) {}\n"
+)
+
+
+def test_a_block_valued_iterator_is_not_the_loop_body(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The call reaches the loop binding, so the helper is not spliced."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", BLOCK_VALUED_LOOP_ITERATOR)
+    assert ids(tmp_path) == set()
+
+
+MATCH_GUARD_CALLS_THE_BOUND_CALLBACK = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(callback: fn(&mut Command) -> bool) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    match callback {\n"
+    "        configure if { configure(&mut command); false } => {}\n"
+    "        _ => {}\n"
+    "    }\n"
+    '    command.arg("metadata").status().unwrap();\n'
+    "}\n"
+    "fn configure(command: &mut Command) -> bool {\n"
+    '    command.arg("build");\n'
+    "    true\n"
+    "}\n"
+)
+
+
+def test_a_match_guard_call_reaches_the_bound_pattern(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An arm's pattern is in scope in its guard, so the helper is not read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", MATCH_GUARD_CALLS_THE_BOUND_CALLBACK)
+    assert ids(tmp_path) == set()
+
+
+def test_an_else_arm_opened_in_a_statement_holds_the_launch() -> None:
+    """The arm's entry blocks leave out the arm the statement has closed."""
+    source = '} else { if other { command.arg("build").status(); } }'
+    masked = mask_literals(source)
+    launch = masked.index(".status")
+    statements: list[Statement] = []
+    _record_statement(
+        statements, Window(source, masked), (0, launch), launch, 1, (100,)
+    )
+    assert statements[-1].launch_blocks == (7, 18)
+
+
+NEWLINE_BEFORE_A_FUNCTION_NAME = (
+    "use std::process::Command;\n"
+    "fn noop() {}\n"
+    "fn\n"
+    "run(configure: fn(&mut Command)) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    configure(&mut command);\n"
+    "}\n"
+    "fn configure(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_function_name_on_the_next_line_starts_a_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`run` is the caller, so its parameter shadows the free function."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", NEWLINE_BEFORE_A_FUNCTION_NAME)
+    assert ids(tmp_path) == set()
+
+
+LAUNCH_BESIDE_A_CLOSURE = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    '    let _ = (|| { noop(); }, command.arg("metadata").status());\n'
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+    "fn noop() {}\n"
+)
+
+
+def test_a_launch_beside_a_closure_is_unconditional(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The tuple's second element runs at the outer depth, ending the read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LAUNCH_BESIDE_A_CLOSURE)
+    assert ids(tmp_path) == set()
+
+
+RETURNING_MIDDLE_ARM = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(flag: bool, other: bool) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    if flag {\n"
+    '        command.arg("metadata");\n'
+    "    } else if other {\n"
+    "        return;\n"
+    "    } else {\n"
+    "        return;\n"
+    "    }\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_returning_middle_arm_leaves_the_first_arm_launching(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The first arm is the only path left, so its `metadata` is given."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", RETURNING_MIDDLE_ARM)
+    assert ids(tmp_path) == set()
+
+
+def test_the_window_closures_are_scanned_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The spans are computed once per window, not once per statement."""
+    source = (
+        'let mut command = Command::new(env!("CARGO"));\n'
+        'command.arg("--version");\n'
+        'command.arg("--help");\n'
+        "command.status();\n"
+    )
+    masked = mask_literals(source)
+    calls: list[str] = []
+    original = statement_reader.closure_spans
+
+    def counting(text: str) -> list[tuple[int, int]]:
+        """Record one scan and delegate to the real scanner."""
+        calls.append(text)
+        return original(text)
+
+    monkeypatch.setattr(statement_reader, "closure_spans", counting)
+    own_statements(masked, masked.index("Command::new"), Window(source, masked))
+    assert len(calls) == 1
+
+
+SHORT_CIRCUIT_IN_ANOTHER_OPERAND = (
+    "use std::process::Command;\n"
+    "fn build_test_binary(first: bool, second: bool) {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    '    (first || second, command.arg("metadata").status().unwrap());\n'
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_short_circuit_in_another_operand_does_not_skip_the_launch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The tuple's second element runs either way, so the read ends there."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SHORT_CIRCUIT_IN_ANOTHER_OPERAND)
+    assert ids(tmp_path) == set()
+
+
+PARENTHESISED_RETURN_EXPRESSION = (
+    "use std::process::Command;\n"
+    "fn probe(command: &mut Command) {\n"
+    '    return (command.arg("--help"));\n'
+    "}\n"
+    "fn run() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    probe(&mut command);\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_parenthesised_return_expression_stays_unconditional(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper always adds `--help`, so the caller's launch prints help."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PARENTHESISED_RETURN_EXPRESSION)
+    assert ids(tmp_path) == set()

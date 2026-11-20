@@ -6,10 +6,17 @@ else the name may denote: a parameter of the enclosing function or of a closure,
 a `let` or loop variable, a destructuring pattern, a `const` or `static` item, a
 `use` import, or a `match` arm's pattern. Any of them means the call reaches
 something the scan cannot read, so the handoff is declined rather than guessed.
+A binding's scope is read as Rust scopes it: a `let` binds from the end of its
+statement, and an `if let` or `while let` only inside the block it guards, so a
+call in an initializer or after a guard still reaches the free function.
 
 A `match` arm's pattern binds every name it mentions, so
 `match callback { configure => configure(..) }` calls the bound value; the scope
-ends with the arm's body. The readers here locate the arms and the blocks that
+ends with the arm's body, and it reaches the arm's guard too, because the
+pattern is in scope there (`configure if configure(..) => ..`). A loop's
+pattern binds inside the loop's body, and the iterator before it may itself be
+a block (`for configure in { hooks } { .. }`), which is the expression rather
+than the body. The readers here locate the arms and the blocks that
 hold a call, because both questions are answered by the same brace walk: which
 blocks enclose the call, and which of them is a match.
 
@@ -21,8 +28,10 @@ item out of the answer.
 A binding counts only in the scope that holds the call, so the file's function
 items are indexed once (:class:`FileIndex`): the innermost function whose body
 still holds the call is that scope, and a function item declared inside the
-caller is not mistaken for it. The same index matches a `const` or `static` to
-the block that declares it.
+caller is not mistaken for it. A function item's name may stand on the line
+after its `fn` (`fn` then `run(..)`), which is the same item and the same
+scope. The same index matches a `const` or `static` to the block that declares
+it.
 """
 
 from __future__ import annotations
@@ -32,19 +41,21 @@ import re
 import typing as typ
 
 from .nested_cargo_syntax import (
-    CLOSURE_HEADER,
     _binding_pattern,
+    _closure_headers,
     _split_parameters,
+    closure_end,
     parameter_names,
     pattern_binds,
     top_level_item,
 )
 from .rust_source import scan_balanced
 
-# An arm arrow and the brackets that hold a pattern together. A pattern's own
-# comma (`(configure, other) =>`) is inside its parentheses, so only a comma at
-# the arm's own level ends one.
-_ARM_TOKENS: typ.Final = re.compile(r"=>|[()\[\]{},]")
+# An arm arrow, its guard's `if`, and the brackets that hold a pattern
+# together. A pattern's own comma (`(configure, other) =>`) is inside its
+# parentheses, so only a comma at the arm's own level ends one. The guard is
+# what makes the pattern's bindings visible to the call written in it.
+_ARM_TOKENS: typ.Final = re.compile(r"=>|\bif\b|[()\[\]{},]")
 
 # A following item is another scope, so a name's arguments end there. Rust
 # writes a function's qualifiers before `fn` in any of several orders, so
@@ -52,12 +63,14 @@ _ARM_TOKENS: typ.Final = re.compile(r"=>|[()\[\]{},]")
 # new scope just as a plain `fn` does. An item may begin on the line that ends
 # the previous one (`} fn later(..)`), so the boundary is the word `fn` and not
 # the start of a line; `fn` is a keyword, and the space before a name keeps it
-# from matching `fn` as part of another word or a `fn(..)` type.
+# from matching `fn` as part of another word or a `fn(..)` type. Rust lets the
+# name stand on the line after `fn`, so every separator is whitespace rather
+# than a space or tab.
 _FUNCTION_QUALIFIER: typ.Final = (
-    r"(?:pub(?:\([^)]*\))?[ \t]+|default[ \t]+|const[ \t]+|async[ \t]+"
-    r"|unsafe[ \t]+|extern[ \t]*\"[^\"]*\"[ \t]+)*"
+    r"(?:pub(?:\([^)]*\))?\s+|default\s+|const\s+|async\s+"
+    r"|unsafe\s+|extern\s*\"[^\"]*\"\s+)*"
 )
-FUNCTION_BOUNDARY: typ.Final = re.compile(rf"\b{_FUNCTION_QUALIFIER}fn[ \t]+\w+")
+FUNCTION_BOUNDARY: typ.Final = re.compile(rf"\b{_FUNCTION_QUALIFIER}fn\s+\w+")
 
 
 class FileIndex(typ.NamedTuple):
@@ -134,8 +147,11 @@ def _arm_pattern_binds(segment: str, name: str) -> bool:
     body; an arrow deeper in one belongs to a match the body holds. A closing
     bracket that is not a block's brace does not end the arm: the binding is in
     scope for the whole expression, so `configure => noop() + configure(..)`
-    still holds its arm after `noop()` closes. A segment that ends inside a
-    pattern rather than a body holds no call, so it binds nothing.
+    still holds its arm after `noop()` closes. A guard is part of the arm's
+    scope too: `configure if configure(..) => ..` calls the bound value, so a
+    depth-zero `if` before the arrow measures the pattern before it and leaves
+    the arm active through the guard. A segment that ends inside a pattern
+    rather than a body holds no call, so it binds nothing.
 
     Returns
     -------
@@ -147,6 +163,7 @@ def _arm_pattern_binds(segment: str, name: str) -> bool:
     pattern_start = 0
     binds = False
     in_body = False
+    in_guard = False
     for found in _ARM_TOKENS.finditer(segment):
         mark = found.group()
         if mark in "([{":
@@ -158,13 +175,26 @@ def _arm_pattern_binds(segment: str, name: str) -> bool:
                 pattern_start = found.end()
         elif depth:
             continue
-        elif mark == "=>":
+        elif mark == "if":
+            if in_body or in_guard:
+                # The body's or the guard's own `if` decides nothing about the
+                # arm; only the first one, before the arrow, opens the guard.
+                continue
+            # The pattern's bindings are in scope in the guard, so the arm is
+            # active from here to the arrow even though the arrow is still to
+            # come.
             binds = bound.search(segment[pattern_start : found.start()]) is not None
+            in_guard = True
+        elif mark == "=>":
+            if not in_guard:
+                binds = bound.search(segment[pattern_start : found.start()]) is not None
+            in_guard = False
             in_body = True
         else:
             in_body = False
+            in_guard = False
             pattern_start = found.end()
-    return binds if in_body else False
+    return binds if (in_body or in_guard) else False
 
 
 def match_arm_binds(masked: str, name: str, start: int, at: int) -> bool:
@@ -244,6 +274,84 @@ def _innermost(masked: str, start: int, at: int) -> int | None:
     return openers[-1] if openers else None
 
 
+def _guarded_block(masked: str, after: int, start: int, at: int) -> int | None:
+    """Return the block an `if let` or `while let` after *after* guards at *at*.
+
+    The block is the first brace written outside the initializer's own
+    brackets. A guard whose block has closed before the call does not hold it,
+    so the call after the guard reaches whatever the name meant before it. An
+    initializer that writes a block of its own (`match y { .. }`) makes the
+    guard unreadable, and the call is then read as the free function.
+
+    Returns
+    -------
+    int | None
+        The guarded block's opening brace, or None when it does not hold *at*.
+    """
+    open_at = open_braces(masked, start, at)
+    depth = 0
+    index = after
+    while index < at:
+        char = masked[index]
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth = max(depth - 1, 0)
+        elif char == "{" and depth == 0:
+            return index if index in open_at else None
+        index += 1
+    return None
+
+
+def _statement_end_after(masked: str, after: int) -> int:
+    """Return the offset just past the statement that continues after *after*.
+
+    A `let` binds its name only once its initializer has been evaluated, so a
+    call written in that initializer (`let configure = configure(command);`)
+    still reaches whatever the name meant before the binding. The statement
+    ends at the first `;` outside its own brackets, or at the brace that
+    closes its block when the semicolon is omitted.
+
+    Returns
+    -------
+    int
+        The offset just past the statement, or the end of *masked*.
+    """
+    depth = 0
+    index = after
+    while index < len(masked):
+        char = masked[index]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            if depth == 0:
+                return index + 1
+            depth -= 1
+        elif char == ";" and depth == 0:
+            return index + 1
+        index += 1
+    return index
+
+
+def _let_holds(masked: str, start: int, at: int, found: re.Match[str]) -> bool:
+    """Report whether the `let` at *found* binds a name that is live at *at*.
+
+    An `if let` or `while let` binds only inside the block it guards, so a
+    call after that block reaches the free function again. An ordinary `let`
+    binds from the end of its statement, so a call written in the initializer
+    is not shadowed by the name it helps to compute.
+
+    Returns
+    -------
+    bool
+        True when the binding governs *at*.
+    """
+    before = masked[start : found.start()].rstrip()
+    if re.search(r"(?<!\w)(?:if|while)$", before) is not None:
+        return _guarded_block(masked, found.end(), start, at) is not None
+    return at >= _statement_end_after(masked, found.end())
+
+
 def _let_binds(masked: str, name: str, start: int, at: int) -> bool:
     """Report whether a live `let` between *start* and *at* binds *name*.
 
@@ -257,6 +365,12 @@ def _let_binds(masked: str, name: str, start: int, at: int) -> bool:
     initializer is not part of it and a call on the right-hand side
     (`let x = configure(..)`) is not mistaken for a binding.
 
+    A binding's scope can be narrower than its block: an `if let` binds only
+    inside the block it guards, and an ordinary `let` binds only from the end
+    of its statement. Both are asked of the binding itself rather than of the
+    block, so the binding's own initializer and the code after a guard are
+    read from the free function.
+
     Returns
     -------
     bool
@@ -265,7 +379,9 @@ def _let_binds(masked: str, name: str, start: int, at: int) -> bool:
     bound = re.compile(rf"\b{re.escape(name)}\b")
     binder = re.compile(rf"\blet\s+{_BINDING}{re.escape(name)}\b")
     for found in binder.finditer(masked, start, at):
-        if _live(masked, start, _innermost(masked, start, found.start()), at):
+        if _let_holds(masked, start, at, found) and _live(
+            masked, start, _innermost(masked, start, found.start()), at
+        ):
             return True
     pattern = re.compile(r"\blet\b([^=;]*?)\s*=")
     for found in pattern.finditer(masked, start, at):
@@ -273,7 +389,9 @@ def _let_binds(masked: str, name: str, start: int, at: int) -> bool:
         destructures = any(char in candidate for char in "([{")
         if not destructures or bound.search(candidate) is None:
             continue
-        if _live(masked, start, _innermost(masked, start, found.start()), at):
+        if _let_holds(masked, start, at, found) and _live(
+            masked, start, _innermost(masked, start, found.start()), at
+        ):
             return True
     return False
 
@@ -283,28 +401,57 @@ def _loop_body(masked: str, after: int, at: int) -> int | None:
 
     The body follows the loop's `in` and iterator expression, and that
     expression may hold a block of its own in a closure
-    (`for x in items.map(|i| { i }) {}`). A block that has closed before the
-    call is such a block rather than the body, so the first brace whose
-    balanced close still holds *at* is the body. A brace after the call, or
-    none that closes after it, leaves the call outside every loop body.
+    (`for x in items.map(|i| { i }) {}`). Brackets are tracked so such a block
+    is not mistaken for the body; the body is the first brace written outside
+    them. The expression may itself be a block (`for x in { hooks } { .. }`),
+    so a brace written immediately after `in` is read as the expression's when
+    another brace follows the block it opens; otherwise it is the body. A body
+    that closes before the call leaves the call outside every loop, so a block
+    written after the loop is not read as its body.
 
     Returns
     -------
     int | None
         The body's opening brace, or None when it does not hold *at*.
     """
+    depth = 0
     index = after
-    while index < len(masked):
-        brace = masked.find("{", index)
-        if brace < 0 or brace > at:
-            return None
-        close = scan_balanced(masked, brace)
-        if close is None:
-            return None
-        if close > at:
-            return brace
-        index = close + 1
+    previous = after
+    while index < len(masked) and index <= at:
+        char = masked[index]
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth = max(depth - 1, 0)
+        elif char == "{" and depth == 0:
+            close = scan_balanced(masked, index)
+            if close is None:
+                return None
+            immediately = not masked[previous:index].strip()
+            if immediately and _followed_by_a_brace(masked, close):
+                # The block is the iterator expression, not the body: the
+                # body's brace follows it.
+                index = close + 1
+                previous = index
+                continue
+            return index if close > at else None
+        index += 1
     return None
+
+
+def _followed_by_a_brace(masked: str, close: int) -> bool:
+    """Report whether the next character after *close* is a brace.
+
+    Returns
+    -------
+    bool
+        True when only whitespace separates the closing brace at *close* from
+        an opening brace.
+    """
+    index = close + 1
+    while index < len(masked) and masked[index].isspace():
+        index += 1
+    return index < len(masked) and masked[index] == "{"
 
 
 def _for_binds(masked: str, name: str, start: int, at: int) -> bool:
@@ -340,21 +487,25 @@ def _for_binds(masked: str, name: str, start: int, at: int) -> bool:
 
 
 def _closure_binds(masked: str, start: int, at: int, name: str) -> bool:
-    """Report whether a closure header between *start* and *at* binds *name*.
+    """Report whether a closure header holding *at* binds *name*.
 
     A closure's own arguments are its values, not the caller's, so a call
     written inside one reaches whatever the header bound. The binding may sit
     anywhere in the list (`|_: (), configure: fn(&mut Command)|`), so every
     parameter's binding is read, and only the text before its type delimiter
-    counts.
+    counts. The header binds only while its body holds the call: a call after
+    a closure that has ended reaches the free function again.
 
     Returns
     -------
     bool
-        True when a `|..|` header before *at* binds *name*.
+        True when a `|..|` header before *at* binds *name* and its body holds
+        *at*.
     """
     bound = re.compile(rf"\b{re.escape(name)}\b")
-    for header in CLOSURE_HEADER.finditer(masked, start, at):
+    for header in _closure_headers(masked, start, at):
+        if closure_end(masked, header.end()) <= at:
+            continue
         if any(
             bound.search(_binding_pattern(part)) is not None
             for part in _split_parameters(header["params"])

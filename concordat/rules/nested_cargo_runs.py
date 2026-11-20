@@ -20,9 +20,11 @@ A statement that opens the branch its launch runs in (`if cond {`, `} else {`)
 is recorded as two: the text before the branch's brace, which runs on every
 path that reaches the choice, and the arm itself. The condition's arguments are
 then inherited by the run of every arm, as they are at run time, rather than
-being attributed to whichever arm happened to be read first. When one arm of an
-`if`/`else` returns, the other arm is the surviving path, and its statements
-join the run that launches.
+being attributed to whichever arm happened to be read first. The arm keeps the
+blocks the launch was reached with, so a block the statement closed before the
+branch (`} else {` closes the arm beside it) is not left open at the arm and
+the branch's own brace is. When one arm of an `if`/`else` returns, the other
+arm is the surviving path, and its statements join the run that launches.
 """
 
 from __future__ import annotations
@@ -298,17 +300,21 @@ def _record_statement(
         _append_statement(
             statements, window, (start, branch), start_depth, blocks, None
         )
-        arm_blocks = list(blocks)
-        _track(arm_blocks, window.masked[branch:stop], branch)
+        # The arm's own blocks are the ones the launch was reached with: the
+        # blocks open at the branch are those before the branch's brace, and
+        # the launch sits inside the branch itself. Tracking the arm's text
+        # again from the statement's start would lose the blocks the statement
+        # closed or opened before the branch (`} else {` closes a block the
+        # launch is not in).
         _append_statement(
             statements,
             window,
             (branch, stop),
             start_depth,
-            blocks,
-            tuple(arm_blocks),
+            tuple(launch_blocks[:-1]),
+            tuple(launch_blocks),
         )
-        return _Launch(arm_blocks[-1] if arm_blocks else None, depth)
+        return _Launch(branch, depth)
     _append_statement(
         statements, window, (start, stop), start_depth, blocks, tuple(launch_blocks)
     )

@@ -12,12 +12,15 @@ the subcommand and `build` as its topic. A conditional word cannot hide the
 subcommand on the path that skips its block, so a `help` inside an `if` leaves
 the unconditional `build` still compiling, and it cannot fill an option's value
 slot either: the path that skips its block gives the next word as that value.
-A run with no unconditional subcommand at all is compiled when any path names
-one: a `metadata` in one block beside a `build` in another builds when only the
-build's block runs, and two conditional words before a topic are each read as a
-possible subcommand. An arm left as the only path after the other arm returns
-is read as given on every path. A word the reader cannot see leaves the
-subcommand open, and then any compiling word before the launch is enough.
+A conditional word is read with the ordered words on the path that gives it, so
+a `build` that is the topic of a conditional `help` does not count, while a
+value-taking option on that path keeps the next word as its value and leaves a
+later `build` as the subcommand. A run with no unconditional subcommand at all
+is compiled when any path names one: a `metadata` in one block beside a `build`
+in another builds when only the build's block runs. An arm left as the only
+path after the other arm returns is read as given on every path. A word the
+reader cannot see leaves the subcommand open, and then any compiling word
+before the launch is enough.
 
 `-h` or `--help` makes the command compile nothing at all when it is given on
 every path, and each arm of a fully paired choice is read for its own
@@ -105,6 +108,7 @@ from .nested_cargo_words import (
     _ARGUMENT_CALL,
     _HELP_FLAGS,
     _QUERY_SET,
+    _VALUE_OPTIONS,
     _VERSION_FLAGS,
     ConditionalWord,
     _cargo_options,
@@ -292,10 +296,13 @@ def _arm_paths(
     `if`/`else` chain: then each path's words are the unconditional ones plus
     that arm's. A guarded word, a word the reader cannot see, or one nested
     deeper leaves a path's words uncertain, so no path is returned and the
-    caller falls back to reading the unconditional sequence. An option given
-    in a block of its own (`if verbose { command.arg("-v") }`) is the
-    exception: it cannot change the subcommand, so the choice beside it is
-    still read path by path.
+    caller falls back to reading the unconditional sequence. An option that
+    takes no value and is given in a block of its own
+    (`if verbose { command.arg("-v") }`) is the exception: it cannot change
+    the subcommand, so the choice beside it is still read path by path. A
+    value-taking option is not set aside, because on the path that runs its
+    block it keeps the next word as its value and so can move the subcommand
+    (`--color`, `always`, `build`).
 
     Returns
     -------
@@ -316,9 +323,15 @@ def _arm_paths(
             # A word that can hide the subcommand leaves a path uncertain, and
             # so does a separator: a `--` given on one path sends every later
             # word to the program, so the arms' help flags no longer excuse the
-            # run on that path. Only an option of a block of its own can be set
-            # aside here.
-            if word.guarded or not _is_option(word.word) or word.word == "--":
+            # run on that path. Only an option that takes no value can be set
+            # aside here; a value-taking one moves the next word into its value
+            # slot on the path that runs its block.
+            if (
+                word.guarded
+                or not _is_option(word.word)
+                or word.word == "--"
+                or word.word in _VALUE_OPTIONS
+            ):
                 return None
             continue
         by_arm.setdefault(word.blocks[depth], []).append(word.word)
@@ -509,19 +522,54 @@ def _before_a_separator(
     return kept
 
 
+def _words_on_path(
+    words: list[str | ConditionalWord | None],
+    candidate: ConditionalWord,
+) -> list[str | None]:
+    """Return the words cargo reads on the path that gives *candidate*.
+
+    A plain word is given on every path. A conditional word is given only where
+    every block it sits in also runs, so one in a sibling block is left out;
+    one behind a short circuit is left out too, because the path through its
+    block may still skip it. The candidate itself is kept: the question is what
+    cargo reads on the path that gives it, so a word before it fixes the
+    subcommand, and a value-taking option before a plain word takes that word
+    as its value (`--color`, `always`, `build` gives the subcommand `build`).
+
+    Returns
+    -------
+    list[str | None]
+        The words on the path, in the order they are given.
+    """
+    path: list[str | None] = []
+    for word in words:
+        if not isinstance(word, ConditionalWord):
+            path.append(word)
+        elif word is candidate or (
+            not word.guarded and candidate.blocks[: len(word.blocks)] == word.blocks
+        ):
+            path.append(word.word)
+    return path
+
+
 def _a_conditional_word_compiles(
     words: list[str | ConditionalWord | None],
 ) -> bool:
     """Report whether a conditional word can be the subcommand on some path.
 
-    A conditional word is absent on the path that skips its block, so the words
-    before it that every path gives are read on their own: if the word is the
-    first positional there, the path that gives it has that subcommand. Two
-    blocks in sequence are read apart this way even when neither is a paired
-    choice (`if a { arg("search") } if b { arg("install") } arg("ripgrep")`
-    gives `install` when only the second block runs). A word after an
-    unconditional subcommand is not read, because the subcommand is fixed
-    before it (`cargo help build` prints help rather than building).
+    A conditional word is absent on the path that skips its block, so the
+    ordered words on the path that gives it are read: the words every path
+    gives, the enclosing blocks' words and the word's own block's words. The
+    word compiles only when the first positional on that path is a compiling
+    subcommand, so `if show { command.args(["help", "build"]) }` reads `help`
+    as the subcommand and `build` as its topic, while two blocks in sequence
+    are still read apart (`if a { arg("search") } if b { arg("install") }
+    arg("ripgrep")` gives `install` when only the second block runs). A word
+    after an unconditional subcommand is not read, because the subcommand is
+    fixed before it (`cargo help build` prints help rather than building). A
+    value-taking option on the path keeps the next word as its value, so
+    `if color { arg("--color") } args(["always", "build"])` still reads
+    `build` as the subcommand when the option's block runs.
 
     A path that is also given a help flag compiles nothing, so the flag is
     kept beside the word it travels with: a conditional `build` and a
@@ -533,20 +581,17 @@ def _a_conditional_word_compiles(
     Returns
     -------
     bool
-        True when some conditional word is a compiling subcommand on a path.
+        True when some conditional word's path starts a compiling subcommand.
     """
     helping = _helping_blocks(words)
-    earlier: list[str | None] = []
-    for word in words:
-        if isinstance(word, ConditionalWord):
-            if (
-                word.word in _COMPILING
-                and _first_positional([*earlier, word.word]) == word.word
-                and not _a_path_asks(helping, word)
-            ):
-                return True
+    listed = list(words)
+    for word in listed:
+        if not isinstance(word, ConditionalWord):
             continue
-        earlier.append(word)
+        if _a_path_asks(helping, word):
+            continue
+        if _first_positional(_words_on_path(listed, word)) in _COMPILING:
+            return True
     return False
 
 
@@ -657,10 +702,11 @@ def _run_compiles(run: Run, name: str | None, arms: ArmChoices) -> bool:
         # false), so the conditional words are read on their own paths rather
         # than in a flattened sequence: a `build` written beside its own
         # `--help` prints help and does not compile. A choice is not needed for
-        # this: each conditional word is read with the words before it that
-        # every path gives, so two blocks in sequence are read apart
+        # this: each conditional word is read with the ordered words on the
+        # path that gives it, so two blocks in sequence are read apart
         # (`if a { arg("search") } if b { arg("install") } arg("ripgrep")` runs
-        # `cargo install ripgrep` when only the second block does).
+        # `cargo install ripgrep` when only the second block does), and the
+        # second word of a block is a topic when the first is `help`.
         return settled in _COMPILING or _a_conditional_word_compiles(unconditional)
     # No unconditional subcommand decides the run, so a compiling word on any
     # path may be the one that runs: a conditional `build` beside a conditional
@@ -677,16 +723,26 @@ def _may_compile(
 ) -> bool:
     """Report whether any word on any path names a compiling subcommand.
 
+    A conditional word is read with the ordered words on the path that gives
+    it, so a `build` that is only ever a topic (`if show { arg("help");
+    arg("build") }`) does not count. A plain compiling word does, even when an
+    unreadable word before it leaves the subcommand open.
+
     Returns
     -------
     bool
-        True when a plain or conditional word is a compiling subcommand.
+        True when a word is a compiling subcommand on the path that gives it.
     """
     listed = list(words)
     helping = _helping_blocks(listed)
+    if any(
+        not isinstance(word, ConditionalWord) and word in _COMPILING for word in listed
+    ):
+        return True
     return any(
-        (word.word if isinstance(word, ConditionalWord) else word) in _COMPILING
-        and not (isinstance(word, ConditionalWord) and _a_path_asks(helping, word))
+        isinstance(word, ConditionalWord)
+        and not _a_path_asks(helping, word)
+        and _first_positional(_words_on_path(listed, word)) in _COMPILING
         for word in listed
     )
 

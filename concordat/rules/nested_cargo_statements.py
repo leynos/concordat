@@ -8,16 +8,26 @@ blocks surround each word is recorded in
 :mod:`concordat.rules.nested_cargo_arguments`.
 
 A launch reached at the top level ends the read, so an argument added to a
-reused command does not count as the first run's work; a launch inside a block
-ends only that branch, and a `return` inside a block ends its path, so the
-command is read once for each path it runs on.
+reused command does not count as the first run's work, unless a `&&` or `||`
+before it may skip it: the path that skips the launch continues, and the next
+statement begins a run of its own. The operator skips only its right operand,
+so a comma at the operator's own level
+(`(first || second, command.arg(..).status())`) puts the launch in another
+operand, which runs either way, and the read ends there. A launch inside a
+block ends only that branch, and a `return` inside a block ends its path, so
+the command is read once for each path it runs on.
 
 A statement that moves the command's name to another value is not the
 command's, and neither is anything after it on that path: a declaration
-shadows the name inside its block, and attribution resumes once that block
-closes, while an assignment ends the read because the block that ran it may
-have been entered. A field assignment (`holder . command = ..`) moves the
-field rather than the binding, so it does not end the read. A closure is
+shadows the name inside its block, whether it writes the name after `let` or
+binds it in a destructuring pattern (`let (mut command,) = (other,)`), and
+attribution resumes once that block closes, while an assignment ends the read
+because the block that ran it may have been entered. The declaration's own
+initializer runs before the new value is bound, so a call written there is
+still the caller's command's and is read before the name moves
+(`let command = command.arg("build").status().unwrap();`). A field assignment
+(`holder . command = ..`) moves the field rather than the binding, so it does
+not end the read. A closure is
 deferred work: its body runs only when the closure is called, so the closure's
 whole span is blanked before the statement is read, whether the body calls a
 parameter of the command's name or captures the command
@@ -26,18 +36,24 @@ is still the command's, wherever in the `|..|` list a parameter sits. A launch
 beside the closure is therefore read
 (`(|command: &mut Command| {}, command.arg("build").status())`), while a launch
 inside the body is not. The body outlives a `;` written inside it, and the
-statement reader splits there, so the span is found in the text before the
-statement rather than in the statement alone; the statements after the body
-closes are the command's again.
+statement reader splits there, so the span may begin before the statement; the
+statements after the body closes are the command's again. The body's braces
+are deferred work as well, so a blanked brace neither opens nor closes a block
+around the statements that follow: a launch beside the closure's remainder in a
+later statement is at the caller's own depth and ends the read
+(`let _ = (|| { noop(); }, command.arg(..).status());`). The window's closures
+are located once and each statement takes its share of them, so reading a
+statement does not rescan the text before it.
 
 The identity of the open braces pairs an `else` arm with the `if` arm beside
 it -- inline (`let _ = if c { .. } else { .. };`) as well as across statements
 -- which is what lets a probe given in every arm cover both paths. When a
 `return` ends one arm of an `if`/`else`, the other arm is the only path that
 reaches the launch, so that arm's statements are read as given on every path.
-An `else if` is a condition of its own rather than the pair's second arm, so
-the arm after it is not the only path and its words are not read as
-unconditional.
+An `else if` is an arm of its own rather than the pair's second arm, so the arm
+beside it is not the only path; the chain is read whole, though, so when every
+other arm returns, the one arm that does not is the only path and its words
+are read as given, while two arms that reach the launch promote neither.
 A `;` inside a block argument of the command's own call does not end the
 statement, so the chain's launch is still read
 (`command.arg({ let flag = "--quiet"; flag }).status()`).
@@ -51,7 +67,7 @@ from __future__ import annotations
 import re
 import typing as typ
 
-from .nested_cargo_handoffs import Window, _bound_name
+from .nested_cargo_handoffs import SHORT_CIRCUIT, Window, _bound_name
 from .nested_cargo_receivers import (
     call_chains,
     launch_at,
@@ -101,6 +117,8 @@ def _rebinding(name: str | None) -> re.Pattern[str] | None:
 
     A `let`, a loop variable or a plain assignment to the command's name gives
     it a new value: the caller's command is no longer what the name denotes. A
+    destructuring pattern binds the name without writing `let name`
+    (`let (mut cmd,) = (other,)`), so it is read as the declaration it is. A
     binding that borrows the value (`let ref command = ..`) denotes the
     borrowed value, so it moves the name in the same way. A declaration only
     moves the name inside the block that declares it, while an assignment moves
@@ -129,6 +147,10 @@ def _rebinding(name: str | None) -> re.Pattern[str] | None:
     return re.compile(
         rf"\blet\s+{binding}{identifier}\b"
         rf"|\bfor\s+{binding}{identifier}\b"
+        # A destructuring pattern binds the name without writing `let name`.
+        # The pattern runs to the `=`, so an initializer call on the name is
+        # not read as a binding.
+        rf"|\blet\b[^=;]*?\b{identifier}\b[^=;]*?="
         # The name must be whole, so `my_command = ..` and `holder.command =
         # ..` move their own value rather than the command's.
         rf"|(?<![\w.])(?P<assign>{identifier})\s*=(?!=)"
@@ -185,41 +207,23 @@ def _entry_depth(masked_statement: str, start_depth: int) -> int:
     return depth
 
 
-def _closure_hiding(masked: str, start: int, stop: int) -> list[tuple[int, int]]:
-    """Return the closure spans around a statement, rebased onto it.
+def _clip_spans(
+    spans: list[tuple[int, int]], start: int, stop: int
+) -> list[tuple[int, int]]:
+    """Return the part of each span that lies in ``[start, stop)``, rebased.
 
-    A closure's body runs only when the closure is called, so a call written
-    inside it (`let deferred = || command.arg("build").status();`) starts no
-    process beside the statement that builds the closure. Every closure is
-    blanked, not only one whose parameter binds the command's name, because a
-    body can capture the command instead of naming a parameter.
-
-    The spans are found in *masked*, the whole read so far, rather than in the
-    statement alone. A closure's body outlives a `;` written inside it
-    (`|command: &mut Command| { let _ = 1; command.arg("--version"); }`) and
-    the statement reader splits there, so the statement after the `;` holds no
-    header of its own. Reading the spans over everything before the statement
-    keeps the later half of the body hidden, while a statement after the body
-    closes is not hidden at all. A body still open at *stop* hides the rest of
-    the statement, because the closure is not finished.
-
-    Parameters
-    ----------
-    masked:
-        The masked source up to the end of the current statement.
-    start:
-        The offset where the current statement begins.
-    stop:
-        The offset where the current statement ends.
+    A span that begins before the statement and ends inside it hides the
+    statement's opening text; a span that begins in the statement and ends
+    after it hides the rest of the statement, because the closure is not
+    finished. A span wholly outside the statement is dropped.
 
     Returns
     -------
     list[tuple[int, int]]
-        The part of each span that lies inside the statement, relative to
-        *start*, in source order.
+        The rebased spans that lie inside the statement, in source order.
     """
     hidden: list[tuple[int, int]] = []
-    for begin, end in closure_spans(masked):
+    for begin, end in spans:
         if end <= start or begin >= stop:
             continue
         hidden.append((max(begin, start) - start, min(end, stop) - start))
@@ -258,6 +262,42 @@ def _end_shadows(shadows: list[int], masked_statement: str, start_depth: int) ->
         shadows.pop()
 
 
+def _may_skip(masked: str, start: int, launch: int) -> bool:
+    """Report whether a `&&` or `||` may skip the launch at *launch*.
+
+    A short circuit skips its right operand, not everything after it on the
+    statement. The operator's own expression ends at a comma written at the
+    expression's level (`(first || second, command.arg(..).status())`: the
+    comma separates the tuple's elements) or at a closer that ends an
+    expression the operator sat inside (`(first || second) && launch`). Either
+    means the launch is in another operand, which runs whether or not the
+    operator short-circuits. The last operator before the launch is the one
+    that governs it.
+
+    Returns
+    -------
+    bool
+        True when the nearest preceding short circuit still has the launch in
+        its right operand.
+    """
+    governing: re.Match[str] | None = None
+    for found in SHORT_CIRCUIT.finditer(masked, start, launch):
+        governing = found
+    if governing is None:
+        return False
+    depth = 0
+    for char in masked[governing.end() : launch]:
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+            if depth < 0:
+                return False
+        elif char == "," and depth == 0:
+            return False
+    return True
+
+
 class _StatementRead:
     """Accumulate a command's statements, its runs and the shadows over it.
 
@@ -284,6 +324,13 @@ class _StatementRead:
         self._window = window
         self._name = name
         self._rebinding = _rebinding(name)
+        # Every closure in the window, scanned once: a statement's share of
+        # them is a clip, so reading a statement does not rescan the text
+        # before it. None when no name is bound, because no statement is then
+        # read for ownership and a closure hides nothing.
+        self._spans: list[tuple[int, int]] | None = (
+            closure_spans(window.masked) if name is not None else None
+        )
         self._statements: list[Statement] = []
         self._starts: list[tuple[int, int, int | None]] = [(0, 0, None)]
         self._shadows: list[int] = []
@@ -316,22 +363,16 @@ class _StatementRead:
             False once the read has stopped, so the caller can leave the loop.
         """
         masked_statement = self._window.masked[self._offset : at]
-        start_depth = self._depth
-        self._depth += masked_statement.count("{") - masked_statement.count("}")
-        blocks = tuple(self._blocks)
-        self._note_else(masked_statement, blocks)
-        _track(self._blocks, masked_statement, self._offset)
         # A closure's body runs only when the closure is called, and its own
         # parameter names its value rather than the caller's command. A call
         # beside the closure in the same statement is still the caller's, so
         # the closure's header and body are blanked rather than the whole
-        # statement being declined. The spans are read over the whole text
-        # before this statement, since a `;` inside the body ends the
-        # statement and leaves the rest of the body in a later one.
+        # statement being declined. The spans are taken from the whole window,
+        # since a `;` inside the body ends the statement and leaves the rest
+        # of the body in a later one; a span that crosses the statement's
+        # start hides the text it covers here.
         scopes = (
-            _closure_hiding(self._window.masked[:at], self._offset, at)
-            if self._name is not None
-            else []
+            [] if self._spans is None else _clip_spans(self._spans, self._offset, at)
         )
         read_masked = _blank_spans(masked_statement, scopes)
         read_window = (
@@ -344,19 +385,31 @@ class _StatementRead:
                 + self._window.masked[at:],
             )
         )
+        # The blanked text is what the statement's braces mean: a closure's
+        # body is deferred work, so its braces neither open nor close a block
+        # the launch can run in. Counting them would leave the block open for
+        # the statements after the body and make a later top-level launch look
+        # conditional.
+        start_depth = self._depth
+        self._depth += read_masked.count("{") - read_masked.count("}")
+        blocks = tuple(self._blocks)
+        self._note_else(read_masked, blocks)
+        _track(self._blocks, read_masked, self._offset)
         moved = (
             _moved(self._rebinding, read_masked)
             if self._offset > 0 and self._rebinding is not None
             else None
         )
         returned = _RETURN.search(read_masked)
+        # A declaration's initializer runs before the new binding exists, so a
+        # call written there is still the caller's command's and is read before
+        # the name is shadowed.
+        self._attribute(read_masked, start_depth, blocks, read_window)
         if moved is not None:
             if self._depth == 0 or moved.group("assign") is not None:
                 self.stopped = True
             else:
                 self._shadows.append(self._depth)
-        else:
-            self._attribute(read_masked, start_depth, blocks, read_window)
         if returned is not None:
             depth = _depth_at(read_masked, returned.start(), start_depth)
             if depth > 0:
@@ -461,6 +514,13 @@ class _StatementRead:
         if launched is None:
             return
         if launched.block is None:
+            if launch is not None and _may_skip(read_window.masked, offset, launch):
+                # A `&&` or `||` before the launch may skip it, so the path
+                # that skips it continues to the next statement. That statement
+                # gives the command its next run's arguments rather than
+                # extending this run's.
+                self._start(launched.depth)
+                return
             # No block was open at the launch, so the command is a reuse for
             # everything after it and the read ends here.
             self.stopped = True
@@ -470,62 +530,63 @@ class _StatementRead:
     def _survivor(self, brace: int | None) -> int | None:
         """Return the arm that is the only path to the launch, or None.
 
-        A `return` inside one arm of an `if`/`else` leaves the other arm as the
-        only path reaching the launch, so the words given there are given on
-        every path that runs the command. The arm is the only path, though,
-        only when the `else` beside it carries no condition: an `else if` has a
-        path of its own beyond the pair, and the arm after it is not reached
-        when that condition is false. When that other arm returns as well, the
-        choice before it is walked in turn, so a chain of returning arms
-        narrows to the arm that does launch; every step of the walk takes the
-        returning arm out of the paths, so only the pair the surviving arm is
-        promoted from must cover both.
+        A `return` inside one arm of an `if`/`else` chain leaves the other arms
+        as the paths reaching the launch, so the words given there are given on
+        every path that runs the command -- but only when one arm remains. The
+        chain is read whole, from its first arm to its last, rather than pair
+        by pair: `if a { .. } else if b { return; } else { return; }` leaves
+        the first arm as the only path, even though the pair beside the first
+        `return` holds two arms. The chain must also cover every path: an
+        `else if` with no final `else` leaves a path that enters none of the
+        arms, and that path reaches the launch with none of their words.
 
         Returns
         -------
         int | None
-            The brace of the surviving arm, or None when both arms can launch.
+            The brace of the only arm that reaches the launch, or None when
+            the chain covers another path or more than one arm survives.
         """
-        seen: set[int] = set()
-        while brace is not None and brace not in seen:
-            seen.add(brace)
-            paired = self._paired(brace)
-            if paired is None:
-                return None
-            if paired not in self._returns:
-                return paired if self._pair_is_exhaustive(brace, paired) else None
-            brace = paired
-        return None
+        if brace is None:
+            return None
+        chain = self._chain(brace)
+        if len(chain) < 2 or chain[-2] not in self._exhaustive:
+            return None
+        survivors = [arm for arm in chain if arm not in self._returns]
+        return survivors[0] if len(survivors) == 1 else None
 
-    def _pair_is_exhaustive(self, brace: int, paired: int) -> bool:
-        """Report whether the choice between *brace* and *paired* has no other path.
+    def _chain(self, brace: int) -> list[int]:
+        """Return the `if`/`else` chain that holds *brace*, first arm first.
 
-        An `if` arm of an `if`/`else` chain is the key of the pair, and only a
-        pair whose `else` carries no condition is exhaustive. A pair whose
-        `else` is another `if` leaves the path beyond that arm open.
+        An `else if` is an arm of its own, so the chain runs from the first
+        `if` through every `else` to the last arm. The arm a `return` sits in
+        is anywhere in the chain, so the chain is found by walking back
+        through the pairs to the first arm and then forward again.
 
         Returns
         -------
-        bool
-            True when every path through the choice enters one of the two arms.
+        list[int]
+            The braces of the chain's arms, in source order; one entry when
+            *brace* is not part of any `else` pair.
         """
-        key = brace if brace in self._arms else paired
-        return key in self._exhaustive
-
-    def _paired(self, brace: int) -> int | None:
-        """Return the arm paired with *brace*, on either side of its `else`.
-
-        Returns
-        -------
-        int | None
-            The sibling arm's brace, or None when *brace* has no `else` pair.
-        """
-        if brace in self._arms:
-            return self._arms[brace]
-        for closed, other in self._arms.items():
-            if other == brace:
-                return closed
-        return None
+        root = brace
+        seen = {root}
+        while True:
+            previous = next(
+                (key for key, arm in self._arms.items() if arm == root), None
+            )
+            if previous is None or previous in seen:
+                break
+            seen.add(previous)
+            root = previous
+        chain = [root]
+        visited = {root}
+        while chain[-1] in self._arms:
+            following = self._arms[chain[-1]]
+            if following in visited:
+                break
+            visited.add(following)
+            chain.append(following)
+        return chain
 
     def _start(self, depth: int, survivor: int | None = None) -> None:
         """Begin a run at the next statement recorded, leaving branch *depth*.
@@ -593,8 +654,10 @@ def own_statements(masked: str, start: int, window: Window) -> CommandRead:
     A launch inside a block does not end the read, because the command runs
     again on the path that skips the block: the statements after the block are
     that run's first arguments, and so are those of an `else` arm. A launch
-    reached with no block open does end the read, because everything after it
-    is a reuse of the command rather than another run. The statements after a
+    reached with no block open ends the read, because everything after it is a
+    reuse of the command rather than another run -- unless a `&&` or `||`
+    before it may skip it, in which case the skipping path runs the next
+    statement and that statement begins a new run. The statements after a
     conditional launch but still inside its block are that path's code after
     the run, so they are not read; a launch in a sibling block that has
     already closed is another path and begins a run of its own. A `return`

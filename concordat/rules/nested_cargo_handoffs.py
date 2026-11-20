@@ -20,8 +20,9 @@ helper name bound by a parameter pattern (`fn run((configure,): ..)`,
 by a `match` arm's pattern, a `const` or `static` item of that name, mutable
 or not, in the caller's block or a block enclosing it (an item is in scope for
 its whole block, so one declared after the call still shadows it, while a
-`let` counts only before the call, and an item in a nested block that does not
-hold the call shadows nothing), a parameter reassigned or shadowed -- is
+`let` counts only from the end of its statement and an `if let` only inside
+the block it guards, and an item in a nested block that does not hold the call
+shadows nothing), a parameter reassigned or shadowed -- is
 declined rather than guessed, because a false positive would demand
 configuration from a repository that needs none. A call written inside a
 closure body is declined as well: the body runs when the closure is called, not
@@ -48,9 +49,12 @@ function whose body holds the call, so a function item declared inside the
 caller is not mistaken for its scope. A `return` in a helper is kept where it is
 written, and the statements after it are wrapped in a block of their own and
 have the keyword blanked, because they run only when the return was skipped; a
-call that is the return's own expression (`return target.arg("--help")`) runs
-before control leaves, so the return statement itself stays unconditional and
-only what follows it is guarded. A return moved after its block would end
+call that is the return's own expression (`return target.arg("--help")`, and
+the same call parenthesised) runs before control leaves, so the return
+statement itself stays unconditional and only what follows it is guarded. The
+expression ends only at a `;` at its own level or at a closer that ends a
+bracket opened before the `return`, so brackets around the call do not make it
+a statement after the return. A return moved after its block would end
 every path instead, so the reader could not split the caller's runs there.
 Guarding the tail rather than starting a new run at it is what keeps the
 caller's own statements after the call on the returning path too. A spliced
@@ -452,14 +456,43 @@ def _receiver_piece(
     if SHORT_CIRCUIT.search(masked_piece, 0, found.start()) is not None:
         return "{" + piece + "}", "{" + masked_piece + "}"
     returned = _RETURN.search(masked_piece, 0, found.start())
-    between = "" if returned is None else masked_piece[returned.end() : found.start()]
-    if between.strip():
+    if returned is not None and _return_is_complete(
+        masked_piece, returned.end(), found.start()
+    ):
         # A `return` before the call ends the helper's path, so the flag is
         # given only to the caller's path that reaches it. A call that is the
         # return's own expression runs before control leaves, so it stays
-        # unconditional.
+        # unconditional: whitespace or an opening bracket between the two is
+        # the expression (`return (target.arg(..))`), not a finished return.
         return "{" + piece + "}", "{" + masked_piece + "}"
     return piece, masked_piece
+
+
+def _return_is_complete(masked: str, after: int, before: int) -> bool:
+    """Report whether the `return` ending at *after* has left its expression.
+
+    A `return` whose expression runs past *before* returns the call's value, so
+    the call runs before control leaves and is unconditional. The expression
+    ends at a `;` written at its own level or at a closer that ends a bracket
+    opened before the `return`; either means the call after it is a later
+    statement of the helper's path and runs only when the return was skipped.
+
+    Returns
+    -------
+    bool
+        True when the return's expression has ended before *before*.
+    """
+    depth = 0
+    for char in masked[after:before]:
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+            if depth < 0:
+                return True
+        elif char == ";" and depth == 0:
+            return True
+    return False
 
 
 def _callee_arguments(
@@ -586,7 +619,10 @@ def command_window(
     next `Command::new` (another command) or the next function item, whichever
     comes first. Both boundaries are found in the masked source, so a
     `Command::new(` inside a string is data and does not end the window early.
-    A command bound to a name and handed to a function defined once in the same
+    The binding is read there too, because a comment between the `=` and the
+    constructor is whitespace to Rust and must not hide the name whose helper
+    calls are spliced. A command bound to a name and handed to a function
+    defined once in the same
     file is also read against that function's body, because the callee adds the
     arguments. Those statements are inserted at the call site, so a launch in
     either the helper or the caller ends the arguments in the order they run. A
@@ -609,14 +645,14 @@ def command_window(
     length = 1 + min(ends)
     window = text[start : start + length]
     masked_window = masked[start : start + length]
-    bound = BINDING.search(text[max(0, start - 120) : start])
-    if bound is None:
+    name = _bound_name(masked, start)
+    if name is None:
         return Window(window, masked_window)
     pieces: list[str] = []
     masked_pieces: list[str] = []
     previous = 0
     for at, body in _callee_bodies(
-        text, masked, closers, masked_window, bound["name"], start, index
+        text, masked, closers, masked_window, name, start, index
     ):
         pieces.extend((
             window[previous:at],
