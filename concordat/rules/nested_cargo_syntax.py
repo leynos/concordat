@@ -25,7 +25,9 @@ captures the command (`|| command.arg("build")`); the handoff reader declines a
 helper call written inside such a body for the same reason; and a closure's own
 parameter of the command's name hides the name only inside that span. A `|`
 that follows an operand is bitwise or rather than a header, so
-`a | command.arg("build") | b` holds no closure, and a return type before the
+`a | command.arg("build") | b` holds no closure; an `async` qualifier stands
+where an expression begins even though it ends in a letter, so `async || { .. }`
+is a header just as `move ||` is. A return type before the
 body is part of the closure, so the body begins after the type rather than at
 its first comma, and the `>` of a function-pointer return inside that type
 closes no generic. A rejected header resumes at its own opening pipe, so the
@@ -377,7 +379,9 @@ def _opens_a_closure(masked: str, found: re.Match[str]) -> bool:
     where an expression begins -- after `=`, `(`, `[`, `{`, `,`, `;`, `:`, a
     comparison or an arrow -- while a bitwise chain's pipe follows the operand
     it operates on. A pipe after a name, a call's `)`, an index's `]` or a
-    literal's quote is therefore read as an operator, not a header.
+    literal's quote is therefore read as an operator, not a header. An `async`
+    qualifier stands where an expression begins even though it ends in a
+    letter, so `async || { .. }` is a header just as `move ||` is.
 
     Returns
     -------
@@ -388,6 +392,8 @@ def _opens_a_closure(masked: str, found: re.Match[str]) -> bool:
         return True
     before = masked[: found.start()].rstrip()
     if not before:
+        return True
+    if re.search(r"(?<!\w)async$", before) is not None:
         return True
     last = before[-1]
     return last != "_" and not (last.isalnum() or last in _OPERAND_END)

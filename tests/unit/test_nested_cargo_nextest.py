@@ -4147,3 +4147,104 @@ def test_a_commented_constructor_is_not_a_spawn(
     source = COMMENTED_CONSTRUCTOR.replace("PROGRAM", program)
     put(tmp_path, "tests/common/mod.rs", source)
     assert ids(tmp_path) == set()
+
+
+CONTAINS_MATCHERS_AROUND_A_NAMED_BINARY = (
+    "!test(~src/foo) | binary(ui) | test(~bar/baz)"
+)
+
+
+def test_a_slash_in_a_contains_matcher_is_not_a_regex() -> None:
+    """An unpaired slash stays data, so the group naming `ui` is still selected."""
+    assert _predicate_arguments(CONTAINS_MATCHERS_AROUND_A_NAMED_BINARY) == [
+        "ui",
+        "~bar/baz",
+    ]
+
+
+COMMENT_BEFORE_THE_CONSTRUCTOR = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut cmd = /* fixture */ Command::new("rustc");\n'
+    '    cmd.arg("input.rs").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_comment_before_the_constructor_still_binds_the_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Rust reads the comment as whitespace, so `cmd` is the bound command."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", COMMENT_BEFORE_THE_CONSTRUCTOR)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CARGO_LOOKUP_AS_THE_CONSTRUCTOR_ARGUMENT = (
+    "use std::process::Command;\n"
+    "#[test]\nfn builds() {\n"
+    '    Command::new(std::env::var_os("CARGO").unwrap())\n'
+    '        .arg("build")\n'
+    "        .status()\n"
+    "        .unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_cargo_lookup_as_the_constructor_argument_is_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The window starts at the constructor, so its `build` launch is read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CARGO_LOOKUP_AS_THE_CONSTRUCTOR_ARGUMENT)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+PARENTHESISED_ARM_EXPRESSION = (
+    "use std::process::Command;\n"
+    "fn run(callback: fn(&mut Command)) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    match callback { configure => noop() + configure(&mut command) }\n"
+    '    command.arg("metadata").status().unwrap();\n'
+    "}\n"
+    'fn configure(command: &mut Command) { command.arg("build"); }\n'
+    "fn noop() -> usize { 0 }\n"
+)
+
+
+def test_a_closed_call_does_not_end_the_match_arm(tmp_path: pathlib.Path) -> None:
+    """The arm's pattern still binds `configure` after `noop()` has closed."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PARENTHESISED_ARM_EXPRESSION)
+    assert ids(tmp_path) == set()
+
+
+LOOP_PATTERN_REBINDS_THE_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command, other: &mut Command) {\n"
+    "    for (target,) in [(other,)] {\n"
+    '        target.arg("build").status().unwrap();\n'
+    "    }\n"
+    "}\n"
+    "fn run() {\n"
+    '    let mut other = Command::new("echo");\n'
+    '    let mut command = Command::new("cargo");\n'
+    "    configure(&mut command, &mut other);\n"
+    "}\n"
+)
+
+
+def test_a_loop_pattern_rebinding_the_parameter_is_not_spliced(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The loop's `target` is `other`, so its `build` launch is not the caller's."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LOOP_PATTERN_REBINDS_THE_PARAMETER)
+    assert ids(tmp_path) == set()
+
+
+def test_an_async_closure_header_is_a_closure() -> None:
+    """`async` qualifies the header, so the call inside it is deferred."""
+    source = "let _deferred = async || { configure(&mut command); };"
+    ((start, stop),) = closure_spans(source)
+    assert start < source.index("configure(&mut command)") < stop

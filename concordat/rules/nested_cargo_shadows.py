@@ -131,9 +131,11 @@ def _arm_pattern_binds(segment: str, name: str) -> bool:
     `=>`, where an arm at the match's own level ends at a comma, and an arm
     whose body is a block also ends at the block's closing brace, because Rust
     lets that comma be left out. Only an arrow outside brackets starts an arm
-    body; an arrow deeper in one belongs to a match the body holds. A segment
-    that ends inside a pattern rather than a body holds no call, so it binds
-    nothing.
+    body; an arrow deeper in one belongs to a match the body holds. A closing
+    bracket that is not a block's brace does not end the arm: the binding is in
+    scope for the whole expression, so `configure => noop() + configure(..)`
+    still holds its arm after `noop()` closes. A segment that ends inside a
+    pattern rather than a body holds no call, so it binds nothing.
 
     Returns
     -------
@@ -151,7 +153,7 @@ def _arm_pattern_binds(segment: str, name: str) -> bool:
             depth += 1
         elif mark in ")]}":
             depth = max(depth - 1, 0)
-            if depth == 0 and in_body:
+            if mark == "}" and depth == 0 and in_body:
                 in_body = False
                 pattern_start = found.end()
         elif depth:

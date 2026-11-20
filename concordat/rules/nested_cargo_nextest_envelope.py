@@ -22,7 +22,10 @@ the spawner; a group of predicates inside one negation
 (`!(binary(ui) | binary(other))`) excludes every name it holds. Parentheses
 are balanced rather than matched lazily, and a matcher's `/regex/` text is
 skipped while they are counted, because a regex holds brackets of its own
-(`!(test(/foo[)]/) | binary(ui))`). The scan for
+(`!(test(/foo[)]/) | binary(ui))`). A `/` opens a regex only at the first
+non-space character of a matcher's argument, so a slash in a `~contains`
+argument (`test(~src/foo)`) is data and does not hide the group's brackets or
+the names beside it. The scan for
 spawners lives in `nested_cargo_spawn` and is conservative by design. A
 configuration that cannot be decoded stays a fact, so the policy answers
 indeterminate.
@@ -234,6 +237,10 @@ def _balanced_close(text: str, open_at: int) -> int:
     Those are not delimiters of the predicate or the group that holds them, so
     an escape pair is skipped wherever it is written and the matcher's text is
     skipped whole, with `\\/` read as an escaped slash rather than as its end.
+    A `/` opens a matcher only where a matcher begins, at the first non-space
+    character after a `(`; elsewhere it is data, as in the contains matchers
+    `test(~src/foo)` and `test(~bar/baz)`, whose slashes would otherwise pair
+    and swallow the group between them.
 
     Returns
     -------
@@ -243,6 +250,7 @@ def _balanced_close(text: str, open_at: int) -> int:
     depth = 0
     in_regex = False
     escaped = False
+    matcher_start = False
     for offset in range(open_at, len(text)):
         char = text[offset]
         if escaped:
@@ -255,11 +263,16 @@ def _balanced_close(text: str, open_at: int) -> int:
             if char == "/":
                 in_regex = False
             continue
+        if char.isspace():
+            continue
+        starts_matcher, matcher_start = matcher_start, False
+        if starts_matcher and char == "/":
+            in_regex = True
+            continue
         match char:
-            case "/":
-                in_regex = True
             case "(":
                 depth += 1
+                matcher_start = True
             case ")":
                 depth -= 1
                 if depth == 0:

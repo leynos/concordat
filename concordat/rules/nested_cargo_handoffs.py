@@ -31,11 +31,19 @@ follow. The same holds for a helper's own parameter: a call on it inside a
 closure body (`let _deferred = || { target.arg("build"); };`) or inside a
 `match` arm whose pattern binds the parameter's name
 (`Ok(target) => target.arg("build")`) is not the caller's command, so the
-helper is declined at the statement that holds it. A helper declared `async`
-is declined as well, because its body runs only when the future is polled and
-not where the call is written. A `let` binding is read even
+helper is declined at the statement that holds it. That arm binding holds for
+the whole arm expression, so a closed call earlier in it
+(`configure => noop() + configure(&mut command)`) does not end the arm. A
+helper loop whose pattern rebinds the receiving parameter
+(`for (target,) in [(other,)] { .. }`) makes its body another command's too, so
+the read ends at the loop. A helper declared `async` is declined as well,
+because its body runs only when the future is polled and not where the call is
+written; so is an `async ||` closure header, which defers its body just as
+`move ||` does. A `let` binding is read even
 when its constructor begins on the next line, because Rust ends the name at the
-`=` rather than at the line, and the parameters read are those of the innermost
+`=` rather than at the line, and the name is found in the masked source, so a
+comment between the `=` and the constructor is whitespace to the reader as well.
+The parameters read are those of the innermost
 function whose body holds the call, so a function item declared inside the
 caller is not mistaken for its scope. A `return` in a helper is kept where it is
 written, and the statements after it are wrapped in a block of their own and
@@ -246,9 +254,11 @@ def _receiver_statements(
     that follows the closing brace of a block keeps that brace in front of it.
     A later declaration of the parameter's name, a reassignment of it, or
     another command built in the helper, means the name no longer denotes the
-    caller's command, so nothing after that statement is read. That declines a
-    helper the scan cannot attribute, which can miss compiler work rather than
-    invent it.
+    caller's command, so nothing after that statement is read. A loop whose
+    pattern binds the parameter (`for (target,) in [(other,)] { .. }`) rebinds
+    it to the loop's element, so its body's calls are not the caller's either
+    and the read ends at the loop. That declines a helper the scan cannot
+    attribute, which can miss compiler work rather than invent it.
 
     A flag behind a short circuit
     (`query && command.arg("--version").get_args().next().is_some()`) is not on
@@ -291,7 +301,7 @@ def _receiver_statements(
     name = _identifier(re.escape(parameter))
     own = re.compile(rf"{name}\s*\.")
     shadow = re.compile(
-        rf"\bfor\s+(?:mut\s+)?{name}\b"
+        rf"\bfor\b[^;]*?\b{name}\b[^;]*?\bin\b"
         rf"|\blet\b[^=;]*\b{name}\b"
         rf"|{name}\s*=(?!=)"
         rf"|\|\s*(?:mut\s+)?{name}\s*(?:\||:)"
@@ -640,7 +650,18 @@ def _spliced(body: str, masked_window: str, end: int) -> str:
     return f";\n{{{body}}};"
 
 
-def _bound_name(text: str, start: int) -> str | None:
-    """Return the name the command built at *start* is bound to, if any."""
-    bound = BINDING.search(text[max(0, start - 120) : start])
+def _bound_name(masked: str, start: int) -> str | None:
+    """Return the name the command built at *start* is bound to, if any.
+
+    The binding is read from the masked source because Rust treats a comment
+    between the `=` and the constructor as whitespace: in
+    `let mut cmd = /* fixture */ Command::new("rustc")` the raw text hides the
+    binding, while the masked text keeps the offsets and leaves only spaces.
+
+    Returns
+    -------
+    str | None
+        The bound name, or None when the constructor is not bound.
+    """
+    bound = BINDING.search(masked[max(0, start - 120) : start])
     return None if bound is None else bound["name"]

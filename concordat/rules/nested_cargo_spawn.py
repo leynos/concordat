@@ -49,9 +49,19 @@ from a repository that needs none.
   a binding in the caller's function (its own parameters included, even a
   method's after its receiver) that shadows the helper's name, a call written
   as a path or method (`support::configure(..)`, however it is spaced around
-  the separator), a reassignment of the parameter (`command = other`), or a
-  later declaration of its name inside the helper, declines the handoff
-  rather than guessing. Compiler work in a declined shape can be missed.
+  the separator), a reassignment of the parameter (`command = other`), a later
+  declaration of its name inside the helper, or a loop pattern in the helper
+  that rebinds the parameter (`for (target,) in [(other,)] { .. }`), declines
+  the handoff rather than guessing; a `match` arm whose pattern binds the
+  parameter's name (`Ok(target) => target.arg("build")`) declines it too, and
+  an arm's binding holds through the whole arm expression, so a call after an
+  earlier call has closed (`configure => noop() + configure(..)`) is still the
+  bound value's rather than the free function's. The
+  caller's binding is found in the masked source, so a comment between its `=`
+  and the constructor is whitespace, as Rust treats it. A `CARGO` lookup passed
+  to `Command::new(..)` is read as that constructor's argument, not as the
+  start of a new window, so the chain's own `.arg` and `.status` are still
+  read. Compiler work in a declined shape can be missed.
 - Python tests that spawn `cargo` are outside the scan: pytest, not nextest,
   bounds them.
 - A file must name `Command`, so `env!("CARGO")` read for a path alone is not a
@@ -92,8 +102,13 @@ SKIPPED_DIRECTORIES: typ.Final = frozenset({
     "vendor",
     "xtask",
 })
+# A `CARGO` lookup is a constructor argument rather than a spawn of its own, so
+# the alternative that carries it inside `Command::new(` must match first: a
+# window that starts at the lookup cannot resolve the chain's `.arg` and
+# `.status` calls, and the compile would go unread.
 CARGO_SPAWN: typ.Final = re.compile(
-    r'Command::new\(\s*(?:"cargo"|&?cargo(?:_binary|_path|_exe)?\b|env!\("CARGO"\))'
+    r'Command::new\(\s*(?:"cargo"|&?cargo(?:_binary|_path|_exe)?\b|env!\("CARGO"\)'
+    r'|(?:[A-Za-z_]\w*\s*::\s*)*env::var(?:_os)?\(\s*"CARGO"\s*\))'
     r"|env!\(\"CARGO\"\)|env::var(?:_os)?\(\s*\"CARGO\"\s*\)"
 )
 RUSTC_SPAWN: typ.Final = re.compile(
@@ -220,8 +235,8 @@ def _spawn_kind(
         if not _is_test_position(relative, spans, match.start()):
             continue
         window = command_window(text, masked, closers, match.start(), index)
-        if launches(text, match.start(), window) and not is_probe(
-            text, match.start(), window
+        if launches(masked, match.start(), window) and not is_probe(
+            masked, match.start(), window
         ):
             return "rustc"
     compiling = any(

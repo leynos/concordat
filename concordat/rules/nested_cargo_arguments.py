@@ -449,7 +449,7 @@ def _asks_a_question(
     return _every_arm_asks(words, launch, arms)
 
 
-def is_probe(text: str, start: int, window: Window) -> bool:
+def is_probe(masked: str, start: int, window: Window) -> bool:
     """Report whether a `rustc` command only asks a question and compiles nothing.
 
     Only arguments added to this command count, so a `"--version"` in a comment,
@@ -467,8 +467,8 @@ def is_probe(text: str, start: int, window: Window) -> bool:
         True when the command launches and every launched run is given a
         version or query flag.
     """
-    name = _bound_name(text, start)
-    read = own_statements(text, start, window)
+    name = _bound_name(masked, start)
+    read = own_statements(masked, start, window)
     launched = False
     for run in read.runs:
         launch = _launch_of(run)
@@ -719,12 +719,12 @@ def compiles(
         True when any run of the command starts compiling work.
     """
     window = command_window(text, masked, closers, start, index)
-    name = _bound_name(text, start)
-    read = own_statements(text, start, window)
+    name = _bound_name(masked, start)
+    read = own_statements(masked, start, window)
     return any(_run_compiles(run, name, read.arms) for run in read.runs)
 
 
-def launches(text: str, start: int, window: Window) -> bool:
+def launches(masked: str, start: int, window: Window) -> bool:
     """Report whether the command is launched inside its read.
 
     A command that is built and given words but never launched starts no child
@@ -738,5 +738,6 @@ def launches(text: str, start: int, window: Window) -> bool:
         True when some run of the command reaches a launch.
     """
     return any(
-        _launch_of(run) is not None for run in own_statements(text, start, window).runs
+        _launch_of(run) is not None
+        for run in own_statements(masked, start, window).runs
     )

@@ -580,7 +580,7 @@ def _statement_ends(masked: str) -> typ.Iterator[int]:
             yield at
 
 
-def own_statements(text: str, start: int, window: Window) -> CommandRead:
+def own_statements(masked: str, start: int, window: Window) -> CommandRead:
     """Return the statements that can add arguments to the command being built.
 
     A command built in one chain owns only that chain. A command bound to a name
@@ -612,18 +612,20 @@ def own_statements(text: str, start: int, window: Window) -> CommandRead:
     Statement boundaries and block depth come from the masked window, so a
     brace in a string literal does not make a later flag look conditional,
     while each statement is also returned with its comments blanked and its
-    literals as written, so a flag in a string can still be read. A `;` inside
-    a block argument of one of the command's calls does not end the statement,
-    so the chain's launch is still read; any other `;` ends it. The depth a
-    statement starts at is counted from its whole text, so a block that closes
-    within it does not lift the statements after it.
+    literals as written, so a flag in a string can still be read. The binding
+    is found in *masked* for the same reason: a comment between the `=` and
+    the constructor is whitespace to Rust. A `;` inside a block argument of one
+    of the command's calls does not end the statement, so the chain's launch is
+    still read; any other `;` ends it. The depth a statement starts at is
+    counted from its whole text, so a block that closes within it does not lift
+    the statements after it.
 
     Returns
     -------
     CommandRead
         The statements, grouped by the run they belong to.
     """
-    read = _StatementRead(window, _bound_name(text, start))
+    read = _StatementRead(window, _bound_name(masked, start))
     for at in [*_statement_ends(window.masked), len(window.masked)]:
         if not read.feed(at):
             break
