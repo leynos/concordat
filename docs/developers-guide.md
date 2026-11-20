@@ -786,8 +786,10 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   given before the branch, a subcommand or help flag read per arm of a fully
   paired `if`/`else` (a help flag excuses only its own arm, while an arm
   holding only options is still a path when the choice is fully paired), a help
-  flag read with the conditional subcommand it shares a block with, an arm left
-  as the only path after the other arm returns read as given on every path (but
+  flag read with the conditional subcommand it shares a block with but not one
+  a short circuit can skip (`query && command.arg("--help")`), each path read
+  from the words it gives rather than from one flattened list, an arm left as
+  the only path after the other arm returns read as given on every path (but
   not when its `else if` gives the choice a further condition), a run with no
   unconditional subcommand compiled when any path names one, an option in a
   block of its own left beside a paired choice, a run that never reaches a
@@ -795,41 +797,48 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   launched runs all ask a question), a `--print` query written to a file in
   either form, asking for `file-names` or naming the crate (`crate-name`), a
   help flag after a `--` that only some path gives passed to the program rather
-  than excusing the build, and each word decoded from its literal's escapes,
-  with a Unicode escape's digits allowed to carry separators — is decided by
-  `nested_cargo_arguments`. Its word readers live in `nested_cargo_words`: each
-  argument's literal and decoded escapes, the split between options and option
-  values (with a conditional word passed over rather than taken as a value),
-  the words after a `--`, and the `--print` query forms. That module reads the
-  statements through `nested_cargo_statements`, which decides which statements
-  are the command's, follows an `else` arm from the `if` beside it (inline as
-  well as across statements) so a word given in every arm covers both paths,
-  keeps a `;` inside a block argument of the command's own call from ending the
-  statement, blanks a closure's own span so only its body is shadowed and a
-  call beside it is still the caller's (finding the span in the text before the
-  statement, because a `;` inside the body ends the statement and leaves the
-  rest of the body in the next one), and narrows a chain of returning arms to
-  the one that launches, without promoting an arm whose `else if` gives the
-  choice a further condition. The run model those readings feed lives in
-  `nested_cargo_runs`: where each run begins, which blocks surround each word,
-  how a statement that opens a branch is split so its condition is shared, and
-  whether a closing brace reaches the launched block or an inner one (an `else`
-  beside the launched block begins the next run; one that closes an inner `if`
-  the launch is not in does not), with a statement that begins by closing a
-  block read at the depth it is reached at. It finds the statements through
-  `nested_cargo_handoffs` (windows, helper bodies and file indexes, with an
-  item beginning on the previous line, a helper naming the caller's binding, a
+  than excusing the build (whether the separator is unconditional or given in a
+  conditional block beside the flag), and each word decoded from its literal's
+  escapes, with a Unicode escape's digits allowed to carry separators — is
+  decided by `nested_cargo_arguments`. Its word readers live in
+  `nested_cargo_words`: each argument's literal and decoded escapes, the split
+  between options and option values (with a conditional word passed over rather
+  than taken as a value), the words after a `--`, and the `--print` query
+  forms. That module reads the statements through `nested_cargo_statements`,
+  which decides which statements are the command's, follows an `else` arm from
+  the `if` beside it (inline as well as across statements) so a word given in
+  every arm covers both paths, keeps a `;` inside a block argument of the
+  command's own call from ending the statement, blanks every closure's own span
+  because its body is deferred work whether it names a parameter or captures
+  the command, so a call beside it is still the caller's (finding the span in
+  the text before the statement, because a `;` inside the body ends the
+  statement and leaves the rest of the body in the next one; an
+  expression-bodied closure ends at its own `;`), and narrows a chain of
+  returning arms to the one that launches, without promoting an arm whose
+  `else if` gives the choice a further condition. The run model those readings
+  feed lives in `nested_cargo_runs`: where each run begins, which blocks
+  surround each word, how a statement that opens a branch is split so its
+  condition is shared, and whether a closing brace reaches the launched block
+  or an inner one (an `else` beside the launched block begins the next run; one
+  that closes an inner `if` the launch is not in does not), with a statement
+  that begins by closing a block read at the depth it is reached at. It finds
+  the statements through `nested_cargo_handoffs` (windows and helper bodies, a
+  spliced fragment keeping the `else` between its braces and a `return` inside
+  the block it was written in, its tail guarded so the caller's continuation
+  stays on the returning path but a call in the return's own expression left
+  unguarded because it runs before control leaves), asks `nested_cargo_shadows`
+  whether the name written at the call is the free function (the file's
+  function items indexed once, so the innermost enclosing function is found for
+  the caller's own parameters rather than the latest `fn` declared, and an item
+  beginning on the previous line, a helper naming the caller's binding, a
   helper name bound by a tuple or struct parameter pattern, a constructor
   pattern in a `let` (`let Hook(configure) = ..`), a closure parameter in any
   position, one rebound by a closure's `|..|` list, one bound by a `match`
-  arm's pattern, a `const` or `static` item in the caller's block or a block
-  enclosing it (a sibling block's item shadows nothing), and a call written
-  inside a closure body all declined, the innermost enclosing function found
-  for the caller's own parameters rather than the latest `fn` declared, while a
-  spliced fragment keeps the `else` between its braces and a `return` inside
-  the block it was written in, its tail guarded so the caller's continuation
-  stays on the returning path), the arm patterns and enclosing braces those
-  decisions read living in `nested_cargo_shadows`, and attributes them through
+  arm's pattern, a `const` or `static` item, mutable or not, in the caller's
+  block or a block enclosing it (a sibling block's item shadows nothing), a
+  call written inside a closure body, and a use of a helper's own parameter
+  inside a closure body or a `match` arm binding its name, all declined, read
+  from the arm patterns and enclosing braces), and attributes them through
   `nested_cargo_receivers` (declining fields, path items and namespace roots,
   with a `Command` reached through `::` the constructor and a bare `Command`
   counted only as the binding under study), and the bracket-depth reading of a
@@ -842,8 +851,9 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   profile or override and `global-timeout` in any profile, and marks each
   top-level test binary as named or not by the grouped filters, where a negated
   predicate names nothing and a group of predicates inside one negation
-  excludes every name it holds. It runs neither Cargo nor nextest and does not
-  evaluate filtersets.
+  excludes every name it holds, with the parentheses balanced rather than
+  matched lazily and a matcher's `/regex/` text skipped while they are counted.
+  It runs neither Cargo nor nextest and does not evaluate filtersets.
 - `policy-input/nested-cargo-ci-wiring` —
   `nested_cargo_wiring_envelope.build_nested_cargo_wiring_envelope`. It reuses
   the shared workflow reader of the CodeScene coverage envelope, then records

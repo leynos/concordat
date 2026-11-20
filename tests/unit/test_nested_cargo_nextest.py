@@ -15,7 +15,6 @@ import pygit2
 import pytest
 
 from concordat.rules import packages, runner
-from concordat.rules.nested_cargo_handoffs import file_index
 from concordat.rules.nested_cargo_nextest_envelope import (
     build_nested_cargo_nextest_envelope,
 )
@@ -24,8 +23,9 @@ from concordat.rules.nested_cargo_receivers import (
     call_chains,
     owns_chain,
 )
+from concordat.rules.nested_cargo_shadows import file_index
 from concordat.rules.nested_cargo_statements import _closure_hiding
-from concordat.rules.nested_cargo_syntax import closure_scopes
+from concordat.rules.nested_cargo_syntax import closure_spans
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -1068,12 +1068,12 @@ SHORT_CIRCUITED_PROBE = (
     "    add_version(&mut command, query_only);\n"
     '    command.arg("input.rs").status().unwrap();\n}\n'
     "fn add_version(command: &mut Command, query: bool) {\n"
-    '    query && command.arg("--version").status().is_ok();\n'
+    '    let _ = query && command.arg("--version").status().is_ok();\n'
     '    command.arg("input.rs");\n'
     "    let _ = query;\n}\n"
 )
 SHORT_CIRCUITED_PROBE_IF = SHORT_CIRCUITED_PROBE.replace(
-    '    query && command.arg("--version").status().is_ok();\n',
+    '    let _ = query && command.arg("--version").status().is_ok();\n',
     '    if query && command.arg("--version").status().is_ok() {}\n',
 )
 
@@ -1124,7 +1124,7 @@ REASSIGNED_PARAMETER = (
     '    let mut git = Command::new("git");\n'
     '    let mut command = Command::new(env!("CARGO"));\n'
     "    add_metadata(&mut command, &mut git);\n}\n"
-    "fn add_metadata(command: &mut Command, other: &mut Command) {\n"
+    "fn add_metadata<'a>(mut command: &'a mut Command, other: &'a mut Command) {\n"
     "    command = other;\n"
     '    command.arg("build").status().unwrap();\n}\n'
 )
@@ -1488,9 +1488,9 @@ def test_a_qualified_constructor_still_binds_the_command(
 
 ARGUMENT_AFTER_A_LAUNCH_IN_THE_SAME_STATEMENT = (
     "use std::process::Command;\n"
-    "fn build_test_binary(mode: &str) {\n"
+    "fn build_test_binary() {\n"
     '    let mut command = Command::new("cargo");\n'
-    "    if command.arg(mode).status().is_ok() {\n"
+    '    if command.arg("metadata").status().is_ok() {\n'
     '        command.arg("build");\n'
     "    }\n}\n"
 )
@@ -2391,19 +2391,19 @@ def test_an_unsafe_function_ends_the_command_window(tmp_path: pathlib.Path) -> N
 
 REF_REBOUND_AFTER_A_RUN = (
     "use std::process::Command;\n"
-    "fn run(fast: bool, other: &mut Command) {\n"
+    "fn run(fast: bool, mut other: &mut Command) {\n"
     '    let mut command = Command::new("cargo");\n'
     "    if fast {\n"
     '        command.arg("--version").status().unwrap();\n'
     "    }\n"
-    "    let ref command: &&mut Command = other;\n"
+    "    let ref mut command: &mut &mut Command = other;\n"
     '    command.arg("test").status().unwrap();\n'
     "}\n"
 )
 
 
 def test_a_ref_rebinding_ends_the_argument_read(tmp_path: pathlib.Path) -> None:
-    """`let ref command = ..` makes the later launch another value's run."""
+    """`let ref mut command = ..` makes the later launch another value's run."""
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", REF_REBOUND_AFTER_A_RUN)
     assert ids(tmp_path) == set()
@@ -2412,7 +2412,7 @@ def test_a_ref_rebinding_ends_the_argument_read(tmp_path: pathlib.Path) -> None:
 SAME_LINE_FUNCTION_AFTER_A_COMMAND = (
     "use std::process::Command;\n"
     'fn construct() { let mut command = Command::new("cargo"); } '
-    'fn later(command: &mut Command) { command.arg("build"); }\n'
+    'fn later(command: &mut Command) { command.arg("build").status(); }\n'
 )
 
 
@@ -2634,6 +2634,7 @@ def test_help_given_in_every_arm_compiles_nothing(tmp_path: pathlib.Path) -> Non
         "not(binary(ui)) | binary(other)",
         "!(binary(other) | binary(ui))",
         "not(binary(other) | binary(ui))",
+        "!(test(/foo[)]/) | binary(ui))",
     ],
 )
 def test_a_negated_predicate_does_not_name_the_spawner(
@@ -2903,7 +2904,7 @@ def test_a_closure_parameter_after_the_first_hides_the_helper(
     "arguments",
     [
         '.arg("--print=cfg=out.txt")',
-        '.args(["--print=file-names", "--crate-name", "x"])',
+        '.args(["--print=file-names", "--crate-name", "x"]).arg("fixture.rs")',
     ],
 )
 def test_a_print_query_written_to_a_file_compiles_nothing(
@@ -3088,10 +3089,10 @@ HELPER_RETURN_INSIDE_A_BLOCK = (
     "    let quiet = 1;\n"
     '    command.arg("--print").arg("cfg");\n'
     "}\n"
-    "fn probe() {\n"
+    "fn probe(skip: bool) {\n"
     '    let mut command = Command::new("rustc");\n'
     '    command.arg("input.rs");\n'
-    "    configure(&mut command, false);\n"
+    "    configure(&mut command, skip);\n"
     "    command.status().unwrap();\n"
     "}\n"
 )
@@ -3246,8 +3247,9 @@ UNLAUNCHED_RETURN_PATH_IS_NOT_A_RUN = (
     "use std::process::Command;\n"
     "fn probe(skip: bool) {\n"
     '    let mut command = Command::new("rustc");\n'
-    '    command.arg("--version");\n'
+    '    command.arg("input.rs");\n'
     "    if skip { return; }\n"
+    '    command.arg("--version");\n'
     "    command.status().unwrap();\n"
     "}\n"
 )
@@ -3363,9 +3365,9 @@ CALLER_COMPILE_AFTER_A_BLOCK_LEVEL_RETURN = (
     '    command.arg("--version");\n'
     "    command.status().unwrap();\n"
     "}\n"
-    "fn run() {\n"
+    "fn run(skip: bool) {\n"
     '    let mut command = Command::new("rustc");\n'
-    "    configure(&mut command, false);\n"
+    "    configure(&mut command, skip);\n"
     '    command.arg("input.rs");\n'
     "    command.status().unwrap();\n"
     "}\n"
@@ -3540,7 +3542,10 @@ def test_a_helper_called_only_inside_a_closure_is_not_spliced(
 
 @pytest.mark.parametrize(
     "arguments",
-    ['.args(["--print", "crate-name"])', '.arg("--print=crate-name")'],
+    [
+        '.args(["--print", "crate-name"]).arg("fixture.rs")',
+        '.arg("--print=crate-name").arg("fixture.rs")',
+    ],
 )
 def test_a_crate_name_print_is_a_probe(arguments: str, tmp_path: pathlib.Path) -> None:
     """`--print crate-name` prints the name and exits without compiling."""
@@ -3582,7 +3587,7 @@ def test_a_closure_return_type_does_not_end_its_span() -> None:
         "let f = |command: &mut Command| -> Result<(), ()> "
         '{ command.arg("--version"); Ok(()) };'
     )
-    ((start, stop),) = closure_scopes(source, "command")
+    ((start, stop),) = closure_spans(source)
     assert start < source.index("command.arg") < stop
 
 
@@ -3613,7 +3618,7 @@ def test_closure_hiding_reads_the_text_before_the_statement() -> None:
     source = 'let f = |command: &mut Command| { command.arg("x");\ncommand.status(); };'
     begin = source.index("command.status")
     stop = source.index(";", begin)
-    ((start, end),) = _closure_hiding(source[:stop], "command", begin, stop)
+    ((start, end),) = _closure_hiding(source[:stop], begin, stop)
     assert (start, end) == (0, stop - begin)
 
 
@@ -3763,3 +3768,193 @@ def test_an_else_if_arm_is_not_the_only_path_to_the_launch(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", ELSE_IF_ARM_IS_NOT_THE_ONLY_PATH)
     assert ids(tmp_path) == {"NC-004"}
+
+
+EXPRESSION_CLOSURE_BEFORE_A_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    let noop = |command: &mut Command| command.arg("x");\n'
+    '    command.arg("build");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_an_expression_closure_ends_at_its_semicolon(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The closure ends with its expression, so the launch beside it compiles."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", EXPRESSION_CLOSURE_BEFORE_A_LAUNCH)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONDITIONAL_HELP_BESIDE_METADATA = (
+    "use std::process::Command;\n"
+    "fn run(show: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    if show { command.args(["build", "--help"]); }\n'
+    '    command.arg("metadata");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_conditional_help_does_not_make_the_metadata_compile(
+    tmp_path: pathlib.Path,
+) -> None:
+    """One path asks for help and the other runs `metadata`; neither compiles."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_HELP_BESIDE_METADATA)
+    assert ids(tmp_path) == set()
+
+
+GUARDED_HELP_BESIDE_A_BUILD = (
+    "use std::process::Command;\n"
+    "fn run(show: bool, query: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if show {\n"
+    '        command.arg("build");\n'
+    '        query && command.arg("--help").get_args().next().is_some();\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_guarded_help_flag_does_not_excuse_the_build(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`query` false leaves the build without help, so the command compiles."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", GUARDED_HELP_BESIDE_A_BUILD)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CAPTURING_CLOSURE_DEFERS_ITS_LAUNCH = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    let deferred = || command.arg("build").status();\n'
+    "    drop(deferred);\n"
+    "}\n"
+)
+
+
+def test_a_capturing_closure_defers_its_launch(tmp_path: pathlib.Path) -> None:
+    """Building the closure starts no process, so its body is no launch."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CAPTURING_CLOSURE_DEFERS_ITS_LAUNCH)
+    assert ids(tmp_path) == set()
+
+
+CONDITIONAL_SEPARATOR_FORWARDS_HELP = (
+    "use std::process::Command;\n"
+    "fn run(show: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    if show { command.args(["test", "--", "--help"]); }\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_help_after_a_separator_on_a_conditional_path_still_compiles(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `--` sends `--help` to the test binary, so the run compiles tests."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONDITIONAL_SEPARATOR_FORWARDS_HELP)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+STATIC_MUT_SHADOWS_THE_HELPER = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command) {\n"
+    '    target.arg("build");\n'
+    "}\n"
+    "fn run() {\n"
+    "    static mut configure: fn(&mut Command) = noop;\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    unsafe { configure(&mut command); }\n"
+    '    command.arg("metadata");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+    "fn noop(_target: &mut Command) {}\n"
+)
+
+
+def test_a_mutable_static_shadows_the_helper(tmp_path: pathlib.Path) -> None:
+    """The static binds `configure` in its block, so the free `fn` is not called."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", STATIC_MUT_SHADOWS_THE_HELPER)
+    assert ids(tmp_path) == set()
+
+
+DEFERRED_PARAMETER_USE_IN_A_HELPER = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command) {\n"
+    '    let _deferred = || { setup(); target.arg("build"); };\n'
+    "}\n"
+    "fn probe() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    configure(&mut command);\n"
+    '    command.arg("metadata").status().unwrap();\n'
+    "}\n"
+    "fn setup() {}\n"
+)
+
+
+def test_a_parameter_use_inside_a_deferred_closure_is_not_spliced(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper's only `build` is deferred, so the caller runs `metadata`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", DEFERRED_PARAMETER_USE_IN_A_HELPER)
+    assert ids(tmp_path) == set()
+
+
+MATCH_ARM_TARGET_BESIDE_THE_PARAMETER = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command, other: Option<&mut Command>) {\n"
+    "    match other {\n"
+    '        Some(mut target) => { target.arg("build"); }\n'
+    "        None => {}\n"
+    "    }\n"
+    "}\n"
+    "fn probe() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    configure(&mut command, None);\n"
+    '    command.arg("metadata").status().unwrap();\n'
+    "}\n"
+)
+
+
+def test_a_match_arm_target_is_not_the_helpers_parameter(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The arm's `target` is the other command, so its `build` is not spliced."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", MATCH_ARM_TARGET_BESIDE_THE_PARAMETER)
+    assert ids(tmp_path) == set()
+
+
+ARGUMENT_RETURNED_WITH_THE_HELP = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command) -> &mut Command {\n"
+    '    return target.arg("--help");\n'
+    "}\n"
+    "fn probe() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    configure(&mut command);\n"
+    '    command.arg("build");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_returned_argument_is_not_conditional(tmp_path: pathlib.Path) -> None:
+    """The return expression runs before control leaves, so the help is certain."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ARGUMENT_RETURNED_WITH_THE_HELP)
+    assert ids(tmp_path) == set()

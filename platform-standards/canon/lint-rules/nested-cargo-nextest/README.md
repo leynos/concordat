@@ -65,11 +65,14 @@ configuration from a repository that needs none:
   written, with the `else` between them, so the arms still pair rather than
   reading as code that runs one after the other, and a `return` stays inside
   the block it was written in, because after that block it would end every
-  path. A block-level `return` also marks the statements after it as the code
-  of the path that skipped it; when the helper is spliced, that tail is wrapped
-  in a block of its own and the keyword is blanked in the masked form, so the
-  caller's own statements after the call stay in the run the early-return path
-  reached. A parameter list is split on its own commas, so a struct pattern
+  path. A call that is the `return`'s own expression
+  (`return target.arg("--help")`) runs before control leaves, so it is not
+  guarded with the tail. A block-level `return` also marks the statements after
+  it as the code of the path that skipped it; when the helper is spliced, that
+  tail is wrapped in a block of its own and the keyword is blanked in the
+  masked form, so the caller's own statements after the call stay in the run
+  the early-return path reached. A parameter list is split on its own commas,
+  so a struct pattern
   (`fn configure(Pair { first, command: other }: Pair, target: &mut Command)`)
   keeps its field comma and a comparison in a const block
   (`fn run(flag: Flag<{ 1 < 2 }>, (configure,): ..)`) is not a generic that
@@ -83,11 +86,11 @@ configuration from a repository that needs none:
   closure parameter in any position such as
   `|_: (), configure: fn(&mut Command)|`, a name bound by a `match` arm's
   pattern such as `match callback { configure => configure(&mut command) }`, a
-  `const` or `static` item of that name in the caller's block or a block
-  enclosing it (an item is in scope for its whole block, even before its
-  declaration, while a sibling block's item is not in scope at the call), and a
-  borrowed binding such as `let ref configure = ..`), a call written as a path
-  or method (`support::configure(..)`, however it is spaced around the
+  `const` or `static` item of that name, mutable or not, in the caller's block
+  or a block enclosing it (an item is in scope for its whole block, even before
+  its declaration, while a sibling block's item is not in scope at the call),
+  and a borrowed binding such as `let ref configure = ..`), a call written as a
+  path or method (`support::configure(..)`, however it is spaced around the
   separator), a name a `use` item could import, or a helper that reassigns the
   parameter. The parameters read are those of the innermost function whose body
   holds the call, so a function item declared inside the caller is not mistaken
@@ -102,8 +105,11 @@ configuration from a repository that needs none:
   (`|_: (), target: &mut Command| target.arg(..)`), because that `target` is
   the closure's argument, not the command the helper was given. A call written
   inside a closure body is declined as well, because the body runs when the
-  closure is called rather than where it is written. A function item ends the
-  arguments however it is qualified (`unsafe fn`, `default fn`,
+  closure is called rather than where it is written. The same holds for a
+  helper's own parameter: a use of it inside a closure body, or inside a
+  `match` arm whose pattern binds the parameter's name, is not the caller's
+  command, so the helper is declined at the statement that holds it. A function
+  item ends the arguments however it is qualified (`unsafe fn`, `default fn`,
   `extern "C" fn`), because the qualifiers do not change where the next scope
   begins, and it does so even when it begins on the line that ends the previous
   item (`} fn later(..)`): the boundary is the `fn` keyword, not the start of a
@@ -139,7 +145,11 @@ configuration from a repository that needs none:
   still the caller's; a `;` inside the body splits the statement, not the
   closure's scope, so
   `|command: &mut Command| { command.arg("x"); command.status(); }` stays
-  hidden to its closing brace. A statement that begins by closing a block
+  hidden to its closing brace. The whole body is deferred work, whether it
+  names a parameter or captures the command
+  (`let deferred = || command.arg("build").status();`), so a launch inside it
+  is not the caller's either, and an expression-bodied closure ends at its `;`,
+  so a launch written after it is. A statement that begins by closing a block
   (`} command.arg("-v")`) is read at the depth it is reached at, so its
   argument is on every path that reaches it rather than only inside the block
   it leaves. The subcommand is the first argument of the run that is neither an
@@ -162,29 +172,35 @@ configuration from a repository that needs none:
   not excuse the build on the path that skips it. A help flag given in the
   block that also holds a conditional subcommand travels with that subcommand,
   so `if show { command.args(["build", "--help"]); }` compiles nothing. A help
-  flag in one arm excuses only the path through that arm, so a `build --help`
-  in the `if` arm does not excuse the `check` its `else` arm runs, while a help
-  flag in every arm excuses the whole run; an arm that holds only options is
-  still a path when the choice is fully paired, so two such arms excuse each
-  other's sibling words. Words after a `--` belong to the program the command
-  runs, not to cargo, and a `--` given only on some path is still a separator
-  on that path, so a help flag written after it is passed to the program and
-  does not excuse the build. A word is the text its string literal has at run
-  time, so an escape (`\x64`, `\u{64}`) is decoded and cannot hide `build` or
-  `--version` from the read, and an escaped quote does not end the literal
-  early. A word counts as unconditional only when every block open at it is
-  also open at the run's launch, so a flag in the branch that launches is on
-  the run's path while one in a sibling block that has already closed is not.
-  An option given in a block of its own (`if verbose { command.arg("-v") }`)
-  cannot change the subcommand, so it does not stop a paired choice beside it
-  being read arm by arm. A flag added on only some paths, behind a `&&`/`||`
-  short circuit or inside a block that may not run, does not make a run a probe
-  -- except when one fully paired `if`/`else` chain gives a probe in every arm,
-  whether that choice is written across statements or on one line
-  (`let _ = if c { .. } else { .. };`), since then no path reaches the launch
-  without one. Each arm is read with the words given before the branch, so a
-  `--print` in one arm and a `cfg` after the choice complete each other; a
-  short circuit inside an arm
+  flag a short circuit can skip (`query && command.arg("--help")`) covers
+  nothing, because the path that takes the left side gives the word without it,
+  and the subcommand is read from the words each path gives rather than from
+  one flattened list, so a `metadata` after that block is still read on its
+  own. A help flag in one arm excuses only the path through that arm, so a
+  `build --help` in the `if` arm does not excuse the `check` its `else` arm
+  runs, while a help flag in every arm excuses the whole run; an arm that holds
+  only options is still a path when the choice is fully paired, so two such
+  arms excuse each other's sibling words. Words after a `--` belong to the
+  program the command runs, not to cargo, and a `--` given only on some path is
+  still a separator on that path, so a help flag written after it is passed to
+  the program and does not excuse the build, whether the separator is
+  unconditional or given in a conditional block beside the flag
+  (`if show { command.args(["test", "--", "--help"]); }`). A word is the text
+  its string literal has at run time, so an escape (`\x64`, `\u{64}`) is
+  decoded and cannot hide `build` or `--version` from the read, and an escaped
+  quote does not end the literal early. A word counts as unconditional only
+  when every block open at it is also open at the run's launch, so a flag in
+  the branch that launches is on the run's path while one in a sibling block
+  that has already closed is not. An option given in a block of its own
+  (`if verbose { command.arg("-v") }`) cannot change the subcommand, so it does
+  not stop a paired choice beside it being read arm by arm. A flag added on
+  only some paths, behind a `&&`/`||` short circuit or inside a block that may
+  not run, does not make a run a probe -- except when one fully paired
+  `if`/`else` chain gives a probe in every arm, whether that choice is written
+  across statements or on one line (`let _ = if c { .. } else { .. };`), since
+  then no path reaches the launch without one. Each arm is read with the words
+  given before the branch, so a `--print` in one arm and a `cfg` after the
+  choice complete each other; a short circuit inside an arm
   (`query && command.arg("-V").get_args().next().is_some()`) can still skip
   that arm's flag, so the arm does not cover its path. `cargo metadata` and
   `cargo config` do not count;
@@ -220,9 +236,11 @@ configuration from a repository that needs none:
   that uses a serial group. A predicate the filter negates (`not(binary(ui))`,
   `!test(compiles)`) excludes that name rather than selecting it, so it does
   not name the spawner, and a group of predicates inside one negation
-  (`!(binary(ui) | binary(other))`) excludes every name it holds. Helpers under
-  `src/` or `tests/support/`, and `main.rs`/`mod.rs`, are judged at repository
-  level only.
+  (`!(binary(ui) | binary(other))`) excludes every name it holds. Parentheses
+  are balanced rather than matched lazily, and a matcher's `/regex/` text is
+  skipped while they are counted, because a regex holds brackets of its own
+  (`!(test(/foo[)]/) | binary(ui))`). Helpers under `src/` or `tests/support/`,
+  and `main.rs`/`mod.rs`, are judged at repository level only.
 - **EN-001** (indeterminate; an error for an envelope defect, the configured
   severity otherwise): the envelope is not a schema-1
   `policy-input/nested-cargo-nextest` document, the configuration cannot be

@@ -21,9 +21,9 @@ than counted, both as the subcommand and as an option's value, because on the
 path that skips its block neither position is its.
 
 The reading is textual: comments are blanked and literal contents kept by the
-caller, and the argument calls are found in the masked source so a `;` or a `{`
-in a string does not move a statement boundary. Which calls belong to the
-command is decided in :mod:`concordat.rules.nested_cargo_receivers`; this
+caller, and the caller finds the argument calls in the masked source so a `;`
+or a `{` in a string does not move a statement boundary. Which calls belong to
+the command is decided in :mod:`concordat.rules.nested_cargo_receivers`; this
 module only reads what those calls say.
 
 :mod:`concordat.rules.nested_cargo_arguments` uses these readers to decide what
@@ -34,10 +34,6 @@ from __future__ import annotations
 
 import re
 import typing as typ
-
-from .nested_cargo_receivers import owns_call
-from .nested_cargo_text import argument_items
-from .rust_source import scan_balanced
 
 # The `--print` requests that read a table or a path and exit without compiling
 # an input. `link-args` and `native-static-libs` are deliberately absent: they
@@ -177,35 +173,6 @@ def _literal_word(item: str) -> str | None:
     if _WORD.fullmatch(item) is None:
         return None
     return _decode_escapes(item[1:-1])
-
-
-def _argument_words(
-    statement: str, masked_statement: str, name: str | None
-) -> typ.Iterator[str | None]:
-    """Yield the words one statement passes to the command, in order.
-
-    Each `.arg(..)`/`.args(..)` call on the command contributes its arguments in
-    source order, so the first word of the whole command is the subcommand that
-    runs. A call on another receiver is not read, and a word that is not a
-    plain literal is yielded as unreadable rather than guessed.
-
-    Yields
-    ------
-    str | None
-        The literal text of each argument, or None where it is not a literal.
-    """
-    for found in _ARGUMENT_CALL.finditer(masked_statement):
-        if not owns_call(masked_statement, found.start(), name):
-            continue
-        open_at = found.end() - 1
-        close = scan_balanced(masked_statement, open_at)
-        if close is None:
-            yield None
-            return
-        yield from (
-            _literal_word(item)
-            for item in argument_items(statement[open_at + 1 : close - 1])
-        )
 
 
 def _first_positional(words: typ.Iterable[str | ConditionalWord | None]) -> str | None:

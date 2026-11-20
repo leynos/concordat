@@ -17,33 +17,42 @@ destructuring pattern (`let (configure,) = ..`, `let Hook(configure) = ..`), a
 helper name bound by a parameter pattern (`fn run((configure,): ..)`,
 `fn run(Callbacks { setup: configure }: ..)`), rebound by a closure's own
 `|..|` list in any position (`|_: (), configure: fn(&mut Command)|`) or bound
-by a `match` arm's pattern, a `const` or `static` item of that name in the
-caller's block or a block enclosing it (an item is in scope for its whole
-block, so one declared after the call still shadows it, while a `let` counts
-only before the call, and an item in a nested block that does not hold the call
-shadows nothing), a parameter reassigned or shadowed -- is declined rather
-than guessed, because a false positive would demand configuration from a
-repository that needs none. A call written inside a
+by a `match` arm's pattern, a `const` or `static` item of that name, mutable
+or not, in the caller's block or a block enclosing it (an item is in scope for
+its whole block, so one declared after the call still shadows it, while a
+`let` counts only before the call, and an item in a nested block that does not
+hold the call shadows nothing), a parameter reassigned or shadowed -- is
+declined rather than guessed, because a false positive would demand
+configuration from a repository that needs none. A call written inside a
 closure body is declined as well: the body runs when the closure is called, not
 where it is written, so `let deferred = |_| configure(&mut command);` adds
 nothing to the command until the closure is invoked, which the scan does not
-follow. A `let` binding is read even
+follow. The same holds for a helper's own parameter: a call on it inside a
+closure body (`let _deferred = || { target.arg("build"); };`) or inside a
+`match` arm whose pattern binds the parameter's name
+(`Ok(target) => target.arg("build")`) is not the caller's command, so the
+helper is declined at the statement that holds it. A `let` binding is read even
 when its constructor begins on the next line, because Rust ends the name at the
 `=` rather than at the line, and the parameters read are those of the innermost
 function whose body holds the call, so a function item declared inside the
 caller is not mistaken for its scope. A `return` in a helper is kept where it is
 written, and the statements after it are wrapped in a block of their own and
 have the keyword blanked, because they run only when the return was skipped; a
-return moved after its block would end every path instead, so the reader could
-not split the caller's runs there. Guarding the tail rather than starting a new
-run at it is what keeps the caller's own statements after the call on the
-returning path too. A spliced fragment
-with no call on the parameter keeps its braces in the order they were written,
-with the `else` between them, so the caller still sees which arm the fragment
-belongs to rather than reading the arms as code that runs one after the other.
-The reading is textual, and every boundary and brace is read from the masked
-source, so a `;` or a `{` in a string moves nothing.
+call that is the return's own expression (`return target.arg("--help")`) runs
+before control leaves, so the return statement itself stays unconditional and
+only what follows it is guarded. A return moved after its block would end
+every path instead, so the reader could not split the caller's runs there.
+Guarding the tail rather than starting a new run at it is what keeps the
+caller's own statements after the call on the returning path too. A spliced
+fragment with no call on the parameter keeps its braces in the order it was
+written, with the `else` between them, so the caller still sees which arm the
+fragment belongs to rather than reading the arms as code that runs one after
+the other. The reading is textual, and every boundary and brace is read from
+the masked source, so a `;` or a `{` in a string moves nothing.
 
+:mod:`concordat.rules.nested_cargo_shadows` answers the scope and shadow
+questions a handoff raises -- which function body holds the call, and what else
+the helper's name may denote there -- and
 :mod:`concordat.rules.nested_cargo_arguments` decides what the statements this
 module returns mean.
 """
@@ -55,19 +64,20 @@ import re
 import typing as typ
 
 from .nested_cargo_receivers import LAUNCH, reaches_through
-from .nested_cargo_shadows import match_arm_binds, open_braces
+from .nested_cargo_shadows import (
+    FUNCTION_BOUNDARY,
+    FileIndex,
+    enclosing_start,
+    imported,
+    match_arm_binds,
+    shadowed,
+)
 from .nested_cargo_syntax import (
     CLOSURE_HEADER,
-    _binding_pattern,
     _body_span,
     _parameter_at,
-    _split_parameters,
     inside_closure,
-    parameter_names,
-    pattern_binds,
-    top_level_item,
 )
-from .rust_source import scan_balanced
 
 # A call behind `&&` or `||` does not run on every path to the launch.
 SHORT_CIRCUIT: typ.Final = re.compile(r"&&|\|\|")
@@ -87,18 +97,6 @@ BINDING: typ.Final = re.compile(
     r"let[ \t]+(?:mut[ \t]+)?(?P<name>\w+)[ \t]*(?::[^=;]+)?=\s*"
     r"(?:[A-Za-z_]\w*[ \t]*::[ \t]*)*$"
 )
-# A following item is another scope, so the command's arguments end there.
-# Rust writes a function's qualifiers before `fn` in any of several orders, so
-# `unsafe fn`, `default fn`, `extern "C" fn` and their combinations all begin a
-# new scope just as a plain `fn` does. An item may begin on the line that ends
-# the previous one (`} fn later(..)`), so the boundary is the word `fn` and not
-# the start of a line; `fn` is a keyword, and the space before a name keeps it
-# from matching `fn` as part of another word or a `fn(..)` type.
-_FUNCTION_QUALIFIER: typ.Final = (
-    r"(?:pub(?:\([^)]*\))?[ \t]+|default[ \t]+|const[ \t]+|async[ \t]+"
-    r"|unsafe[ \t]+|extern[ \t]*\"[^\"]*\"[ \t]+)*"
-)
-FUNCTION_BOUNDARY: typ.Final = re.compile(rf"\b{_FUNCTION_QUALIFIER}fn[ \t]+\w+")
 
 
 def _argument_position(before: str | None) -> int | None:
@@ -165,6 +163,35 @@ def _closure_shadows(statement: str, name: str, own: re.Pattern[str]) -> bool:
     )
 
 
+def _hidden_use(
+    masked: str,
+    statement: str,
+    own: re.Pattern[str],
+    start: int,
+    parameter: str,
+    offset: int,
+) -> bool:
+    """Report whether a use of the parameter cannot be attributed to the call.
+
+    A call written inside a closure body runs only when the closure is called,
+    even when the header names no parameter (`|| { target.arg("build") }`), and
+    a call inside a match arm whose pattern binds the parameter's name reaches
+    the arm's value rather than the caller's command. Neither is the caller's
+    work, so the statement that holds such a use ends the read.
+
+    Returns
+    -------
+    bool
+        True when a use of the parameter is neither the caller's nor on a path
+        the caller reaches.
+    """
+    return any(
+        inside_closure(masked, start, offset + use.start())
+        or match_arm_binds(masked, parameter, start, offset + use.start())
+        for use in own.finditer(statement)
+    )
+
+
 def _receiver_statements(
     text: str, masked: str, span: tuple[int, int], parameter: str, receiver: str
 ) -> Window:
@@ -194,6 +221,12 @@ def _receiver_statements(
     because the helper has returned by then. A closure parameter that names the
     command parameter (`|_: (), target: &mut Command| ..`) shadows it wherever
     in the header it sits, so nothing after that statement is read.
+
+    A call written inside a closure body runs only when the closure is called,
+    even when the header names no parameter (`|| { target.arg("build") }`), and
+    a call inside a match arm whose pattern binds the parameter's name reaches
+    the arm's value rather than the caller's command. Neither is the caller's
+    work, so the body is declined from the statement that holds the call.
 
     A `return` ends the helper's path there, and the statements after it run
     only when the return was skipped. They are therefore kept conditional, and
@@ -232,7 +265,8 @@ def _receiver_statements(
     offset = start
     for statement in masked[start:end].split(";"):
         if (
-            COMMAND_NEW.search(statement)
+            _hidden_use(masked, statement, own, start, parameter, offset)
+            or COMMAND_NEW.search(statement)
             or shadow.search(statement)
             or _closure_shadows(statement, parameter, own)
         ):
@@ -254,6 +288,20 @@ def _receiver_statements(
     return Window(";\n".join([*pieces, closers]), ";\n".join([*guarded, closers]))
 
 
+def _blanked_return(masked: str) -> str:
+    """Return *masked* with the `return` keyword replaced by spaces.
+
+    The blanked text keeps its length, so an offset taken from it still names
+    the same character in the text as written.
+
+    Returns
+    -------
+    str
+        The text with every `return` blanked.
+    """
+    return _RETURN.sub(lambda found: " " * len(found[0]), masked)
+
+
 def _returning_tail(
     pieces: list[str], masked_pieces: list[str]
 ) -> tuple[list[str], list[str]]:
@@ -264,10 +312,13 @@ def _returning_tail(
     form would make the caller's reader start a new run at them and lose the
     caller's own continuation from the returning path. Blanking the keyword in
     the masked form (same length, so the two forms still index each other) and
-    wrapping the guarded statements in one block keeps them conditional, while
-    the caller's statements after the call stay in the run they belong to. The
-    wrapper braces are added to both forms at the same offsets, so a literal in
-    a guarded statement is still read from the text it was written in. A
+    wrapping only the statements after it in one block keeps them conditional,
+    while the return statement itself runs whenever control reaches it: a call
+    that is the return's own expression executes before control leaves, so it
+    is not made conditional by the return that follows it. The caller's
+    statements after the call stay in the run they belong to. The wrapper
+    braces are added to both forms at the same offsets, so a literal in a
+    guarded statement is still read from the text it was written in. A
     top-level `return` is guarded the same way; its tail is unreachable, so
     reading it as a path costs nothing.
 
@@ -280,11 +331,13 @@ def _returning_tail(
     for index, piece in enumerate(masked_pieces):
         if _RETURN.search(piece) is None:
             continue
-        guarded = [
-            _RETURN.sub(lambda found: " " * len(found[0]), tail)
-            for tail in masked_pieces[index:]
-        ]
-        text_tail = list(pieces[index:])
+        tail = [_blanked_return(rest) for rest in masked_pieces[index + 1 :]]
+        if not tail:
+            return [*pieces[: index + 1]], [
+                *masked_pieces[:index],
+                _blanked_return(piece),
+            ]
+        text_tail = list(pieces[index + 1 :])
         # The guard ends at the helper's last statement, so a launch earlier on
         # the returning path would sit in a block the guard's opening brace
         # changes the identity of; the caller's continuation after the call
@@ -292,10 +345,13 @@ def _returning_tail(
         # reader's own block boundary and only has the keyword blanked.
         if not any(LAUNCH.search(before) for before in masked_pieces[: index + 1]):
             text_tail[0] = "{" + text_tail[0]
-            guarded[0] = "{" + guarded[0]
+            tail[0] = "{" + tail[0]
             text_tail[-1] += "}"
-            guarded[-1] += "}"
-        return [*pieces[:index], *text_tail], [*masked_pieces[:index], *guarded]
+            tail[-1] += "}"
+        return [
+            *pieces[: index + 1],
+            *text_tail,
+        ], [*masked_pieces[:index], _blanked_return(piece), *tail]
     return pieces, masked_pieces
 
 
@@ -315,7 +371,10 @@ def _receiver_piece(
     (`if target.get_program() != "x" { target.arg("build") }`). Any other
     statement keeps only its braces, because they move the block depth a later
     statement is judged at. A call behind `&&` or `||` may not run, so it is
-    wrapped in a block of its own.
+    wrapped in a block of its own. A call after a `return` in the same
+    statement is wrapped too, because the return ends the helper's path there;
+    a call that is the return's own expression is not, because it runs before
+    control leaves.
 
     Returns
     -------
@@ -348,232 +407,15 @@ def _receiver_piece(
             )
     if SHORT_CIRCUIT.search(masked_piece, 0, found.start()) is not None:
         return "{" + piece + "}", "{" + masked_piece + "}"
-    if _RETURN.search(masked_piece, 0, found.start()) is not None:
+    returned = _RETURN.search(masked_piece, 0, found.start())
+    between = "" if returned is None else masked_piece[returned.end() : found.start()]
+    if between.strip():
         # A `return` before the call ends the helper's path, so the flag is
-        # given only to the caller's path that reaches it.
+        # given only to the caller's path that reaches it. A call that is the
+        # return's own expression runs before control leaves, so it stays
+        # unconditional.
         return "{" + piece + "}", "{" + masked_piece + "}"
     return piece, masked_piece
-
-
-class FileIndex(typ.NamedTuple):
-    """The `fn` definitions and item boundaries of one masked source.
-
-    Attributes
-    ----------
-    definitions:
-        Each `fn` name with the matches that define it, in source order.
-    boundaries:
-        The start offset of every function item, in source order.
-    """
-
-    definitions: dict[str, list[re.Match[str]]]
-    boundaries: list[int]
-
-
-def file_index(masked: str) -> FileIndex:
-    """Index the `fn` definitions and item boundaries of *masked* once.
-
-    Each handoff in a file asks the same questions about the same text, so the
-    names and boundaries are collected once rather than rescanned per call.
-
-    Returns
-    -------
-    FileIndex
-        The definitions by name and the ordered boundary offsets.
-    """
-    definitions: dict[str, list[re.Match[str]]] = {}
-    for found in re.finditer(r"\bfn\s+(?P<name>\w+)", masked):
-        definitions.setdefault(found["name"], []).append(found)
-    return FileIndex(
-        definitions, [found.start() for found in FUNCTION_BOUNDARY.finditer(masked)]
-    )
-
-
-def _destructured(masked: str, name: str, start: int, at: int) -> bool:
-    """Report whether a `let` between *start* and *at* binds *name* by pattern.
-
-    A tuple, slice, tuple-struct or struct pattern binds names without writing
-    `let name`: `let (configure,) = ..`, `let Hook(configure) = ..` and
-    `let Settings { configure } = ..` all shadow the free function of that
-    name. Any bracket before the `=` makes the pattern a destructuring one;
-    the `let` pattern runs to the `=`, so the initializer is not part of the
-    pattern and a call on the right-hand side (`let x = configure(..)`) is not
-    mistaken for a binding.
-
-    Returns
-    -------
-    bool
-        True when a destructuring `let` binds *name*.
-    """
-    pattern = re.compile(r"\blet\b([^=;]*?)\s*=")
-    bound = re.compile(rf"\b{re.escape(name)}\b")
-    for found in pattern.finditer(masked, start, at):
-        binding = found[1]
-        destructures = any(char in binding for char in "([{")
-        if destructures and bound.search(binding) is not None:
-            return True
-    return False
-
-
-def _closure_binds(masked: str, start: int, at: int, name: str) -> bool:
-    """Report whether a closure header between *start* and *at* binds *name*.
-
-    A closure's own arguments are its values, not the caller's, so a call
-    written inside one reaches whatever the header bound. The binding may sit
-    anywhere in the list (`|_: (), configure: fn(&mut Command)|`), so every
-    parameter's binding is read, and only the text before its type delimiter
-    counts.
-
-    Returns
-    -------
-    bool
-        True when a `|..|` header before *at* binds *name*.
-    """
-    bound = re.compile(rf"\b{re.escape(name)}\b")
-    for header in CLOSURE_HEADER.finditer(masked, start, at):
-        if any(
-            bound.search(_binding_pattern(part)) is not None
-            for part in _split_parameters(header["params"])
-        ):
-            return True
-    return False
-
-
-def _enclosing_start(masked: str, at: int, index: FileIndex) -> int:
-    """Return the start of the innermost function whose body holds *at*.
-
-    The latest `fn` before a call is not necessarily the caller's scope: a
-    function declared inside another one (`fn unrelated() {}`) is an item of
-    its own, so a call after it would otherwise be read against that inner
-    item and miss the enclosing function's parameters. The body is the first
-    `{` at bracket depth zero after the item starts, so the boundaries are
-    walked back from the call and the first whose body has not closed is the
-    one that holds it. A call outside every function keeps the whole file as
-    its scope.
-
-    Returns
-    -------
-    int
-        The start offset of the enclosing function, or 0 when none holds *at*.
-    """
-    boundary = bisect.bisect_left(index.boundaries, at)
-    for start in reversed(index.boundaries[:boundary]):
-        item = top_level_item(masked, start)
-        if item is None or item[1] != "{":
-            continue
-        close = scan_balanced(masked, item[0])
-        if close is not None and close > at:
-            return start
-    return 0
-
-
-def _shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
-    """Report whether *name* may be a local binding at *at* rather than a `fn`.
-
-    A parameter of the caller's own function, a closure's own parameter (in
-    any position), a loop variable, `let`, `const` or `static` with the
-    helper's name shadows the free function, so the call reaches something the
-    scan cannot read. A `let` or a loop variable counts only before the call,
-    because a value bound later is not the one the call reaches, while a
-    `const` or `static` counts anywhere in the caller's block, because an item
-    is in scope for the whole block. A `let` whose pattern destructures the name
-    (`let (configure,) = ..`) binds it too, and so does a binding that borrows
-    the value (`let ref configure = ..`, `|ref mut configure|`): the name still
-    denotes the borrowed value rather than the free function. The enclosing
-    function's parameter list is read because `fn run(configure: fn(&mut
-    Command))` calls the argument, not the free function; a function item
-    declared inside it is not the caller's scope, so the innermost enclosing
-    body is found rather than the latest declaration. A parameter written as a
-    pattern (`fn run((configure,): ..)`, `fn run(Settings { hook: configure }:
-    ..)`) binds names the plain reader cannot see, so the handoff is declined
-    rather than guessed.
-
-    Returns
-    -------
-    bool
-        True when a binding of that name is in scope at *at*.
-    """
-    at = min(at, len(masked))
-    start = _enclosing_start(masked, at, index)
-    pattern = rf"\b{re.escape(name)}\b"
-    # `ref` and `mut` may each be present, in either combination, before the
-    # name a pattern binds; neither changes which name is bound.
-    binding = r"(?:(?:ref\s+)?mut\s+|ref\s+)?"
-    binder = re.compile(rf"\b(?:let\s+{binding}|for\s+{binding}){pattern}")
-    if binder.search(masked, start, at) is not None:
-        return True
-    if match_arm_binds(masked, name, start, at):
-        return True
-    if _item_shadows(masked, name, at, index):
-        return True
-    if _closure_binds(masked, start, at, name):
-        return True
-    if _destructured(masked, name, start, at):
-        return True
-    if pattern_binds(masked, start, name):
-        return True
-    return name in parameter_names(masked, start)
-
-
-def _item_shadows(masked: str, name: str, at: int, index: FileIndex) -> bool:
-    """Report whether a `const` or `static` of *name* is in scope at *at*.
-
-    An item declaration is in scope for its whole block, so one written after
-    the call shadows the free function there just as one written before it
-    does: `configure(&mut command); const configure: fn(&mut Command) = noop;`
-    calls the constant, not the `fn` beside it. A declaration in a block that
-    encloses the call counts too, because that block's items are in scope
-    throughout it: the call is declined rather than read from the free
-    function. The block that declares the item is matched by the offset of its
-    opening brace against the blocks open at the call, so a sibling block's
-    item -- which is not in scope at the call -- does not shadow it.
-
-    Returns
-    -------
-    bool
-        True when an item of that name is in scope at *at*.
-    """
-    start = _enclosing_start(masked, at, index)
-    item = top_level_item(masked, start)
-    if item is None or item[1] != "{":
-        return False
-    close = scan_balanced(masked, item[0])
-    if close is None:
-        return False
-    at_blocks = open_braces(masked, item[0], at)
-    declaration = re.compile(rf"\b(?:const|static)\s+\b{re.escape(name)}\b")
-    for found in declaration.finditer(masked, item[0], close):
-        declarer = open_braces(masked, item[0], found.start())
-        if not declarer or declarer[-1] == item[0] or declarer[-1] in at_blocks:
-            return True
-    return False
-
-
-def _imported(masked: str, name: str) -> bool:
-    """Report whether a `use` in the file could bring *name* in.
-
-    A call to an imported function may resolve to another file, and it may
-    resolve to an inline module in the same file (`use
-    self::support::configure`). The scan does not resolve imports, so it cannot
-    tell which definition the call reaches, and a same-file `fn` of that name is
-    not certainly the one it does.
-    The handoff is therefore declined rather than read from the local namesake;
-    a false positive here would hide a real compile.
-
-    A glob import (`use support::*`, `use support::{*}`) binds names without
-    spelling any of them, so while one is present no name is certainly the
-    file's own. Any `*` inside a `use` item is that glob, because a path
-    segment cannot otherwise hold one. That reads as an import of every name,
-    which further errs towards not demanding configuration.
-
-    Returns
-    -------
-    bool
-        True when a `use` item names *name* or imports a whole module.
-    """
-    if re.search(r"\buse\b[^;]*\*", masked) is not None:
-        return True
-    return re.search(rf"\buse\b[^;]*\b{re.escape(name)}\b", masked) is not None
 
 
 def _callee_arguments(
@@ -606,9 +448,9 @@ def _callee_arguments(
         *receiver*, or None when the helper is undefined, duplicated, shadowed
         or shaped uncertainly.
     """
-    if _shadowed(masked, call["callee"], base + call.start(), index):
+    if shadowed(masked, call["callee"], base + call.start(), index):
         return None
-    if _imported(masked, call["callee"]):
+    if imported(masked, call["callee"]):
         return None
     definitions = index.definitions.get(call["callee"], [])
     if len(definitions) != 1:
@@ -675,7 +517,7 @@ def _callee_bodies(
         # site's. `let deferred = |_| configure(&mut command);` adds nothing to
         # the command until `deferred` runs, which the scan does not follow.
         at = base + call.start()
-        if inside_closure(masked, _enclosing_start(masked, at, index), at):
+        if inside_closure(masked, enclosing_start(masked, at, index), at):
             continue
         body = _callee_arguments(text, masked, closers, call, name, base, index)
         if body is not None:

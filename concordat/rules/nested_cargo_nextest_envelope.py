@@ -19,7 +19,10 @@ spawners (helpers under `src/` or `tests/support/`) are judged at repository
 level only. A predicate the filter negates (`not(binary(ui))`, `!test(ui)`)
 excludes that name rather than selecting it, so it does not count as naming
 the spawner; a group of predicates inside one negation
-(`!(binary(ui) | binary(other))`) excludes every name it holds. The scan for
+(`!(binary(ui) | binary(other))`) excludes every name it holds. Parentheses
+are balanced rather than matched lazily, and a matcher's `/regex/` text is
+skipped while they are counted, because a regex holds brackets of its own
+(`!(test(/foo[)]/) | binary(ui))`). The scan for
 spawners lives in `nested_cargo_spawn` and is conservative by design. A
 configuration that cannot be decoded stays a fact, so the policy answers
 indeterminate.
@@ -196,6 +199,45 @@ NEGATION: typ.Final = re.compile(r"(?:!\s*\(?\s*|\bnot\s*\(?\s*)$")
 NEGATION_GROUP: typ.Final = re.compile(r"(?:!|\bnot)\s*\(")
 
 
+def _balanced_close(text: str, open_at: int) -> int:
+    r"""Return the offset of the `)` that balances the `(` at *open_at*.
+
+    A filter argument is either bare or a `/regex/` matcher, and a matcher
+    holds parentheses and brackets of its own (`test(/foo[)]/)`). Those are
+    not delimiters of the predicate or the group that holds the matcher, so
+    the matcher's text is skipped, with `\\/` read as an escaped slash rather
+    than as its end.
+
+    Returns
+    -------
+    int
+        The offset of the balancing `)`, or -1 when the text has none.
+    """
+    depth = 0
+    in_regex = False
+    escaped = False
+    for offset in range(open_at, len(text)):
+        char = text[offset]
+        if in_regex:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == "/":
+                in_regex = False
+            continue
+        match char:
+            case "/":
+                in_regex = True
+            case "(":
+                depth += 1
+            case ")":
+                depth -= 1
+                if depth == 0:
+                    return offset
+    return -1
+
+
 def _negated_spans(text: str) -> list[tuple[int, int]]:
     """Return the spans a negation's parentheses hold.
 
@@ -203,7 +245,7 @@ def _negated_spans(text: str) -> list[tuple[int, int]]:
     (`!(binary(ui) | binary(other))`), and each of them names a test the
     override does not place in the group. The span runs from the group's
     opening `(` to its balancing `)`, counted rather than matched lazily
-    because a regex argument holds parentheses of its own.
+    because a matcher argument holds brackets of its own.
 
     Returns
     -------
@@ -213,12 +255,9 @@ def _negated_spans(text: str) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
     for found in NEGATION_GROUP.finditer(text):
         open_at = found.end() - 1
-        depth = 0
-        for offset in range(open_at, len(text)):
-            depth += (text[offset] == "(") - (text[offset] == ")")
-            if depth == 0:
-                spans.append((open_at, offset))
-                break
+        close = _balanced_close(text, open_at)
+        if close >= 0:
+            spans.append((open_at, close))
     return spans
 
 
@@ -246,12 +285,9 @@ def _predicate_arguments(text: str) -> list[str]:
             continue
         if NEGATION.search(text[: match.start()]) is not None:
             continue
-        depth, start = 1, match.end()
-        for offset, char in enumerate(text[start:], start):
-            depth += (char == "(") - (char == ")")
-            if depth == 0:
-                found.append(text[start:offset])
-                break
+        close = _balanced_close(text, match.end() - 1)
+        if close >= 0:
+            found.append(text[match.end() : close])
     return found
 
 

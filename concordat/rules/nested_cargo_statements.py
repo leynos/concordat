@@ -17,16 +17,18 @@ command's, and neither is anything after it on that path: a declaration
 shadows the name inside its block, and attribution resumes once that block
 closes, while an assignment ends the read because the block that ran it may
 have been entered. A field assignment (`holder . command = ..`) moves the
-field rather than the binding, so it does not end the read. A closure parameter
-of that name is different again: it shadows the command only inside the closure
-body, so the closure's own span is blanked before the statement is read and the
-rest of the statement is still the command's, wherever in the `|..|` list the
-parameter sits. A launch beside the closure is therefore read
+field rather than the binding, so it does not end the read. A closure is
+deferred work: its body runs only when the closure is called, so the closure's
+whole span is blanked before the statement is read, whether the body calls a
+parameter of the command's name or captures the command
+(`let deferred = || command.arg("build").status();`). The rest of the statement
+is still the command's, wherever in the `|..|` list a parameter sits. A launch
+beside the closure is therefore read
 (`(|command: &mut Command| {}, command.arg("build").status())`), while a launch
-on the closure's own parameter is not. The body outlives a `;` written inside
-it, and the statement reader splits there, so the span is found in the text
-before the statement rather than in the statement alone; the statements after
-the body closes are the command's again.
+inside the body is not. The body outlives a `;` written inside it, and the
+statement reader splits there, so the span is found in the text before the
+statement rather than in the statement alone; the statements after the body
+closes are the command's again.
 
 The identity of the open braces pairs an `else` arm with the `if` arm beside
 it -- inline (`let _ = if c { .. } else { .. };`) as well as across statements
@@ -66,7 +68,7 @@ from .nested_cargo_runs import (
     _starts_a_run,
     _track,
 )
-from .nested_cargo_syntax import closure_scopes
+from .nested_cargo_syntax import closure_spans
 from .nested_cargo_words import _ARGUMENT_CALL
 
 # An `else` arm is the other path through the `if` beside it. It may open the
@@ -183,10 +185,14 @@ def _entry_depth(masked_statement: str, start_depth: int) -> int:
     return depth
 
 
-def _closure_hiding(
-    masked: str, name: str, start: int, stop: int
-) -> list[tuple[int, int]]:
-    """Return the closure spans around *name*, rebased onto a statement.
+def _closure_hiding(masked: str, start: int, stop: int) -> list[tuple[int, int]]:
+    """Return the closure spans around a statement, rebased onto it.
+
+    A closure's body runs only when the closure is called, so a call written
+    inside it (`let deferred = || command.arg("build").status();`) starts no
+    process beside the statement that builds the closure. Every closure is
+    blanked, not only one whose parameter binds the command's name, because a
+    body can capture the command instead of naming a parameter.
 
     The spans are found in *masked*, the whole read so far, rather than in the
     statement alone. A closure's body outlives a `;` written inside it
@@ -201,8 +207,6 @@ def _closure_hiding(
     ----------
     masked:
         The masked source up to the end of the current statement.
-    name:
-        The command's name, as bound at the spawn.
     start:
         The offset where the current statement begins.
     stop:
@@ -215,7 +219,7 @@ def _closure_hiding(
         *start*, in source order.
     """
     hidden: list[tuple[int, int]] = []
-    for begin, end in closure_scopes(masked, name):
+    for begin, end in closure_spans(masked):
         if end <= start or begin >= stop:
             continue
         hidden.append((max(begin, start) - start, min(end, stop) - start))
@@ -317,15 +321,15 @@ class _StatementRead:
         blocks = tuple(self._blocks)
         self._note_else(masked_statement, blocks)
         _track(self._blocks, masked_statement, self._offset)
-        # A closure's own parameter names its value, not the caller's command,
-        # but only inside the closure: a call beside the closure in the same
-        # statement is still the caller's. The closure's header and body are
-        # therefore blanked rather than the whole statement being declined.
-        # The spans are read over the whole text before this statement, since
-        # a `;` inside the body ends the statement and leaves the rest of the
-        # body in a later one.
+        # A closure's body runs only when the closure is called, and its own
+        # parameter names its value rather than the caller's command. A call
+        # beside the closure in the same statement is still the caller's, so
+        # the closure's header and body are blanked rather than the whole
+        # statement being declined. The spans are read over the whole text
+        # before this statement, since a `;` inside the body ends the
+        # statement and leaves the rest of the body in a later one.
         scopes = (
-            _closure_hiding(self._window.masked[:at], self._name, self._offset, at)
+            _closure_hiding(self._window.masked[:at], self._offset, at)
             if self._name is not None
             else []
         )

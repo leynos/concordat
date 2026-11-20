@@ -18,13 +18,16 @@ caller's scope just as a `let` does. A struct pattern's field colon
 (`Callbacks { setup: configure }: ..`) is not the delimiter before the type,
 and a pattern's own commas do not split the parameter from its neighbour.
 
-A closure's header and body are located here too, because two readers need the
-same span: one blanks it so a parameter of the command's name shadows the name
-only inside the closure, and the other declines a helper call written inside a
-body that runs only when the closure is called. A `|` that follows an operand
-is bitwise or rather than a header, so `a | command.arg("build") | b` holds no
-closure, and a return type before the body is part of the closure, so the body
-begins after the type rather than at its first comma.
+A closure's header and body are located here too, because the scan reads the
+same span in three places: the statement reader blanks every closure, since its
+body runs only when the closure is called, whether it names a parameter or
+captures the command (`|| command.arg("build")`); the handoff reader declines a
+helper call written inside such a body for the same reason; and a closure's own
+parameter of the command's name hides the name only inside that span. A `|`
+that follows an operand is bitwise or rather than a header, so
+`a | command.arg("build") | b` holds no closure, and a return type before the
+body is part of the closure, so the body begins after the type rather than at
+its first comma.
 """
 
 from __future__ import annotations
@@ -452,35 +455,37 @@ def closure_end(masked: str, after: int) -> int:
             if depth == 0:
                 return index
             depth -= 1
-        elif char == "," and depth == 0:
+        elif char in ",;" and depth == 0:
             return index
         index += 1
     return index
 
 
-def closure_scopes(masked: str, name: str) -> list[tuple[int, int]]:
-    """Return the spans a closure binding *name* hides the name in.
+def _closure_headers(masked: str) -> typ.Iterator[re.Match[str]]:
+    """Yield each `|..|` in *masked* that really opens a closure."""
+    return (
+        header
+        for header in CLOSURE_HEADER.finditer(masked)
+        if _opens_a_closure(masked, header)
+    )
 
-    A closure's parameter names its own value only inside the closure, so the
-    header and body are blanked before an enclosing statement is read: a call
-    on the closure's parameter is not the caller's command, while a call
-    written beside the closure is. The binding may sit anywhere in the header
-    (`|_: (), command: &mut Command|`), as it may in a parameter list.
+
+def closure_spans(masked: str) -> list[tuple[int, int]]:
+    """Return the span of every closure written in *masked*.
+
+    A closure's body runs only when the closure is called, however it captures
+    the command (`|| command.arg("build")` binds no parameter of that name).
+    The span runs from the header's opening `|` through the end of the body,
+    so blanking it leaves the calls written beside the closure readable.
 
     Returns
     -------
     list[tuple[int, int]]
-        The half-open spans to blank, in source order.
+        The half-open spans of each closure, in source order.
     """
-    bound = re.compile(rf"\b{re.escape(name)}\b")
     return [
         (header.start(), closure_end(masked, header.end()))
-        for header in CLOSURE_HEADER.finditer(masked)
-        if _opens_a_closure(masked, header)
-        and any(
-            bound.search(_binding_pattern(part)) is not None
-            for part in _split_parameters(header["params"])
-        )
+        for header in _closure_headers(masked)
     ]
 
 

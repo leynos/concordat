@@ -24,9 +24,15 @@ every path, and each arm of a fully paired choice is read for its own
 subcommand and its own help flag, so one arm's `metadata` does not hide the
 other arm's `build`. A help flag given in the block that also holds the word
 it excuses covers that word as well, so the path that gives a conditional
-subcommand gives the flag with it. A `--` given on only some path is still a
-separator on that path, so a help flag written after it is passed to the
-program the command runs and does not excuse the build. A `--print` query asks
+subcommand gives the flag with it -- unless a short circuit may skip the flag
+(`query && command.arg("--help")`), which leaves the word without help on the
+path that takes the left side. Each path is read from the words it gives and
+not from one flattened list of every word, so a `build` in a block that a path
+skips is not that path's subcommand, and a later `metadata` is still read on
+its own. A `--` given on only some path is still a separator on that path, so
+a help flag written after it is passed to the program the command runs and
+does not excuse the build, whether the separator is unconditional or given in
+a conditional block beside its flag. A `--print` query asks
 the compiler what it is only when its two halves are adjacent: an unreadable
 or conditional word between `--print` and `cfg` may be `link-args`, which
 builds the crate, so the query is not read as a probe. A kind may name an
@@ -83,7 +89,6 @@ import typing as typ
 
 from .nested_cargo_handoffs import (
     SHORT_CIRCUIT,
-    FileIndex,
     Window,
     _bound_name,
     command_window,
@@ -102,7 +107,6 @@ from .nested_cargo_words import (
     _QUERY_SET,
     _VERSION_FLAGS,
     ConditionalWord,
-    _argument_words,
     _cargo_options,
     _first_positional,
     _is_option,
@@ -112,6 +116,9 @@ from .nested_cargo_words import (
     _query_kind,
 )
 from .rust_source import scan_balanced
+
+if typ.TYPE_CHECKING:
+    from .nested_cargo_shadows import FileIndex
 
 SUBCOMMANDS: typ.Final = (
     "build|check|test|run|package|clippy|doc|rustc|install|publish|bench|miri"
@@ -546,18 +553,37 @@ def _a_conditional_word_compiles(
 def _helping_blocks(
     words: typ.Iterable[str | ConditionalWord | None],
 ) -> list[tuple[int, ...]]:
-    """Return the blocks a conditional help flag is given in.
+    """Return the blocks a conditional help flag is guaranteed to be given in.
+
+    A help flag is guaranteed only when the path that runs its block certainly
+    gives it to cargo. A guarded flag (`query && command.arg("--help")`) is
+    absent when the short circuit skips it, and a flag written after a `--`
+    that the same path gives belongs to the program the command runs
+    (`cargo test -- --help` passes the flag to the test binary). A flag in a
+    nested block is still cargo's when the separator sits in a block that
+    encloses it, because that block runs whenever the flag's does; a separator
+    in a sibling block is not on the flag's path.
 
     Returns
     -------
     list[tuple[int, ...]]
-        The blocks open at each conditional help flag, in order.
+        The blocks open at each conditional help flag that really reaches
+        cargo, in order.
     """
-    return [
-        word.blocks
-        for word in words
-        if isinstance(word, ConditionalWord) and word.word in _HELP_FLAGS
-    ]
+    separators: list[tuple[int, ...]] = []
+    helping: list[tuple[int, ...]] = []
+    for word in words:
+        if not isinstance(word, ConditionalWord):
+            continue
+        if word.word == "--":
+            separators.append(word.blocks)
+        elif (
+            word.word in _HELP_FLAGS
+            and not word.guarded
+            and not any(word.blocks[: len(blocks)] == blocks for blocks in separators)
+        ):
+            helping.append(word.blocks)
+    return helping
 
 
 def _a_path_asks(helping: list[tuple[int, ...]], word: ConditionalWord) -> bool:
@@ -610,11 +636,6 @@ def _run_compiles(run: Run, name: str | None, arms: ArmChoices) -> bool:
     launch = _launch_of(run)
     if launch is None:
         return False
-    words = _cargo_options(
-        word
-        for statement in run.statements
-        for word in _argument_words(statement.text, statement.masked, name)
-    )
     plain = list(_probe_words(run, name, launch))
     paths = _arm_paths(plain, launch, arms)
     if paths is not None:
@@ -633,16 +654,14 @@ def _run_compiles(run: Run, name: str | None, arms: ArmChoices) -> bool:
     if settled:
         # A conditional word before it may still be the subcommand on its own
         # path (`if a { arg("metadata") } arg("build")` builds when `a` is
-        # false), so both readings are consulted once one is settled. A choice
-        # is not needed for this: each conditional word is read with the words
-        # before it that every path gives, so two blocks in sequence are read
-        # apart (`if a { arg("search") } if b { arg("install") } arg("ripgrep")`
-        # runs `cargo install ripgrep` when only the second block does).
-        return (
-            settled in _COMPILING
-            or _first_positional(words) in _COMPILING
-            or _a_conditional_word_compiles(unconditional)
-        )
+        # false), so the conditional words are read on their own paths rather
+        # than in a flattened sequence: a `build` written beside its own
+        # `--help` prints help and does not compile. A choice is not needed for
+        # this: each conditional word is read with the words before it that
+        # every path gives, so two blocks in sequence are read apart
+        # (`if a { arg("search") } if b { arg("install") } arg("ripgrep")` runs
+        # `cargo install ripgrep` when only the second block does).
+        return settled in _COMPILING or _a_conditional_word_compiles(unconditional)
     # No unconditional subcommand decides the run, so a compiling word on any
     # path may be the one that runs: a conditional `build` beside a conditional
     # `metadata` still builds when only the build's block runs. An unreadable

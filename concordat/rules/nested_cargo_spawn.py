@@ -73,7 +73,8 @@ import re
 import typing as typ
 
 from .nested_cargo_arguments import compiles, is_probe, launches
-from .nested_cargo_handoffs import command_window, file_index
+from .nested_cargo_handoffs import command_window
+from .nested_cargo_shadows import file_index
 from .nested_cargo_source import brace_pairs
 from .nested_cargo_syntax import top_level_item
 from .rust_source import mask_literals
