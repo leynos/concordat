@@ -39,13 +39,18 @@ _OPENER: typ.Final = {")": "(", "]": "["}
 _VISIBILITY: typ.Final = re.compile(r"\bpub\s*$")
 
 
-def _depths(masked: str, start: int) -> typ.Iterator[tuple[int, int | None]]:
+def _depths(
+    masked: str, start: int, *, enter_braces: bool = False
+) -> typ.Iterator[tuple[int, int | None]]:
     """Yield each offset from *start* with the number of openers before it.
 
     A const block (`Tag<{ 1 + 1 }>`) counts as one level, and inside it only
     braces are read, so a `<` there is a comparison and not a generic opener.
     A brace at the top level is the item's own body and is reported at depth
-    zero rather than entered. A return arrow is skipped whole.
+    zero rather than entered, unless *enter_braces* asks for it: in a parameter
+    list a brace is a struct pattern or a const block, never a body, so its
+    field commas must stay inside the parameter. A return arrow is skipped
+    whole.
 
     A `>` closes a `<` only when the `<` is still the innermost opener, so the
     `>` of an array length's shift (`[u8; 4 >> 1]`, and `Option<[u8; 4 >> 1]>`
@@ -69,7 +74,7 @@ def _depths(masked: str, start: int) -> typ.Iterator[tuple[int, int | None]]:
             continue
         inside_brace = bool(openers) and openers[-1] == "{"
         if char == "{":
-            if openers:
+            if openers or enter_braces:
                 openers.append("{")
         elif char == "}":
             if inside_brace:
@@ -168,12 +173,13 @@ def _parameter_close(masked: str, open_at: int) -> int | None:
 def _split_parameters(parameters: str) -> list[str]:
     """Split a parameter list on the commas that sit outside brackets.
 
-    A generic type (`Result<A, B, E>`), an array length (`[u8; 4]`) or a
-    function-pointer return (`fn() -> ()`) keeps its commas, so a position
-    still indexes the parameter the caller passed. The `>` of a return arrow
-    is not a generic closer, a comparison inside a const block
-    (`Flag<{ 1 < 2 }>`) is not a generic opener, and the `>>` of an array
-    length (`[u8; 4 >> 1]`) is a shift, not a closer.
+    A generic type (`Result<A, B, E>`), an array length (`[u8; 4]`), a
+    function-pointer return (`fn() -> ()`) or a struct pattern
+    (`Pair { first, command: other }`) keeps its commas, so a position still
+    indexes the parameter the caller passed. The `>` of a return arrow is not a
+    generic closer, a comparison inside a const block (`Flag<{ 1 < 2 }>`) is
+    not a generic opener, and the `>>` of an array length (`[u8; 4 >> 1]`) is a
+    shift, not a closer.
 
     Returns
     -------
@@ -183,7 +189,7 @@ def _split_parameters(parameters: str) -> list[str]:
     """
     parts: list[str] = []
     start = 0
-    for index, depth in _depths(parameters, 0):
+    for index, depth in _depths(parameters, 0, enter_braces=True):
         if parameters[index] == "," and depth == 0:
             parts.append(parameters[start:index])
             start = index + 1
@@ -271,37 +277,6 @@ def _binding_pattern(part: str) -> str:
     return part
 
 
-def _split_patterns(parameters: str) -> list[str]:
-    """Split a parameter list on the commas outside any bracket, braces too.
-
-    :func:`_split_parameters` leaves a top-level brace alone because its
-    callers read a signature, where a brace at depth zero is the body. A
-    struct pattern inside the list is depth, so this reader counts it and a
-    pattern's own commas do not split the parameter.
-
-    Returns
-    -------
-    list[str]
-        The parameters in order.
-    """
-    parts: list[str] = []
-    start = 0
-    depth = 0
-    for index, char in enumerate(parameters):
-        if char == ">" and index and parameters[index - 1] == "-":
-            # The `>` of a return arrow closes no generic.
-            continue
-        if char in "([{<":
-            depth += 1
-        elif char in ")]}>":
-            depth = max(depth - 1, 0)
-        elif char == "," and depth == 0:
-            parts.append(parameters[start:index])
-            start = index + 1
-    parts.append(parameters[start:])
-    return parts
-
-
 def pattern_binds(masked: str, start: int, name: str) -> bool:
     """Report whether a parameter pattern binds *name*.
 
@@ -325,7 +300,7 @@ def pattern_binds(masked: str, start: int, name: str) -> bool:
     if close_at is None:
         return False
     parameters = masked[open_at + 1 : close_at]
-    parts = _split_patterns(parameters)
+    parts = _split_parameters(parameters)
     if SELF_RECEIVER.match(parameters):
         parts = parts[1:]
     bound = re.compile(rf"\b{re.escape(name)}\b")

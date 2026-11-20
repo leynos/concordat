@@ -3086,15 +3086,20 @@ command. A helper read that stops inside a block is closed before it is
 spliced, so a block the helper leaves open cannot hide a later unconditional
 flag, and a spliced fragment with no call on the command keeps its braces in
 the order they were written, with the `else` between them, so the arms still
-pair rather than reading as code that runs one after the other. A helper
-defined more than once, or one whose receiving parameter is not a plain
-`name: Type` binding, is declined rather than guessed; so is a call that a
-binding in the caller's own function shadows (a parameter included, even one
-after a method's receiver, a name bound by a parameter pattern such as
-`fn run((configure,): ..)` or `fn run(Callbacks { setup: configure }: ..)`, a
-name bound by a destructuring pattern such as `let (configure,) = ..`, a
-closure parameter in any position such as
-`|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
+pair rather than reading as code that runs one after the other, and a `return`
+stays inside the block it was written in, because moved after that block it
+would end every path. A parameter list is split on its own commas, so a struct
+pattern (`fn configure(Pair { first, command: other }: Pair, target: ..)`)
+keeps its field comma and a comparison inside a const block
+(`fn run(flag: Flag<{ 1 < 2 }>, (configure,): ..)`) is not a generic that
+swallows the parameters after it. A helper defined more than once, or one whose
+receiving parameter is not a plain `name: Type` binding, is declined rather
+than guessed; so is a call that a binding in the caller's own function shadows
+(a parameter included, even one after a method's receiver, a name bound by a
+parameter pattern such as `fn run((configure,): ..)` or
+`fn run(Callbacks { setup: configure }: ..)`, a name bound by a destructuring
+pattern such as `let (configure,) = ..`, a closure parameter in any position
+such as `|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
 `let ref configure = ..`), a call written as a path or method
 (`support::configure(..)`, however it is spaced around the separator), a name a
 `use` item could import, or a helper that reassigns the parameter or redeclares
@@ -3154,36 +3159,39 @@ reader cannot see fills its option's slot rather than ending the read. A
 conditional word cannot hide the subcommand on the path that skips its block,
 so a `help` inside an `if` leaves an unconditional `build` still compiling, and
 each arm of a fully paired chain is read for its own subcommand, so a
-`metadata` in the `if` arm does not hide the `build` in its `else` arm. A `-h`
-or `--help` given on every path makes cargo print help whatever the subcommand
-is, while one added inside a block does not excuse the build on the path that
-skips it. A help flag in one arm excuses only the path through that arm, so a
-`build --help` in the `if` arm does not excuse the `check` its `else` arm runs,
-while a help flag in every arm excuses the whole run. A word after a `--`
-belongs to the program the command runs, not to cargo. A word is the text its
-string literal has at run time, so an escape (`\x64`, `\u{64}`) is decoded and
-cannot hide `build` or `--version` from the read, and an escaped quote does not
-end the literal early. A Unicode escape's digits may be separated by
-underscores, which are not part of the number, and an escape longer than the
-six digits Rust allows is not decoded. A word the reader cannot see leaves the
-subcommand open, and then any compiling argument before the launch is enough. A
-`--print` query is read across the command's ordered arguments, so
-`.arg("--print").arg("cfg")` is the same probe as `.args(["--print", "cfg"])`,
-but its two halves must be adjacent: an unreadable word between them, or one
-given only inside a block, may be `link-args`, which builds the crate, so the
-query is not a probe. `--print=file-names` is a query too, and a kind may name
-an output file after a second `=` (`--print=cfg=out.txt`), which writes the
-answer there and still compiles nothing. The configuration facts are the ones
-netsuke and rstest-bdd converged on: a serial group, an override that uses it,
-an explicit `slow-timeout` (profile or override) and a `global-timeout` (any
-profile, since netsuke sets it on `ci`). A top-level test binary must also be
-named by a grouped override's filter, by binary or by one of its functions,
-which is how ortho-config's BDD suite is told apart from netsuke's. The package
-does not evaluate nextest filtersets: a name appearing in a grouped filter is
-the evidence, which is cheap and errs towards acceptance. The name must be a
-whole word inside a `binary()`, `binary_id()` or `test()` predicate, so
-`binary(ui_extra)` does not name `ui`, and a regex argument such as
-`/^name($|::)/` is read whole. A predicate the filter negates
+`metadata` in the `if` arm does not hide the `build` in its `else` arm. A run
+with no unconditional subcommand at all is compiled when any path names one, so
+a `metadata` in one block beside a `build` in another still compiles when only
+the build's block runs. A `-h` or `--help` given on every path makes cargo
+print help whatever the subcommand is, while one added inside a block does not
+excuse the build on the path that skips it. A help flag in one arm excuses only
+the path through that arm, so a `build --help` in the `if` arm does not excuse
+the `check` its `else` arm runs, while a help flag in every arm excuses the
+whole run. A word after a `--` belongs to the program the command runs, not to
+cargo. A word is the text its string literal has at run time, so an escape
+(`\x64`, `\u{64}`) is decoded and cannot hide `build` or `--version` from the
+read, and an escaped quote does not end the literal early. A Unicode escape's
+digits may be separated by underscores, which are not part of the number, and
+an escape longer than the six digits Rust allows is not decoded. A word the
+reader cannot see leaves the subcommand open, and then any compiling argument
+before the launch is enough. A `--print` query is read across the command's
+ordered arguments, so `.arg("--print").arg("cfg")` is the same probe as
+`.args(["--print", "cfg"])`, but its two halves must be adjacent: an unreadable
+word between them, or one given only inside a block, may be `link-args`, which
+builds the crate, so the query is not a probe. `--print=file-names` is a query
+too, and a kind may name an output file after a second `=`, in the joined form
+(`--print=cfg=out.txt`) or the two-word one (`--print`, `cfg=out.txt`), which
+writes the answer there and still compiles nothing. The configuration facts are
+the ones netsuke and rstest-bdd converged on: a serial group, an override that
+uses it, an explicit `slow-timeout` (profile or override) and a
+`global-timeout` (any profile, since netsuke sets it on `ci`). A top-level test
+binary must also be named by a grouped override's filter, by binary or by one
+of its functions, which is how ortho-config's BDD suite is told apart from
+netsuke's. The package does not evaluate nextest filtersets: a name appearing
+in a grouped filter is the evidence, which is cheap and errs towards
+acceptance. The name must be a whole word inside a `binary()`, `binary_id()` or
+`test()` predicate, so `binary(ui_extra)` does not name `ui`, and a regex
+argument such as `/^name($|::)/` is read whole. A predicate the filter negates
 (`not(binary(ui))`, `!test(compiles)`) excludes that name rather than selecting
 it, so it names nothing. Exemptions name a test source and follow the NC-001
 convention: repository, path, rationale and review trigger, where a blank

@@ -20,9 +20,11 @@ configure }: ..)`) or rebound by a closure's own `|..|` list in any position
 is declined rather than guessed, because a false positive would demand
 configuration from a repository that needs none. A `let` binding is read even
 when its constructor begins on the next line, because Rust ends the name at the
-`=` rather than at the line. A `return` in a helper is kept as a word, because
-it ends the helper's path and what follows runs only when the return was
-skipped, so the reader can split the caller's runs there. A spliced fragment
+`=` rather than at the line. A `return` in a helper is kept where it is
+written, because it ends the helper's path there and what follows runs only
+when the return was skipped; a return moved after its block would end every
+path instead, so the reader could not split the caller's runs there. A spliced
+fragment
 with no call on the parameter keeps its braces in the order they were written,
 with the `else` between them, so the caller still sees which arm the fragment
 belongs to rather than reading the arms as code that runs one after the other.
@@ -44,7 +46,7 @@ from .nested_cargo_syntax import (
     _binding_pattern,
     _body_span,
     _parameter_at,
-    _split_patterns,
+    _split_parameters,
     parameter_names,
     pattern_binds,
 )
@@ -58,10 +60,11 @@ _RETURN: typ.Final = re.compile(r"\breturn\b")
 CLOSURE_HEADER: typ.Final = re.compile(r"(?:\bmove\s+)?\|(?P<params>[^|]*)\|")
 # A new command's arguments belong to it, not to the one before it.
 COMMAND_NEW: typ.Final = re.compile(r"Command::new\(")
-# The braces of a statement with no call on the command, and the `else` (with
-# the `if` that qualifies it) written between them. Keeping both in order is
-# what tells a spliced reader which arm a later statement belongs to.
-_BRACES_AND_ARMS: typ.Final = re.compile(r"\belse\s+if\b|\belse\b|[{}]")
+# The braces of a statement with no call on the command, the `else` (with the
+# `if` that qualifies it) written between them, and any `return`. Keeping them
+# in the order they were written is what tells a spliced reader which arm a
+# later statement belongs to, and where a path ends.
+_BRACES_AND_ARMS: typ.Final = re.compile(r"\belse\s+if\b|\belse\b|\breturn\b|[{}]")
 # A binding may name the constructor through a path (`std::process::Command`),
 # so the qualified path that follows `=` is part of the binding, not text
 # between it and the command.
@@ -257,12 +260,11 @@ def _receiver_piece(
         # in the order they were written, with the `else` (and any `if` that
         # qualifies it) beside them, because a `else` written between them is
         # what pairs the arms of a choice; dropping it makes the arms read as
-        # code that runs one after the other. A `return` is kept as a word,
-        # because it ends the helper's path and the caller reads what follows
-        # as the path that skipped it.
+        # code that runs one after the other. A `return` is kept where it is
+        # written, because it ends the helper's path there: after the block it
+        # would end every path, and the caller would read the block's code as
+        # unconditional.
         marker = "".join(token[0] for token in _BRACES_AND_ARMS.finditer(statement))
-        if _RETURN.search(statement) is not None:
-            marker += " return"
         return marker, marker
     piece = text[offset : offset + len(statement)]
     masked_piece = statement
@@ -360,7 +362,7 @@ def _closure_binds(masked: str, start: int, at: int, name: str) -> bool:
     for header in CLOSURE_HEADER.finditer(masked, start, at):
         if any(
             bound.search(_binding_pattern(part)) is not None
-            for part in _split_patterns(header["params"])
+            for part in _split_parameters(header["params"])
         ):
             return True
     return False

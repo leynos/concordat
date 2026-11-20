@@ -63,15 +63,20 @@ configuration from a repository that needs none:
   helper leaves open cannot hide a later unconditional flag, and a spliced
   fragment with no call on the command keeps its braces in the order they were
   written, with the `else` between them, so the arms still pair rather than
-  reading as code that runs one after the other. A helper defined more than
-  once, or one whose receiving parameter is not a plain `name: Type` binding,
-  is declined rather than guessed; so is a call that a binding in the caller's
-  own function shadows (a parameter included, even one after a method's
-  receiver, a name bound by a parameter pattern such as
-  `fn run((configure,): ..)` or `fn run(Callbacks { setup: configure }: ..)`, a
-  name bound by a destructuring pattern such as `let (configure,) = ..`, a
-  closure parameter in any position such as
-  `|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
+  reading as code that runs one after the other, and a `return` stays inside
+  the block it was written in, because after that block it would end every
+  path. A parameter list is split on its own commas, so a struct pattern
+  (`fn configure(Pair { first, command: other }: Pair, target: &mut Command)`)
+  keeps its field comma and a comparison in a const block
+  (`fn run(flag: Flag<{ 1 < 2 }>, (configure,): ..)`) is not a generic that
+  swallows the parameters after it. A helper defined more than once, or one
+  whose receiving parameter is not a plain `name: Type` binding, is declined
+  rather than guessed; so is a call that a binding in the caller's own function
+  shadows (a parameter included, even one after a method's receiver, a name
+  bound by a parameter pattern such as `fn run((configure,): ..)` or
+  `fn run(Callbacks { setup: configure }: ..)`, a name bound by a destructuring
+  pattern such as `let (configure,) = ..`, a closure parameter in any position
+  such as `|_: (), configure: fn(&mut Command)|`, and a borrowed binding such as
   `let ref configure = ..`), a call written as a path or method
   (`support::configure(..)`, however it is spaced around the separator), a name
   a `use` item could import, or a helper that reassigns the parameter. The scan
@@ -115,23 +120,25 @@ configuration from a repository that needs none:
   word cannot hide the subcommand on the path that skips its block, so a `help`
   inside an `if` leaves an unconditional `build` still compiling, and each arm
   of a fully paired chain is read for its own subcommand, so a `metadata` in the
-  `if` arm does not hide the `build` in its `else` arm. A `-h` or `--help`
-  given on every path prints help whatever the subcommand is, while one added
-  inside a block does not excuse the build on the path that skips it. A help
-  flag in one arm excuses only the path through that arm, so a `build --help`
-  in the `if` arm does not excuse the `check` its `else` arm runs, while a help
-  flag in every arm excuses the whole run. Words after a `--` belong to the
-  program the command runs, not to cargo. A word is the text its string literal
-  has at run time, so an escape (`\x64`, `\u{64}`) is decoded and cannot hide
-  `build` or `--version` from the read, and an escaped quote does not end the
-  literal early. A word counts as unconditional only when every block open at
-  it is also open at the run's launch, so a flag in the branch that launches is
-  on the run's path while one in a sibling block that has already closed is
-  not. An option given in a block of its own
-  (`if verbose { command.arg("-v") }`) cannot change the subcommand, so it does
-  not stop a paired choice beside it being read arm by arm. A flag added on
-  only some paths, behind a `&&`/`||` short circuit or inside a block that may
-  not run, does not make a run a probe -- except when one fully paired
+  `if` arm does not hide the `build` in its `else` arm. A run with no
+  unconditional subcommand at all is compiled when any path names one, so a
+  `metadata` in one block beside a `build` in another still compiles when only
+  the build's block runs. A `-h` or `--help` given on every path prints help
+  whatever the subcommand is, while one added inside a block does not excuse
+  the build on the path that skips it. A help flag in one arm excuses only the
+  path through that arm, so a `build --help` in the `if` arm does not excuse the
+  `check` its `else` arm runs, while a help flag in every arm excuses the
+  whole run. Words after a `--` belong to the program the command runs, not to
+  cargo. A word is the text its string literal has at run time, so an escape
+  (`\x64`, `\u{64}`) is decoded and cannot hide `build` or `--version` from the
+  read, and an escaped quote does not end the literal early. A word counts as
+  unconditional only when every block open at it is also open at the run's
+  launch, so a flag in the branch that launches is on the run's path while one
+  in a sibling block that has already closed is not. An option given in a block
+  of its own (`if verbose { command.arg("-v") }`) cannot change the subcommand,
+  so it does not stop a paired choice beside it being read arm by arm. A flag
+  added on only some paths, behind a `&&`/`||` short circuit or inside a block
+  that may not run, does not make a run a probe -- except when one fully paired
   `if`/`else` chain gives a probe in every arm, whether that choice is written
   across statements or on one line (`let _ = if c { .. } else { .. };`), since
   then no path reaches the launch without one. Each arm is read with the words
@@ -144,11 +151,12 @@ configuration from a repository that needs none:
   `--print` of a table that needs no compile (`sysroot`, `target-libdir`,
   `host-tuple`, `cfg`, `target-list`, `target-cpus`, `target-features`,
   `code-models`, `relocation-models`, `tls-models`, `file-names`): such a probe
-  exits at once. A kind may name an output file after a second `=`
-  (`--print=cfg=out.txt`), which writes the answer there and still compiles
-  nothing. A `--print` query may be split across calls
-  (`.arg("--print").arg("cfg")`), which asks the same question as one array,
-  but its two halves must be adjacent: a word the reader cannot see between them
+  exits at once. A kind may name an output file after a second `=`, in the
+  joined form (`--print=cfg=out.txt`) or the two-word one (`--print`,
+  `cfg=out.txt`), which writes the answer there and still compiles nothing. A
+  `--print` query may be split across calls (`.arg("--print").arg("cfg")`),
+  which asks the same question as one array, but its two halves must be
+  adjacent: a word the reader cannot see between them
   (`.args(["--print", print_kind, "cfg"])`), or one given only inside a block
   (`.arg("--print")`, then `if link { .arg("link-args") }`, then
   `.arg("cfg")`), may be `link-args`, so the query is not a probe. Comments and

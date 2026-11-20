@@ -3049,3 +3049,143 @@ def test_a_later_conditional_option_keeps_the_arms_readable(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", LATER_CONDITIONAL_OPTION)
     assert ids(tmp_path) == {"NC-004"}
+
+
+PRINT_KIND_WRITTEN_TO_A_FILE = (
+    "use std::process::Command;\n"
+    "fn probe() {\n"
+    '    Command::new("rustc")\n'
+    '        .args(["--print", "cfg=out.txt"])\n'
+    "        .status()\n"
+    "        .unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_two_word_print_query_written_to_a_file_compiles_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An output path after the kind leaves the query a query in the split form too."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", PRINT_KIND_WRITTEN_TO_A_FILE)
+    assert ids(tmp_path) == set()
+
+
+HELPER_RETURN_INSIDE_A_BLOCK = (
+    "use std::process::Command;\n"
+    "fn configure(command: &mut Command, skip: bool) {\n"
+    "    if skip { return }\n"
+    "    let quiet = 1;\n"
+    '    command.arg("--print").arg("cfg");\n'
+    "}\n"
+    "fn probe() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    '    command.arg("input.rs");\n'
+    "    configure(&mut command, false);\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_return_inside_a_helper_block_bounds_its_path(tmp_path: pathlib.Path) -> None:
+    """The print is skipped on the returning path, so that path compiles."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELPER_RETURN_INSIDE_A_BLOCK)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+STRUCT_PATTERN_COMMA_KEEPS_THE_PARAMETERS = (
+    "use std::process::Command;\n"
+    "struct Pair { first: u8, command: u8 }\n"
+    "fn configure(Pair { first, command: other }: Pair, cmd: &mut Command) {\n"
+    '    cmd.arg("build");\n'
+    "    cmd.status().unwrap();\n"
+    "}\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    let pair = Pair { first: 1, command: 2 };\n"
+    "    configure(pair, &mut command);\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_struct_pattern_comma_does_not_split_the_parameters(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The field comma stays inside the pattern, so `cmd` is the second parameter."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", STRUCT_PATTERN_COMMA_KEEPS_THE_PARAMETERS)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+CONST_BLOCK_COMPARISON = (
+    "use std::process::Command;\n"
+    "fn configure(cmd: &mut Command) {\n"
+    '    cmd.arg("--version");\n'
+    "}\n"
+    "fn run(\n"
+    "    flag: Flag<{ 1 < 2 }>,\n"
+    "    (configure,): (fn(&mut Command),),\n"
+    ") {\n"
+    '    let mut cmd = Command::new("rustc");\n'
+    '    cmd.arg("input.rs");\n'
+    "    configure(&mut cmd);\n"
+    "    cmd.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_comparison_in_a_const_block_does_not_merge_the_parameters(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The `<` is a comparison, so the tuple pattern's binding still shadows."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CONST_BLOCK_COMPARISON)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+SIBLING_BUILD_BESIDE_METADATA = (
+    "use std::process::Command;\n"
+    "fn run(a: bool, b: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    if a {\n"
+    '        command.arg("metadata");\n'
+    "    }\n"
+    "    if b {\n"
+    '        command.arg("build");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_a_conditional_build_beside_metadata_still_compiles(
+    tmp_path: pathlib.Path,
+) -> None:
+    """With `a` false and `b` true the command runs `cargo build`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", SIBLING_BUILD_BESIDE_METADATA)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+UNCONDITIONAL_METADATA_BESIDE_BUILD = (
+    "use std::process::Command;\n"
+    "fn run(b: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    '    command.arg("metadata");\n'
+    "    if b {\n"
+    '        command.arg("build");\n'
+    "    }\n"
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_an_unconditional_metadata_beside_a_build_runs_metadata(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`metadata` is the subcommand on every path, so no path builds."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", UNCONDITIONAL_METADATA_BESIDE_BUILD)
+    assert ids(tmp_path) == set()
