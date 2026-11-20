@@ -56,7 +56,7 @@ jobs:
           go install github.com/open-policy-agent/conftest@v0.52.0
 
       - name: Install mdtablefix
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@7d751eded578e48dacf43ab173d5820e6437c474
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@cfd51f3d5423cb16155b94e020cdd7eaeebd0833
         with:
           version: ${{ env.MDTABLEFIX_VERSION }}
 
@@ -125,7 +125,7 @@ jobs:
         run: make lint
 
       - name: Dead-code gate
-        uses: leynos/shared-actions/.github/actions/df12-skylos@a0519a1476ab769ca7b8badfa794f3751213f1ea
+        uses: leynos/shared-actions/.github/actions/df12-skylos@cfd51f3d5423cb16155b94e020cdd7eaeebd0833
 
       - name: Run typechecker
         run: make typecheck
@@ -142,7 +142,7 @@ jobs:
         # the publisher measured on 3.13, and the ratchet compared the two.
         env:
           UV_PYTHON: '3.13'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@ff1dd759dfffc0db3459e30e833f52437ee62b57
+        uses: leynos/shared-actions/.github/actions/generate-coverage@cfd51f3d5423cb16155b94e020cdd7eaeebd0833
         with:
           output-path: coverage.xml
           format: cobertura
