@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import pathlib
 import subprocess
+import sys
 import typing as typ
 
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from concordat import cli
+from concordat import bounded_subprocess, cli
 from concordat.rules import runner
 
 from .conftest import RunResult
@@ -34,6 +35,62 @@ ENVELOPES_DIR = (
 MAKEFILES_DIR = ENVELOPES_DIR.parent / "makefiles"
 
 CARGO_STUB = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
+
+
+def test_rule_run_cli_reports_oversized_conftest_output(
+    checkout: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The CLI reports bounded Conftest output as an operational failure."""
+    given_rust_checkout(checkout)
+    makefile_fixture = json.loads(
+        (ENVELOPES_DIR / "compliant.json").read_text(encoding="utf-8")
+    )["makefile"]
+    limit = 128
+    original_run_bounded = bounded_subprocess.run_bounded
+
+    def run_bounded(
+        args: typ.Sequence[str | pathlib.Path],
+        *,
+        timeout: float,
+        cwd: str | pathlib.Path | None = None,
+        max_bytes_per_stream: int = bounded_subprocess.MAX_CAPTURE_BYTES_PER_STREAM,
+    ) -> subprocess.CompletedProcess[str]:
+        """Use fixture facts for makeutil and a real overflowing test process."""
+        if pathlib.Path(args[0]).name == "makeutil":
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                json.dumps(makefile_fixture),
+                "",
+            )
+        if pathlib.Path(args[0]).name == "conftest":
+            args = [
+                sys.executable,
+                "-c",
+                f"import sys; sys.stdout.write('x' * {limit + 1})",
+            ]
+        return original_run_bounded(
+            args,
+            timeout=timeout,
+            cwd=cwd,
+            max_bytes_per_stream=max_bytes_per_stream,
+        )
+
+    monkeypatch.setattr(bounded_subprocess, "run_bounded", run_bounded)
+    monkeypatch.setattr(runner, "MAX_CAPTURE_BYTES_PER_STREAM", limit)
+
+    try:
+        returncode = cli.main(
+            ["artefact", "rule", "run", RULE_ID, "--repo", str(checkout)],
+        )
+    except SystemExit as error:
+        returncode = int(error.code or 0)
+
+    captured = capsys.readouterr()
+    assert returncode == 2
+    assert f"conftest stdout exceeded {limit} byte limit" in captured.err
 
 
 def _conftest_result(failures: list[dict[str, object]]) -> str:
@@ -213,7 +270,7 @@ def given_no_makeutil(monkeypatch: pytest.MonkeyPatch) -> None:
         """Raise FileNotFoundError for any launch, as if makeutil were absent."""
         raise FileNotFoundError("makeutil")
 
-    monkeypatch.setattr(subprocess, "run", raise_missing)
+    monkeypatch.setattr(bounded_subprocess, "run_bounded", raise_missing)
 
 
 @when("I run the rule against the checkout")

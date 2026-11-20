@@ -90,11 +90,22 @@ class CmdMox:
         self._expectations.append(expectation)
 
     def replay(self) -> None:
-        """Patch subprocess.run with the harness once per test."""
+        """Patch both subprocess adapters with the harness once per test."""
         if self._active:
             return
         self._active = True
         self._monkeypatch.setattr(subprocess, "run", self._run)
+        from concordat import bounded_subprocess
+
+        self._monkeypatch.setattr(bounded_subprocess, "run_bounded", self._run_bounded)
+
+    def _run_bounded(
+        self,
+        args: cabc.Iterable[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        """Replay a bounded child command through the same expectations."""
+        return self._run(args, **kwargs)
 
     def _run(
         self,
