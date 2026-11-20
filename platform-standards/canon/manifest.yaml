@@ -397,7 +397,7 @@ artifacts:
       platform-standards/canon/lint-rules/yaml-lint-baseline/policy/yaml_lint_baseline.rego
     description: >
       Audit-only YL-001 to YL-005 policy holding the lint gate to strict yamllint over tracked YAML and actionlint, the estate base and thin local yamllint configuration, the actionlint runner labels, and the pinned CI installer.
-    sha256: c751420c6199bff459210e8943434d38642546461061780165e40b78814f69f8
+    sha256: d883865e88388a57096768f32f5d7c91a20a4a9dea8bcd86d95ed6a217071b04
   - id: lint-rule-yaml-lint-baseline-manifest
     type: lint-config
     path: >-

@@ -1396,8 +1396,9 @@ It applies when the checkout has any YAML file, and reports:
 - **YL-001**: a recipe reachable from `lint` runs `yamllint --strict` over a
   `git ls-files` list that names `*.yml` and `*.yaml`, and its exit status
   reaches Make. Write it as
-  `git ls-files -z '*.yml' '*.yaml' | xargs -0 -r $(YAMLLINT) --strict --`.
-  `-d`, `--config-data` and `--no-warnings` are reported.
+  `git ls-files -z '*.yml' '*.yaml' | xargs -0 -r $(YAMLLINT) --strict --`, or
+  buffer the listing in a temporary file (see below). `-d`, `--config-data` and
+  `--no-warnings` are reported.
 - **YL-002**: a recipe reachable from `lint` runs actionlint with a binding
   exit status, and does not switch off its shellcheck integration with an empty
   `-shellcheck=`.
@@ -1413,6 +1414,43 @@ It applies when the checkout has any YAML file, and reports:
   commit SHA, and no step installs yamllint, actionlint or shellcheck by hand
   or lints through a third-party action. A job that calls a reusable workflow
   makes the absence of a lint job indeterminate.
+
+A recipe may instead buffer the listing in a temporary file, so the linter runs
+only after Git has enumerated the whole tree:
+
+```make
+yamllint:
+	@tmp=$$(mktemp) || exit 1; \
+	trap 'rm -f "$$tmp"' EXIT; \
+	git ls-files -z '*.yml' '*.yaml' >"$$tmp" && \
+	xargs -0 -r $(YAMLLINT) --strict -- <"$$tmp"
+```
+
+The guarded form is accepted only with one `mktemp` invocation under
+`|| exit N` where `N` makes the recipe fail (plain arguments such as
+`-t yaml.XXXXXX` are allowed, but a separator, redirection or expansion inside
+the substitution is not), the same shell variable on both redirections, `-z` and
+`-0` keeping the listing NUL-delimited, `&&` so a failed enumeration cannot
+reach the linter, and no trap other than the `rm -f` cleanup (which may be
+omitted). The pathspecs must be whole arguments after one matching outer quote
+pair is removed, so `*.yml.bak` does not count as `*.yml`, nested quoting such
+as `"'*.yml'"` is refused, and a wildcard must be quoted so the shell does not
+expand it first. `git ls-files` may use only `-z`, `-c`/`--cached`,
+`--full-name` and `--`. `xargs` may use only `-0`/`--null`,
+`-r`/`--no-run-if-empty`, `-n`, `-L`, `-P` or `-s` with a numeric operand,
+`-t`/`--verbose` and `-x`/`--exit`; anything else is refused, because
+`-a`/`--arg-file` reads another list, `-d`/`--delimiter` replaces the NUL
+delimiter, `-I`/`-i`/`--replace` stops the names being appended, and `--help`,
+`--show-limits` and `--version` exit without running the linter. Options must
+be spelled in full, since `getopt` accepts abbreviations and grouped short
+options such as `-raother.list`, and the shell removes quotes from `--"help"`.
+The piped form also needs `-0` or `--null`. The `--strict` flag is read from
+the fed invocation, and that invocation must be the one whose exit status
+reaches Make, so a second `yamllint --strict good.yml` does not make an unfed
+invocation compliant. Guarded tool arguments must be plain words, because an
+expansion such as `$((tmp=0))` runs before the redirection opens and can point
+it at another file. `$$` is shell syntax rather than a Make variable, so
+`$$(mktemp)` is not reported as unresolved.
 
 yamllint must run from the repository root, because it resolves `extends:`
 against the current directory.
