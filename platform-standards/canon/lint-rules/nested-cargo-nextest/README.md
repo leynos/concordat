@@ -71,32 +71,42 @@ configuration from a repository that needs none:
   it as the code of the path that skipped it; when the helper is spliced, that
   tail is wrapped in a block of its own and the keyword is blanked in the
   masked form, so the caller's own statements after the call stay in the run
-  the early-return path reached. A parameter list is split on its own commas,
-  so a struct pattern
+  the early-return path reached. The helper's statements are split at a `;`
+  only at bracket depth zero, so a `;` inside a block argument
+  (`target.arg({ let flag = "--quiet"; flag }).status()`) keeps the launch
+  chained after it on the same statement. A parameter list is split on its own
+  commas, so a struct pattern
   (`fn configure(Pair { first, command: other }: Pair, target: &mut Command)`)
   keeps its field comma and a comparison in a const block
   (`fn run(flag: Flag<{ 1 < 2 }>, (configure,): ..)`) is not a generic that
-  swallows the parameters after it. A helper defined more than once, or one
-  whose receiving parameter is not a plain `name: Type` binding, is declined
-  rather than guessed; so is a call that a binding in the caller's own function
+  swallows the parameters after it. A helper defined more than once, one defined
+  `async` (its body runs when it is awaited, not at the call), or one whose
+  receiving parameter is not a plain `name: Type` binding, is declined rather
+  than guessed; so is a call that a binding in the caller's own function
   shadows (a parameter included, even one after a method's receiver, a name
   bound by a parameter pattern such as `fn run((configure,): ..)` or
   `fn run(Callbacks { setup: configure }: ..)`, a name bound by a destructuring
-  pattern such as `let (configure,) = ..` or `let Hook(configure) = ..`, a
-  closure parameter in any position such as
-  `|_: (), configure: fn(&mut Command)|`, a name bound by a `match` arm's
-  pattern such as `match callback { configure => configure(&mut command) }`, a
-  `const` or `static` item of that name, mutable or not, in the caller's block
-  or a block enclosing it (an item is in scope for its whole block, even before
-  its declaration, while a sibling block's item is not in scope at the call),
-  and a borrowed binding such as `let ref configure = ..`), a call written as a
-  path or method (`support::configure(..)`, however it is spaced around the
-  separator), a name a `use` item could import, or a helper that reassigns the
-  parameter. The parameters read are those of the innermost function whose body
-  holds the call, so a function item declared inside the caller is not mistaken
-  for its scope. The scan does not resolve imports, and a `use` may name an
-  inline module in the same file (`use self::support::configure`) as easily as
-  a helper in another file, so an imported name is declined either way; a glob
+  pattern such as `let (configure,) = ..` or `let Hook(configure) = ..`, a name
+  bound by a `for` loop's pattern such as `for (configure, other) in ..`, which
+  hides it inside the loop's body only, a closure parameter in any position
+  such as `|_: (), configure: fn(&mut Command)|`, a name bound by a `match`
+  arm's pattern such as
+  `match callback { configure => configure(&mut command) }`, which hides it
+  only inside that arm's body, so a later arm's call is not hidden by an
+  earlier arm's binding, a `const` or `static` item of that name, mutable or
+  not, in the caller's block or a block enclosing it (an item is in scope for
+  its whole block, even before its declaration, while a `let` counts only
+  before it and only while its own block is open at the call, so one declared
+  in an inner block that has closed is out of scope, and a sibling block's item
+  is not in scope at the call), and a borrowed binding such as
+  `let ref configure = ..`), a call written as a path or method
+  (`support::configure(..)`, however it is spaced around the separator), a name
+  a `use` item could import, or a helper that reassigns the parameter. The
+  parameters read are those of the innermost function whose body holds the
+  call, so a function item declared inside the caller is not mistaken for its
+  scope. The scan does not resolve imports, and a `use` may name an inline
+  module in the same file (`use self::support::configure`) as easily as a
+  helper in another file, so an imported name is declined either way; a glob
   import (`use support::*`, `use support::{*}`) spells no name but could bring
   any in, so it declines every handoff in the file. A helper whose body names
   the caller's binding is declined too: rewriting its receiving parameter to
@@ -221,7 +231,8 @@ configuration from a repository that needs none:
   other statements do not count, and `--print=link-args` and
   `--print=native-static-libs` still do, because they build the crate;
 - the file must name `Command`, so `env!("CARGO")` read for a path alone is not
-  a spawn;
+  a spawn, and a constructor written in a comment or inside a string is not one
+  either, however the file names `Command`;
 - Python tests that spawn `cargo` are outside the scan: pytest bounds them.
 
 ## Checks
@@ -236,11 +247,16 @@ configuration from a repository that needs none:
   that uses a serial group. A predicate the filter negates (`not(binary(ui))`,
   `!test(compiles)`) excludes that name rather than selecting it, so it does
   not name the spawner, and a group of predicates inside one negation
-  (`!(binary(ui) | binary(other))`) excludes every name it holds. Parentheses
-  are balanced rather than matched lazily, and a matcher's `/regex/` text is
-  skipped while they are counted, because a regex holds brackets of its own
-  (`!(test(/foo[)]/) | binary(ui))`). Helpers under `src/` or `tests/support/`,
-  and `main.rs`/`mod.rs`, are judged at repository level only.
+  (`!(binary(ui) | binary(other))`) excludes every name it holds. Negations
+  nest and cancel in pairs, so `not(not(binary(ui)))` names `ui` again, and a
+  difference (`binary(ui) - test(compiles)`,
+  `binary(ui) and not test(compiles)`) excludes its right operand as a negation
+  does, leaving `ui` selected. Parentheses are balanced rather than matched
+  lazily, and a backslash escapes the next character wherever it sits, so a
+  `\(` or `\)` in a matcher neither opens nor closes a group, while a matcher's
+  `/regex/` text is skipped as they are counted, because a regex holds brackets
+  of its own (`!(test(/foo[)]/) | binary(ui))`). Helpers under `src/` or
+  `tests/support/`, and `main.rs`/`mod.rs`, are judged at repository level only.
 - **EN-001** (indeterminate; an error for an envelope defect, the configured
   severity otherwise): the envelope is not a schema-1
   `policy-input/nested-cargo-nextest` document, the configuration cannot be

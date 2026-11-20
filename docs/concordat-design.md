@@ -3058,11 +3058,13 @@ signature. A compiling argument counts only when it belongs to the same command
 as the spawn: it is read from the spawn to the next `Command::new` or the next
 function item, and only before that command's first launch. Arguments are read
 with comments blanked and literal contents kept, so a flag in a comment is not
-an argument while a `//` in a string does not hide the rest of the line, and
-each argument and launch is attributed to the receiver it is called on, so
-another command's `.arg(..)`, or one built inside an argument, is not this
-command's; a receiver reached through a field or a path is declined, however
-much whitespace sits around the separator. A name called as a namespace
+an argument while a `//` in a string does not hide the rest of the line, and a
+constructor written in a comment or inside a string is not a spawn however the
+file names `Command`, because only the code before its literal argument
+survives masking. Each argument and launch is attributed to the receiver it is
+called on, so another command's `.arg(..)`, or one built inside an argument, is
+not this command's; a receiver reached through a field or a path is declined,
+however much whitespace sits around the separator. A name called as a namespace
 (`command::factory()`) is declined too, because the path root is a type or
 module rather than the binding, while a single colon is a field initializer, so
 `Settings { status: command }` still passes the command as a value. A bare
@@ -3094,25 +3096,33 @@ guarded with the tail. A block-level `return` also marks the statements that
 follow it as the code of the path that skipped it; when the helper is spliced,
 that tail is wrapped in a block of its own and the keyword is blanked in the
 masked form, so the tail stays conditional and the caller's own statements
-after the call stay in the run the early-return path reached. A parameter list
-is split on its own commas, so a struct pattern
+after the call stay in the run the early-return path reached. A helper's
+statements are split at a `;` only at bracket depth zero, so a `;` inside a
+block argument (`target.arg({ let flag = "--quiet"; flag }).status()`) keeps
+the launch chained after it on the same statement. A parameter list is split on
+its own commas, so a struct pattern
 (`fn configure(Pair { first, command: other }: Pair, target: ..)`) keeps its
 field comma and a comparison inside a const block
 (`fn run(flag: Flag<{ 1 < 2 }>, (configure,): ..)`) is not a generic that
-swallows the parameters after it. A helper defined more than once, or one whose
-receiving parameter is not a plain `name: Type` binding, is declined rather
-than guessed; so is a call that a binding in the caller's own function shadows
-(a parameter included, even one after a method's receiver, a name bound by a
-parameter pattern such as `fn run((configure,): ..)` or
+swallows the parameters after it. A helper defined more than once, one defined
+`async` (its body runs when awaited, not at the call), or one whose receiving
+parameter is not a plain `name: Type` binding, is declined rather than guessed;
+so is a call that a binding in the caller's own function shadows (a parameter
+included, even one after a method's receiver, a name bound by a parameter
+pattern such as `fn run((configure,): ..)` or
 `fn run(Callbacks { setup: configure }: ..)`, a name bound by a destructuring
-pattern such as `let (configure,) = ..` or `let Hook(configure) = ..`, a
-closure parameter in any position such as
-`|_: (), configure: fn(&mut Command)|`, a name bound by a `match` arm's pattern
-such as `match callback { configure => configure(&mut command) }`, a `const` or
-`static` item of that name, mutable or not, in the caller's block or a block
-enclosing it, since an item is in scope for its whole block even when it is
-declared after the call, while a `let` counts only before it and a sibling
-block's item is not in scope at the call, and a borrowed binding such as
+pattern such as `let (configure,) = ..` or `let Hook(configure) = ..`, a name
+bound by a `for` loop's pattern such as `for (configure, other) in ..`, which
+hides it inside the loop's body only, a closure parameter in any position such
+as `|_: (), configure: fn(&mut Command)|`, a name bound by a `match` arm's
+pattern such as `match callback { configure => configure(&mut command) }`,
+which hides it only inside that arm's body, so a later arm's call is not hidden
+by an earlier arm's binding, a `const` or `static` item of that name, mutable
+or not, in the caller's block or a block enclosing it, since an item is in
+scope for its whole block even when it is declared after the call, while a
+`let` counts only before it and only while its own block is open at the call,
+so one declared in an inner block that has closed is out of scope, and a
+sibling block's item is not in scope at the call, and a borrowed binding such as
 `let ref configure = ..`), a call written as a path or method
 (`support::configure(..)`, however it is spaced around the separator), a name a
 `use` item could import, or a helper that reassigns the parameter or redeclares
@@ -3251,9 +3261,14 @@ acceptance. The name must be a whole word inside a `binary()`, `binary_id()` or
 argument such as `/^name($|::)/` is read whole. A predicate the filter negates
 (`not(binary(ui))`, `!test(compiles)`) excludes that name rather than selecting
 it, so it names nothing, and a group of predicates inside one negation
-(`!(binary(ui) | binary(other))`) excludes every name it holds. The parentheses
-are balanced rather than matched lazily, and a matcher's `/regex/` text is
-skipped while they are counted, because a regex holds brackets of its own
+(`!(binary(ui) | binary(other))`) excludes every name it holds. Negations nest
+and cancel in pairs, so `not(not(binary(ui)))` names `ui` again, and a
+difference (`binary(ui) - test(compiles)`, `binary(ui) and not test(compiles)`)
+excludes its right operand as a negation does, leaving `ui` selected. The
+parentheses are balanced rather than matched lazily, and a backslash escapes
+the next character wherever it sits, so a `\(` or `\)` in a matcher neither
+opens nor closes a group, while a matcher's `/regex/` text is skipped as they
+are counted, because a regex holds brackets of its own
 (`!(test(/foo[)]/) | binary(ui))`). Exemptions name a test source and follow
 the NC-001 convention: repository, path, rationale and review trigger, where a
 blank rationale or trigger suppresses nothing. The package ships at `warning`

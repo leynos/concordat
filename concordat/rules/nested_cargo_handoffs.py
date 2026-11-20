@@ -31,7 +31,9 @@ follow. The same holds for a helper's own parameter: a call on it inside a
 closure body (`let _deferred = || { target.arg("build"); };`) or inside a
 `match` arm whose pattern binds the parameter's name
 (`Ok(target) => target.arg("build")`) is not the caller's command, so the
-helper is declined at the statement that holds it. A `let` binding is read even
+helper is declined at the statement that holds it. A helper declared `async`
+is declined as well, because its body runs only when the future is polled and
+not where the call is written. A `let` binding is read even
 when its constructor begins on the next line, because Rust ends the name at the
 `=` rather than at the line, and the parameters read are those of the innermost
 function whose body holds the call, so a function item declared inside the
@@ -97,6 +99,10 @@ BINDING: typ.Final = re.compile(
     r"let[ \t]+(?:mut[ \t]+)?(?P<name>\w+)[ \t]*(?::[^=;]+)?=\s*"
     r"(?:[A-Za-z_]\w*[ \t]*::[ \t]*)*$"
 )
+# An `async fn`'s body runs when its future is polled, not where the call is
+# written. The other qualifiers may follow `async` in either order
+# (`async unsafe fn`, `async extern "C" fn`), so they are read as a run.
+_ASYNC: typ.Final = re.compile(r"\basync\s+(?:(?:unsafe|extern\s*\"[^\"]*\")\s+)*$")
 
 
 def _argument_position(before: str | None) -> int | None:
@@ -192,6 +198,36 @@ def _hidden_use(
     )
 
 
+def _statements(masked: str, start: int, end: int) -> typ.Iterator[tuple[int, str]]:
+    """Yield the statements between *start* and *end* with their offsets.
+
+    A statement ends at a `;` at the helper body's own depth. A `;` inside
+    brackets belongs to the expression that holds it, and a method chain may
+    pass a block argument that holds statements of its own
+    (`target.arg("build").arg({ let flag = "--quiet"; flag }).status()`), so
+    splitting at every `;` would cut the chain and lose the call on the
+    command.
+
+    Yields
+    ------
+    tuple[int, str]
+        The statement's offset in *masked* and its text.
+    """
+    depth = 0
+    opening = start
+    for index in range(start, end):
+        char = masked[index]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(depth - 1, 0)
+        elif char == ";" and depth == 0:
+            yield opening, masked[opening:index]
+            opening = index + 1
+    if masked[opening:end].strip():
+        yield opening, masked[opening:end]
+
+
 def _receiver_statements(
     text: str, masked: str, span: tuple[int, int], parameter: str, receiver: str
 ) -> Window:
@@ -262,8 +298,7 @@ def _receiver_statements(
     )
     pieces: list[str] = []
     masked_pieces: list[str] = []
-    offset = start
-    for statement in masked[start:end].split(";"):
+    for offset, statement in _statements(masked, start, end):
         if (
             _hidden_use(masked, statement, own, start, parameter, offset)
             or COMMAND_NEW.search(statement)
@@ -276,7 +311,6 @@ def _receiver_statements(
         )
         pieces.append(piece)
         masked_pieces.append(masked_piece)
-        offset += len(statement) + 1
     if not pieces:
         return Window("", "")
     pieces, guarded = _returning_tail(pieces, masked_pieces)
@@ -434,9 +468,11 @@ def _callee_arguments(
     A local binding of the helper's name before the call shadows it, so the
     call is declined rather than resolved by name alone; so is a name a `use`
     item could import, because the call then reaches another file and a local
-    namesake is not what it runs. The definition's text still stops at the next
-    function item, so a helper at the end of the file cannot run into unrelated
-    code.
+    namesake is not what it runs. An `async fn` is declined as well: its body
+    runs when the future is polled, not where the call is written, so its
+    statements are not the call site's. The definition's text still stops at
+    the next function item, so a helper at the end of the file cannot run into
+    unrelated code.
 
     *base* is the file offset of the window *call* was matched in, used to find
     the caller's scope for the shadowing check.
@@ -456,6 +492,8 @@ def _callee_arguments(
     if len(definitions) != 1:
         return None
     definition = definitions[0]
+    if _ASYNC.search(masked, 0, definition.start()) is not None:
+        return None
     position = _argument_position(call["before"])
     if position is None:
         return None

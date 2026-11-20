@@ -176,6 +176,24 @@ def _is_test_position(
     return any(start <= position < end for start, end in spans)
 
 
+def _live(masked: str, found: re.Match[str]) -> bool:
+    """Report whether a spawn match names code rather than a comment or literal.
+
+    A constructor's literal argument is blanked in the masked form, so the
+    patterns are matched against the text as written. The text before that
+    argument survives masking only where it is code, so a constructor written
+    in a comment or inside a raw string is not a spawn. A pattern with no
+    literal keeps its whole text, which is compared as it stands.
+
+    Returns
+    -------
+    bool
+        True when the match's code stands in the masked source too.
+    """
+    code = found.group().split('"', 1)[0]
+    return masked.startswith(code, found.start())
+
+
 def _spawn_kind(
     relative: str, text: str, masked: str, closers: dict[int, int]
 ) -> str | None:
@@ -197,6 +215,8 @@ def _spawn_kind(
     index = file_index(masked)
     spans = _test_spans(masked, closers)
     for match in RUSTC_SPAWN.finditer(text):
+        if not _live(masked, match):
+            continue
         if not _is_test_position(relative, spans, match.start()):
             continue
         window = command_window(text, masked, closers, match.start(), index)
@@ -207,7 +227,7 @@ def _spawn_kind(
     compiling = any(
         compiles(text, masked, closers, match.start(), index)
         for match in CARGO_SPAWN.finditer(text)
-        if _is_test_position(relative, spans, match.start())
+        if _live(masked, match) and _is_test_position(relative, spans, match.start())
     )
     return "cargo" if compiling else None
 

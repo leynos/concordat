@@ -27,7 +27,9 @@ parameter of the command's name hides the name only inside that span. A `|`
 that follows an operand is bitwise or rather than a header, so
 `a | command.arg("build") | b` holds no closure, and a return type before the
 body is part of the closure, so the body begins after the type rather than at
-its first comma.
+its first comma, and the `>` of a function-pointer return inside that type
+closes no generic. A rejected header resumes at its own opening pipe, so the
+first pipe of a later `||` header is not consumed as a closing delimiter.
 """
 
 from __future__ import annotations
@@ -398,7 +400,9 @@ def _body_start(masked: str, after: int) -> int:
     whose commas and parentheses are part of the signature: reading the body as
     the words after the header would end it at the type's first comma and
     leave the rest of the closure unread. The arrow is followed past the type,
-    and any whitespace after it is skipped.
+    and any whitespace after it is skipped. An arrow inside the type
+    (`Result<fn() -> (), ()>`) is a function pointer's, not a generic's closer,
+    so the type is read whole rather than ending at its first comma.
 
     Returns
     -------
@@ -413,6 +417,11 @@ def _body_start(masked: str, after: int) -> int:
     index += 2
     depth = 0
     while index < len(masked):
+        if masked.startswith("->", index):
+            # The `>` of a function-pointer return (`fn() -> ()`) closes no
+            # generic, so it must not be counted as one.
+            index += 2
+            continue
         char = masked[index]
         if char in "([<":
             depth += 1
@@ -461,13 +470,36 @@ def closure_end(masked: str, after: int) -> int:
     return index
 
 
-def _closure_headers(masked: str) -> typ.Iterator[re.Match[str]]:
-    """Yield each `|..|` in *masked* that really opens a closure."""
-    return (
-        header
-        for header in CLOSURE_HEADER.finditer(masked)
-        if _opens_a_closure(masked, header)
-    )
+def _closure_headers(
+    masked: str, start: int = 0, end: int | None = None
+) -> typ.Iterator[re.Match[str]]:
+    """Yield each `|..|` in *masked* that really opens a closure.
+
+    A bitwise chain can make the header pattern pair one `|` with the first
+    pipe of a later `||` header (`a | b; let f = || ..`), consuming the pipe
+    that really opens the closure. A rejected match therefore resumes at its
+    own opening pipe rather than after it, so the second pipe of the `||` is
+    read as a header's opener. Bitwise expressions are rejected as before.
+
+    *start* and *end* bound the scan, so a caller asking about one offset does
+    not read the headers after it.
+
+    Yields
+    ------
+    re.Match[str]
+        Each header that opens a closure, in source order.
+    """
+    stop = len(masked) if end is None else min(end, len(masked))
+    index = start
+    while True:
+        header = CLOSURE_HEADER.search(masked, index, stop)
+        if header is None:
+            return
+        if _opens_a_closure(masked, header):
+            yield header
+            index = header.end()
+        else:
+            index = header.start() + 1
 
 
 def closure_spans(masked: str) -> list[tuple[int, int]]:
@@ -501,7 +533,7 @@ def inside_closure(masked: str, start: int, at: int) -> bool:
     bool
         True when a closure's header and body hold *at*.
     """
-    for header in CLOSURE_HEADER.finditer(masked, start, at):
-        if _opens_a_closure(masked, header) and closure_end(masked, header.end()) > at:
-            return True
-    return False
+    return any(
+        closure_end(masked, header.end()) > at
+        for header in _closure_headers(masked, start, at)
+    )

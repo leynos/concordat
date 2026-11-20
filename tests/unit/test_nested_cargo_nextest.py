@@ -16,6 +16,7 @@ import pytest
 
 from concordat.rules import packages, runner
 from concordat.rules.nested_cargo_nextest_envelope import (
+    _predicate_arguments,
     build_nested_cargo_nextest_envelope,
 )
 from concordat.rules.nested_cargo_receivers import (
@@ -822,7 +823,7 @@ RECEIVER_AFTER_IF = (
     '    let mut command = Command::new(env!("CARGO"));\n'
     "    add_build(&mut command, true);\n}\n"
     "fn add_build(command: &mut Command, enabled: bool) {\n"
-    '    if enabled { command.arg("build").status().unwrap() }\n'
+    '    if enabled { command.arg("build").status().unwrap(); }\n'
     "    let _ = enabled;\n}\n"
 )
 
@@ -2635,6 +2636,8 @@ def test_help_given_in_every_arm_compiles_nothing(tmp_path: pathlib.Path) -> Non
         "!(binary(other) | binary(ui))",
         "not(binary(other) | binary(ui))",
         "!(test(/foo[)]/) | binary(ui))",
+        "all() - binary(ui)",
+        "all() - (binary(ui) | binary(other))",
     ],
 )
 def test_a_negated_predicate_does_not_name_the_spawner(
@@ -2659,6 +2662,30 @@ def test_a_selected_predicate_beside_a_negated_one_still_names_the_spawner(
         grouped_config("not(binary(other)) | binary(ui)"),
     )
     assert ids(tmp_path) == set()
+
+
+@pytest.mark.parametrize(
+    "filter_expression",
+    [
+        "all() & binary(ui)",
+        "!(!binary(ui))",
+        "!(!(binary(ui)))",
+        "!!binary(ui)",
+    ],
+)
+def test_a_predicate_selected_after_cancelling_exclusions_names_the_spawner(
+    tmp_path: pathlib.Path, filter_expression: str
+) -> None:
+    """An even number of exclusions around `ui` selects it again."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", BUILD_TEST)
+    put(tmp_path, ".config/nextest.toml", grouped_config(filter_expression))
+    assert ids(tmp_path) == set()
+
+
+def test_an_escaped_parenthesis_does_not_end_a_negated_group() -> None:
+    r"""`\\)` is matcher data, so the rest of the negated group stays excluded."""
+    assert _predicate_arguments("!(test(=other\\)) | binary(ui))") == []
 
 
 ESCAPED_BUILD = (
@@ -3957,4 +3984,166 @@ def test_a_returned_argument_is_not_conditional(tmp_path: pathlib.Path) -> None:
     """The return expression runs before control leaves, so the help is certain."""
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", ARGUMENT_RETURNED_WITH_THE_HELP)
+    assert ids(tmp_path) == set()
+
+
+CLOSURE_AFTER_A_BITWISE_PAIR = (
+    "use std::process::Command;\n"
+    "fn configure(command: &mut Command) {\n"
+    "    let _both = a | b;\n"
+    '    let deferred = || { command.arg("--version"); };\n'
+    "    drop(deferred);\n"
+    '    command.arg("build").status().unwrap();\n'
+    "}\n"
+    "fn run(a: bool, b: bool) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    configure(&mut command);\n"
+    "}\n"
+)
+
+
+def test_a_closure_after_a_bitwise_pair_is_still_a_closure(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The closure ends the helper's read, so its later launch is not spliced."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", CLOSURE_AFTER_A_BITWISE_PAIR)
+    assert ids(tmp_path) == set()
+
+
+def test_a_function_pointer_return_does_not_end_the_closure_span() -> None:
+    """The arrow inside `fn() -> ()` closes no generic, so the body stays read."""
+    source = (
+        "let f = |command: &mut Command| -> Result<fn() -> (), ()> "
+        '{ command.arg("--version"); Ok(noop) };'
+    )
+    ((start, stop),) = closure_spans(source)
+    assert start < source.index("command.arg") < stop
+
+
+DESTRUCTURED_LOOP_BINDING = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    for (configure,) in [(noop as fn(&mut Command),)] {\n"
+    "        configure(&mut command);\n"
+    "    }\n"
+    "}\n"
+    'fn configure(command: &mut Command) { command.arg("build").status().unwrap(); }\n'
+    "fn noop(_command: &mut Command) {}\n"
+)
+
+
+def test_a_destructured_loop_binding_hides_the_helper(tmp_path: pathlib.Path) -> None:
+    """The loop binds `configure` to `noop`, so its body never launches cargo."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", DESTRUCTURED_LOOP_BINDING)
+    assert ids(tmp_path) == set()
+
+
+HELPER_CHAIN_THROUGH_A_BLOCK_ARGUMENT = (
+    "use std::process::Command;\n"
+    "fn configure(target: &mut Command) {\n"
+    '    target.arg("build").arg({ let flag = "--quiet"; flag }).status().unwrap();\n'
+    "}\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    configure(&mut command);\n"
+    "}\n"
+)
+
+
+def test_a_semicolon_inside_a_helpers_block_argument_keeps_the_chain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The helper's `;` is inside the block argument, so its launch is read."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HELPER_CHAIN_THROUGH_A_BLOCK_ARGUMENT)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+EXPIRED_LOCAL_BINDING = (
+    "use std::process::Command;\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    { let configure = noop; }\n"
+    "    configure(&mut command);\n"
+    '    command.arg("metadata").status().unwrap();\n'
+    "}\n"
+    'fn configure(command: &mut Command) { command.arg("build"); }\n'
+    "fn noop(_command: &mut Command) {}\n"
+)
+
+
+def test_an_expired_local_binding_does_not_hide_the_helper(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `let` in a block that has closed binds nothing at a later call."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", EXPIRED_LOCAL_BINDING)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+LATER_MATCH_ARM_CALLS_THE_HELPER = (
+    "use std::process::Command;\n"
+    "fn run(callback: Option<fn(&mut Command)>) {\n"
+    '    let mut command = Command::new("cargo");\n'
+    "    match callback {\n"
+    "        Some(configure) => { drop(configure); },\n"
+    "        None => configure(&mut command),\n"
+    "    }\n"
+    '    command.arg("metadata").status().unwrap();\n'
+    "}\n"
+    'fn configure(command: &mut Command) { command.arg("build"); }\n'
+)
+
+
+def test_a_later_match_arm_does_not_inherit_an_earlier_binding(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Only the arm holding the call decides what its name denotes."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", LATER_MATCH_ARM_CALLS_THE_HELPER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+ASYNC_HELPER = (
+    "use std::process::Command;\n"
+    "async fn configure(command: &mut Command) {\n"
+    '    command.arg("--version");\n'
+    "}\n"
+    "fn run() {\n"
+    '    let mut command = Command::new("rustc");\n'
+    "    let _future = configure(&mut command);\n"
+    '    command.arg("input.rs");\n'
+    "    command.status().unwrap();\n"
+    "}\n"
+)
+
+
+def test_an_async_helper_is_not_spliced_at_the_call(tmp_path: pathlib.Path) -> None:
+    """Dropping the future runs nothing, so the helper's `--version` is not given."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", ASYNC_HELPER)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+COMMENTED_CONSTRUCTOR = (
+    "use std::process::Command;\n"
+    "fn run(cmd: &mut Command) {\n"
+    '    // let mut cmd = Command::new("PROGRAM");\n'
+    '    cmd.arg("build");\n'
+    "    cmd.status().unwrap();\n"
+    "}\n"
+)
+
+
+@pytest.mark.parametrize("program", ["rustc", "cargo"])
+def test_a_commented_constructor_is_not_a_spawn(
+    program: str, tmp_path: pathlib.Path
+) -> None:
+    """A constructor in a comment starts nothing, so it is not a candidate."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    source = COMMENTED_CONSTRUCTOR.replace("PROGRAM", program)
+    put(tmp_path, "tests/common/mod.rs", source)
     assert ids(tmp_path) == set()

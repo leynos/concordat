@@ -189,24 +189,51 @@ def _nextest(checkout: pathlib.Path) -> tuple[Nextest, list[str]]:
     return _facts(document)
 
 
-PREDICATE: typ.Final = re.compile(r"\b(?:binary|binary_id|test)\(")
-# A filter can exclude a binary instead of selecting it, with `!` or `not`
-# before the predicate. The exclusion names the same tests, so a name inside it
-# says nothing about which tests the override places in the group.
-NEGATION: typ.Final = re.compile(r"(?:!\s*\(?\s*|\bnot\s*\(?\s*)$")
-# A group of predicates inside one negation: `not(a | b)` or `!(a | b)`. Every
-# predicate in the group is excluded, not only the one written beside the `!`.
-NEGATION_GROUP: typ.Final = re.compile(r"(?:!|\bnot)\s*\(")
+# The predicates whose argument can name a binary or a test function. Another
+# predicate's argument names something else (a package, a platform), so it is
+# not read for the spawner's name however it is written.
+NAMING_PREDICATES: typ.Final = frozenset({"binary", "binary_id", "test"})
+# The filterset's operators as one character each, and as words. `-` is set
+# difference, which selects its left operand and excludes its right one.
+_OPERATOR_CHARS: typ.Final = {
+    "!": "not",
+    "-": "diff",
+    "&": "and",
+    "|": "or",
+    "+": "or",
+    "(": "open",
+    ")": "close",
+}
+_OPERATOR_WORDS: typ.Final = {"and": "and", "or": "or", "not": "not"}
+_WORD: typ.Final = re.compile(r"\w+")
+
+
+class _FilterToken(typ.NamedTuple):
+    """One structural token of a filterset expression.
+
+    Attributes
+    ----------
+    kind:
+        `predicate`, `not`, `and`, `or`, `diff`, `open`, `close` or `unknown`.
+    name:
+        The predicate's name, or an empty string for any other token.
+    argument:
+        The text between a predicate's parentheses, or an empty string.
+    """
+
+    kind: str
+    name: str
+    argument: str
 
 
 def _balanced_close(text: str, open_at: int) -> int:
     r"""Return the offset of the `)` that balances the `(` at *open_at*.
 
-    A filter argument is either bare or a `/regex/` matcher, and a matcher
-    holds parentheses and brackets of its own (`test(/foo[)]/)`). Those are
-    not delimiters of the predicate or the group that holds the matcher, so
-    the matcher's text is skipped, with `\\/` read as an escaped slash rather
-    than as its end.
+    A filter argument is either bare or a `/regex/` matcher, and both hold
+    parentheses and brackets of their own (`test(/foo[)]/)`, `test(=other\))`).
+    Those are not delimiters of the predicate or the group that holds them, so
+    an escape pair is skipped wherever it is written and the matcher's text is
+    skipped whole, with `\\/` read as an escaped slash rather than as its end.
 
     Returns
     -------
@@ -218,12 +245,14 @@ def _balanced_close(text: str, open_at: int) -> int:
     escaped = False
     for offset in range(open_at, len(text)):
         char = text[offset]
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
         if in_regex:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == "/":
+            if char == "/":
                 in_regex = False
             continue
         match char:
@@ -238,57 +267,103 @@ def _balanced_close(text: str, open_at: int) -> int:
     return -1
 
 
-def _negated_spans(text: str) -> list[tuple[int, int]]:
-    """Return the spans a negation's parentheses hold.
-
-    A filter can exclude a group of predicates at once
-    (`!(binary(ui) | binary(other))`), and each of them names a test the
-    override does not place in the group. The span runs from the group's
-    opening `(` to its balancing `)`, counted rather than matched lazily
-    because a matcher argument holds brackets of its own.
+def _after_space(text: str, index: int) -> int:
+    """Return the offset of the next non-space character at or after *index*.
 
     Returns
     -------
-    list[tuple[int, int]]
-        The half-open spans held by each negated group.
+    int
+        The offset, or the text's end when only whitespace follows.
     """
-    spans: list[tuple[int, int]] = []
-    for found in NEGATION_GROUP.finditer(text):
-        open_at = found.end() - 1
-        close = _balanced_close(text, open_at)
-        if close >= 0:
-            spans.append((open_at, close))
-    return spans
+    while index < len(text) and text[index].isspace():
+        index += 1
+    return index
+
+
+def _filter_tokens(text: str) -> typ.Iterator[_FilterToken]:
+    """Yield the structural tokens of a filterset expression.
+
+    A predicate's parentheses hold bare or `/regex/` matchers and escapes, so
+    each argument is skipped whole rather than tokenised: a `!` or a `-` in a
+    test name is data, not an operator. The operators `and`, `or` and `not`
+    can be written as words, so a name is read as an operator before it is
+    read as a predicate.
+
+    Yields
+    ------
+    _FilterToken
+        Each token in source order.
+    """
+    index = 0
+    while index < len(text):
+        if text[index].isspace():
+            index += 1
+            continue
+        kind = _OPERATOR_CHARS.get(text[index])
+        if kind is not None:
+            yield _FilterToken(kind, "", "")
+            index += 1
+            continue
+        word = _WORD.match(text, index)
+        if word is None:
+            yield _FilterToken("unknown", "", "")
+            index += 1
+            continue
+        name = word.group()
+        operator = _OPERATOR_WORDS.get(name)
+        if operator is not None:
+            yield _FilterToken(operator, "", "")
+            index = word.end()
+            continue
+        open_at = _after_space(text, word.end())
+        if open_at < len(text) and text[open_at] == "(":
+            close_at = _balanced_close(text, open_at)
+            if close_at >= 0:
+                yield _FilterToken("predicate", name, text[open_at + 1 : close_at])
+                index = close_at + 1
+                continue
+        yield _FilterToken("unknown", "", "")
+        index = word.end()
 
 
 def _predicate_arguments(text: str) -> list[str]:
-    """Return the arguments of every selecting predicate, negations skipped.
+    """Return the arguments of the predicates a filter selects.
 
-    A filter such as `not(binary(ui))` or `!test(/^ui/)` excludes those names
-    rather than selecting them, so their arguments are not returned: an
-    override that only excludes `ui` does not place it in the group. A
-    negated group excludes every predicate it holds, not only the first, so
-    `!(binary(other) | binary(ui))` does not name `ui` either. The
-    parentheses are balanced rather than matched lazily, because a regex
-    argument such as `/^name($|::)/` holds parentheses of its own.
+    A predicate is excluded by an odd number of exclusions around it: a `!` or
+    `not` before it, or the right operand of a difference (`all() -
+    binary(ui)`). The exclusions compose through nesting, so `!binary(ui)` and
+    `!(binary(ui))` exclude `ui` while `!(!binary(ui))` selects it again.
+    Exclusions are read from the filter's structure rather than from its text:
+    a predicate's argument is skipped whole, so a `!` or a `-` in a test name
+    selects nothing of its own.
 
     Returns
     -------
     list[str]
-        The text between the parentheses of each predicate that is not
-        negated.
+        The text between the parentheses of each selected predicate.
     """
-    excluded = _negated_spans(text)
-    found: list[str] = []
-    for match in PREDICATE.finditer(text):
-        if any(start < match.start() < stop for start, stop in excluded):
-            continue
-        if NEGATION.search(text[: match.start()]) is not None:
-            continue
-        close = _balanced_close(text, match.end() - 1)
-        if close >= 0:
-            found.append(text[match.end() : close])
-    return found
+    selected: list[str] = []
+    stack: list[tuple[bool, bool]] = []
+    flipped = False
+    pending = False
+    for token in _filter_tokens(text):
+        match token.kind:
+            case "not" | "diff":
+                pending = not pending
+            case "open":
+                stack.append((flipped, pending))
+                flipped = flipped != pending
+                pending = False
+            case "close":
+                flipped, _ = stack.pop() if stack else (False, False)
+                pending = False
+            case "predicate":
+                if token.name in NAMING_PREDICATES and flipped == pending:
+                    selected.append(token.argument)
+                pending = False
+            case _:
+                pending = False
+    return selected
 
 
 def _mentions(argument: str, name: str) -> bool:

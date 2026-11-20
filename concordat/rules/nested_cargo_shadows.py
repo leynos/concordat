@@ -123,36 +123,46 @@ def enclosing_start(masked: str, at: int, index: FileIndex) -> int:
 
 
 def _arm_pattern_binds(segment: str, name: str) -> bool:
-    """Report whether an arm pattern in *segment* binds *name*.
+    """Report whether the arm holding the segment's end binds *name*.
 
-    Only text before an `=>` that sits outside brackets is a pattern; an
-    arrow deeper in an arm's block belongs to a match the arm body holds. The
-    pattern is the text since the arm's start, which a comma at the arm's own
-    level ends, so a preceding sibling arm's body is not read as part of it.
+    Only one arm is active at the call, so only the pattern of the arm whose
+    body the segment ends in counts; an earlier sibling arm's binding ends
+    with that arm. The pattern is the text between the arm's start and its
+    `=>`, where an arm at the match's own level ends at a comma, and an arm
+    whose body is a block also ends at the block's closing brace, because Rust
+    lets that comma be left out. Only an arrow outside brackets starts an arm
+    body; an arrow deeper in one belongs to a match the body holds. A segment
+    that ends inside a pattern rather than a body holds no call, so it binds
+    nothing.
 
     Returns
     -------
     bool
-        True when a pattern mentions *name* as a whole word.
+        True when the active arm's pattern mentions *name* as a whole word.
     """
     bound = re.compile(rf"\b{re.escape(name)}\b")
     depth = 0
-    arm_start = 0
+    pattern_start = 0
+    binds = False
+    in_body = False
     for found in _ARM_TOKENS.finditer(segment):
-        arm_char = found.group()
-        if arm_char in "([{":
+        mark = found.group()
+        if mark in "([{":
             depth += 1
-        elif arm_char in ")]}":
+        elif mark in ")]}":
             depth = max(depth - 1, 0)
+            if depth == 0 and in_body:
+                in_body = False
+                pattern_start = found.end()
         elif depth:
             continue
-        elif arm_char == "=>":
-            if bound.search(segment[arm_start : found.start()]) is not None:
-                return True
-            arm_start = found.end()
+        elif mark == "=>":
+            binds = bound.search(segment[pattern_start : found.start()]) is not None
+            in_body = True
         else:
-            arm_start = found.end()
-    return False
+            in_body = False
+            pattern_start = found.end()
+    return binds if in_body else False
 
 
 def match_arm_binds(masked: str, name: str, start: int, at: int) -> bool:
@@ -197,28 +207,132 @@ def open_braces(masked: str, base: int, at: int) -> list[int]:
     return openers
 
 
-def _destructured(masked: str, name: str, start: int, at: int) -> bool:
-    """Report whether a `let` between *start* and *at* binds *name* by pattern.
+# `ref` and `mut` may each be present, in either combination, before the name
+# a pattern binds; neither changes which name is bound.
+_BINDING: typ.Final = r"(?:(?:ref\s+)?mut\s+|ref\s+)?"
+_IN: typ.Final = re.compile(r"\bin\b")
+_FOR: typ.Final = re.compile(r"\bfor\b")
 
-    A tuple, slice, tuple-struct or struct pattern binds names without writing
-    `let name`: `let (configure,) = ..`, `let Hook(configure) = ..` and
-    `let Settings { configure } = ..` all shadow the free function of that
-    name. Any bracket before the `=` makes the pattern a destructuring one;
-    the `let` pattern runs to the `=`, so the initializer is not part of the
-    pattern and a call on the right-hand side (`let x = configure(..)`) is not
-    mistaken for a binding.
+
+def _live(masked: str, start: int, declarer: int | None, at: int) -> bool:
+    """Report whether the block opened at *declarer* still holds *at*.
+
+    A `let` or loop binding lives only in the block that declares it, so one
+    written in a sibling block that has already closed is out of scope at the
+    call. A binding at the file's top level has no declarer and is in scope
+    throughout.
 
     Returns
     -------
     bool
-        True when a destructuring `let` binds *name*.
+        True when the declaring block encloses *at*, or there is none.
     """
-    pattern = re.compile(r"\blet\b([^=;]*?)\s*=")
+    return declarer is None or declarer in open_braces(masked, start, at)
+
+
+def _innermost(masked: str, start: int, at: int) -> int | None:
+    """Return the opening brace of the innermost block open at *at*.
+
+    Returns
+    -------
+    int | None
+        The block's opening brace, or None when no block encloses *at*.
+    """
+    openers = open_braces(masked, start, at)
+    return openers[-1] if openers else None
+
+
+def _let_binds(masked: str, name: str, start: int, at: int) -> bool:
+    """Report whether a live `let` between *start* and *at* binds *name*.
+
+    A `let` binds its names from its statement to the end of the block that
+    holds it, so one in a block that has closed before the call does not
+    shadow the free function there. A tuple, slice, tuple-struct or struct
+    pattern binds names without writing `let name`: `let (configure,) = ..`,
+    `let Hook(configure) = ..` and `let Settings { configure } = ..` all
+    shadow the free function of that name. Any bracket before the `=` makes
+    the pattern a destructuring one; the pattern runs to the `=`, so the
+    initializer is not part of it and a call on the right-hand side
+    (`let x = configure(..)`) is not mistaken for a binding.
+
+    Returns
+    -------
+    bool
+        True when a live `let` binds *name*.
+    """
     bound = re.compile(rf"\b{re.escape(name)}\b")
+    binder = re.compile(rf"\blet\s+{_BINDING}{re.escape(name)}\b")
+    for found in binder.finditer(masked, start, at):
+        if _live(masked, start, _innermost(masked, start, found.start()), at):
+            return True
+    pattern = re.compile(r"\blet\b([^=;]*?)\s*=")
     for found in pattern.finditer(masked, start, at):
-        binding = found[1]
+        candidate = found[1]
+        destructures = any(char in candidate for char in "([{")
+        if not destructures or bound.search(candidate) is None:
+            continue
+        if _live(masked, start, _innermost(masked, start, found.start()), at):
+            return True
+    return False
+
+
+def _loop_body(masked: str, after: int, at: int) -> int | None:
+    """Return the opening brace of the loop body that holds *at*.
+
+    The body follows the loop's `in` and iterator expression, and that
+    expression may hold a block of its own in a closure
+    (`for x in items.map(|i| { i }) {}`). A block that has closed before the
+    call is such a block rather than the body, so the first brace whose
+    balanced close still holds *at* is the body. A brace after the call, or
+    none that closes after it, leaves the call outside every loop body.
+
+    Returns
+    -------
+    int | None
+        The body's opening brace, or None when it does not hold *at*.
+    """
+    index = after
+    while index < len(masked):
+        brace = masked.find("{", index)
+        if brace < 0 or brace > at:
+            return None
+        close = scan_balanced(masked, brace)
+        if close is None:
+            return None
+        if close > at:
+            return brace
+        index = close + 1
+    return None
+
+
+def _for_binds(masked: str, name: str, start: int, at: int) -> bool:
+    """Report whether a `for` loop whose body holds *at* binds *name*.
+
+    A loop's pattern binds only inside the loop body, so `for (configure,) in
+    hooks {}` shadows the free function there and nowhere else: a call after
+    the loop reaches the `fn`. A plain pattern may carry `ref` or `mut`, and a
+    destructuring pattern binds names without writing the plain form, so both
+    are read.
+
+    Returns
+    -------
+    bool
+        True when a loop body holding *at* binds *name*.
+    """
+    bound = re.compile(rf"\b{re.escape(name)}\b")
+    plain = re.compile(rf"\s*{_BINDING}{re.escape(name)}\b")
+    for found in _FOR.finditer(masked, start, at):
+        opening = found.end()
+        inside = _IN.search(masked, opening, at)
+        if inside is None:
+            continue
+        binding = masked[opening : inside.start()]
         destructures = any(char in binding for char in "([{")
-        if destructures and bound.search(binding) is not None:
+        if destructures:
+            binds = bound.search(binding) is not None
+        else:
+            binds = plain.match(binding) is not None
+        if binds and _loop_body(masked, inside.end(), at) is not None:
             return True
     return False
 
@@ -321,17 +435,21 @@ def shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     scan cannot read. A `let` or a loop variable counts only before the call,
     because a value bound later is not the one the call reaches, while a
     `const` or `static` counts anywhere in the caller's block, because an item
-    is in scope for the whole block. A `let` whose pattern destructures the name
-    (`let (configure,) = ..`) binds it too, and so does a binding that borrows
-    the value (`let ref configure = ..`, `|ref mut configure|`): the name still
-    denotes the borrowed value rather than the free function. The enclosing
-    function's parameter list is read because `fn run(configure: fn(&mut
-    Command))` calls the argument, not the free function; a function item
-    declared inside it is not the caller's scope, so the innermost enclosing
-    body is found rather than the latest declaration. A parameter written as a
-    pattern (`fn run((configure,): ..)`, `fn run(Settings { hook: configure }:
-    ..)`) binds names the plain reader cannot see, so the handoff is declined
-    rather than guessed.
+    is in scope for the whole block. A `let` lives only in the block that
+    declares it, so one in a sibling block that has already closed no longer
+    shadows the name, and a loop's binding lives only in the loop body, so a
+    call after the loop reaches the free function again. A `let` whose pattern
+    destructures the name (`let (configure,) = ..`) binds it too, as does a
+    loop's destructuring pattern (`for (configure,) in ..`), and so does a
+    binding that borrows the value (`let ref configure = ..`, `|ref mut
+    configure|`): the name still denotes the borrowed value rather than the
+    free function. The enclosing function's parameter list is read because
+    `fn run(configure: fn(&mut Command))` calls the argument, not the free
+    function; a function item declared inside it is not the caller's scope, so
+    the innermost enclosing body is found rather than the latest declaration.
+    A parameter written as a pattern (`fn run((configure,): ..)`, `fn
+    run(Settings { hook: configure }: ..)`) binds names the plain reader cannot
+    see, so the handoff is declined rather than guessed.
 
     Returns
     -------
@@ -340,20 +458,13 @@ def shadowed(masked: str, name: str, at: int, index: FileIndex) -> bool:
     """
     at = min(at, len(masked))
     start = enclosing_start(masked, at, index)
-    pattern = rf"\b{re.escape(name)}\b"
-    # `ref` and `mut` may each be present, in either combination, before the
-    # name a pattern binds; neither changes which name is bound.
-    binding = r"(?:(?:ref\s+)?mut\s+|ref\s+)?"
-    binder = re.compile(rf"\b(?:let\s+{binding}|for\s+{binding}){pattern}")
-    if binder.search(masked, start, at) is not None:
+    if _let_binds(masked, name, start, at) or _for_binds(masked, name, start, at):
         return True
     if match_arm_binds(masked, name, start, at):
         return True
     if _item_shadows(masked, name, at, index):
         return True
     if _closure_binds(masked, start, at, name):
-        return True
-    if _destructured(masked, name, start, at):
         return True
     if pattern_binds(masked, start, name):
         return True

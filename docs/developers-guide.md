@@ -775,8 +775,9 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
 - `policy-input/nested-cargo-nextest` —
   `nested_cargo_nextest_envelope.build_nested_cargo_nextest_envelope`. The scan
   for compiler-spawning tests lives in `nested_cargo_spawn` (test code only,
-  compiling subcommands only, files that name `Command`, a launch reached
-  inside the read, 1 MiB cap), what a found command does with its arguments —
+  compiling subcommands only, files that name `Command` in code, so a
+  constructor in a comment or a string is not a spawn, a launch reached inside
+  the read, 1 MiB cap), what a found command does with its arguments —
   including a helper's body spliced in at the call site, a helper's tail after
   a block-level return guarded so the caller's continuation stays on the
   returning path, a read that restarts for each branch the command runs on or
@@ -826,34 +827,44 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   spliced fragment keeping the `else` between its braces and a `return` inside
   the block it was written in, its tail guarded so the caller's continuation
   stays on the returning path but a call in the return's own expression left
-  unguarded because it runs before control leaves), asks `nested_cargo_shadows`
-  whether the name written at the call is the free function (the file's
-  function items indexed once, so the innermost enclosing function is found for
-  the caller's own parameters rather than the latest `fn` declared, and an item
-  beginning on the previous line, a helper naming the caller's binding, a
-  helper name bound by a tuple or struct parameter pattern, a constructor
-  pattern in a `let` (`let Hook(configure) = ..`), a closure parameter in any
-  position, one rebound by a closure's `|..|` list, one bound by a `match`
-  arm's pattern, a `const` or `static` item, mutable or not, in the caller's
-  block or a block enclosing it (a sibling block's item shadows nothing), a
-  call written inside a closure body, and a use of a helper's own parameter
-  inside a closure body or a `match` arm binding its name, all declined, read
-  from the arm patterns and enclosing braces), and attributes them through
+  unguarded because it runs before control leaves, statements split at a `;`
+  only at depth zero so a block argument's semicolon keeps the launch chained
+  on its statement, and a helper defined `async` declined because its body runs
+  when awaited rather than at the call), asks `nested_cargo_shadows` whether
+  the name written at the call is the free function (the file's function items
+  indexed once, so the innermost enclosing function is found for the caller's
+  own parameters rather than the latest `fn` declared, and an item beginning on
+  the previous line, a helper naming the caller's binding, a helper name bound
+  by a tuple or struct parameter pattern, a constructor pattern in a `let`
+  (`let Hook(configure) = ..`), a name bound by a `for` loop's pattern (which
+  hides it inside the loop's body only), a closure parameter in any position,
+  one rebound by a closure's `|..|` list, one bound by a `match` arm's pattern
+  (inside that arm's body only, so a later arm's call is not hidden by an
+  earlier binding), a `const` or `static` item, mutable or not, in the caller's
+  block or a block enclosing it (a sibling block's item shadows nothing, and a
+  `let` counts only while its own block is open at the call), a call written
+  inside a closure body, and a use of a helper's own parameter inside a closure
+  body or a `match` arm binding its name, all declined, read from the arm
+  patterns and enclosing braces), and attributes them through
   `nested_cargo_receivers` (declining fields, path items and namespace roots,
   with a `Command` reached through `::` the constructor and a bare `Command`
   counted only as the binding under study), and the bracket-depth reading of a
   signature and its body lives in `nested_cargo_syntax` (where a struct
   pattern's field comma stays inside its parameter, a const-block comparison is
   an operator rather than a generic, a pipe after an operand is bitwise or
-  rather than a closure header, and a closure's return type is part of its
-  signature rather than its body); the envelope reads `.config/nextest.toml`
-  for serial groups, whether an override uses one, `slow-timeout` in any
-  profile or override and `global-timeout` in any profile, and marks each
-  top-level test binary as named or not by the grouped filters, where a negated
-  predicate names nothing and a group of predicates inside one negation
-  excludes every name it holds, with the parentheses balanced rather than
-  matched lazily and a matcher's `/regex/` text skipped while they are counted.
-  It runs neither Cargo nor nextest and does not evaluate filtersets.
+  rather than a closure header with a rejected header resuming at that pipe so
+  a later closure is still found, and a closure's return type is part of its
+  signature rather than its body, with a `->` before a function-pointer return
+  closing no generic); the envelope reads `.config/nextest.toml` for serial
+  groups, whether an override uses one, `slow-timeout` in any profile or
+  override and `global-timeout` in any profile, and marks each top-level test
+  binary as named or not by the grouped filters, where a negated predicate
+  names nothing, a group of predicates inside one negation excludes every name
+  it holds, nested negations cancel in pairs, a difference excludes its right
+  operand, and a backslash escapes the next character so an escaped parenthesis
+  neither opens nor closes a group, with the parentheses balanced rather than
+  matched lazily and a matcher's `/regex/` text skipped as they are counted. It
+  runs neither Cargo nor nextest and does not evaluate filtersets.
 - `policy-input/nested-cargo-ci-wiring` —
   `nested_cargo_wiring_envelope.build_nested_cargo_wiring_envelope`. It reuses
   the shared workflow reader of the CodeScene coverage envelope, then records
