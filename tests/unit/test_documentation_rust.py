@@ -16,6 +16,7 @@ from concordat.rules import fs_probe
 from concordat.rules.documentation_envelope import build_documentation_envelope
 from concordat.rules.fs_probe import FileProbe
 from concordat.rules.rust_source import (
+    blank_comments,
     leading_attributes,
     mask_literals,
     suppressions_in,
@@ -319,6 +320,37 @@ def test_character_literals_are_blanked_and_lifetimes_are_not(literal: str) -> N
     """A character literal's body is blanked; a lifetime's is not."""
     assert mask_literals(literal) == "'" + " " * (len(literal) - 2) + "'"
     assert mask_literals("&'a str") == "&'a str"
+
+
+def test_a_comment_marker_in_a_string_is_not_a_comment() -> None:
+    """A `//` inside a string is part of the string, so the rest stays readable."""
+    source = 'cmd.env("URL", "https://example.com").arg("build");\n'
+
+    assert blank_comments(source) == source
+
+
+def test_comments_are_blanked_without_moving_an_offset() -> None:
+    """Both comment forms become spaces, and literals stay as written."""
+    source = 'let url = "a//b"; // a note\n/* block */ cmd.arg("build");\n'
+
+    blanked = blank_comments(source)
+
+    assert len(blanked) == len(source)
+    assert blanked.count("\n") == source.count("\n")
+    assert '"a//b"' in blanked
+    assert "a note" not in blanked
+    assert "block" not in blanked
+    assert 'cmd.arg("build")' in blanked
+
+
+def test_a_raw_string_keeps_its_comment_markers() -> None:
+    """A raw string's `//` is content, not a comment."""
+    source = 'let doc = r#"see // here"#; // trailing\n'
+
+    blanked = blank_comments(source)
+
+    assert 'r#"see // here"#;' in blanked
+    assert "trailing" not in blanked
 
 
 def test_a_top_level_library_root_does_not_read_the_crates_other_targets(
