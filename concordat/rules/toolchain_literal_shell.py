@@ -402,26 +402,60 @@ def _exported_assignments(commands: cabc.Iterable[list[str]]) -> list[Selection]
     is_exported = False
     for words in commands:
         _, program, args = _program(words)
+        published: Selection | None = None
         if program is None:
-            assignment = _assignment_in(words)
-            if assignment is not None:
-                pending = assignment
-            if not is_exported:
-                continue
-            if pending is not None:
-                found.append(pending)
-            continue
-        if program != "export":
-            continue
-        if not _exports_toolchain(args):
-            continue
-        if _publishes_value(args):
-            # `selection_in` already reports the value the export gives.
-            pending = None
-        elif pending is not None:
-            found.append(pending)
-        is_exported = True
+            pending, published = _after_assignment(
+                words, pending, is_exported=is_exported
+            )
+        elif _is_toolchain_export(program, args):
+            pending, published = _after_export(args, pending)
+            is_exported = True
+        if published is not None:
+            found.append(published)
     return found
+
+
+def _is_toolchain_export(program: str, args: list[str]) -> bool:
+    """Return whether the command is an `export` of the toolchain variable."""
+    if program != "export":
+        return False
+    return _exports_toolchain(args)
+
+
+def _after_assignment(
+    words: list[str], pending: Selection | None, *, is_exported: bool
+) -> tuple[Selection | None, Selection | None]:
+    """Return the pending assignment after *words*, and any it publishes.
+
+    Returns
+    -------
+    tuple[Selection | None, Selection | None]
+        The assignment a later `export` could publish, and the one an already
+        exported variable publishes now.
+    """
+    assignment = _assignment_in(words)
+    if assignment is not None:
+        pending = assignment
+    if not is_exported:
+        return pending, None
+    return pending, pending
+
+
+def _after_export(
+    args: list[str], pending: Selection | None
+) -> tuple[Selection | None, Selection | None]:
+    """Return the pending assignment after an `export`, and any it publishes.
+
+    Returns
+    -------
+    tuple[Selection | None, Selection | None]
+        The assignment left pending (none when the export gives a value of its
+        own, which `selection_in` already reports), and the earlier assignment
+        a bare export publishes.
+    """
+    if _publishes_value(args):
+        return None, None
+    return pending, pending
 
 
 def selection_in(words: list[str]) -> cabc.Iterator[Selection]:
