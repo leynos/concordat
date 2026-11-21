@@ -237,8 +237,10 @@ deny contains finding("RT-027", "error", "noncompliant", workflows_path, msg) if
 # nightly-pinned repository. The rule therefore reports every restated date,
 # including one that is correct today, because correctness today is what makes
 # the drift silent tomorrow. A literal is declared as deliberately separate by
-# binding it to a named Make variable or a workflow `env` entry; the envelope
-# has already removed those, so every literal here is undefended.
+# binding it to a named Make variable or reaching it through a workflow `env`
+# entry, which writes no date; the envelope has already removed those, so every
+# literal here is undefended. A reference the Makefile never supplies is an
+# error rather than a guess, so it is indeterminate, not a dated literal.
 literal_severity := object.get(data.parameters, "literal_severity", "warning")
 
 deny contains finding("RT-028", literal_severity, "indeterminate", error.path, msg) if {

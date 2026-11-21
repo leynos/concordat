@@ -154,6 +154,29 @@ def given_declared_makefile_pin(toolchain_checkout: pathlib.Path) -> None:
     )
 
 
+@given("a fresh pin whose workflow declares a separate fast toolchain")
+def given_declared_workflow_pin(toolchain_checkout: pathlib.Path) -> None:
+    """Write a workflow that binds a fast nightly to an `env` name.
+
+    RT-028 excuses the reference because the file binds the date to a name,
+    and RT-027 must not report the same value as competing with the pin.
+    """
+    _write(toolchain_checkout, "Cargo.toml", _MANIFEST)
+    _write(toolchain_checkout, "rust-toolchain.toml", _pin(_nightly(7)))
+    _write(toolchain_checkout, ".github/dependabot.yml", _DEPENDABOT)
+    _write(
+        toolchain_checkout,
+        ".github/workflows/ci.yml",
+        "env:\n"
+        f"  DEV_FAST_TOOLCHAIN: {_nightly(90)}\n"
+        "jobs:\n  test:\n    steps:\n"
+        "      - uses: dtolnay/rust-toolchain@master\n"
+        "        with:\n"
+        "          toolchain: ${{ env.DEV_FAST_TOOLCHAIN }}\n"
+        "      - run: cargo +${{ env.DEV_FAST_TOOLCHAIN }} test\n",
+    )
+
+
 @when("I audit the checkout for its toolchain policy")
 def when_audit_checkout(
     toolchain_checkout: pathlib.Path,

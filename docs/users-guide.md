@@ -364,8 +364,10 @@ pin: `ci.yml` adding a component to `nightly-2026-10-30` while the pin is
 uses. Read the channel from `rust-toolchain.toml` instead, as a step output or
 a parsed variable. A pin that is deliberately separate is declared by binding
 the date to a name: a Makefile variable assigned the date itself and used as
-`$(NAME)`, or a workflow `env` entry. A date reached through one variable from
-another, or written inline, is still reported. Severity is the
+`$(NAME)`, or a workflow `env` entry a step reaches as
+`${{ env.DEV_FAST_TOOLCHAIN }}`. RT-027 treats that reference the same way, so
+a declared fast toolchain does not compete with the pin. A date reached through
+one variable from another, or written inline, is still reported. Severity is the
 `literal_severity` parameter; promote it to `error` once the estate is clear.
 
 A repository whose nightly cannot move records that in

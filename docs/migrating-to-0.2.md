@@ -23,13 +23,16 @@ findings to zero:
   an application crate `publish = false`.
 - **RT-026**: exercise each declared MSRV in CI with one
   `cargo check --lib --locked`, not a second test run.
-- **RT-027**: name no dated nightly in a workflow other than the pinned one.
+- **RT-027**: name no dated nightly in a workflow other than the pinned one. A
+  date reached through a `${{ env.NAME }}` entry is deliberately separate and
+  is not compared with the pin.
 - **RT-028**: spell no dated nightly out in a workflow or the root `Makefile`;
   read the channel from `rust-toolchain.toml` instead, as a step output or a
   parsed variable. A pin that is deliberately separate is declared by binding
   the date to a name (a `Makefile` variable assigned the date itself and used as
-  `$(NAME)`, or a workflow `env` entry). This clause is a warning by default;
-  the rule's `literal_severity` parameter promotes it to `error`.
+  `$(NAME)`, or a workflow `env` entry a command reaches as
+  `${{ env.NAME }}`). This clause is a warning by default; the rule's
+  `literal_severity` parameter promotes it to `error`.
 
 ## A nightly that cannot move
 

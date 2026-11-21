@@ -52,7 +52,9 @@ clause indeterminate. The estate's cost rule for the MSRV job is
 ## RT-027
 
 No workflow names a dated nightly other than the pinned one. Numeric toolchains
-are not compared: they are usually a host tool's toolchain.
+are not compared: they are usually a host tool's toolchain. A date a workflow
+reaches through a `${{ env.NAME }}` entry is deliberately separate, as RT-028
+treats it, so it is not compared with the pin; a date written inline still is.
 
 ## RT-028
 
@@ -80,10 +82,14 @@ itself a variable is expanded and tokenized so its selections are read.
 A literal is declared as deliberately separate by binding it to a name: a
 Makefile variable assigned the date itself
 (`DEV_FAST_TOOLCHAIN ?= nightly-2026-08-23`, used as `$(DEV_FAST_TOOLCHAIN)`),
-or a workflow `env` entry. Such a literal draws no finding, which is how cuprum
-keeps a fast toolchain beside a `rust/` directory pinned to stable. A date
-reached through one variable from another is reported, because it is not
-declared where it is used; so is a literal written inline.
+or a workflow `env` entry a command reaches as `${{ env.DEV_FAST_TOOLCHAIN }}`.
+Such a reference draws no finding, which is how cuprum keeps a fast toolchain
+beside a `rust/` directory pinned to stable. A date reached through one
+variable from another is reported, because it is not declared where it is used;
+so is a literal written inline, even when an `env` entry carries the same date
+— that second copy is the one that drifts. A recipe reference to a variable the
+Makefile never assigns, where no included file could, leaves the toolchain
+unknown rather than dated, so it is indeterminate.
 
 Severity is `literal_severity` (`warning` by default, promoting to `error` once
 the estate has been surveyed). A workflow or `Makefile` that cannot be read is

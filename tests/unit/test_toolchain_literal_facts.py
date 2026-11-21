@@ -7,23 +7,25 @@ mornington#37 adopted — and reads the facts back through the real reader.
 
 from __future__ import annotations
 
-import textwrap
 import typing as typ
 
 import pytest
 
 from concordat.rules.makefile_facts import MakefileFacts
 from concordat.rules.toolchain import inspect_toolchain
-from concordat.rules.toolchain_literal_facts import (
-    ToolchainLiteralFacts,
-    toolchain_literal_facts,
+from concordat.rules.toolchain_literal_facts import toolchain_literal_facts
+from tests.unit.toolchain_literal_support import (
+    MANIFEST,
+    literals,
+    read,
+    rust_repository,
+    workflow,
+    write,
 )
 
 if typ.TYPE_CHECKING:
     import pathlib
 
-_MANIFEST = '[package]\nname = "demo"\nversion = "0.1.0"\n'
-_PIN = '[toolchain]\nchannel = "nightly-2026-11-05"\n'
 _SETUP_RUST = (
     "leynos/shared-actions/.github/actions/setup-rust@"
     "6cec89bac47a21cf756d68d638a9a510998e57f8"
@@ -40,42 +42,13 @@ _READ_CHANNEL = (
 )
 
 
-def _write(checkout: pathlib.Path, relative: str, text: str) -> None:
-    """Write *text* at *relative* under *checkout*."""
-    path = checkout / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(textwrap.dedent(text), encoding="utf-8")
-
-
-def _rust_repository(checkout: pathlib.Path) -> pathlib.Path:
-    """Make *checkout* a Rust repository pinned to a dated nightly."""
-    _write(checkout, "Cargo.toml", _MANIFEST)
-    _write(checkout, "rust-toolchain.toml", _PIN)
-    return checkout
-
-
-def _read(checkout: pathlib.Path) -> ToolchainLiteralFacts:
-    """Read *checkout*'s literals against the pin facts it exposes."""
-    return toolchain_literal_facts(checkout, inspect_toolchain(checkout))
-
-
-def _literals(facts: ToolchainLiteralFacts) -> list[tuple[str, str, str]]:
-    """Return each literal as `(kind, path, text)`."""
-    return [(f["kind"], f["path"], f["text"]) for f in facts["literals"]]
-
-
-def _workflow(steps: str) -> str:
-    """Return a workflow whose single job runs *steps*."""
-    return f"jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n{steps}"
-
-
 def test_wireframes_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
     """A `rustup component add --toolchain nightly-DATE` names the nightly."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
-        _workflow(
+        workflow(
             f"""\
               - name: Cranelift
                 run: |
@@ -85,9 +58,9 @@ def test_wireframes_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
         ),
     )
 
-    facts = _read(tmp_path)
+    facts = read(tmp_path)
 
-    assert _literals(facts) == [
+    assert literals(facts) == [
         ("workflow", ".github/workflows/ci.yml", "nightly-2026-10-30")
     ], facts
     assert facts["errors"] == [], facts
@@ -95,12 +68,12 @@ def test_wireframes_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
 
 def test_morningtons_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
     """A `setup-rust` input and a `cross +nightly-DATE` both name the nightly."""
-    _rust_repository(tmp_path)
+    rust_repository(tmp_path)
     channel = "nightly-2026-08-27"
-    _write(
+    write(
         tmp_path,
         ".github/workflows/release.yml",
-        _workflow(
+        workflow(
             f"""\
               - uses: {_SETUP_RUST}
                 with:
@@ -110,9 +83,9 @@ def test_morningtons_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
         ),
     )
 
-    facts = _read(tmp_path)
+    facts = read(tmp_path)
 
-    assert [(kind, text) for kind, _, text in _literals(facts)] == [
+    assert [(kind, text) for kind, _, text in literals(facts)] == [
         ("workflow", channel),
         ("workflow", channel),
     ], facts
@@ -120,11 +93,11 @@ def test_morningtons_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
 
 def test_the_fixed_shapes_pass(tmp_path: pathlib.Path) -> None:
     """Reading the channel into a step output and referencing it is silent."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
-        _workflow(
+        workflow(
             f"""\
               - id: toolchain
                 run: |
@@ -139,17 +112,17 @@ def test_the_fixed_shapes_pass(tmp_path: pathlib.Path) -> None:
         ),
     )
 
-    assert _read(tmp_path)["literals"] == [], _literals(_read(tmp_path))
+    assert read(tmp_path)["literals"] == [], literals(read(tmp_path))
 
 
 def test_a_reformatted_workflow_keeps_its_verdict(tmp_path: pathlib.Path) -> None:
     """The verdict comes from the decoded document, not the layout."""
-    _rust_repository(tmp_path)
-    compact = _workflow(
+    rust_repository(tmp_path)
+    compact = workflow(
         "      - {uses: 'dtolnay/rust-toolchain@master', with: "
         "{toolchain: 'nightly-2026-10-30'}}\n"
     )
-    expanded = _workflow(
+    expanded = workflow(
         """\
           - uses: dtolnay/rust-toolchain@master
             with:
@@ -157,19 +130,21 @@ def test_a_reformatted_workflow_keeps_its_verdict(tmp_path: pathlib.Path) -> Non
         """
     )
 
-    _write(tmp_path, ".github/workflows/compact.yml", compact)
-    _write(tmp_path, ".github/workflows/expanded.yml", expanded)
+    write(tmp_path, ".github/workflows/compact.yml", compact)
+    write(tmp_path, ".github/workflows/expanded.yml", expanded)
 
-    assert _literals(_read(tmp_path)) == [
+    assert literals(read(tmp_path)) == [
         ("workflow", ".github/workflows/compact.yml", "nightly-2026-10-30"),
         ("workflow", ".github/workflows/expanded.yml", "nightly-2026-10-30"),
     ]
 
 
-def test_a_workflow_env_declaration_is_deliberate(tmp_path: pathlib.Path) -> None:
-    """A literal the workflow's own `env` declares is not reported."""
-    _rust_repository(tmp_path)
-    _write(
+def test_a_workflow_env_reference_declares_a_separate_pin(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A command that reaches the date through `env` binds it to a name."""
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
         """\
@@ -181,21 +156,44 @@ def test_a_workflow_env_declaration_is_deliberate(tmp_path: pathlib.Path) -> Non
             steps:
               - uses: dtolnay/rust-toolchain@master
                 with:
-                  toolchain: nightly-2026-08-23
+                  toolchain: ${{ env.DEV_FAST_TOOLCHAIN }}
+              - run: cargo +${{ env.DEV_FAST_TOOLCHAIN }} test
               - run: cargo +nightly-2026-09-01 test
         """,
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-09-01"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-09-01"]
+
+
+def test_an_inline_literal_beside_an_env_declaration_is_reported(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An `env` entry excuses the reference to it, not a second copy of the date."""
+    rust_repository(tmp_path)
+    write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        """\
+        env:
+          DEV_FAST_TOOLCHAIN: nightly-2026-08-23
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: cargo +nightly-2026-08-23 test
+        """,
+    )
+
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-08-23"]
 
 
 def test_a_comment_or_display_name_is_not_a_literal(tmp_path: pathlib.Path) -> None:
     """A toolchain named in a comment or a step's name is not CI using it."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
-        _workflow(
+        workflow(
             """\
               # Previously nightly-2026-10-30
               - name: Test on nightly-2026-10-30
@@ -204,19 +202,19 @@ def test_a_comment_or_display_name_is_not_a_literal(tmp_path: pathlib.Path) -> N
         ),
     )
 
-    assert _read(tmp_path)["literals"] == []
+    assert read(tmp_path)["literals"] == []
 
 
 def test_an_unpinned_repository_is_outside_the_rule(tmp_path: pathlib.Path) -> None:
     """Without rust-toolchain.toml there is no pin for a literal to bypass."""
-    _write(tmp_path, "Cargo.toml", _MANIFEST)
-    _write(
+    write(tmp_path, "Cargo.toml", MANIFEST)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
-        _workflow("      - run: cargo +nightly-2026-10-30 test\n"),
+        workflow("      - run: cargo +nightly-2026-10-30 test\n"),
     )
 
-    facts = _read(tmp_path)
+    facts = read(tmp_path)
 
     assert facts["reads_pin"] is False, facts
     assert facts["literals"] == [], facts
@@ -224,10 +222,10 @@ def test_an_unpinned_repository_is_outside_the_rule(tmp_path: pathlib.Path) -> N
 
 def test_an_unreadable_workflow_is_carried_as_an_error(tmp_path: pathlib.Path) -> None:
     """A workflow that does not decode leaves the rule indeterminate."""
-    _rust_repository(tmp_path)
-    _write(tmp_path, ".github/workflows/ci.yml", "jobs: [unclosed\n")
+    rust_repository(tmp_path)
+    write(tmp_path, ".github/workflows/ci.yml", "jobs: [unclosed\n")
 
-    facts = _read(tmp_path)
+    facts = read(tmp_path)
 
     assert facts["literals"] == [], facts
     assert len(facts["errors"]) == 1, facts
@@ -237,8 +235,8 @@ def test_an_unreadable_workflow_is_carried_as_an_error(tmp_path: pathlib.Path) -
 
 def test_a_makefile_variable_declares_a_separate_pin(tmp_path: pathlib.Path) -> None:
     """Cuprum's `DEV_FAST_TOOLCHAIN ?= nightly-DATE` is a deliberate pin."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "DEV_FAST_TOOLCHAIN ?= nightly-2026-08-23\n"
@@ -249,13 +247,13 @@ def test_a_makefile_variable_declares_a_separate_pin(tmp_path: pathlib.Path) -> 
         "\tcargo +$(RUSTFMT_TOOLCHAIN) fmt --check\n",
     )
 
-    assert _read(tmp_path)["literals"] == []
+    assert read(tmp_path)["literals"] == []
 
 
 def test_an_inline_makefile_literal_is_reported(tmp_path: pathlib.Path) -> None:
     """A literal written into a recipe bypasses the pin inline."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "test:\n"
@@ -263,32 +261,36 @@ def test_an_inline_makefile_literal_is_reported(tmp_path: pathlib.Path) -> None:
         "\trustup run nightly-2026-10-30 rustc -vV\n",
     )
 
-    assert _literals(_read(tmp_path)) == [
+    assert literals(read(tmp_path)) == [
         ("makefile", "Makefile", "nightly-2026-10-30"),
         ("makefile", "Makefile", "nightly-2026-10-30"),
     ]
 
 
-def test_an_undefined_makefile_variable_is_reported(tmp_path: pathlib.Path) -> None:
-    """A recipe naming an undefined variable cannot be shown to be deliberate."""
-    _rust_repository(tmp_path)
-    _write(
+def test_a_toolchain_from_an_unsupplied_variable_is_indeterminate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A recipe naming a variable the Makefile never assigns has no known date."""
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
-        "test:\n\tRUSTUP_TOOLCHAIN=$(DEV_FAST_TOOLCHAIN) cargo test\n",
+        "test:\n\tRUSTUP_TOOLCHAIN=$(TOOLCHAIN) cargo test\n",
     )
 
-    assert _literals(_read(tmp_path)) == [
-        ("makefile", "Makefile", "$(DEV_FAST_TOOLCHAIN)")
-    ]
+    facts = read(tmp_path)
+
+    assert facts["literals"] == [], facts
+    assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
+    assert "cannot be determined" in facts["errors"][0]["reason"], facts
 
 
 def test_a_variable_that_expands_to_a_literal_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:
     """Indirection through a Make variable is not a declaration to keep apart."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "NIGHTLY = nightly-2026-10-30\n"
@@ -298,15 +300,15 @@ def test_a_variable_that_expands_to_a_literal_is_reported(
         "\tRUSTUP_TOOLCHAIN=$(TEST_TOOLCHAIN) cargo test\n",
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_makefile_without_literals_is_silent(tmp_path: pathlib.Path) -> None:
     """An ordinary Makefile draws no finding."""
-    _rust_repository(tmp_path)
-    _write(tmp_path, "Makefile", "test:\n\tcargo test --all-targets\n")
+    rust_repository(tmp_path)
+    write(tmp_path, "Makefile", "test:\n\tcargo test --all-targets\n")
 
-    assert _read(tmp_path)["literals"] == []
+    assert read(tmp_path)["literals"] == []
 
 
 @pytest.mark.parametrize("makefile", ["Makefile", "makefile", "GNUmakefile"])
@@ -314,47 +316,32 @@ def test_the_makefile_spelling_does_not_matter(
     tmp_path: pathlib.Path, makefile: str
 ) -> None:
     """Make reads any of the three spellings, so the reader finds the one present."""
-    _rust_repository(tmp_path)
-    _write(tmp_path, makefile, "test:\n\tcargo +nightly-2026-10-30 test\n")
+    rust_repository(tmp_path)
+    write(tmp_path, makefile, "test:\n\tcargo +nightly-2026-10-30 test\n")
 
-    assert _literals(_read(tmp_path)) == [("makefile", makefile, "nightly-2026-10-30")]
+    assert literals(read(tmp_path)) == [("makefile", makefile, "nightly-2026-10-30")]
 
 
 def test_a_host_suffixed_nightly_is_reported(tmp_path: pathlib.Path) -> None:
     """A target-triple suffix does not hide the date rustup selects."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
-        _workflow(
+        workflow(
             "      - run: cargo +nightly-2026-10-30-x86_64-unknown-linux-gnu test\n"
         ),
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == [
+    assert [text for _, _, text in literals(read(tmp_path))] == [
         "nightly-2026-10-30-x86_64-unknown-linux-gnu"
     ]
 
 
-def test_a_quoted_command_is_not_a_selection(tmp_path: pathlib.Path) -> None:
-    """Text an `echo` prints is an argument, not a command."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            '      - run: echo "cargo +nightly-2026-10-30 test"\n'
-            "      - run: true; cargo +nightly-2026-11-05 check\n"
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-11-05"]
-
-
 def test_a_matrix_toolchain_is_resolved(tmp_path: pathlib.Path) -> None:
     """A toolchain the matrix supplies is read from every leg."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
         """\
@@ -375,7 +362,7 @@ def test_a_matrix_toolchain_is_resolved(tmp_path: pathlib.Path) -> None:
         """,
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == [
+    assert [text for _, _, text in literals(read(tmp_path))] == [
         "nightly-2026-10-30",
         "nightly-2026-11-05",
         "nightly-2026-12-01",
@@ -384,8 +371,8 @@ def test_a_matrix_toolchain_is_resolved(tmp_path: pathlib.Path) -> None:
 
 def test_a_matrix_toolchain_in_a_command_is_resolved(tmp_path: pathlib.Path) -> None:
     """A `${{ matrix.x }}` argument is resolved before the date is read."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
         """\
@@ -400,46 +387,46 @@ def test_a_matrix_toolchain_in_a_command_is_resolved(tmp_path: pathlib.Path) -> 
         """,
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_command_variable_is_expanded(tmp_path: pathlib.Path) -> None:
     """A recipe that runs `$(CHECK)` selects whatever that variable commands."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "CHECK = cargo +nightly-2026-10-30 check\n\ntest:\n\t$(CHECK)\n",
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_silent_recipe_prefix_is_not_the_program(tmp_path: pathlib.Path) -> None:
     """Make's `@` prefix does not stop `cargo` being the program."""
-    _rust_repository(tmp_path)
-    _write(tmp_path, "Makefile", "test:\n\t@cargo +nightly-2026-10-30 test\n")
+    rust_repository(tmp_path)
+    write(tmp_path, "Makefile", "test:\n\t@cargo +nightly-2026-10-30 test\n")
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_quoted_make_reference_is_a_reference(tmp_path: pathlib.Path) -> None:
     """Quoting the reference must not hide that it is one."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "TOOL = $(PIN)\nPIN = nightly-2026-10-30\n\n"
         'test:\n\tRUSTUP_TOOLCHAIN="$(TOOL)" cargo test\n',
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_recovered_parse_is_carried_as_an_error(tmp_path: pathlib.Path) -> None:
     """A recovered parse may have lost the recipe that names the date."""
-    _rust_repository(tmp_path)
-    _write(tmp_path, "Makefile", "test:\n\tcargo test\n")
+    rust_repository(tmp_path)
+    write(tmp_path, "Makefile", "test:\n\tcargo test\n")
     report: typ.Any = {
         "schema_version": 1,
         "parse": {"status": "recovered"},
@@ -463,42 +450,22 @@ def test_a_makefile_outside_the_checkout_is_an_error(tmp_path: pathlib.Path) -> 
     """A symlink must not feed another repository's recipes into the audit."""
     checkout = tmp_path / "checkout"
     external = tmp_path / "external"
-    _rust_repository(checkout)
+    rust_repository(checkout)
     external.mkdir()
     (external / "Makefile").write_text("test:\n\tcargo test\n", encoding="utf-8")
     (checkout / "Makefile").symlink_to(external / "Makefile")
 
-    facts = _read(checkout)
+    facts = read(checkout)
 
     assert facts["literals"] == [], facts
     assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
     assert "outside the checkout" in facts["errors"][0]["reason"], facts
 
 
-def test_a_here_document_body_is_not_a_command(tmp_path: pathlib.Path) -> None:
-    """Text a quoted here-document feeds to a command is data, not a selection."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  cat <<'EOF' > notes.txt
-                  cargo +nightly-2026-10-30 check
-                  EOF
-                  cargo +nightly-2026-09-01 test
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-09-01"]
-
-
 def test_a_matrix_include_beside_an_axis_contributes(tmp_path: pathlib.Path) -> None:
     """An `include` leg written before an axis still adds its value."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         ".github/workflows/ci.yml",
         """\
@@ -515,39 +482,39 @@ def test_a_matrix_include_beside_an_axis_contributes(tmp_path: pathlib.Path) -> 
         """,
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_recipe_prefix_does_not_hide_an_assignment(tmp_path: pathlib.Path) -> None:
     """Make strips `@` before the shell, so the word is still an assignment."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "test:\n\t@RUSTUP_TOOLCHAIN=nightly-2026-10-30 cargo test\n",
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_command_variable_is_read_as_a_shell_command(tmp_path: pathlib.Path) -> None:
     """A quoted override in a command variable is shell syntax, not text."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         'CHECK = cargo "+nightly-2026-10-30" check\n\ntest:\n\t$(CHECK)\n',
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_command_variable_may_hold_several_commands(
     tmp_path: pathlib.Path,
 ) -> None:
     """Every command a command variable holds is read, not only the first."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "CHECK = cargo +nightly-2026-10-30 check && "
@@ -557,109 +524,18 @@ def test_a_command_variable_may_hold_several_commands(
         "\t$(CHECK)\n",
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == [
+    assert [text for _, _, text in literals(read(tmp_path))] == [
         "nightly-2026-10-30",
         "nightly-2026-09-01",
     ]
-
-
-def test_an_exported_toolchain_is_a_selection(tmp_path: pathlib.Path) -> None:
-    """`export RUSTUP_TOOLCHAIN=...` selects, and is not a workflow `env`."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  export RUSTUP_TOOLCHAIN=nightly-2026-10-30
-                  cargo check
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_wrapper_option_operand_is_not_the_program(tmp_path: pathlib.Path) -> None:
-    """`env -u NAME` takes an operand; the program after it still selects."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  env -u RUSTUP_TOOLCHAIN cargo +nightly-2026-10-30 test
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_an_assignment_after_a_shell_keyword_is_read(tmp_path: pathlib.Path) -> None:
-    """`if NAME=value cmd` still assigns, so the command is read."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  if RUSTUP_TOOLCHAIN=nightly-2026-10-30 cargo test; then true; fi
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_command_on_the_here_document_line_still_runs(
-    tmp_path: pathlib.Path,
-) -> None:
-    """`cat <<EOF; cargo ...` runs the command before the body is read."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  cat <<EOF; cargo +nightly-2026-10-30 test
-                  cargo +nightly-2026-09-01 check
-                  EOF
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_here_string_is_not_a_here_document(tmp_path: pathlib.Path) -> None:
-    """`<<<` feeds one word; it does not open a body that hides commands."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  cat <<< "hello"
-                  cargo +nightly-2026-10-30 test
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_prefixed_assignment_before_a_command_variable_is_read(
     tmp_path: pathlib.Path,
 ) -> None:
     """`@RUSTUP_TOOLCHAIN=stable $(CHECK)` still expands `CHECK`."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "CHECK = cargo +nightly-2026-10-30 check\n"
@@ -668,192 +544,16 @@ def test_a_prefixed_assignment_before_a_command_variable_is_read(
         "\t@RUSTUP_TOOLCHAIN=stable $(CHECK)\n",
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_an_escaped_quote_does_not_end_a_double_quoted_word(
-    tmp_path: pathlib.Path,
-) -> None:
-    r"""An escaped quote keeps the text inside the word it quotes.
-
-    `echo "\"; cargo +nightly-...; \""` prints the argument, so it selects
-    nothing.
-    """
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  echo "\\"; cargo +nightly-2026-10-30 test; \\""
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == []
-
-
-def test_a_command_substitution_runs_its_command(tmp_path: pathlib.Path) -> None:
-    """A quoted `$(cargo +nightly-...)` still executes cargo."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  version="$(cargo +nightly-2026-10-30 --version)"
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_wrapper_option_arity_follows_its_wrapper(tmp_path: pathlib.Path) -> None:
-    """`sudo -n` takes no operand, so the cargo after it is the program."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  sudo -n cargo +nightly-2026-10-30 test
-                  xargs -n 1 cargo +nightly-2026-09-01 test
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == [
-        "nightly-2026-10-30",
-        "nightly-2026-09-01",
-    ]
-
-
-def test_an_unspaced_here_document_hides_its_payload(tmp_path: pathlib.Path) -> None:
-    """`cat<<'EOF'` opens a here-document even without spaces around `<<`."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  cat<<'EOF'
-                  cargo +nightly-2026-09-01 check
-                  EOF
-                  cargo +nightly-2026-10-30 test
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
 
 
 def test_a_wrapped_command_variable_is_expanded(tmp_path: pathlib.Path) -> None:
     """`env $(CHECK)` runs the command `CHECK` names, overrides included."""
-    _rust_repository(tmp_path)
-    _write(
+    rust_repository(tmp_path)
+    write(
         tmp_path,
         "Makefile",
         "CHECK = cargo +nightly-2026-10-30 test\n\ntest:\n\tenv $(CHECK)\n",
     )
 
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_parenthesized_group_runs_its_command(tmp_path: pathlib.Path) -> None:
-    """`(cargo +nightly-...)` runs cargo in a subshell."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  (cargo +nightly-2026-10-30 check)
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_backquoted_command_substitution_runs_its_command(
-    tmp_path: pathlib.Path,
-) -> None:
-    """A backquoted `` `cargo +nightly-...` `` executes cargo."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  version=`cargo +nightly-2026-10-30 --version`
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_line_continuation_does_not_break_the_word(tmp_path: pathlib.Path) -> None:
-    r"""A word split by backslash-newline is joined, so the override is read.
-
-    `car\<newline>go` is cargo, and the toolchain after it is selected.
-    """
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  car\\
-                  go +nightly-2026-10-30 test
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_an_unquoted_here_document_body_still_expands(tmp_path: pathlib.Path) -> None:
-    """An unquoted delimiter expands `$(cargo +nightly-...)` in its body."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  cat <<EOF
-                  $(cargo +nightly-2026-10-30 --version)
-                  EOF
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_quoted_here_document_body_does_not_expand(tmp_path: pathlib.Path) -> None:
-    """A quoted delimiter keeps `$(cargo +nightly-...)` literal."""
-    _rust_repository(tmp_path)
-    _write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        _workflow(
-            """\
-              - run: |
-                  cat <<'EOF'
-                  $(cargo +nightly-2026-10-30 --version)
-                  EOF
-            """
-        ),
-    )
-
-    assert [text for _, _, text in _literals(_read(tmp_path))] == []
+    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]

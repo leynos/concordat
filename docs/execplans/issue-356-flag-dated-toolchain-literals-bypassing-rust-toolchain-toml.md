@@ -41,6 +41,14 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
 - Workflow literals are read on the raw decoded documents: a later rule
   promotion needs `line` on every finding, which the current `json_safe` facts
   lose.
+- A workflow declaration is the *reference* to an `env` name, not any literal
+  whose value happens to equal the entry. An inline copy of the date is a
+  second place to drift, so it is reported; RT-027 leaves the declared
+  reference out of the nightlies it compares with the pin, so both clauses
+  treat one declaration the same way.
+- A Makefile reference whose value the file never supplies is indeterminate,
+  not a dated literal: the reader cannot see whether the caller passes a date,
+  so it reports the uncertainty instead of guessing.
 
 ## Tasks
 
@@ -106,6 +114,21 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   backslash-newline is joined rather than broken; and an unquoted here-document
   body is read for the substitutions it expands, while a quoted delimiter keeps
   them literal. Five regression tests cover them.
+- A post-review correctness round found four gaps, all actioned: an inline
+  literal is reported even when an `env` entry carries the same date, because
+  only a reference to the declared name is exempt; a `NAME=value` line of its
+  own keeps its `RUSTUP_TOOLCHAIN=` selection; a recipe reference the Makefile
+  never supplies is an indeterminate error rather than a dated literal; and a
+  toolchain reached through `${{ env.NAME }}` is left out of the nightlies
+  RT-027 compares with the pin, so the two clauses cannot disagree. New tests
+  cover each, including a BDD scenario for a workflow-declared separate pin.
+- CodeScene reported complex methods and a bumpy road in the two production
+  modules and duplication and length in the test module. The scanner moved to
+  `toolchain_literal_scan.py`, the selection routes stayed in
+  `toolchain_literal_shell.py`, helpers were decomposed, and the shell-shape
+  tests became one 17-row table with shared fixtures in
+  `tests/unit/toolchain_literal_support.py`. `cs delta origin/main` now reports
+  no issues.
 
 ## Lessons
 
@@ -152,15 +175,30 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   it, so the body is read for those while its lines stay data. The same
   distinction decides whether a word is split: a backslash-newline joins its
   two halves, a space does not.
+- Exempting by *value* is not exempting by *declaration*. Filtering every
+  literal equal to an `env` entry's date hid a second, inline copy that drifts
+  on its own; only a reference to the declared name may be excused. The same
+  mistake in reverse made an unknown variable look like a dated literal: a
+  value the reader cannot see is indeterminate, never a finding.
+- Two clauses that read the same files must agree about what a declaration
+  means. RT-027 resolved `${{ env.NAME }}` and compared it with the pin while
+  RT-028 excused it, so a deliberately separate pin failed one clause and
+  passed the other; the CI facts now record that value as declared.
+- Metric gates reward decomposition that a review already wants: splitting the
+  scanner from the selection routes took the module under pylint's limit and
+  cleared CodeScene's complexity findings without changing behaviour.
 
-## Estate survey (2026-11-19)
+## Estate survey (2026-11-19, re-audited 2026-11-21)
 
 `uv run python -m scripts.parabellum_sweep --package rust-toolchain-policy`
 audited all 52 repositories of `docs/parabellum/estate.yaml` at their
 default-branch heads, and
 `... report --package rust-toolchain-policy --output docs/parabellum/rust-toolchain-policy-survey.md`
 rendered the survey; the records sit in the campaign ledger beside the
-`rust-makefile-baseline` campaign.
+`rust-makefile-baseline` campaign. The sweep was re-run with `--force` after
+the review corrections, because the env-value fix could hide or add findings;
+only the recorded repository heads moved, and the verdicts and finding text are
+unchanged.
 
 | Rule   | Severity | Repositories | Findings |
 | ------ | -------- | ------------ | -------- |

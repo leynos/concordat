@@ -1208,23 +1208,27 @@ provider to fix the date. The workflow facts (`toolchain_ci_facts.py`) are
 extracted from decoded YAML, not by searching text: a step's `uses` ref, its
 `with.toolchain` input (following a `${{ env.NAME }}` or `${{ matrix.NAME }}`
 reference, matrix `include` legs too), and `rustup` (`install`, `run`,
-`default`, `override set`) or `cargo +toolchain` commands in its `run`. The
-literal reader walks the same decoded documents and adds each `run` command's
-toolchain selections, a toolchain action's ref and `with.toolchain`, and
-`makeutil`'s report of the root `Makefile`, judging a variable declaration per
-referenced name. It splits a `run` script into shell commands first, through
-`toolchain_literal_shell.py`, so a date an `echo` prints or a here-document
-feeds to a command is not a selection, an `export RUSTUP_TOOLCHAIN=...` is, a
-command substitution runs its own command, and a `+toolchain` override is only
-read as a program's argument. A `src/lib.rs` that cannot be examined (an
-occupied path, a dangling link, a refusal) is carried as `lib_read_error` and
-makes RT-025 indeterminate for that crate; it is never read as the library's
-absence. A workflow that does not decode is recorded with its reason, which
-makes RT-026 and RT-027 indeterminate, and RT-028 too because that workflow
-could have named a date. A root `Makefile` the reader refuses, or one
-`makeutil` parses only partially, reaches RT-028 alone as an indeterminate
-finding; RT-026 and RT-027 do not read the Makefile. The window and the
-accepted Dependabot intervals reach Conftest as `data.parameters`.
+`default`, `override set`) or `cargo +toolchain` commands in its `run`. A value
+reached through `env` is recorded as declared: binding it to a name is how a
+repository says the pin is deliberately separate, so RT-027 does not compare it
+with the pin. The literal reader walks the same decoded documents and adds each
+`run` command's toolchain selections, a toolchain action's ref and
+`with.toolchain`, and `makeutil`'s report of the root `Makefile`, judging a
+variable declaration per referenced name. It splits a `run` script into shell
+commands first, through `toolchain_literal_scan.py`, and reads the selection
+routes in `toolchain_literal_shell.py`, so a date an `echo` prints or a
+here-document feeds to a command is not a selection, an
+`export RUSTUP_TOOLCHAIN=...` is, a command substitution runs its own command,
+and a `+toolchain` override is only read as a program's argument. A
+`src/lib.rs` that cannot be examined (an occupied path, a dangling link, a
+refusal) is carried as `lib_read_error` and makes RT-025 indeterminate for that
+crate; it is never read as the library's absence. A workflow that does not
+decode is recorded with its reason, which makes RT-026 and RT-027
+indeterminate, and RT-028 too because that workflow could have named a date. A
+root `Makefile` the reader refuses, one `makeutil` parses only partially, or a
+recipe reference the Makefile never supplies, reaches RT-028 alone as an
+indeterminate finding; RT-026 and RT-027 do not read the Makefile. The window
+and the accepted Dependabot intervals reach Conftest as `data.parameters`.
 
 `dependabot-update-shape` takes its own as well. `build_dependabot_envelope` (in
 `dependabot_envelope.py`) assembles a `policy-input/dependabot-update-shape`

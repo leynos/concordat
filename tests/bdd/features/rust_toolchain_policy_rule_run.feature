@@ -58,3 +58,9 @@ Feature: Rust toolchain policy rule run
     When I audit the checkout for its toolchain policy
     Then the toolchain audit exit status is 0
     And the toolchain audit table reports zero findings
+
+  Scenario: a workflow that declares a separate pin is not reported
+    Given a fresh pin whose workflow declares a separate fast toolchain
+    When I audit the checkout for its toolchain policy
+    Then the toolchain audit exit status is 0
+    And the toolchain audit table reports zero findings

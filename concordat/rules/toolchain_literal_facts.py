@@ -13,17 +13,18 @@ Five decisions are made here rather than in the policy:
   input, and the action's own ref. A `run` script is split into shell commands,
   so `echo "cargo +nightly-..."` prints a date rather than selecting it, and a
   `${{ matrix.NAME }}` value is resolved to every leg the matrix declares.
-* a literal the workflow's document, job or step `env` declares is a
-  deliberately separate pin, and is not reported. Declaring it there is the
-  explicit way for a repository to say the pin is separate.
+* a workflow value a command reaches through `${{ env.NAME }}` is a
+  deliberately separate pin, and is not reported, because the file binds the
+  date to a name. An inline date that happens to equal an `env` entry is still
+  reported: the file writes the date twice, so the second copy can drift.
 * a Makefile is read from the `makeutil` report, because a recipe is what Make
   runs. A variable whose whole value is the date, at the name the recipe
   writes, is a deliberate separate pin; a variable that merely contains a date
   in a command is not. A literal written inline is reported; a date reached
-  through another variable is reported at its expanded value; a command that
-  is itself a variable is expanded so its selections are read; and a reference
-  to a variable the Makefile never assigns, where no included file could, is
-  reported as the reference, since nothing declares it.
+  through another variable is reported at its expanded value; and a command
+  that is itself a variable is expanded so its selections are read. A
+  reference the Makefile never assigns, where no included file could, leaves
+  the toolchain unknown rather than dated, so it is carried as an error.
 * only dated nightlies are read. A numeric literal in CI is usually a host
   tool's toolchain, which is why RT-027 judges dated nightlies only too.
 * the findings belong to the envelope builder. The facts readers run at the
@@ -40,20 +41,25 @@ import typing as typ
 from concordat.errors import OperationalRuleError
 
 from .makefile_expansion import expand, shown, single_assignments
-from .makefile_facts import MakefileInspector, MakefileRefusedError, inspect_makefile
+from .makefile_facts import (
+    MakefileInspector,
+    MakefileRefusedError,
+    MakeutilReport,
+    inspect_makefile,
+)
 from .markdown_envelope import (
     OPERATION_READ_MAKEFILE,
     is_file,
     load_workflows,
     resolved_root,
 )
+from .toolchain_literal_scan import shell_commands
 from .toolchain_literal_shell import (
     Selection,
     command_selections,
     program_position,
     reference_name,
     selection_in,
-    shell_commands,
 )
 
 if typ.TYPE_CHECKING:
@@ -96,8 +102,8 @@ class LiteralFacts(typ.TypedDict):
     kind:
         ``workflow`` or ``makefile``.
     text:
-        The literal as written, or the reference that stands for a value the
-        reader cannot see (``$(DEV_FAST_TOOLCHAIN)``).
+        The dated nightly as written. A reference that expands to one is
+        reported at its expanded value, so this is always a date.
     """
 
     path: str
@@ -165,34 +171,6 @@ def _literals_in(text: str) -> list[str]:
     return [match.group(0) for match in DATED_NIGHTLY.finditer(text)]
 
 
-def _scalar_texts(value: object) -> cabc.Iterator[str]:
-    """Yield every scalar in a decoded YAML node as text."""
-    # `bool()` must precede `int()`: YAML decodes `true` to a bool, and
-    # `isinstance(True, int)` holds, so a later branch would render it as 1.
-    match value:
-        case bool():
-            yield str(value).lower()
-        case str() | int() | float():
-            yield str(value)
-        case dict():
-            for key, item in typ.cast("dict[object, object]", value).items():
-                yield from _scalar_texts(key)
-                yield from _scalar_texts(item)
-        case list():
-            for item in typ.cast("list[object]", value):
-                yield from _scalar_texts(item)
-
-
-def _env_literals(node: object) -> frozenset[str]:
-    """Return the dated nightlies a mapping's `env` table declares."""
-    if not isinstance(node, dict):
-        return frozenset()
-    env = node.get("env")
-    return frozenset(
-        literal for text in _scalar_texts(env) for literal in _literals_in(text)
-    )
-
-
 def _steps(job: object) -> cabc.Iterator[dict[str, object]]:
     """Yield every step mapping of one job."""
     steps = job.get("steps") if isinstance(job, dict) else None
@@ -251,24 +229,33 @@ def _matrix_values(job: object) -> dict[str, list[str]]:
     values: dict[str, list[str]] = {}
     for key, listed in matrix.items():
         entries = listed if isinstance(listed, list) else []
-        if key == "include":
-            for name, texts in _include_values(entries).items():
-                values.setdefault(name, []).extend(texts)
-            continue
-        texts = [text for item in entries if (text := _scalar_text(item))]
-        if texts:
+        for name, texts in _axis_values(str(key), entries).items():
             # An `include` leg that the axis does not carry adds a value
             # GitHub will still run, so an axis must not replace it.
-            values.setdefault(str(key), []).extend(texts)
+            values.setdefault(name, []).extend(texts)
     return values
+
+
+def _axis_values(key: str, entries: cabc.Sequence[object]) -> dict[str, list[str]]:
+    """Return the values one matrix axis or `include` list contributes.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Each name the entry gives and every value it takes.
+    """
+    if key == "include":
+        return _include_values(entries)
+    texts = [text for item in entries if (text := _scalar_text(item))]
+    return {key: texts} if texts else {}
 
 
 def _resolved(text: str, matrix: cabc.Mapping[str, list[str]]) -> list[str]:
     """Return the values *text* names, following a matrix reference.
 
-    A `${{ env.NAME }}` reference is left as written: an `env` entry that
-    declares the date is exempt by its declaration, so resolving it would only
-    produce a value the same walk filters out.
+    A `${{ env.NAME }}` reference is left as written: binding the date to a
+    name is how a workflow declares a deliberately separate pin, so the
+    reference is not a restated literal.
 
     Returns
     -------
@@ -337,26 +324,27 @@ def _step_literals(
 def _workflow_literals(document: object, path: str) -> list[LiteralFacts]:
     """Return the literals one decoded workflow selects.
 
+    An `env` entry is not read here. A command that reaches it through
+    `${{ env.NAME }}` writes no date, so there is nothing to report; a date
+    written inline is reported even when an `env` entry carries the same date,
+    because that second copy is the one that drifts.
+
     Returns
     -------
     list[LiteralFacts]
-        The literals the workflow names outside what its `env` tables declare.
+        The literals the workflow writes where it selects a toolchain.
     """
     jobs = document.get("jobs") if isinstance(document, dict) else None
     if not isinstance(jobs, dict):
         return []
-    document_declared = _env_literals(document)
     found: list[LiteralFacts] = []
     for job in jobs.values():
-        job_declared = document_declared | _env_literals(job)
         matrix = _matrix_values(job)
-        for step in _steps(job):
-            declared = job_declared | _env_literals(step)
-            found.extend(
-                {"path": path, "kind": KIND_WORKFLOW, "text": literal}
-                for literal in _step_literals(step, matrix)
-                if literal not in declared
-            )
+        found.extend(
+            {"path": path, "kind": KIND_WORKFLOW, "text": literal}
+            for step in _steps(job)
+            for literal in _step_literals(step, matrix)
+        )
     return found
 
 
@@ -375,49 +363,77 @@ def _is_declared_date(value: str) -> bool:
     return DATED_NIGHTLY.fullmatch(value.strip()) is not None
 
 
-def _reported_texts(selection: Selection, table: VariableTable) -> list[str]:
-    """Return the texts to report for one recipe selection; empty when declared.
+def _declares_its_own_date(name: str, table: VariableTable) -> bool:
+    """Return whether *name* is declared where the recipe writes it.
 
-    A variable assigned the date itself, at the name the recipe writes, is a
-    deliberate separate pin, as cuprum's `DEV_FAST_TOOLCHAIN` is. A recipe
-    that reaches the date through another variable is not: the date is not
-    declared where it is used, so it is reported at its expanded value. A
-    reference to a name the Makefile never assigns is reported as written,
-    because nothing declares it. When the Makefile includes other files, a
-    name the report does not carry may be assigned by one of them, so it is
-    treated as declared rather than guessed at.
+    A variable assigned the date itself is a deliberate separate pin, as
+    cuprum's `DEV_FAST_TOOLCHAIN` is. A name the table does not carry is
+    declared when the Makefile assigns it some other way, or when an included
+    file may assign it; neither says the value is a date.
 
     Returns
     -------
-    list[str]
-        The literal texts to report, or an empty list when the selection is
-        declared as deliberately separate.
+    bool
+        Whether the reference names a declared separate pin.
+    """
+    written = table.values.get(name)
+    if written is not None:
+        return _is_declared_date(shown(written))
+    if name in table.assigned:
+        return True
+    return table.has_includes
+
+
+def _reported_texts(
+    selection: Selection, table: VariableTable
+) -> tuple[list[str], str | None]:
+    """Return the texts to report for one recipe selection, and any unknown.
+
+    A variable assigned the date itself, at the name the recipe writes, is a
+    deliberate separate pin. A recipe that reaches the date through another
+    variable is not: the date is not declared where it is used, so it is
+    reported at its expanded value. A reference the Makefile never assigns,
+    where no included file could, has a value the reader cannot see: it is
+    carried as an unknown reference rather than guessed to be a date.
+
+    Returns
+    -------
+    tuple[list[str], str | None]
+        The literal texts to report, and the reference whose value is unknown.
     """
     if not selection.is_reference:
-        return _literals_in(selection.text)
+        return _literals_in(selection.text), None
     name = reference_name(selection.text)
     if name is None:
-        return []
-    written = table.values.get(name)
-    if written is not None and _is_declared_date(shown(written)):
-        return []
-    if written is None and (name in table.assigned or table.has_includes):
-        return []
+        return [], None
+    if _declares_its_own_date(name, table):
+        return [], None
     return _expanded_literals(selection, table)
 
 
-def _expanded_literals(selection: Selection, table: VariableTable) -> list[str]:
-    """Return the literals a reference expands to, or the reference itself."""
+def _expanded_literals(
+    selection: Selection, table: VariableTable
+) -> tuple[list[str], str | None]:
+    """Return the literals a reference expands to, or the reference if unknown.
+
+    Returns
+    -------
+    tuple[list[str], str | None]
+        The literal texts the reference expands to, and the reference itself
+        when it expands to a name whose value is not in the table.
+    """
     expanded = shown(expand(selection.text, table.values).text).strip()
     literals = _literals_in(expanded)
     if literals:
-        return literals
+        return literals, None
     if not expanded.startswith("$"):
-        return []
+        return [], None
     name = reference_name(expanded)
-    if name is None or name in table.assigned or table.has_includes:
-        return []
-    return [expanded]
+    if name is None:
+        return [], None
+    if _declares_its_own_date(name, table):
+        return [], None
+    return [], expanded
 
 
 def _expanded_commands(
@@ -458,24 +474,44 @@ def _expanded_commands(
     return shell_commands(command) if command else None
 
 
-def _recipe_texts(text: str, table: VariableTable) -> list[str]:
-    """Return the literal texts to report for one recipe line."""
+def _selection_texts(
+    selections: cabc.Iterable[Selection], table: VariableTable
+) -> tuple[list[str], list[str]]:
+    """Return the texts to report for *selections* and the references left unknown.
+
+    Returns
+    -------
+    tuple[list[str], list[str]]
+        The literal texts to report, and the references whose value the
+        Makefile never supplies.
+    """
+    texts: list[str] = []
+    unknown: list[str] = []
+    for selection in selections:
+        found, missing = _reported_texts(selection, table)
+        texts.extend(found)
+        if missing is not None:
+            unknown.append(missing)
+    return texts, unknown
+
+
+def _recipe_texts(text: str, table: VariableTable) -> tuple[list[str], list[str]]:
+    """Return the literal texts one recipe line selects, and its unknowns.
+
+    Returns
+    -------
+    tuple[list[str], list[str]]
+        The literal texts to report, and the references whose value the
+        Makefile never supplies.
+    """
     raw = shown(text)
-    texts = [
-        value
-        for selection in command_selections(raw)
-        for value in _reported_texts(selection, table)
-    ]
+    texts, unknown = _selection_texts(command_selections(raw), table)
     for words in shell_commands(raw):
-        expanded = _expanded_commands(words, table)
-        if expanded is None:
-            continue
-        for command in expanded:
-            for selection in selection_in(command):
-                for value in _reported_texts(selection, table):
-                    if value not in texts:
-                        texts.append(value)
-    return texts
+        for command in _expanded_commands(words, table) or []:
+            found, missing = _selection_texts(selection_in(command), table)
+            unknown.extend(missing)
+            texts.extend(value for value in found if value not in texts)
+    return texts, unknown
 
 
 def _makefile_path(
@@ -512,9 +548,20 @@ def _makefile_path(
     return None, None
 
 
+def _unknown_reference(name: str, reference: str) -> LiteralError:
+    """Return the indeterminate finding a recipe's unresolved reference makes."""
+    return {
+        "path": name,
+        "reason": (
+            f"a recipe selects {reference}, which the Makefile does not "
+            "assign, so the toolchain it names cannot be determined"
+        ),
+    }
+
+
 def _makefile_literals(
     checkout: pathlib.Path, inspect: MakefileInspector
-) -> tuple[list[LiteralFacts], LiteralError | None]:
+) -> tuple[list[LiteralFacts], list[LiteralError]]:
     """Return the literals the root Makefile's recipes select.
 
     The recipes are read as written, so a reference is still a reference and
@@ -523,34 +570,37 @@ def _makefile_literals(
 
     Returns
     -------
-    tuple[list[LiteralFacts], LiteralError | None]
-        The literals, and why the Makefile could not be read (None when it read
-        cleanly, or when the checkout has no Makefile).
+    tuple[list[LiteralFacts], list[LiteralError]]
+        The literals, and each reason the Makefile's selections could not be
+        read: a refusal, an incomplete parse, or a reference whose value the
+        Makefile never supplies.
     """
-    error: LiteralError | None
-    makefile, error = _makefile_path(checkout)
+    makefile, unreadable = _makefile_path(checkout)
     if makefile is None:
-        return [], error
+        return [], [] if unreadable is None else [unreadable]
     try:
         facts = inspect(makefile)
     except MakefileRefusedError as refusal:
-        return [], {"path": makefile.name, "reason": str(refusal)}
+        return [], [{"path": makefile.name, "reason": str(refusal)}]
     except OperationalRuleError as failure:
         # An absent or unusable `makeutil` is a deployment fault that stops
         # every other package too. This one reports it as indeterminate rather
         # than making the package unusable, so a repository cannot silence
         # RT-028 by taking the tool away.
-        return [], {"path": makefile.name, "reason": str(failure)}
+        return [], [{"path": makefile.name, "reason": str(failure)}]
     report = facts.report
+    errors: list[LiteralError] = []
     if facts.status != "complete":
         # A recovered parse still emits facts, but they may be incomplete, so
         # a recipe that selects a dated nightly could be the part it lost.
-        error = LiteralError(
-            path=makefile.name,
-            reason=(
-                "makeutil recovered from a parse error, so a recipe that "
-                "selects a dated nightly may be missing"
-            ),
+        errors.append(
+            LiteralError(
+                path=makefile.name,
+                reason=(
+                    "makeutil recovered from a parse error, so a recipe that "
+                    "selects a dated nightly may be missing"
+                ),
+            )
         )
     values = single_assignments(report["variables"])
     table = VariableTable(
@@ -558,15 +608,31 @@ def _makefile_literals(
         assigned=values.assigned,
         has_includes=bool(report["includes"]),
     )
-    return (
-        [
-            {"path": makefile.name, "kind": KIND_MAKEFILE, "text": text}
-            for rule in report["rules"]
-            for recipe in rule["recipes"]
-            for text in _recipe_texts(recipe["text"], table)
-        ],
-        error,
-    )
+    literals, recipe_errors = _recipe_findings(report, makefile.name, table)
+    return literals, [*errors, *recipe_errors]
+
+
+def _recipe_findings(
+    report: MakeutilReport, name: str, table: VariableTable
+) -> tuple[list[LiteralFacts], list[LiteralError]]:
+    """Return the literals and unknowns every recipe of *report* selects.
+
+    Returns
+    -------
+    tuple[list[LiteralFacts], list[LiteralError]]
+        The literals the recipes select, and the references whose value the
+        Makefile never supplies.
+    """
+    literals: list[LiteralFacts] = []
+    errors: list[LiteralError] = []
+    for rule in report["rules"]:
+        for recipe in rule["recipes"]:
+            texts, unknown = _recipe_texts(recipe["text"], table)
+            literals.extend(
+                {"path": name, "kind": KIND_MAKEFILE, "text": text} for text in texts
+            )
+            errors.extend(_unknown_reference(name, reference) for reference in unknown)
+    return literals, errors
 
 
 def toolchain_literal_facts(
@@ -594,11 +660,7 @@ def toolchain_literal_facts(
         The literals, whether the checkout pins its toolchain, and the files
         that could not be read.
     """
-    if (
-        toolchain is None
-        or toolchain["parse_error"] is not None
-        or not isinstance(toolchain["channel"], str)
-    ):
+    if not _pins_a_toolchain(toolchain):
         # Without a pin there is nothing for a literal to bypass, and RT-022
         # already reports the pin that is missing or unreadable.
         return {"reads_pin": False, "literals": [], "errors": []}
@@ -609,8 +671,23 @@ def toolchain_literal_facts(
             literals.extend(_workflow_literals(workflow["parsed"], workflow["path"]))
         else:
             errors.append({"path": workflow["path"], "reason": workflow["error"]})
-    makefile_literals, makefile_error = _makefile_literals(checkout, inspect)
+    makefile_literals, makefile_errors = _makefile_literals(checkout, inspect)
     literals.extend(makefile_literals)
-    if makefile_error is not None:
-        errors.append(makefile_error)
+    errors.extend(makefile_errors)
     return {"reads_pin": True, "literals": literals, "errors": errors}
+
+
+def _pins_a_toolchain(toolchain: ToolchainFacts | None) -> bool:
+    """Return whether the envelope read a pinned channel.
+
+    Returns
+    -------
+    bool
+        False when there is no pin fact, it records a parse error, or its
+        channel is not a string.
+    """
+    if toolchain is None:
+        return False
+    if toolchain["parse_error"] is not None:
+        return False
+    return isinstance(toolchain["channel"], str)
