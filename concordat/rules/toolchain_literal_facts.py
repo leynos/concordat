@@ -23,8 +23,10 @@ Five decisions are made here rather than in the policy:
   in a command is not. A literal written inline is reported; a date reached
   through another variable is reported at its expanded value; and a command
   that is itself a variable is expanded so its selections are read. A
-  reference the Makefile never assigns, where no included file could, leaves
-  the toolchain unknown rather than dated, so it is carried as an error.
+  reference whose value the file never supplies — because it never assigns the
+  name, assigns it in a form this reader cannot substitute, or leaves it to an
+  included file — leaves the toolchain unknown rather than dated, so it is
+  carried as an error.
 * only dated nightlies are read. A numeric literal in CI is usually a host
   tool's toolchain, which is why RT-027 judges dated nightlies only too.
 * the findings belong to the envelope builder. The facts readers run at the
@@ -34,7 +36,6 @@ Five decisions are made here rather than in the policy:
 
 from __future__ import annotations
 
-import dataclasses
 import re
 import typing as typ
 
@@ -144,26 +145,6 @@ class ToolchainLiteralFacts(typ.TypedDict):
     reads_pin: bool
     literals: list[LiteralFacts]
     errors: list[LiteralError]
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class VariableTable:
-    """A Makefile's substitutable variables, and the names it leaves unknown.
-
-    Attributes
-    ----------
-    values:
-        Each variable with one plain assignment, mapped to its raw value.
-    assigned:
-        Every name the Makefile assigns, whether or not it can be substituted.
-    has_includes:
-        Whether the Makefile includes another file, which may assign a name
-        this table does not carry.
-    """
-
-    values: cabc.Mapping[str, str]
-    assigned: cabc.Container[str]
-    has_includes: bool
 
 
 def _literals_in(text: str) -> list[str]:
@@ -363,38 +344,37 @@ def _is_declared_date(value: str) -> bool:
     return DATED_NIGHTLY.fullmatch(value.strip()) is not None
 
 
-def _declares_its_own_date(name: str, table: VariableTable) -> bool:
+def _declares_its_own_date(name: str, values: cabc.Mapping[str, str]) -> bool:
     """Return whether *name* is declared where the recipe writes it.
 
     A variable assigned the date itself is a deliberate separate pin, as
-    cuprum's `DEV_FAST_TOOLCHAIN` is. A name the table does not carry is
-    declared when the Makefile assigns it some other way, or when an included
-    file may assign it; neither says the value is a date.
+    cuprum's `DEV_FAST_TOOLCHAIN` is. A name the table does not carry is not
+    declared: the file may assign it in a form this reader cannot substitute,
+    or an included file may assign it, but neither shows the value, so it
+    cannot be established as a separate pin.
 
     Returns
     -------
     bool
         Whether the reference names a declared separate pin.
     """
-    written = table.values.get(name)
-    if written is not None:
-        return _is_declared_date(shown(written))
-    if name in table.assigned:
-        return True
-    return table.has_includes
+    written = values.get(name)
+    if written is None:
+        return False
+    return _is_declared_date(shown(written))
 
 
 def _reported_texts(
-    selection: Selection, table: VariableTable
+    selection: Selection, values: cabc.Mapping[str, str]
 ) -> tuple[list[str], str | None]:
     """Return the texts to report for one recipe selection, and any unknown.
 
     A variable assigned the date itself, at the name the recipe writes, is a
     deliberate separate pin. A recipe that reaches the date through another
     variable is not: the date is not declared where it is used, so it is
-    reported at its expanded value. A reference the Makefile never assigns,
-    where no included file could, has a value the reader cannot see: it is
-    carried as an unknown reference rather than guessed to be a date.
+    reported at its expanded value. A reference whose value the file never
+    supplies has a value the reader cannot see: it is carried as an unknown
+    reference rather than guessed to be a date.
 
     Returns
     -------
@@ -406,13 +386,13 @@ def _reported_texts(
     name = reference_name(selection.text)
     if name is None:
         return [], None
-    if _declares_its_own_date(name, table):
+    if _declares_its_own_date(name, values):
         return [], None
-    return _expanded_literals(selection, table)
+    return _expanded_literals(selection, values)
 
 
 def _expanded_literals(
-    selection: Selection, table: VariableTable
+    selection: Selection, values: cabc.Mapping[str, str]
 ) -> tuple[list[str], str | None]:
     """Return the literals a reference expands to, or the reference if unknown.
 
@@ -422,7 +402,7 @@ def _expanded_literals(
         The literal texts the reference expands to, and the reference itself
         when it expands to a name whose value is not in the table.
     """
-    expanded = shown(expand(selection.text, table.values).text).strip()
+    expanded = shown(expand(selection.text, values).text).strip()
     literals = _literals_in(expanded)
     if literals:
         return literals, None
@@ -431,13 +411,13 @@ def _expanded_literals(
     name = reference_name(expanded)
     if name is None:
         return [], None
-    if _declares_its_own_date(name, table):
+    if _declares_its_own_date(name, values):
         return [], None
     return [], expanded
 
 
 def _expanded_commands(
-    words: list[str], table: VariableTable
+    words: list[str], values: cabc.Mapping[str, str]
 ) -> list[list[str]] | None:
     """Return the commands a variable-named recipe expands to, or None.
 
@@ -466,7 +446,7 @@ def _expanded_commands(
         return None
     substitutable = {
         name: value
-        for name, value in table.values.items()
+        for name, value in values.items()
         if not _is_declared_date(shown(value))
     }
     expanded = shown(expand(program, substitutable).text)
@@ -475,7 +455,7 @@ def _expanded_commands(
 
 
 def _selection_texts(
-    selections: cabc.Iterable[Selection], table: VariableTable
+    selections: cabc.Iterable[Selection], values: cabc.Mapping[str, str]
 ) -> tuple[list[str], list[str]]:
     """Return the texts to report for *selections* and the references left unknown.
 
@@ -488,14 +468,16 @@ def _selection_texts(
     texts: list[str] = []
     unknown: list[str] = []
     for selection in selections:
-        found, missing = _reported_texts(selection, table)
+        found, missing = _reported_texts(selection, values)
         texts.extend(found)
         if missing is not None:
             unknown.append(missing)
     return texts, unknown
 
 
-def _recipe_texts(text: str, table: VariableTable) -> tuple[list[str], list[str]]:
+def _recipe_texts(
+    text: str, values: cabc.Mapping[str, str]
+) -> tuple[list[str], list[str]]:
     """Return the literal texts one recipe line selects, and its unknowns.
 
     Returns
@@ -505,10 +487,10 @@ def _recipe_texts(text: str, table: VariableTable) -> tuple[list[str], list[str]
         Makefile never supplies.
     """
     raw = shown(text)
-    texts, unknown = _selection_texts(command_selections(raw), table)
+    texts, unknown = _selection_texts(command_selections(raw), values)
     for words in shell_commands(raw):
-        for command in _expanded_commands(words, table) or []:
-            found, missing = _selection_texts(selection_in(command), table)
+        for command in _expanded_commands(words, values) or []:
+            found, missing = _selection_texts(selection_in(command), values)
             unknown.extend(missing)
             texts.extend(value for value in found if value not in texts)
     return texts, unknown
@@ -603,17 +585,12 @@ def _makefile_literals(
             )
         )
     values = single_assignments(report["variables"])
-    table = VariableTable(
-        values=values,
-        assigned=values.assigned,
-        has_includes=bool(report["includes"]),
-    )
-    literals, recipe_errors = _recipe_findings(report, makefile.name, table)
+    literals, recipe_errors = _recipe_findings(report, makefile.name, values)
     return literals, [*errors, *recipe_errors]
 
 
 def _recipe_findings(
-    report: MakeutilReport, name: str, table: VariableTable
+    report: MakeutilReport, name: str, values: cabc.Mapping[str, str]
 ) -> tuple[list[LiteralFacts], list[LiteralError]]:
     """Return the literals and unknowns every recipe of *report* selects.
 
@@ -627,7 +604,7 @@ def _recipe_findings(
     errors: list[LiteralError] = []
     for rule in report["rules"]:
         for recipe in rule["recipes"]:
-            texts, unknown = _recipe_texts(recipe["text"], table)
+            texts, unknown = _recipe_texts(recipe["text"], values)
             literals.extend(
                 {"path": name, "kind": KIND_MAKEFILE, "text": text} for text in texts
             )

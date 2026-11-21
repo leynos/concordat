@@ -285,6 +285,23 @@ def test_a_toolchain_from_an_unsupplied_variable_is_indeterminate(
     assert "cannot be determined" in facts["errors"][0]["reason"], facts
 
 
+def test_an_include_does_not_declare_an_unsupplied_variable(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An include may supply the name, but it cannot be shown to be a pin."""
+    rust_repository(tmp_path)
+    write(
+        tmp_path,
+        "Makefile",
+        "-include optional.mk\n\ntest:\n\tRUSTUP_TOOLCHAIN=$(TOOLCHAIN) cargo test\n",
+    )
+
+    facts = read(tmp_path)
+
+    assert facts["literals"] == [], facts
+    assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
+
+
 def test_a_variable_that_expands_to_a_literal_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:

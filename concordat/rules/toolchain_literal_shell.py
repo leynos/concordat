@@ -345,10 +345,9 @@ def _program(words: list[str]) -> tuple[list[Selection], str | None, list[str]]:
     """
     found = _executable(words)
     if found is None:
-        # `RUSTUP_TOOLCHAIN=...` on a line of its own still selects for the
-        # commands that follow it.
-        stripped = _without_recipe_prefix(words)
-        return _assignments(stripped[: _prefix_end(stripped)]), None, []
+        # An assignment on a line of its own reaches a later command only
+        # through `export`, which `command_selections` follows.
+        return [], None, []
     index, program, selections = found
     return selections, program, words[index + 1 :]
 
@@ -357,6 +356,72 @@ def _override(args: list[str]) -> cabc.Iterator[Selection]:
     """Yield cargo's `+toolchain` override when it is the first argument."""
     if args and args[0].startswith("+"):
         yield _toolchain_word(args[0][1:])
+
+
+def _assignment_in(words: list[str]) -> Selection | None:
+    """Return the toolchain assignment among *words*, if any."""
+    return next(
+        (
+            selection
+            for word in words
+            if (selection := _assignment_selection(word)) is not None
+        ),
+        None,
+    )
+
+
+def _names_toolchain(word: str) -> bool:
+    """Return whether *word* is the toolchain variable, valued or bare."""
+    return word.partition("=")[0] == "RUSTUP_TOOLCHAIN"
+
+
+def _exports_toolchain(args: list[str]) -> bool:
+    """Return whether an `export` command publishes the toolchain variable."""
+    return any(_names_toolchain(word) for word in args)
+
+
+def _publishes_value(args: list[str]) -> bool:
+    """Return whether an `export` command gives the variable a value of its own."""
+    return any("=" in word for word in args)
+
+
+def _exported_assignments(commands: cabc.Iterable[list[str]]) -> list[Selection]:
+    """Return the assignments an `export` publishes for the commands after it.
+
+    A variable set on its own line is not in a later command's environment
+    until `export` names it, and once exported a later assignment is visible
+    too. An assignment prefixed to a command is read by `selection_in`.
+
+    Returns
+    -------
+    list[Selection]
+        The selections the exports publish, in the order they take effect.
+    """
+    found: list[Selection] = []
+    pending: Selection | None = None
+    is_exported = False
+    for words in commands:
+        _, program, args = _program(words)
+        if program is None:
+            assignment = _assignment_in(words)
+            if assignment is not None:
+                pending = assignment
+            if not is_exported:
+                continue
+            if pending is not None:
+                found.append(pending)
+            continue
+        if program != "export":
+            continue
+        if not _exports_toolchain(args):
+            continue
+        if _publishes_value(args):
+            # `selection_in` already reports the value the export gives.
+            pending = None
+        elif pending is not None:
+            found.append(pending)
+        is_exported = True
+    return found
 
 
 def selection_in(words: list[str]) -> cabc.Iterator[Selection]:
@@ -403,7 +468,9 @@ def command_selections(text: str) -> list[Selection]:
 
     A command substitution runs its own command, even inside double quotes, so
     `VERSION="$(cargo +nightly-... --version)"` selects that toolchain. Its
-    selections follow the selections of the text that contains it.
+    selections follow the selections of the text that contains it. An
+    assignment on a line of its own selects only once `export` publishes it,
+    because a shell variable reaches a later command's environment only then.
 
     Returns
     -------
@@ -412,6 +479,7 @@ def command_selections(text: str) -> list[Selection]:
     """
     commands, substitutions = scan_text(text)
     selections = [selection for words in commands for selection in selection_in(words)]
+    selections.extend(_exported_assignments(commands))
     for inner in substitutions:
         selections.extend(command_selections(inner))
     return selections

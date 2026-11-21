@@ -2318,9 +2318,12 @@ a reference draws no finding, which is how cuprum keeps a fast toolchain beside
 a `rust/` directory pinned to stable, and RT-027 leaves the same reference out
 of the nightlies it compares with the pin so the two clauses cannot disagree. A
 date written inline is reported even when an `env` entry carries the same date,
-because the second copy is the one that drifts. A recipe reference to a
-variable the Makefile never assigns, where no included file could, leaves the
-toolchain unknown rather than dated, so it is indeterminate. Its severity is the
+because the second copy is the one that drifts. A recipe reference whose value
+the file never supplies — it never assigns the name, assigns it in a form the
+reader cannot substitute, or leaves it to an included file — leaves the
+toolchain unknown rather than dated, so it is indeterminate. An assignment on a
+line of its own selects only once `export` publishes it, because a shell
+variable reaches a later command's environment only then. Its severity is the
 `literal_severity` parameter, `warning` by default, so the estate can be
 surveyed before the clause blocks a merge, and promotable to `error` once it is
 clear.

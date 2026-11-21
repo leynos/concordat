@@ -41,7 +41,12 @@ _CASES: typ.Final = [
     pytest.param(
         "RUSTUP_TOOLCHAIN=nightly-2026-10-30\nexport RUSTUP_TOOLCHAIN\ncargo test\n",
         ["nightly-2026-10-30"],
-        id="assignment-alone-selects-for-what-follows",
+        id="assignment-alone-selects-once-exported",
+    ),
+    pytest.param(
+        "RUSTUP_TOOLCHAIN=nightly-2026-10-30\ncargo test\n",
+        [],
+        id="unexported-assignment-does-not-reach-cargo",
     ),
     pytest.param(
         "env -u RUSTUP_TOOLCHAIN cargo +nightly-2026-10-30 test\n",

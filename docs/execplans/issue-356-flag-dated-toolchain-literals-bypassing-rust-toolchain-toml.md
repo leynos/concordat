@@ -129,6 +129,13 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   tests became one 17-row table with shared fixtures in
   `tests/unit/toolchain_literal_support.py`. `cs delta origin/main` now reports
   no issues.
+- CodeRabbit's follow-up on that round found two more gaps, both actioned: an
+  included file no longer makes an unsupplied reference look declared, because
+  the include does not show the value, so the reference is indeterminate; and
+  an assignment on a line of its own selects only once `export` publishes it,
+  so the unexported form is no longer a false positive. A regression test
+  covers each. The estate was re-audited a third time: only the ledger grew,
+  and the report is byte-identical, so the verdicts and counts stand.
 - The branch was behind `main`, and the hosted `lint-test` failed on the merge
   commit because `concordat/rules/packages.py` had reached 805 lines once the
   two branches were combined. The locate-and-read helpers moved to
@@ -192,6 +199,12 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
 - Metric gates reward decomposition that a review already wants: splitting the
   scanner from the selection routes took the module under pylint's limit and
   cleared CodeScene's complexity findings without changing behaviour.
+- An include is not evidence of a value. Treating any included file as a
+  declaration excused a reference the reader never saw supplied; the honest
+  answer is indeterminate, because the include might or might not set it.
+- A shell assignment is not a selection until it is exported, and a Make
+  recipe line runs in its own shell, so an assignment alone on a line reaches
+  nothing. Reading `export` across the script is what tells the two apart.
 
 ## Estate survey (2026-11-19, re-audited 2026-11-21)
 
