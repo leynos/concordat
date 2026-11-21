@@ -58,7 +58,7 @@ def test_a_makefile_variable_declares_a_separate_pin(tmp_path: pathlib.Path) -> 
         "\tcargo +$(RUSTFMT_TOOLCHAIN) fmt --check\n",
     )
 
-    assert read(tmp_path)["literals"] == []
+    assert not read(tmp_path)["literals"]
 
 
 def test_an_inline_makefile_literal_is_reported(tmp_path: pathlib.Path) -> None:
@@ -87,7 +87,7 @@ def test_a_toolchain_from_an_unsupplied_variable_is_indeterminate(
         "test:\n\tRUSTUP_TOOLCHAIN=$(TOOLCHAIN) cargo test\n",
     )
 
-    assert facts["literals"] == [], facts
+    assert not facts["literals"], facts
     assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
     assert "cannot be determined" in facts["errors"][0]["reason"], facts
 
@@ -175,6 +175,31 @@ def test_a_partly_expanded_value_is_indeterminate(tmp_path: pathlib.Path) -> Non
     assert outcome == ([], ["Makefile"]), outcome
 
 
+def test_a_dotted_variable_name_is_indeterminate(tmp_path: pathlib.Path) -> None:
+    """`$(PIN.DATE)` is a plain name with a dot, not a computed call."""
+    outcome = makefile_outcome(
+        tmp_path,
+        "test:\n\tRUSTUP_TOOLCHAIN=$(PIN.DATE) cargo test\n",
+    )
+
+    assert outcome == ([], ["Makefile"]), outcome
+
+
+def test_a_declared_dotted_variable_is_a_separate_pin(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A dotted name assigned the date itself is a deliberate separate pin."""
+    outcome = makefile_outcome(
+        tmp_path,
+        "PIN.DATE = nightly-2026-10-30\n"
+        "\n"
+        "test:\n"
+        "\tRUSTUP_TOOLCHAIN=$(PIN.DATE) cargo test\n",
+    )
+
+    assert outcome == ([], []), outcome
+
+
 def test_a_variable_that_expands_to_a_literal_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -198,7 +223,7 @@ def test_a_makefile_without_literals_is_silent(tmp_path: pathlib.Path) -> None:
     rust_repository(tmp_path)
     write(tmp_path, "Makefile", "test:\n\tcargo test --all-targets\n")
 
-    assert read(tmp_path)["literals"] == []
+    assert not read(tmp_path)["literals"]
 
 
 @pytest.mark.parametrize("makefile", ["Makefile", "makefile", "GNUmakefile"])
@@ -263,7 +288,7 @@ def test_a_recovered_parse_is_carried_as_an_error(tmp_path: pathlib.Path) -> Non
         inspect=lambda _path: MakefileFacts(report=report, status="recovered"),
     )
 
-    assert facts["literals"] == [], facts
+    assert not facts["literals"], facts
     assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
     assert "recovered" in facts["errors"][0]["reason"], facts
 
@@ -279,7 +304,7 @@ def test_a_makefile_outside_the_checkout_is_an_error(tmp_path: pathlib.Path) -> 
 
     facts = read(checkout)
 
-    assert facts["literals"] == [], facts
+    assert not facts["literals"], facts
     assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
     assert "outside the checkout" in facts["errors"][0]["reason"], facts
 

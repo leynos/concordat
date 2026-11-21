@@ -19,7 +19,7 @@ import typing as typ
 # A plain `$(NAME)`/`${NAME}` that survived expansion: a missing variable, not
 # a Make function computing a value from something else.
 _SURVIVING_REFERENCE: typ.Final = re.compile(
-    r"\$(?:\((?P<paren>[A-Za-z_][\w-]*)\)|\{(?P<brace>[A-Za-z_][\w-]*)\})"
+    r"\$(?:\((?P<paren>[A-Za-z_][\w.-]*)\)|\{(?P<brace>[A-Za-z_][\w.-]*)\})"
 )
 
 

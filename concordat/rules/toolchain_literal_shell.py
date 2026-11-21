@@ -28,7 +28,7 @@ if typ.TYPE_CHECKING:
 
 # A value that is a Make reference rather than a literal: `$(NAME)`/`${NAME}`.
 _REFERENCE: typ.Final = re.compile(
-    r"^\$(?:\((?P<paren>[A-Za-z_][\w-]*)\)|\{(?P<brace>[A-Za-z_][\w-]*)\})$"
+    r"^\$(?:\((?P<paren>[A-Za-z_][\w.-]*)\)|\{(?P<brace>[A-Za-z_][\w.-]*)\})$"
 )
 # The programs that take cargo's `+toolchain` override. A reference is one too
 # when its name says cargo, which is what `$(CARGO)` is in a Makefile.

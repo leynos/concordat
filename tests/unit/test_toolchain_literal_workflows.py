@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import typing as typ
 
+import pytest
+
 from tests.unit.toolchain_literal_support import (
     MANIFEST,
     literals,
@@ -58,7 +60,7 @@ def test_wireframes_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
     assert literals(facts) == [
         ("workflow", ".github/workflows/ci.yml", "nightly-2026-10-30")
     ], facts
-    assert facts["errors"] == [], facts
+    assert not facts["errors"], facts
 
 
 def test_morningtons_old_shape_is_reported(tmp_path: pathlib.Path) -> None:
@@ -107,7 +109,7 @@ def test_the_fixed_shapes_pass(tmp_path: pathlib.Path) -> None:
         ),
     )
 
-    assert read(tmp_path)["literals"] == [], literals(read(tmp_path))
+    assert not read(tmp_path)["literals"], literals(read(tmp_path))
 
 
 def test_a_reformatted_workflow_keeps_its_verdict(tmp_path: pathlib.Path) -> None:
@@ -197,7 +199,7 @@ def test_a_comment_or_display_name_is_not_a_literal(tmp_path: pathlib.Path) -> N
         ),
     )
 
-    assert read(tmp_path)["literals"] == []
+    assert not read(tmp_path)["literals"]
 
 
 def test_an_unpinned_repository_is_outside_the_rule(tmp_path: pathlib.Path) -> None:
@@ -275,45 +277,44 @@ def test_a_matrix_toolchain_is_resolved(tmp_path: pathlib.Path) -> None:
     ]
 
 
-def test_a_matrix_toolchain_in_a_command_is_resolved(tmp_path: pathlib.Path) -> None:
-    """A `${{ matrix.x }}` argument is resolved before the date is read."""
+_MATRIX_LEGS = """\
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+{matrix}
+    steps:
+      - run: {command}
+"""
+
+
+@pytest.mark.parametrize(
+    ("matrix", "command"),
+    [
+        pytest.param(
+            "        toolchain: [nightly-2026-10-30]",
+            "cargo +${{ matrix.toolchain }} test",
+            id="axis",
+        ),
+        pytest.param(
+            "        include:\n"
+            "          - toolchain: nightly-2026-10-30\n"
+            "        toolchain: [stable]",
+            "cargo +${{ matrix.toolchain }} check",
+            id="include-before-axis",
+        ),
+    ],
+)
+def test_a_matrix_toolchain_in_a_command_is_resolved(
+    tmp_path: pathlib.Path, matrix: str, command: str
+) -> None:
+    """A `${{ matrix.x }}` argument is read from every leg, include legs too."""
     rust_repository(tmp_path)
     write(
         tmp_path,
         ".github/workflows/ci.yml",
-        """\
-        jobs:
-          build:
-            runs-on: ubuntu-latest
-            strategy:
-              matrix:
-                toolchain: [nightly-2026-10-30]
-            steps:
-              - run: cargo +${{ matrix.toolchain }} test
-        """,
-    )
-
-    assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
-
-
-def test_a_matrix_include_beside_an_axis_contributes(tmp_path: pathlib.Path) -> None:
-    """An `include` leg written before an axis still adds its value."""
-    rust_repository(tmp_path)
-    write(
-        tmp_path,
-        ".github/workflows/ci.yml",
-        """\
-        jobs:
-          build:
-            runs-on: ubuntu-latest
-            strategy:
-              matrix:
-                include:
-                  - toolchain: nightly-2026-10-30
-                toolchain: [stable]
-            steps:
-              - run: cargo +${{ matrix.toolchain }} check
-        """,
+        _MATRIX_LEGS.format(matrix=matrix, command=command),
     )
 
     assert [text for _, _, text in literals(read(tmp_path))] == ["nightly-2026-10-30"]
