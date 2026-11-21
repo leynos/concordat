@@ -583,23 +583,25 @@ reverse:
 
 ## `concordat artefact rule run`
 
-`concordat/rules/runner.py`, `concordat/rules/packages.py`, and
-`concordat/rules/envelope.py` implement the rule-run subcommand exposed as
-`concordat artefact rule run <rule-id>`.
+`concordat/rules/runner.py`, `concordat/rules/packages.py`,
+`concordat/rules/rule_package.py`, and `concordat/rules/envelope.py` implement
+the rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
 
-The split is by question asked. `packages.py` answers three about a rule
-package without evaluating one: where its policy lives, what its manifest
-declares, and which policy-input envelope it is audited over. `runner.py`
-answers the fourth, what Conftest made of that envelope, and imports the rest.
-Where a test patches depends on what it is testing, and the answer is not
-simply "where the name is defined". `runner` imports `rule_package_dir` and
-`rule_parameters` into its own bindings, so a test of how `runner` uses them
-patches `runner._rule_package_dir` or `runner._rule_parameters`; patching
-`packages` leaves `runner`'s bindings pointing at the originals. `run_rule`
-captures `default_envelope_builder` as a default argument at definition time,
-so substituting the resolver means passing `envelope_builder=` rather than
-patching either module. Patch `packages` when testing the package helpers
-themselves, including the mappings and the manifest reader.
+The split is by question asked. `rule_package.py` answers two about a rule
+package without evaluating one: where its policy lives and what its manifest
+declares. `packages.py` answers which policy-input envelope the package is
+audited over, and re-exports the locate helpers so `runner` and the tests keep
+one boundary to import. `runner.py` answers the fourth question, what Conftest
+made of that envelope. Where a test patches depends on what it is testing, and
+the answer is not simply "where the name is defined". `runner` imports
+`rule_package_dir` and `rule_parameters` into its own bindings, so a test of how
+`runner` uses them patches `runner._rule_package_dir` or
+`runner._rule_parameters`; patching `packages` leaves `runner`'s bindings
+pointing at the originals. `run_rule` captures `default_envelope_builder` as a
+default argument at definition time, so substituting the resolver means passing
+`envelope_builder=` rather than patching either module. Patch `packages` when
+testing the envelope mappings, and `rule_package` when testing the locate and
+manifest helpers themselves.
 
 ### The policy envelope
 

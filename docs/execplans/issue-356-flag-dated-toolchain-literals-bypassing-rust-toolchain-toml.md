@@ -129,6 +129,11 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   tests became one 17-row table with shared fixtures in
   `tests/unit/toolchain_literal_support.py`. `cs delta origin/main` now reports
   no issues.
+- The branch was behind `main`, and the hosted `lint-test` failed on the merge
+  commit because `concordat/rules/packages.py` had reached 805 lines once the
+  two branches were combined. The locate-and-read helpers moved to
+  `concordat/rules/rule_package.py`, which brings the module under pylint's
+  limit without changing the boundary `runner` and the tests import.
 
 ## Lessons
 

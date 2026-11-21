@@ -17,7 +17,7 @@ import pytest
 
 from concordat import cli
 from concordat.errors import OperationalRuleError
-from concordat.rules import packages, runner
+from concordat.rules import packages, rule_package, runner
 from concordat.rules.codescene_coverage_envelope import (
     ENVELOPE_KIND as COVERAGE_ENVELOPE_KIND,
 )
@@ -619,7 +619,7 @@ def package_root(
     """Point the package resolver at a temporary tree for one test."""
     root = tmp_path / "lint-rules"
     root.mkdir()
-    monkeypatch.setattr(packages, "_resolve_rule_packages_dir", lambda: root)
+    monkeypatch.setattr(rule_package, "_resolve_rule_packages_dir", lambda: root)
     packages._rule_packages_dir.cache_clear()
     yield root
     packages._rule_packages_dir.cache_clear()
