@@ -302,6 +302,39 @@ def test_an_include_does_not_declare_an_unsupplied_variable(
     assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
 
 
+def test_a_computed_toolchain_is_not_a_literal(tmp_path: pathlib.Path) -> None:
+    """A value Make computes at build time is not a date written down."""
+    rust_repository(tmp_path)
+    write(
+        tmp_path,
+        "Makefile",
+        "test:\n\tRUSTUP_TOOLCHAIN=$(shell cat tools/toolchain.txt) cargo test\n",
+    )
+
+    facts = read(tmp_path)
+
+    assert facts["literals"] == [], facts
+    assert facts["errors"] == [], facts
+
+
+def test_a_partly_expanded_value_is_indeterminate(tmp_path: pathlib.Path) -> None:
+    """`nightly-$(DATE)` has no date the reader can establish without DATE."""
+    rust_repository(tmp_path)
+    write(
+        tmp_path,
+        "Makefile",
+        "TOOLCHAIN = nightly-$(DATE)\n"
+        "\n"
+        "test:\n"
+        "\tRUSTUP_TOOLCHAIN=$(TOOLCHAIN) cargo test\n",
+    )
+
+    facts = read(tmp_path)
+
+    assert facts["literals"] == [], facts
+    assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
+
+
 def test_a_variable_that_expands_to_a_literal_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:

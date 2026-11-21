@@ -381,8 +381,20 @@ def _exports_toolchain(args: list[str]) -> bool:
 
 
 def _publishes_value(args: list[str]) -> bool:
-    """Return whether an `export` command gives the variable a value of its own."""
-    return any("=" in word for word in args)
+    """Return whether an `export` gives the toolchain variable a value of its own."""
+    return any(_publishes_toolchain(word) for word in args)
+
+
+def _publishes_toolchain(word: str) -> bool:
+    """Return whether *word* assigns the toolchain variable inline."""
+    if not _names_toolchain(word):
+        return False
+    return "=" in word
+
+
+def _clears_toolchain(words: list[str]) -> bool:
+    """Return whether *words* assign the toolchain variable an empty value."""
+    return any(word == "RUSTUP_TOOLCHAIN=" for word in words)
 
 
 def _exported_assignments(commands: cabc.Iterable[list[str]]) -> list[Selection]:
@@ -433,6 +445,9 @@ def _after_assignment(
         The assignment a later `export` could publish, and the one an already
         exported variable publishes now.
     """
+    if _clears_toolchain(words):
+        # `NAME=` gives the variable an empty value, so nothing dated remains.
+        return None, None
     assignment = _assignment_in(words)
     if assignment is not None:
         pending = assignment

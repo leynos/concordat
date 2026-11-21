@@ -136,6 +136,14 @@ The change adds `RT-028` to the `rust-toolchain-policy` package, starting at
   so the unexported form is no longer a false positive. A regression test
   covers each. The estate was re-audited a third time: only the ledger grew,
   and the report is byte-identical, so the verdicts and counts stand.
+- CodeRabbit's third follow-up found three more, all actioned: a partly
+  expanded value (`nightly-$(DATE)`) is now indeterminate instead of silent; an
+  export that names an unrelated value no longer discards the toolchain
+  assignment; and an empty assignment clears the pending value. A fourth
+  re-audit surfaced one more question — `$(shell ...)` expressions, which
+  compute a value rather than write a date, must not be indeterminate — so the
+  unknown path now only fires when a plain variable survived expansion. The
+  survey is back to the original verdicts and the two RT-028 findings.
 - The branch was behind `main`, and the hosted `lint-test` failed on the merge
   commit because `concordat/rules/packages.py` had reached 805 lines once the
   two branches were combined. The locate-and-read helpers moved to

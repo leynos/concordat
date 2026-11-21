@@ -90,9 +90,12 @@ so is a literal written inline, even when an `env` entry carries the same date
 — that second copy is the one that drifts. A recipe reference whose value the
 file never supplies — because it never assigns the name, assigns it in a form
 the reader cannot substitute, or leaves it to an included file — leaves the
-toolchain unknown rather than dated, so it is indeterminate. An assignment on a
-line of its own selects only once `export` publishes it, because a shell
-variable reaches a later command's environment only then.
+toolchain unknown rather than dated, so it is indeterminate, and so does a
+value only partly expanded (`nightly-$(DATE)`). A value Make computes at build
+time, such as `$(shell cat tools/toolchain.txt)`, writes no date down, so it is
+not reported. An assignment on a line of its own selects only once `export`
+publishes it, because a shell variable reaches a later command's environment
+only then.
 
 Severity is `literal_severity` (`warning` by default, promoting to `error` once
 the estate has been surveyed). A workflow or `Makefile` that cannot be read is

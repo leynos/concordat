@@ -80,6 +80,11 @@ _WORKFLOW_REFERENCE: typ.Final = re.compile(
     r"^\$\{\{\s*(?P<scope>env|matrix)\.(?P<name>[\w-]+)\s*\}\}$"
 )
 _EXPRESSION: typ.Final = re.compile(r"\$\{\{\s*(?P<body>[^}]*?)\s*\}\}")
+# A plain `$(NAME)`/`${NAME}` that survived expansion: a missing variable, not
+# a Make function computing a value from something else.
+_SURVIVING_REFERENCE: typ.Final = re.compile(
+    r"\$(?:\((?P<paren>[A-Za-z_][\w-]*)\)|\{(?P<brace>[A-Za-z_][\w-]*)\})"
+)
 # GNU Make reads these in this order, so the first present one is the file the
 # repository's recipes run from.
 _MAKEFILE_NAMES: typ.Final = ("GNUmakefile", "makefile", "Makefile")
@@ -372,17 +377,17 @@ def _reported_texts(
     A variable assigned the date itself, at the name the recipe writes, is a
     deliberate separate pin. A recipe that reaches the date through another
     variable is not: the date is not declared where it is used, so it is
-    reported at its expanded value. A reference whose value the file never
-    supplies has a value the reader cannot see: it is carried as an unknown
-    reference rather than guessed to be a date.
+    reported at its expanded value. A value the file never supplies — a whole
+    reference or a partly expanded `nightly-$(DATE)` — is carried as unknown
+    rather than guessed to be a date.
 
     Returns
     -------
     tuple[list[str], str | None]
-        The literal texts to report, and the reference whose value is unknown.
+        The literal texts to report, and the text whose value is unknown.
     """
     if not selection.is_reference:
-        return _literals_in(selection.text), None
+        return _expanded_literals(selection, values)
     name = reference_name(selection.text)
     if name is None:
         return [], None
@@ -394,24 +399,27 @@ def _reported_texts(
 def _expanded_literals(
     selection: Selection, values: cabc.Mapping[str, str]
 ) -> tuple[list[str], str | None]:
-    """Return the literals a reference expands to, or the reference if unknown.
+    """Return the literals a reference expands to, or the text if unknown.
+
+    A value that is still partly a variable — `nightly-$(DATE)` — has no date
+    the reader can establish, so it is reported as unknown rather than as
+    clean. A Make function that survives expansion — `$(shell cat ...)` — is a
+    value computed at build time, not a date written down, so it is ignored.
 
     Returns
     -------
     tuple[list[str], str | None]
-        The literal texts the reference expands to, and the reference itself
-        when it expands to a name whose value is not in the table.
+        The literal texts the reference expands to, and the expanded text when
+        a missing variable survived it.
     """
-    expanded = shown(expand(selection.text, values).text).strip()
+    expansion = expand(selection.text, values)
+    expanded = shown(expansion.text).strip()
     literals = _literals_in(expanded)
     if literals:
         return literals, None
-    if not expanded.startswith("$"):
+    if expansion.is_resolved:
         return [], None
-    name = reference_name(expanded)
-    if name is None:
-        return [], None
-    if _declares_its_own_date(name, values):
+    if _SURVIVING_REFERENCE.search(expanded) is None:
         return [], None
     return [], expanded
 

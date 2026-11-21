@@ -49,6 +49,21 @@ _CASES: typ.Final = [
         id="unexported-assignment-does-not-reach-cargo",
     ),
     pytest.param(
+        "RUSTUP_TOOLCHAIN=nightly-2026-10-30\n"
+        "export RUSTUP_TOOLCHAIN OTHER=value\n"
+        "cargo test\n",
+        ["nightly-2026-10-30"],
+        id="unrelated-export-value-keeps-the-toolchain",
+    ),
+    pytest.param(
+        "RUSTUP_TOOLCHAIN=nightly-2026-10-30\n"
+        "RUSTUP_TOOLCHAIN=\n"
+        "export RUSTUP_TOOLCHAIN\n"
+        "cargo test\n",
+        [],
+        id="empty-assignment-clears-the-exported-toolchain",
+    ),
+    pytest.param(
         "env -u RUSTUP_TOOLCHAIN cargo +nightly-2026-10-30 test\n",
         ["nightly-2026-10-30"],
         id="wrapper-operand-is-not-the-program",
