@@ -236,7 +236,7 @@ def _rule_rows(tallies: dict[str, _RuleTally]) -> list[tuple[str, ...]]:
             "Severity",
             "Noncompliant repositories",
             "Indeterminate-only repositories",
-            "Would fail",
+            "Would fail at error",
         )
     ]
     for rule_id in sorted(tallies):

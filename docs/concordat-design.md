@@ -1939,6 +1939,7 @@ the dependency-pin actionability checks.
 | RT-025       | Every publishable library crate declares `rust-version`, directly or by inheriting a workspace value, unless a recorded exception names the pinned channel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + TOML parse (`rust-toolchain-policy`)                 | warning              | 4                        |
 | RT-026       | Every declared MSRV is exercised by CI: a workflow installs that toolchain, a job or step runs cargo-msrv or is named for the MSRV, a step selects the toolchain from `rust-version`, or the pin is that version.                                                                                                                                                                                                                                                                                                                                                                                                                   | Toolchain Baseline              | OPA/Conftest + workflow parse (`rust-toolchain-policy`)             | error                | 4                        |
 | RT-027       | CI names no dated nightly other than the one `rust-toolchain.toml` pins, so the file and the workflows cannot disagree about the toolchain.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + workflow parse (`rust-toolchain-policy`)             | error                | 4                        |
+| RT-028       | No workflow or root `Makefile` restates a dated nightly literal instead of reading the pin: the channel comes from `rust-toolchain.toml`, or the literal is declared deliberately separate by binding it to a named variable or reaching it through a workflow `env` entry.                                                                                                                                                                                                                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + workflow and Makefile parse                          | warning              | 4                        |
 | TA-001       | No continuous integration job builds a tool it merely consumes from source; the repository's own crate under test and a build that is the workflow's product are exempt.                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Toolchain Baseline              | OPA/Conftest + workflow envelope                                    | error                | 4                        |
 | TA-002       | A release archive is verified by a digest computed from the downloaded bytes and compared with the publisher's sidecar before those bytes are executed or extracted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Toolchain Baseline              | OPA/Conftest + workflow envelope                                    | error                | 4                        |
 | TA-003       | Every tool pin is a full commit SHA or an exact version, never a branch, a bare tag, or an unpinned Git acquisition.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Toolchain Baseline              | OPA/Conftest + workflow envelope + canon pin data                   | error                | 4                        |
@@ -2274,7 +2275,7 @@ stay on an older generation by recording an exception in `.concordat` under
 `dependencies.family_exceptions`, naming the relationship, a rationale and a
 review trigger. Missing facts are DF-006 indeterminate findings, never passes.
 
-##### Rust toolchain policy (RT-022 through RT-027)
+##### Rust toolchain policy (RT-022 through RT-028)
 
 The estate audit of 2026-10-11 (DF12-102) found 53 of 72 Rust repositories
 pinned to a dated nightly, only 5 of them within eight weeks of it, and 65
@@ -2284,9 +2285,10 @@ library, 46 declared no `rust-version`, and 16 declared an MSRV that no
 workflow exercised. RT-006 (a nightly within a year) passed every repository,
 so it could not tell any of this apart.
 
-The audit-only `rust-toolchain-policy` package reads five facts: the pin, the
+The audit-only `rust-toolchain-policy` package reads six facts: the pin, the
 Cargo packages, the Dependabot `rust-toolchain` entries, the toolchains the
-workflows name, and any recorded exception. The envelope carries "today" as
+workflows name, the dated nightlies the workflows and root `Makefile` spell
+out, and any recorded exception. The envelope carries "today" as
 `evaluated_on`, so the nightly-age clause is a pure comparison and the Rego
 tests can pin the window's edge. Workflows are walked as data (steps, `with`
 inputs, `env` references and `rustup` or `cargo +toolchain` commands), so a
@@ -2294,14 +2296,48 @@ toolchain named in a comment is not CI using it. A numeric toolchain in CI is
 not compared with the pin: such literals are usually a host tool's toolchain
 (`cargo +1.95.0 install merman-cli`), so RT-027 judges dated nightlies only.
 
+RT-028 judges the same dated nightlies as RT-027, but from the other side: not
+whether CI resolved a date different from the pin, but whether the repository
+wrote a date down at all. That matters because the two drift silently in a
+nightly-pinned repository, where Dependabot moves `rust-toolchain.toml` daily
+and a literal that agreed yesterday disagrees today; wireframe's `ci.yml` added
+the Cranelift component to `nightly-2026-10-30` while the pin was
+`nightly-2026-11-05`, and mornington's `release.yml` named its nightly twice
+instead of reading the manifest. The clause reports every restated date,
+including one that is correct when the audit runs, because correctness today is
+what makes tomorrow's drift invisible. The literals come from the same decoded
+walk as RT-027, plus `makeutil`'s report of the root `Makefile`; the reader
+parses rather than matching whole lines, so a reformat does not change the
+verdict, and each recipe is expanded through the single assignments so a date
+reached through one variable from another is reported at its value.
+
+A literal is declared deliberately separate when it is bound to a name where it
+is written: a `Makefile` variable assigned the date itself and used as
+`$(NAME)`, or a workflow `env` entry a step reaches as `${{ env.NAME }}`. Such
+a reference draws no finding, which is how cuprum keeps a fast toolchain beside
+a `rust/` directory pinned to stable, and RT-027 leaves the same reference out
+of the nightlies it compares with the pin so the two clauses cannot disagree. A
+date written inline is reported even when an `env` entry carries the same date,
+because the second copy is the one that drifts. A recipe reference whose value
+the file never supplies — it never assigns the name, assigns it in a form the
+reader cannot substitute, or leaves it to an included file — leaves the
+toolchain unknown rather than dated, so it is indeterminate, as does a value
+only partly expanded (`nightly-$(DATE)`). A value Make computes at build time,
+such as `$(shell cat tools/toolchain.txt)`, writes no date down, so it is not
+reported. An assignment on a line of its own selects only once `export`
+publishes it, because a shell variable reaches a later command's environment
+only then. Its severity is the `literal_severity` parameter, `warning` by
+default, so the estate can be surveyed before the clause blocks a merge, and
+promotable to `error` once it is clear.
+
 The window and the accepted Dependabot intervals are manifest parameters. An
 exception is a section of the developers' guide whose heading contains
 "Toolchain policy" and which names the pinned channel. It exempts RT-023,
-RT-024 and RT-025 (a nightly coupled to compiler internals has no stable MSRV
-to declare) only while it names the current pin, so every move of the pin
-re-justifies it. whitaker is the standing case: its nightly is coupled to
-`ra_ap_syntax` and a vendored `clippy_utils`, and is never moved to satisfy the
-window.
+RT-024, RT-025 (a nightly coupled to compiler internals has no stable MSRV to
+declare) and RT-028 (the toolchain moves with something other than the pin)
+only while it names the current pin, so every move of the pin re-justifies it.
+whitaker is the standing case: its nightly is coupled to `ra_ap_syntax` and a
+vendored `clippy_utils`, and is never moved to satisfy the window.
 
 ##### Mutation-testing coverage (MT-001)
 

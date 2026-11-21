@@ -144,13 +144,19 @@ def _expected(selections: list[_Selection]) -> tuple[list[str], list[str]]:
     The minor is computed here by splitting the generated `M.m.p` text, not by
     the production helper, so a defect in that helper cannot hide itself.
 
+    A nightly reached through an `env` reference is a deliberately separate
+    pin, so it is not among the dated nightlies RT-027 compares with the pin.
+    Numeric minors still count every route: an MSRV job may read its toolchain
+    from `env`.
+
     Returns
     -------
     tuple[list[str], list[str]]
         The sorted dated nightlies and the sorted numeric `major.minor` values.
     """
     names = {s.toolchain for s in selections}
-    nightlies = sorted(n for n in names if n.startswith("nightly-"))
+    inline = {s.toolchain for s in selections if s.route != "env_reference"}
+    nightlies = sorted(n for n in inline if n.startswith("nightly-"))
     minors = sorted({
         ".".join(n.split(".")[:2]) for n in names if _NUMERIC_TOOLCHAIN.fullmatch(n)
     })

@@ -7,7 +7,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import packages
+from concordat.rules import packages, rule_package
 from concordat.rules.spelling_envelope import (
     DEFAULT_VENDORED_PATTERNS,
     ENVELOPE_KIND,
@@ -217,7 +217,7 @@ def test_the_resolver_passes_the_manifest_patterns_through(
         "parameters:\n  defaults:\n    vendored_paths:\n      - tools/*.py\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(packages, "_resolve_rule_packages_dir", lambda: root)
+    monkeypatch.setattr(rule_package, "_resolve_rule_packages_dir", lambda: root)
     packages._rule_packages_dir.cache_clear()
     try:
         envelope = packages.default_envelope_builder(RULE_ID, legacy_and_custom)

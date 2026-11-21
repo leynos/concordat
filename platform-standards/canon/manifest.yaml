@@ -366,16 +366,16 @@ artifacts:
     path: >-
       platform-standards/canon/lint-rules/rust-toolchain-policy/policy/rust_toolchain_policy.rego
     description: >
-      Audit-only RT-022 to RT-027 policy holding the Rust toolchain to an exact
-      pin, a fresh nightly, a Dependabot entry that moves it, and a declared
-      MSRV that CI exercises.
-    sha256: daeb617edde3a10b7435fc926ce2817a26fcbe1eaaee97cc3e2541322af75ec6
+      Audit-only RT-022 to RT-028 policy holding the Rust toolchain to an exact
+      pin, a fresh nightly, a Dependabot entry that moves it, a declared MSRV
+      that CI exercises, and no restated dated literal in CI or the Makefile.
+    sha256: 747e8248d44a90839261753c3a7fd07dc24a497432d8276565f2442c91586a7a
   - id: lint-rule-rust-toolchain-policy-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-toolchain-policy/rule.yaml
     description: >
       Rule package manifest for the Rust toolchain policy.
-    sha256: 79586b19ecafeb8e4db15e1e85765904f41e12e0298204978ae89795e6800421
+    sha256: 25e372bfb40a9af3205adefb5311e48706dacc6f415876cb498b37e4e40efc0e
   - id: lint-rule-spelling-config-baseline
     type: opa-policy
     path: >-

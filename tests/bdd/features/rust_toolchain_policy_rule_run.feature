@@ -40,3 +40,27 @@ Feature: Rust toolchain policy rule run
     When I audit the checkout for its toolchain policy
     Then the toolchain audit exit status is 0
     And the toolchain audit table reports zero findings
+
+  Scenario: a workflow that restates the pin is reported as a warning
+    Given a fresh pin whose workflow names the pinned date
+    When I audit the checkout for its toolchain policy
+    Then the toolchain audit exit status is 0
+    And the toolchain audit output reports "RT-028" and "selects"
+
+  Scenario: a Makefile that restates the pin is reported as a warning
+    Given a fresh pin whose Makefile names a dated nightly
+    When I audit the checkout for its toolchain policy
+    Then the toolchain audit exit status is 0
+    And the toolchain audit output reports "RT-028" and "Makefile selects"
+
+  Scenario: a Makefile variable that declares a separate pin is not reported
+    Given a fresh pin whose Makefile declares its nightly in a variable
+    When I audit the checkout for its toolchain policy
+    Then the toolchain audit exit status is 0
+    And the toolchain audit table reports zero findings
+
+  Scenario: a workflow that declares a separate pin is not reported
+    Given a fresh pin whose workflow declares a separate fast toolchain
+    When I audit the checkout for its toolchain policy
+    Then the toolchain audit exit status is 0
+    And the toolchain audit table reports zero findings

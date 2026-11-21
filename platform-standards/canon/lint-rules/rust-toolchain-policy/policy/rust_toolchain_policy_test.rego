@@ -5,6 +5,8 @@ import rego.v1
 
 import data.canon.lint_rules.rust_toolchain_policy as policy
 
+# `literal_severity` is deliberately absent: RT-028 has to fall back to its
+# default rather than drop the finding when a caller supplies partial data.
 params := {
   "window_days": 56,
   "dependabot_intervals": ["daily", "weekly"],
@@ -222,4 +224,67 @@ test_a_competing_nightly if {
     "RT-027", "error", "noncompliant", ".github/workflows",
     "a workflow names nightly-2026-03-26 but rust-toolchain.toml pins nightly-2026-09-20: CI and the file must not disagree about the toolchain",
   ]}
+}
+
+# -- RT-028 ---------------------------------------------------------------------
+
+# A date that is correct today still drifts when Dependabot moves the pin, so
+# RT-028 reports it even though RT-027 is satisfied.
+test_a_workflow_that_restates_the_pin if {
+  audit(data.fixtures.literal_restates_the_pin) == {[
+    "RT-028", "warning", "noncompliant", ".github/workflows/release.yml",
+    ".github/workflows/release.yml selects nightly-2026-09-20, but the toolchain is pinned in rust-toolchain.toml (nightly-2026-09-20): read the channel from that file, or declare the literal in a named variable to say the pin is deliberately separate",
+  ]}
+}
+
+test_a_makefile_literal_is_reported if {
+  audit(data.fixtures.literal_in_a_makefile) == {[
+    "RT-028", "warning", "noncompliant", "Makefile",
+    "Makefile selects nightly-2026-10-30, but the toolchain is pinned in rust-toolchain.toml (nightly-2026-09-20): read the channel from that file, or declare the literal in a named variable to say the pin is deliberately separate",
+  ]}
+}
+
+# The envelope removes a literal bound to a variable or an `env` entry, so a
+# declared separate pin draws no finding.
+test_a_declared_literal_is_silent if {
+  count(audit(data.fixtures.literal_declared_separately)) == 0
+}
+
+test_an_unreadable_makefile_is_indeterminate if {
+  audit(data.fixtures.literal_makefile_unreadable) == {[
+    "RT-028", "warning", "indeterminate", "Makefile",
+    "Makefile could not be read, so a dated toolchain literal there cannot be ruled out: makeutil is required but was not found on PATH",
+  ]}
+}
+
+test_an_exception_exempts_the_literal if {
+  count(audit(data.fixtures.literal_excepted)) == 0
+}
+
+# An exception that names the current pin also covers the file the reader
+# could not open: the repository has already said its toolchain is separate.
+test_an_exception_exempts_an_unreadable_file if {
+  count(audit(data.fixtures.literal_excepted_unreadable)) == 0
+}
+
+test_a_missing_severity_parameter_defaults_to_warning if {
+  some finding in audit(data.fixtures.literal_in_a_makefile)
+  finding[0] == "RT-028"
+  finding[1] == "warning"
+}
+
+test_the_literal_severity_is_a_parameter if {
+  findings := policy.deny with input as data.fixtures.literal_in_a_makefile
+    with data.parameters as object.union(params, {"literal_severity": "error"})
+  some finding in findings
+  finding.rule_id == "RT-028"
+  finding.severity == "error"
+}
+
+# RT-027 and RT-028 are separate questions: a workflow cannot satisfy one by
+# way of the other's facts.
+test_rt028_ignores_the_toolchains_ci_resolves if {
+  some finding in audit(data.fixtures.literal_in_a_makefile)
+  finding[0] == "RT-028"
+  count({f | some f in audit(data.fixtures.literal_in_a_makefile); f[0] == "RT-027"}) == 0
 }

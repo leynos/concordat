@@ -39,6 +39,10 @@ remove = ['`[^`\n]+`']
 
 [files]
 # Shared policy also excludes generated OpenTofu output; the Parabellum
-# baseline report is generated and quotes commit SHA prefixes that the
-# tokenizer misreads as words.
-exclude = [".terraform", "docs/parabellum/baseline-report.md"]
+# reports are generated from the ledger and quote crate names and commit SHA
+# prefixes that the tokenizer misreads as words.
+exclude = [
+    ".terraform",
+    "docs/parabellum/baseline-report.md",
+    "docs/parabellum/rust-toolchain-policy-survey.md",
+]

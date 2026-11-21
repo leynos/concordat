@@ -738,6 +738,11 @@ the Section 2.1.2 format.
   within a 56-day window, requires a Dependabot `rust-toolchain` entry, and
   requires a declared MSRV to be exercised by CI. RT-006 stays until RT-023 is
   live estate-wide, then a separate change retires it.
+- [x] Flag dated toolchain literals that bypass the pin (RT-028, #356): no
+  workflow or root `Makefile` restates a dated nightly instead of reading
+  `rust-toolchain.toml`, unless the date is bound to a named variable or
+  workflow `env` entry to declare the pin deliberately separate. The clause
+  ships at `warning` severity so the estate can be surveyed first.
 - [x] Ship the prover tooling rule (PT-001 to PT-005, DF12-102): the
   `rust-prover-tooling` package holds a repository that uses Kani or Verus to
   one `rust-prover-tools` pin, installation in CI only through the shared
