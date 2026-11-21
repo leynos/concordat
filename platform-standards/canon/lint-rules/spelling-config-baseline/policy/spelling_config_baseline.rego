@@ -417,6 +417,11 @@ release_version(ref) := [to_number(p[1]), to_number(p[2]), to_number(p[3])] if {
 	p := regex.find_all_string_submatch_n(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)$`, ref, 1)[0]
 }
 
+# UV accepts an explicit tag namespace to disambiguate tags from branches.
+# Strip only that anchored prefix for invocation pins; floor/text parameters
+# retain their release-only syntax and the existing numeric version parser.
+pinned_release_version(ref) := release_version(trim_prefix(ref, "refs/tags/"))
+
 version_at_least(version, floor) if version[0] > floor[0]
 
 version_at_least(version, floor) if {
@@ -446,10 +451,10 @@ pin_problem(invocation) := "runs typos-config-builder without pinning a release;
 	regex.match(`^[0-9a-f]{7,40}$`, ref)
 } else := sprintf("pins typos-config-builder to %q, which is not a release tag; pin one at or above %s", [ref, builder_floor]) if {
 	ref := git_ref(from_spec(invocation))
-	not release_version(ref)
+	not pinned_release_version(ref)
 } else := sprintf("pins typos-config-builder %s, below the floor %s", [ref, builder_floor]) if {
 	ref := git_ref(from_spec(invocation))
-	not version_at_least(release_version(ref), floor_version)
+	not version_at_least(pinned_release_version(ref), floor_version)
 }
 
 # A spec still holding a Make reference, in either form, names no release the
@@ -818,7 +823,7 @@ pinned_releases := {version |
 	some recipe in spelling_recipes
 	some invocation in builder_invocations(recipe)
 	runs_gate(invocation)
-	version := release_version(git_ref(from_spec(invocation)))
+	version := pinned_release_version(git_ref(from_spec(invocation)))
 }
 
 block_versions := {key: version |

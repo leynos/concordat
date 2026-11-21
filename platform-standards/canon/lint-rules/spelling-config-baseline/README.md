@@ -28,14 +28,14 @@ phrase corrections Typos cannot express.
 - **PD-007** (error): a recipe reachable from `spelling` runs
   `typos-config-builder gate`, through `uvx` or `uv tool run` with `--from`
   naming the `leynos/typos-config-builder` repository at a release tag
-  (`vMAJOR.MINOR.PATCH`) at or above the floor (`v0.1.3` by default), and its
-  exit status reaches Make. The floor is the first release that publishes the
-  AGENTS.md block PD-013 compares, so the pin and the block move together. A
-  commit pin is immutable but is not a release, and cannot be compared with the
-  floor. A branch, another repository, an unpinned `typos-config-builder`, the
-  default command (which renders `typos.toml` but neither runs Typos nor checks
-  phrases), `--check`, and a direct Typos run on the same path are each
-  reported in their own right.
+  (`vMAJOR.MINOR.PATCH` or `refs/tags/vMAJOR.MINOR.PATCH`) at or above the floor
+  (`v0.1.3` by default), and its exit status reaches Make. The floor is the
+  first release that publishes the AGENTS.md block PD-013 compares, so the pin
+  and the block move together. A commit pin is immutable but is not a release,
+  and cannot be compared with the floor. A branch, another repository, an
+  unpinned `typos-config-builder`, the default command (which renders
+  `typos.toml` but neither runs Typos nor checks phrases), `--check`, and a
+  direct Typos run on the same path are each reported in their own right.
 - **PD-008** (error): the Makefile assigns none of the legacy pins
   (`TYPOS_VERSION`, `PATHSPEC_VERSION`, or a builder commit variable) and
   defines none of the legacy helper targets (`spelling-helper-test`,
@@ -172,3 +172,17 @@ conftest verify \
   --policy platform-standards/canon/lint-rules/spelling-config-baseline/policy \
   --data platform-standards/canon/lint-rules/spelling-config-baseline/fixtures/data.json
 ```
+
+### Explicit tag references
+
+A UV Git specification ending in `@refs/tags/v0.1.3` identifies the same
+builder release as `@v0.1.3`. PD-007 removes only the anchored `refs/tags/`
+prefix before comparing numeric versions, and PD-013 uses that same release
+number to select the published `docs/agents-md-spelling.md` block. The existing
+optional `v` spelling is retained for both forms in this package. The floor and
+block-map parameters remain bare release numbers.
+
+An explicit tag below the floor still fails. Branch references, commit hashes
+in the tag namespace, nested namespaces, trailing path components and
+prerelease or build suffixes do not become releases. Naming the tag explicitly
+does not freeze the rolling shared dictionary or change its provenance.

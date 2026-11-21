@@ -34,3 +34,16 @@ Feature: Spelling configuration baseline rule run
     And the audit output reports "PD-007" "drift-checks typos.toml"
     And the audit output reports "PD-008" "TYPOS_VERSION"
     And the audit output reports "PD-009" "scripts/typos_rollout_check.py"
+
+  Scenario Outline: explicit tag refs retain the spelling release contract
+    Given a checkout whose spelling target pins "<release>"
+    When I audit the checkout for its spelling gate
+    Then the audit exit status is <status>
+
+    Examples:
+      | release                  | status |
+      | refs/tags/v0.1.3         | 0      |
+      | refs/tags/v0.1.2         | 1      |
+      | refs/heads/v0.1.3        | 1      |
+      | refs/tags/v0.1.3/extra   | 1      |
+      | refs/tags/v0.1.3-rc.1    | 1      |

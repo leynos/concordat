@@ -481,3 +481,53 @@ test_no_configured_text_is_indeterminate if {
     ["PD-013", "indeterminate", 0, "no canonical AGENTS.md spelling block is configured; the block cannot be compared"],
   }
 }
+
+# Explicit tag refs use the same floor and canonical AGENTS text as bare releases.
+spelling_with_pin(ref) := json.patch(data.fixtures.compliant, [{
+  "op": "replace",
+  "path": "/makefile/rules/1/recipes/0/text",
+  "value": sprintf(`uvx --from "git+https://github.com/leynos/typos-config-builder.git@%s" typos-config-builder gate --scope all`, [ref]),
+}])
+
+test_explicit_release_ref_is_equivalent if {
+  every ref in ["v0.1.3", "0.1.3", "v0.2.0", "v1.0.0"] {
+    bare := spelling_with_pin(ref)
+    explicit := spelling_with_pin(sprintf("refs/tags/%s", [ref]))
+    bare_findings := policy.deny with input as bare
+    explicit_findings := policy.deny with input as explicit
+    count(bare_findings) == 0
+    count(explicit_findings) == 0
+  }
+}
+
+test_explicit_release_ref_retains_floor if {
+  findings := policy.deny with input as spelling_with_pin("refs/tags/v0.1.2")
+  some f in findings
+  f.rule_id == "PD-007"
+  f.verdict == "noncompliant"
+  contains(f.msg, "below the floor v0.1.3")
+}
+
+test_explicit_release_ref_uses_published_block if {
+  envelope := spelling_with_pin("refs/tags/v0.1.3")
+  findings := policy.deny with input as envelope with data.parameters.agents_md_blocks as {"v0.1.3": "different published text"}
+  some f in findings
+  f.rule_id == "PD-013"
+  f.verdict == "noncompliant"
+  contains(f.msg, "typos-config-builder v0.1.3's docs/agents-md-spelling.md")
+}
+
+test_explicit_release_ref_rejects_non_releases if {
+  every ref in [
+    "refs/heads/v0.1.3", "refs/tags/main", "refs/tags/v0.1.3/extra",
+    "refs/tags/v0.1.3-rc.1", "refs/tags/v0.1.3+build", "refs/tags/refs/tags/v0.1.3",
+    "/refs/tags/v0.1.3", "prefix/refs/tags/v0.1.3", "refs//tags/v0.1.3",
+    "refs/tags/", "refs/tags/d6da92f02240a79a945c835f69bdd08a888da1d0",
+  ] {
+    findings := policy.deny with input as spelling_with_pin(ref)
+    some f in findings
+    f.rule_id == "PD-007"
+    f.verdict == "noncompliant"
+    contains(f.msg, "not a release tag")
+  }
+}

@@ -513,9 +513,9 @@ release_tag_accepted(spec, text) if {
 # command must not hide a bare `uv sync` beside it.
 commands(text) := regex.split(`&&|\|\||[;|&]`, text)
 
-# A direct `uvx --from <listed repository>@vX.Y.Z` is the shape
-# spelling-config-baseline (PD-007) requires, so UV-003 does not call it a
-# bypass; UV-006 still judges the pin.
+# A direct `uvx --from <listed repository>@vX.Y.Z` (also `@refs/tags/vX.Y.Z`)
+# is the shape spelling-config-baseline (PD-007) requires, so UV-003 does
+# not call it a bypass; UV-006 still judges the pin.
 direct_release_tag_invocation(text) if {
 	specs := tool_specs(text)
 	count(specs) > 0
@@ -526,7 +526,7 @@ direct_release_tag_invocation(text) if {
 
 release_tag_pinned(spec) if {
 	some repository in release_tag_tools
-	pattern := sprintf(`^git\+https://%s(\.git)?@v[0-9]+\.[0-9]+\.[0-9]+$`, [regex.replace(repository, `[.]`, `\.`)])
+	pattern := sprintf(`^git\+https://%s(\.git)?@(refs/tags/)?v[0-9]+\.[0-9]+\.[0-9]+$`, [regex.replace(repository, `[.]`, `\.`)])
 	regex.match(pattern, spec)
 }
 

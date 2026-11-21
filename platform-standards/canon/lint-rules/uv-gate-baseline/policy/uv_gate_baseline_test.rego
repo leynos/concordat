@@ -323,3 +323,47 @@ test_a_foreign_kind_is_indeterminate if {
 	foreign := object.union(data.fixtures.compliant, {"kind": "policy-input/other"})
 	reported(foreign) == {"EN-001/indeterminate"}
 }
+
+# The direct exception must recognize explicit tag refs without hiding neighbours.
+with_spelling_command(command) := json.patch(data.fixtures.tool_typos_builder_tag, [{
+  "op": "replace",
+  "path": "/makefile/rules/4/recipes/0/text",
+  "value": command,
+}])
+
+explicit_tag_command := `uvx --from "git+https://github.com/leynos/typos-config-builder.git@refs/tags/v0.1.3" typos-config-builder gate`
+
+test_explicit_tag_direct_command_is_accepted if {
+  reported(with_spelling_command(explicit_tag_command)) == set()
+}
+
+test_explicit_tag_tool_run_is_accepted if {
+  command := replace(explicit_tag_command, "uvx", "uv tool run")
+  reported(with_spelling_command(command)) == set()
+}
+
+test_explicit_tag_does_not_hide_neighbouring_bypass if {
+  every separator in [" && ", "; ", " || ", " | "] {
+    command := concat(separator, [explicit_tag_command, "uv sync"])
+    reported(with_spelling_command(command)) == {"UV-003/noncompliant"}
+  }
+}
+
+test_explicit_tag_via_helper_still_fails if {
+  command := replace(explicit_tag_command, "uvx", "$(UV_GATE) tool")
+  reported(with_spelling_command(command)) == {"UV-006/noncompliant"}
+}
+
+test_explicit_tag_retains_repository_and_release_boundaries if {
+  every ref in [
+    "refs/heads/v0.1.3", "refs/tags/main", "refs/tags/v0.1.3/extra",
+    "refs/tags/v0.1.3-rc.1", "refs/tags/v0.1.3+build", "refs/tags/refs/tags/v0.1.3",
+    "/refs/tags/v0.1.3", "prefix/refs/tags/v0.1.3", "refs//tags/v0.1.3",
+    "refs/tags/", "refs/tags/0.1.3", "refs/tags/d6da92f02240a79a945c835f69bdd08a888da1d0",
+  ] {
+    command := replace(explicit_tag_command, "refs/tags/v0.1.3", ref)
+    reported(with_spelling_command(command)) == {"UV-003/noncompliant", "UV-006/noncompliant"}
+  }
+  unlisted := replace(explicit_tag_command, "leynos/typos-config-builder", "leynos/other-tool")
+  reported(with_spelling_command(unlisted)) == {"UV-003/noncompliant", "UV-006/noncompliant"}
+}

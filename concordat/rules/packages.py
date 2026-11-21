@@ -115,6 +115,7 @@ from .uv_gate_envelope import (
     ENVELOPE_KIND as UV_GATE_ENVELOPE_KIND,
 )
 from .uv_gate_envelope import (
+    UvGateEnvelope,
     build_uv_gate_envelope,
 )
 from .whitaker_provisioning_envelope import (
@@ -143,6 +144,7 @@ type RuleEnvelope = (
     | DependabotEnvelope
     | DependencyFamilyEnvelope
     | SpellingEnvelope
+    | UvGateEnvelope
     | ProvisioningEnvelope
     | DocumentationEnvelope
     | DuplicationGateEnvelope

@@ -5,6 +5,11 @@ The audit is read-only and no existing rule changes, so nothing needs migrating
 for a repository that does not run it. This note is for a repository adopting
 the rule.
 
+Spelling and UV audits also accept `@refs/tags/vX.Y.Z` as equivalent to
+`@vX.Y.Z` for eligible release pins. The release floor remains in force, and
+the UV direct-invocation restriction still applies; existing bare-tag pins need
+no change.
+
 ## What the rule asks for
 
 Run `concordat artefact rule run rust-toolchain-policy --repo .` and bring the
