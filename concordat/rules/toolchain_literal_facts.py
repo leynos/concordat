@@ -431,44 +431,81 @@ def _opens_make_call(text: str, index: int) -> bool:
     return text[index + 1 : index + 2] in "({"
 
 
-def _is_missing_at_top(text: str, index: int, depth: int) -> bool:
-    """Return whether a plain reference survives outside any Make call."""
-    if depth:
+def _opens_a_missing_variable(text: str, index: int, closers: list[str]) -> bool:
+    """Return whether a plain reference starts at *index* outside any call."""
+    if closers:
         return False
     return _SURVIVING_REFERENCE.match(text, index) is not None
 
 
-def _closer_depth(text: str, index: int, depth: int) -> int:
-    """Return the call depth after the character at *index*."""
-    if depth == 0:
-        return 0
-    if text[index] in ")}":
-        return depth - 1
-    return depth
+def _closer_for(text: str, index: int) -> str:
+    """Return the character that closes the Make call at *index*."""
+    if text[index + 1] == "(":
+        return ")"
+    return "}"
+
+
+def _close_paren(closers: list[str], parens: list[int]) -> None:
+    """Close a plain `(` if one is open, else the call when it expects `)`."""
+    if parens[-1]:
+        parens[-1] -= 1
+        return
+    if closers[-1] != ")":
+        return
+    closers.pop()
+    parens.pop()
+
+
+def _read_in_call(text: str, index: int, closers: list[str], parens: list[int]) -> int:
+    """Read one character inside a Make call and return the next index.
+
+    Ordinary parentheses inside a call are balanced first, and only the
+    delimiter the call opened with closes it, so `$(shell echo ")")` stays one
+    call rather than ending at the first `)` the regex-shaped text carries.
+
+    Returns
+    -------
+    int
+        The index to resume reading at.
+    """
+    char = text[index]
+    if char == "(":
+        parens[-1] += 1
+    elif char == ")":
+        _close_paren(closers, parens)
+    elif char == closers[-1]:
+        closers.pop()
+        parens.pop()
+    return index + 1
 
 
 def _survives_a_missing_variable(text: str) -> bool:
     """Return whether a plain `$(NAME)` survives outside any Make call.
 
     A reference nested in `$(shell ...)` or `$(call ...)` is that call's
-    argument, so the value is computed rather than missing.
+    argument, so the value is computed rather than missing. The call's own
+    parentheses and delimiter are tracked so the scan cannot end it early.
 
     Returns
     -------
     bool
         Whether a missing variable remains at the top level of *text*.
     """
-    depth = 0
+    closers: list[str] = []
+    parens: list[int] = []
     index = 0
     while index < len(text):
-        if not _opens_make_call(text, index):
-            depth = _closer_depth(text, index, depth)
+        if _opens_make_call(text, index):
+            if _opens_a_missing_variable(text, index, closers):
+                return True
+            closers.append(_closer_for(text, index))
+            parens.append(0)
+            index += 2
+            continue
+        if not closers:
             index += 1
             continue
-        if _is_missing_at_top(text, index, depth):
-            return True
-        depth += 1
-        index += 2
+        index = _read_in_call(text, index, closers, parens)
     return False
 
 

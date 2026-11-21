@@ -13,7 +13,10 @@ import pytest
 
 from concordat.rules.makefile_facts import MakefileFacts
 from concordat.rules.toolchain import inspect_toolchain
-from concordat.rules.toolchain_literal_facts import toolchain_literal_facts
+from concordat.rules.toolchain_literal_facts import (
+    ToolchainLiteralFacts,
+    toolchain_literal_facts,
+)
 from tests.unit.toolchain_literal_support import (
     MANIFEST,
     literals,
@@ -267,18 +270,44 @@ def test_an_inline_makefile_literal_is_reported(tmp_path: pathlib.Path) -> None:
     ]
 
 
+def _makefile_facts(tmp_path: pathlib.Path, makefile: str) -> ToolchainLiteralFacts:
+    """Write *makefile* over a pinned repository and read its facts.
+
+    Returns
+    -------
+    ToolchainLiteralFacts
+        The literals the Makefile selects and any it leaves unknown.
+    """
+    rust_repository(tmp_path)
+    write(tmp_path, "Makefile", makefile)
+    return read(tmp_path)
+
+
+def _makefile_outcome(
+    tmp_path: pathlib.Path, makefile: str
+) -> tuple[list[str], list[str]]:
+    """Return the literal texts a Makefile selects, and its error paths.
+
+    Returns
+    -------
+    tuple[list[str], list[str]]
+        The literal texts, and the path of each error the Makefile leaves.
+    """
+    facts = _makefile_facts(tmp_path, makefile)
+    return (
+        [text for _, _, text in literals(facts)],
+        [error["path"] for error in facts["errors"]],
+    )
+
+
 def test_a_toolchain_from_an_unsupplied_variable_is_indeterminate(
     tmp_path: pathlib.Path,
 ) -> None:
     """A recipe naming a variable the Makefile never assigns has no known date."""
-    rust_repository(tmp_path)
-    write(
+    facts = _makefile_facts(
         tmp_path,
-        "Makefile",
         "test:\n\tRUSTUP_TOOLCHAIN=$(TOOLCHAIN) cargo test\n",
     )
-
-    facts = read(tmp_path)
 
     assert facts["literals"] == [], facts
     assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
@@ -289,67 +318,71 @@ def test_an_include_does_not_declare_an_unsupplied_variable(
     tmp_path: pathlib.Path,
 ) -> None:
     """An include may supply the name, but it cannot be shown to be a pin."""
-    rust_repository(tmp_path)
-    write(
+    outcome = _makefile_outcome(
         tmp_path,
-        "Makefile",
         "-include optional.mk\n\ntest:\n\tRUSTUP_TOOLCHAIN=$(TOOLCHAIN) cargo test\n",
     )
 
-    facts = read(tmp_path)
-
-    assert facts["literals"] == [], facts
-    assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
+    assert outcome == ([], ["Makefile"]), outcome
 
 
 def test_a_computed_toolchain_is_not_a_literal(tmp_path: pathlib.Path) -> None:
     """A value Make computes at build time is not a date written down."""
-    rust_repository(tmp_path)
-    write(
+    outcome = _makefile_outcome(
         tmp_path,
-        "Makefile",
         "test:\n\tRUSTUP_TOOLCHAIN=$(shell cat tools/toolchain.txt) cargo test\n",
     )
 
-    facts = read(tmp_path)
-
-    assert facts["literals"] == [], facts
-    assert facts["errors"] == [], facts
+    assert outcome == ([], []), outcome
 
 
 def test_a_reference_inside_a_computed_value_is_not_missing(
     tmp_path: pathlib.Path,
 ) -> None:
     """`$(shell cat $(PIN_FILE))` computes its value; the argument is not a pin."""
-    rust_repository(tmp_path)
-    write(
+    outcome = _makefile_outcome(
         tmp_path,
-        "Makefile",
         "test:\n\tRUSTUP_TOOLCHAIN=$(shell cat $(PIN_FILE)) cargo test\n",
     )
 
-    facts = read(tmp_path)
+    assert outcome == ([], []), outcome
 
-    assert facts["literals"] == [], facts
-    assert facts["errors"] == [], facts
+
+def test_a_call_with_plain_parentheses_stays_one_call(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `)` in the call's own text does not end a `$(shell ...)` early."""
+    outcome = _makefile_outcome(
+        tmp_path,
+        "test:\n\tRUSTUP_TOOLCHAIN=$(shell echo ')')-$(PIN_FILE) cargo test\n",
+    )
+
+    assert outcome == ([], ["Makefile"]), outcome
+
+
+def test_a_top_level_reference_beside_a_call_is_missing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A reference after a completed call is still a missing variable."""
+    outcome = _makefile_outcome(
+        tmp_path,
+        "test:\n\tRUSTUP_TOOLCHAIN=$(shell echo hi)-$(PIN_FILE) cargo test\n",
+    )
+
+    assert outcome == ([], ["Makefile"]), outcome
 
 
 def test_a_partly_expanded_value_is_indeterminate(tmp_path: pathlib.Path) -> None:
     """`nightly-$(DATE)` has no date the reader can establish without DATE."""
-    rust_repository(tmp_path)
-    write(
+    outcome = _makefile_outcome(
         tmp_path,
-        "Makefile",
         "TOOLCHAIN = nightly-$(DATE)\n"
         "\n"
         "test:\n"
         "\tRUSTUP_TOOLCHAIN=$(TOOLCHAIN) cargo test\n",
     )
 
-    facts = read(tmp_path)
-
-    assert facts["literals"] == [], facts
-    assert [error["path"] for error in facts["errors"]] == ["Makefile"], facts
+    assert outcome == ([], ["Makefile"]), outcome
 
 
 def test_a_variable_that_expands_to_a_literal_is_reported(
