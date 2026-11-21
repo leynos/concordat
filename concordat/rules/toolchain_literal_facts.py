@@ -419,9 +419,57 @@ def _expanded_literals(
         return literals, None
     if expansion.is_resolved:
         return [], None
-    if _SURVIVING_REFERENCE.search(expanded) is None:
+    if not _survives_a_missing_variable(expanded):
         return [], None
     return [], expanded
+
+
+def _opens_make_call(text: str, index: int) -> bool:
+    """Return whether `$(` or `${` starts a call or reference at *index*."""
+    if not text.startswith("$", index):
+        return False
+    return text[index + 1 : index + 2] in "({"
+
+
+def _is_missing_at_top(text: str, index: int, depth: int) -> bool:
+    """Return whether a plain reference survives outside any Make call."""
+    if depth:
+        return False
+    return _SURVIVING_REFERENCE.match(text, index) is not None
+
+
+def _closer_depth(text: str, index: int, depth: int) -> int:
+    """Return the call depth after the character at *index*."""
+    if depth == 0:
+        return 0
+    if text[index] in ")}":
+        return depth - 1
+    return depth
+
+
+def _survives_a_missing_variable(text: str) -> bool:
+    """Return whether a plain `$(NAME)` survives outside any Make call.
+
+    A reference nested in `$(shell ...)` or `$(call ...)` is that call's
+    argument, so the value is computed rather than missing.
+
+    Returns
+    -------
+    bool
+        Whether a missing variable remains at the top level of *text*.
+    """
+    depth = 0
+    index = 0
+    while index < len(text):
+        if not _opens_make_call(text, index):
+            depth = _closer_depth(text, index, depth)
+            index += 1
+            continue
+        if _is_missing_at_top(text, index, depth):
+            return True
+        depth += 1
+        index += 2
+    return False
 
 
 def _expanded_commands(

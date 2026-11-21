@@ -317,6 +317,23 @@ def test_a_computed_toolchain_is_not_a_literal(tmp_path: pathlib.Path) -> None:
     assert facts["errors"] == [], facts
 
 
+def test_a_reference_inside_a_computed_value_is_not_missing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`$(shell cat $(PIN_FILE))` computes its value; the argument is not a pin."""
+    rust_repository(tmp_path)
+    write(
+        tmp_path,
+        "Makefile",
+        "test:\n\tRUSTUP_TOOLCHAIN=$(shell cat $(PIN_FILE)) cargo test\n",
+    )
+
+    facts = read(tmp_path)
+
+    assert facts["literals"] == [], facts
+    assert facts["errors"] == [], facts
+
+
 def test_a_partly_expanded_value_is_indeterminate(tmp_path: pathlib.Path) -> None:
     """`nightly-$(DATE)` has no date the reader can establish without DATE."""
     rust_repository(tmp_path)
