@@ -54,6 +54,7 @@ from .markdown_envelope import (
     load_workflows,
     resolved_root,
 )
+from .toolchain_literal_refs import has_missing_reference
 from .toolchain_literal_scan import shell_commands
 from .toolchain_literal_shell import (
     Selection,
@@ -80,11 +81,6 @@ _WORKFLOW_REFERENCE: typ.Final = re.compile(
     r"^\$\{\{\s*(?P<scope>env|matrix)\.(?P<name>[\w-]+)\s*\}\}$"
 )
 _EXPRESSION: typ.Final = re.compile(r"\$\{\{\s*(?P<body>[^}]*?)\s*\}\}")
-# A plain `$(NAME)`/`${NAME}` that survived expansion: a missing variable, not
-# a Make function computing a value from something else.
-_SURVIVING_REFERENCE: typ.Final = re.compile(
-    r"\$(?:\((?P<paren>[A-Za-z_][\w-]*)\)|\{(?P<brace>[A-Za-z_][\w-]*)\})"
-)
 # GNU Make reads these in this order, so the first present one is the file the
 # repository's recipes run from.
 _MAKEFILE_NAMES: typ.Final = ("GNUmakefile", "makefile", "Makefile")
@@ -419,94 +415,9 @@ def _expanded_literals(
         return literals, None
     if expansion.is_resolved:
         return [], None
-    if not _survives_a_missing_variable(expanded):
+    if not has_missing_reference(expanded):
         return [], None
     return [], expanded
-
-
-def _opens_make_call(text: str, index: int) -> bool:
-    """Return whether `$(` or `${` starts a call or reference at *index*."""
-    if not text.startswith("$", index):
-        return False
-    return text[index + 1 : index + 2] in "({"
-
-
-def _opens_a_missing_variable(text: str, index: int, closers: list[str]) -> bool:
-    """Return whether a plain reference starts at *index* outside any call."""
-    if closers:
-        return False
-    return _SURVIVING_REFERENCE.match(text, index) is not None
-
-
-def _closer_for(text: str, index: int) -> str:
-    """Return the character that closes the Make call at *index*."""
-    if text[index + 1] == "(":
-        return ")"
-    return "}"
-
-
-def _close_paren(closers: list[str], parens: list[int]) -> None:
-    """Close a plain `(` if one is open, else the call when it expects `)`."""
-    if parens[-1]:
-        parens[-1] -= 1
-        return
-    if closers[-1] != ")":
-        return
-    closers.pop()
-    parens.pop()
-
-
-def _read_in_call(text: str, index: int, closers: list[str], parens: list[int]) -> int:
-    """Read one character inside a Make call and return the next index.
-
-    Ordinary parentheses inside a call are balanced first, and only the
-    delimiter the call opened with closes it, so `$(shell echo ")")` stays one
-    call rather than ending at the first `)` the regex-shaped text carries.
-
-    Returns
-    -------
-    int
-        The index to resume reading at.
-    """
-    char = text[index]
-    if char == "(":
-        parens[-1] += 1
-    elif char == ")":
-        _close_paren(closers, parens)
-    elif char == closers[-1]:
-        closers.pop()
-        parens.pop()
-    return index + 1
-
-
-def _survives_a_missing_variable(text: str) -> bool:
-    """Return whether a plain `$(NAME)` survives outside any Make call.
-
-    A reference nested in `$(shell ...)` or `$(call ...)` is that call's
-    argument, so the value is computed rather than missing. The call's own
-    parentheses and delimiter are tracked so the scan cannot end it early.
-
-    Returns
-    -------
-    bool
-        Whether a missing variable remains at the top level of *text*.
-    """
-    closers: list[str] = []
-    parens: list[int] = []
-    index = 0
-    while index < len(text):
-        if _opens_make_call(text, index):
-            if _opens_a_missing_variable(text, index, closers):
-                return True
-            closers.append(_closer_for(text, index))
-            parens.append(0)
-            index += 2
-            continue
-        if not closers:
-            index += 1
-            continue
-        index = _read_in_call(text, index, closers, parens)
-    return False
 
 
 def _expanded_commands(

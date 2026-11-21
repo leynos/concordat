@@ -61,3 +61,33 @@ def run_step(script: str) -> str:
     """Return one `run` step whose block holds *script* at the block's indent."""
     body = textwrap.indent(script.strip("\n"), " " * 18)
     return workflow(f"      - run: |\n{body}\n")
+
+
+def makefile_facts(checkout: pathlib.Path, makefile: str) -> ToolchainLiteralFacts:
+    """Write *makefile* over a pinned repository and read its facts.
+
+    Returns
+    -------
+    ToolchainLiteralFacts
+        The literals the Makefile selects and any it leaves unknown.
+    """
+    rust_repository(checkout)
+    write(checkout, "Makefile", makefile)
+    return read(checkout)
+
+
+def makefile_outcome(
+    checkout: pathlib.Path, makefile: str
+) -> tuple[list[str], list[str]]:
+    """Return the literal texts a Makefile selects, and its error paths.
+
+    Returns
+    -------
+    tuple[list[str], list[str]]
+        The literal texts, and the path of each error the Makefile leaves.
+    """
+    facts = makefile_facts(checkout, makefile)
+    return (
+        [text for _, _, text in literals(facts)],
+        [error["path"] for error in facts["errors"]],
+    )
