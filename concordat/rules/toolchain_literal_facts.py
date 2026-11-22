@@ -486,8 +486,10 @@ def _program_recogniser(
     """Return a predicate that reads a reference program through the table.
 
     `$(CARGO.PRINT)` may expand to `echo`, so the name alone cannot say the
-    program takes cargo's override. A reference the table does not resolve is
-    not treated as a tool either: nothing shows it is cargo.
+    program takes cargo's override. The value is read as a command, because it
+    may be a wrapper around the tool (`env cargo`); a command whose program is
+    not a tool selects nothing. A reference the table does not resolve is not
+    treated as a tool either: nothing shows it is cargo.
 
     Returns
     -------
@@ -502,9 +504,34 @@ def _program_recogniser(
         expansion = expand(program, values)
         if not expansion.is_resolved:
             return False
-        return is_tool(shown(expansion.text).strip())
+        return _commands_run_a_tool(shown(expansion.text))
 
     return recognises
+
+
+def _commands_run_a_tool(text: str) -> bool:
+    """Return whether any command *text* runs has a tool as its program.
+
+    Returns
+    -------
+    bool
+        Whether one of the commands takes cargo's `+toolchain` override.
+    """
+    return any(_command_runs_a_tool(words) for words in shell_commands(text))
+
+
+def _command_runs_a_tool(words: list[str]) -> bool:
+    """Return whether one command's program takes the toolchain override.
+
+    Returns
+    -------
+    bool
+        Whether the program, with any wrapper unwrapped, is a tool.
+    """
+    position = program_position(words)
+    if position is None:
+        return False
+    return is_tool(position[1])
 
 
 def _recipe_texts(

@@ -227,6 +227,43 @@ def test_a_reference_program_that_is_cargo_is_read(
     assert outcome == (["nightly-2026-10-30"], []), outcome
 
 
+def test_a_command_valued_reference_is_not_a_tool(tmp_path: pathlib.Path) -> None:
+    """`$(PRINT)` expanding to `echo /usr/bin/cargo` prints the date."""
+    outcome = makefile_outcome(
+        tmp_path,
+        "PRINT = echo /usr/bin/cargo\n\ntest:\n\t$(PRINT) +nightly-2026-10-30 check\n",
+    )
+
+    assert outcome == ([], []), outcome
+
+
+def test_a_wrapper_reference_is_read_as_its_program(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`$(CARGO)` expanding to `env cargo` still takes the override."""
+    outcome = makefile_outcome(
+        tmp_path,
+        "CARGO = env cargo\n\ntest:\n\t$(CARGO) +nightly-2026-10-30 test\n",
+    )
+
+    assert outcome == (["nightly-2026-10-30"], []), outcome
+
+
+def test_a_wrapper_reference_inside_a_substitution_is_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A command substitution of `$(CARGO) +nightly-...` still selects."""
+    outcome = makefile_outcome(
+        tmp_path,
+        "CARGO = env cargo\n"
+        "\n"
+        "test:\n"
+        '\t@echo "$$($(CARGO) +nightly-2026-10-30 --version)"\n',
+    )
+
+    assert outcome == (["nightly-2026-10-30"], []), outcome
+
+
 def test_a_variable_that_expands_to_a_literal_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:
