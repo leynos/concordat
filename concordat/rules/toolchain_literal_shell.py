@@ -167,7 +167,7 @@ def _assignment_selection(word: str) -> Selection | None:
     return Selection(text=value, is_reference=reference_name(value) is not None)
 
 
-def _is_tool(word: str) -> bool:
+def is_tool(word: str) -> bool:
     """Return whether *word* is a program that takes the `+toolchain` override."""
     bare = word.rpartition("/")[2]
     if bare in _TOOLCHAINS:
@@ -473,7 +473,9 @@ def _after_export(
     return pending, pending
 
 
-def selection_in(words: list[str]) -> cabc.Iterator[Selection]:
+def selection_in(
+    words: list[str], *, recognise: cabc.Callable[[str], bool] = is_tool
+) -> cabc.Iterator[Selection]:
     """Yield each toolchain one command's words select.
 
     A `+toolchain` override is only read from the program's first argument:
@@ -503,11 +505,13 @@ def selection_in(words: list[str]) -> cabc.Iterator[Selection]:
     if program.rpartition("/")[2] == "rustup":
         yield from _option_values(args)
         yield from _rustup_arguments(args)
-    elif _is_tool(program):
+    elif recognise(program):
         yield from _override(args)
 
 
-def command_selections(text: str) -> list[Selection]:
+def command_selections(
+    text: str, *, recognise: cabc.Callable[[str], bool] = is_tool
+) -> list[Selection]:
     """Return each toolchain a command text selects, as written.
 
     The text is split into shell commands first, so a selection is only read
@@ -527,8 +531,12 @@ def command_selections(text: str) -> list[Selection]:
         The selected toolchains, in the order the text writes them.
     """
     commands, substitutions = scan_text(text)
-    selections = [selection for words in commands for selection in selection_in(words)]
+    selections = [
+        selection
+        for words in commands
+        for selection in selection_in(words, recognise=recognise)
+    ]
     selections.extend(_exported_assignments(commands))
     for inner in substitutions:
-        selections.extend(command_selections(inner))
+        selections.extend(command_selections(inner, recognise=recognise))
     return selections

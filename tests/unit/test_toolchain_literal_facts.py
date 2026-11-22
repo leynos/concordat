@@ -200,6 +200,33 @@ def test_a_declared_dotted_variable_is_a_separate_pin(
     assert outcome == ([], []), outcome
 
 
+def test_a_reference_program_that_is_not_cargo_selects_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`$(CARGO.PRINT) = echo` means the override is an argument to echo."""
+    outcome = makefile_outcome(
+        tmp_path,
+        "CARGO.PRINT = echo\n"
+        "\n"
+        "test:\n"
+        "\t$(CARGO.PRINT) +nightly-2026-10-30 cargo test\n",
+    )
+
+    assert outcome == ([], []), outcome
+
+
+def test_a_reference_program_that_is_cargo_is_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A reference that resolves to cargo keeps its `+toolchain` override."""
+    outcome = makefile_outcome(
+        tmp_path,
+        "CARGO = cargo\n\ntest:\n\t$(CARGO) +nightly-2026-10-30 test\n",
+    )
+
+    assert outcome == (["nightly-2026-10-30"], []), outcome
+
+
 def test_a_variable_that_expands_to_a_literal_is_reported(
     tmp_path: pathlib.Path,
 ) -> None:

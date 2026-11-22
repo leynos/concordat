@@ -59,6 +59,7 @@ from .toolchain_literal_scan import shell_commands
 from .toolchain_literal_shell import (
     Selection,
     command_selections,
+    is_tool,
     program_position,
     reference_name,
     selection_in,
@@ -479,6 +480,33 @@ def _selection_texts(
     return texts, unknown
 
 
+def _program_recogniser(
+    values: cabc.Mapping[str, str],
+) -> cabc.Callable[[str], bool]:
+    """Return a predicate that reads a reference program through the table.
+
+    `$(CARGO.PRINT)` may expand to `echo`, so the name alone cannot say the
+    program takes cargo's override. A reference the table does not resolve is
+    not treated as a tool either: nothing shows it is cargo.
+
+    Returns
+    -------
+    cabc.Callable[[str], bool]
+        Whether a program word takes cargo's `+toolchain` override.
+    """
+
+    def recognises(program: str) -> bool:
+        """Return whether *program*, resolved if a reference, is a tool."""
+        if reference_name(program) is None:
+            return is_tool(program)
+        expansion = expand(program, values)
+        if not expansion.is_resolved:
+            return False
+        return is_tool(shown(expansion.text).strip())
+
+    return recognises
+
+
 def _recipe_texts(
     text: str, values: cabc.Mapping[str, str]
 ) -> tuple[list[str], list[str]]:
@@ -491,10 +519,15 @@ def _recipe_texts(
         Makefile never supplies.
     """
     raw = shown(text)
-    texts, unknown = _selection_texts(command_selections(raw), values)
+    recognise = _program_recogniser(values)
+    texts, unknown = _selection_texts(
+        command_selections(raw, recognise=recognise), values
+    )
     for words in shell_commands(raw):
         for command in _expanded_commands(words, values) or []:
-            found, missing = _selection_texts(selection_in(command), values)
+            found, missing = _selection_texts(
+                selection_in(command, recognise=recognise), values
+            )
             unknown.extend(missing)
             texts.extend(value for value in found if value not in texts)
     return texts, unknown
