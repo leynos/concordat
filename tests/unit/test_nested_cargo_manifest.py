@@ -238,7 +238,7 @@ def test_a_finding_blocks_by_default(tmp_path: pathlib.Path) -> None:
 def test_the_severity_parameter_can_lower_a_finding_to_a_warning(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A repository may still configure the survey behaviour."""
+    """A change to the shared package default restores the survey behaviour."""
     uncovered_fixture(tmp_path)
     result = result_with(
         monkeypatch, tmp_path, {"severity": "warning", "exemptions": []}

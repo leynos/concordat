@@ -240,7 +240,7 @@ artifacts:
     description: >-
       Sensor requiring a cargo Dependabot entry to cover every standalone
       manifest with registry dependencies.
-    sha256: 0cdbca7387f1872ef30f8124ffeec70b3b3fa65c2af07b74bf07c3d0eb827236
+    sha256: 3e005cca73d64acaf02adc9d13f0790637dbdcba9dac1b832745dacc3a5f0dfc
   - id: lint-rule-nested-cargo-fixture-manifests-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/nested-cargo-fixture-manifests/rule.yaml

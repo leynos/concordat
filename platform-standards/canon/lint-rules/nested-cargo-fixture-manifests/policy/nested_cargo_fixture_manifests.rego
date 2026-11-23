@@ -10,8 +10,9 @@
 #
 # NC-003 and the indeterminate findings that report evidence the reader could
 # not establish carry the configured severity, which defaults to `error` since
-# the promotion of 23 November 2026; a repository may configure `warning` to
-# report without blocking. An envelope defect is always an error.
+# the promotion of 23 November 2026. The default is the rule package's and
+# applies to every audited checkout; there is no per-repository override. An
+# envelope defect is always an error.
 package canon.lint_rules.nested_cargo_fixture_manifests
 
 import rego.v1
