@@ -1951,26 +1951,36 @@ run_id_reachable(body) if {
 }
 
 # A run id is shadowed when an always-set reference stands as a bare
-# alternative (not an `&&` operand) before an `||`, and the parenthesised group
-# holding that alternative is still open where the run id appears. A group that
-# closes first, as in `(github.ref || x) && github.run_id`, no longer
-# constrains what follows it.
+# alternative (not an `&&` operand) before an `||`, and nothing ends its hold
+# before the run id appears. A parenthesised group that holds the alternative
+# is as truthy as the alternative, so closing it does not end the hold:
+# `(github.ref || github.sha) || github.run_id` is still shadowed. What ends it
+# is a group that closes and is followed by `&&`, because an `&&` chain yields
+# its last operand: `(github.ref || x) && github.run_id` selects the run id.
 run_id_shadowed_in(prefix) if {
 	some p in numbers.range(0, count(prefix) - 1)
 	tail := substring(prefix, p, -1)
 	regex.match(ALWAYS_SET_ALTERNATIVE_PATTERN, tail)
 	not endswith(trim_right(substring(prefix, 0, p), " "), "&")
 	matched := regex.find_n(ALWAYS_SET_ALTERNATIVE_PATTERN, tail, 1)[0]
-	not group_closes(substring(tail, count(matched), -1))
+	not hold_ends(substring(tail, count(matched), -1))
 }
 
-# Whether a `)` in the text has no `(` before it in the same text.
-group_closes(text) if {
+# Whether a group closing in the text (a `)` that takes the running depth below
+# every earlier point) is followed by `&&`.
+hold_ends(text) if {
 	chars := split(text, "")
+	depths := [d | some j in numbers.range(1, count(chars)); d := depth_after(chars, j)]
 	some j in numbers.range(1, count(chars))
-	seen := array.slice(chars, 0, j)
-	count([c | some c in seen; c == ")"]) > count([c | some c in seen; c == "("])
+	chars[j - 1] == ")"
+	depths[j - 1] < 0
+	every earlier in array.slice(depths, 0, j - 1) {
+		depths[j - 1] < earlier
+	}
+	regex.match(`^\s*&&`, substring(text, j, -1))
 }
+
+depth_after(chars, j) := count([c | some c in array.slice(chars, 0, j); c == "("]) - count([c | some c in array.slice(chars, 0, j); c == ")"])
 
 # --------------------------------------------------------------------------
 # Findings
