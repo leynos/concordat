@@ -248,6 +248,16 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         ),
         # A double-colon rule runs independently of the target's other rules.
         "test: prepare\n\tcargo nextest run\n\nprepare::\n\tcargo build\n",
+        # `.IGNORE` and `MAKEFLAGS` let the tests run after a failed build.
+        (
+            ".IGNORE: prepare\n"
+            "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+        ),
+        ".IGNORE:\ntest: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n",
+        (
+            "MAKEFLAGS += -i\n"
+            "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+        ),
         # A compile-only command after the test prepares nothing for it.
         "test:\n\tcargo nextest run\n\tcargo nextest run --no-run\n",
         # `make -f` reads another Makefile and `make -n` runs nothing.

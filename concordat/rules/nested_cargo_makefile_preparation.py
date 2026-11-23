@@ -53,6 +53,10 @@ if typ.TYPE_CHECKING:
 MAKEFILE: typ.Final = "Makefile"
 ONESHELL_TARGET: typ.Final = ".ONESHELL"
 PHONY_TARGET: typ.Final = ".PHONY"
+# Special targets that change what a failed recipe line does to the next (a
+# `.ONESHELL` recipe runs as one script; `.IGNORE` ignores errors, globally or
+# for the targets it names), so a build before the tests no longer gates them.
+UNSAFE_SPECIAL_TARGETS: typ.Final = frozenset({ONESHELL_TARGET, ".IGNORE"})
 OPERATION_READ_MAKEFILE: typ.Final = "read-nested-cargo-makefile-preparation"
 
 
@@ -365,8 +369,8 @@ def makefile_prepares(checkout: pathlib.Path) -> bool:
         True when a prerequisite of `test`, an earlier recipe line, or an
         earlier success-gated command on the test line compiles before the
         test command. False when there is no Makefile, it cannot be parsed, it
-        declares `.ONESHELL`, or nothing in it prepares: the reader never
-        guesses a preparation it cannot see.
+        declares `.ONESHELL` or `.IGNORE`, assigns `MAKEFLAGS`, or nothing in it
+        prepares: the reader never guesses a preparation it cannot see.
     """
     path = checkout / MAKEFILE
     try:
@@ -380,7 +384,9 @@ def makefile_prepares(checkout: pathlib.Path) -> bool:
     except MakefileRefusedError:
         return False
     index = rules_by_target(report)
-    if TEST_TARGET not in index or ONESHELL_TARGET in index:
+    if TEST_TARGET not in index or UNSAFE_SPECIAL_TARGETS & index.keys():
+        return False
+    if any(variable.get("name") == "MAKEFLAGS" for variable in report["variables"]):
         return False
     values = read_tool_paths(single_assignments(report["variables"]))
     return _Reader(index, values).test_prepares()
