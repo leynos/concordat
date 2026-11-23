@@ -375,3 +375,75 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
             break
         current = updated
     return Expansion(current, _UNRESOLVED_REFERENCE.search(current) is None)
+
+
+# `$(if $(shell PROBE),THEN,ELSE)`, up to and including the probe. A probe asks
+# a toolchain binary for its version (`cargo nextest --version 2>/dev/null`);
+# a shell call that does anything else may change the machine, so it is not read.
+_PROBE_IF: typ.Final = re.compile(
+    r"\$\(" + JUDGED_MARK + r"?if\s+\$\(shell\s+(?:cargo|rustc|rustup)(?:\s+[\w.-]+)*"
+    r"\s+(?:--version|-V)(?:\s+2>/dev/null)?\s*\)"
+)
+
+# How many probe conditionals one text may fork on. Each doubles the readings.
+MAX_PROBES: typ.Final = 2
+
+
+def _probe_split(text: str) -> tuple[str, str] | None:
+    """Return the two readings of the first probe `if` in *text*, or None.
+
+    A probe is an `if` whose whole condition is one `$(shell ...)` call, such
+    as `$(if $(shell cargo nextest --version),nextest run,test)`. Make decides
+    it at run time, so the reader cannot, but it knows the call yields one of
+    its two branches. The first reading keeps the THEN branch, the second the
+    ELSE branch, with the rest of the text untouched.
+
+    Returns
+    -------
+    tuple[str, str] | None
+        The text with the probe replaced by each branch, or None when *text*
+        holds no probe in the form this reads.
+    """
+    match = _PROBE_IF.search(text)
+    if match is None:
+        return None
+    close = close_of(text, match.start() + 1)
+    if close is None:
+        return None
+    branches = text[match.end() : close]
+    commas = top_level_commas(branches)
+    if len(commas) != 2 or branches[: commas[0]].strip():
+        return None
+    then = branches[commas[0] + 1 : commas[1]]
+    otherwise = branches[commas[1] + 1 :]
+    head, tail = text[: match.start()], text[close + 1 :]
+    return head + then + tail, head + otherwise + tail
+
+
+def expand_readings(text: str, values: cabc.Mapping[str, str]) -> list[Expansion]:
+    """Expand *text*, forking on each probe `if` its variables leave behind.
+
+    A variable such as `TEST_CMD := $(if $(shell $(CARGO) nextest --version
+    2>/dev/null),nextest run,test)` picks a runner by asking the machine. The
+    reader does not run shell, so it reads both branches: the line is settled
+    only if each reading is, and a caller that needs a proof must have it hold
+    in every reading. At most :data:`MAX_PROBES` probes fork; any further probe
+    stays unresolved.
+
+    Returns
+    -------
+    list[Expansion]
+        One expansion per reading, THEN branch first. A text without a probe
+        has exactly one.
+    """
+    readings = [expand(text, values)]
+    for _ in range(MAX_PROBES):
+        forked: list[Expansion] = []
+        for reading in readings:
+            split = _probe_split(reading.text)
+            if split is None:
+                forked.append(reading)
+                continue
+            forked.extend(expand(branch, values) for branch in split)
+        readings = forked
+    return readings

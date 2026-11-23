@@ -472,9 +472,11 @@ def _shell_words(text: str) -> str:
     return _CONTINUATION.sub(" ", text)
 
 
-def _command_words(text: str) -> list[str] | None:
+def command_words(text: str, *, names_cargo: bool = True) -> list[str] | None:
     """Return the words of the first simple command, or ``None`` if unlexable."""
-    segments = lex_segments(blank_references(_shell_words(text)))
+    segments = lex_segments(
+        blank_references(_shell_words(text), names_cargo=names_cargo)
+    )
     if segments is None:
         return None
     for words in segments:
@@ -497,7 +499,7 @@ def _command_start(words: list[str]) -> int:
 
 def _classify(text: str) -> CommandMeaning:
     """Classify one simple command."""
-    words = _command_words(text)
+    words = command_words(text)
     if words is None:
         # A script the shell lexer refuses cannot be shown to do anything, and
         # guessing that it fetches would be the one answer that matters.

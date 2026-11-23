@@ -452,6 +452,142 @@ def test_an_unresolved_cargo_variable_is_uncertain(tmp_path: pathlib.Path) -> No
     assert makefile_state(tmp_path) == [("test", "uncertain")]
 
 
+WHITAKER_CARGO = (
+    "CARGO ?= $(or $(shell command -v cargo 2>/dev/null),"
+    '$(shell [ -x "$(HOME)/.cargo/bin/cargo" ] && echo "$(HOME)/.cargo/bin/cargo"))'
+)
+LINKER_FLAGS = (
+    'RUSTFLAGS="$(if $(filter Linux,$(shell uname -s)),-C link-arg=-fuse-ld=mold)"'
+)
+PROBE = (
+    "TEST_CMD := $(if $(shell $(CARGO) nextest --version 2>/dev/null),nextest run,test)"
+)
+
+
+def test_an_executable_probe_shell_is_a_cargo_lookup(tmp_path: pathlib.Path) -> None:
+    """`[ -x P ] && echo P` prints the one path it tests, so it ends in cargo."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"{WHITAKER_CARGO}\n\ntest:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_an_executable_probe_that_prints_another_path_is_not_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The path tested and the path printed must be the same cargo."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        'CARGO ?= $(shell [ -x "/bin/cargo" ] && echo "/bin/true")\n\n'
+        "test:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_shell_in_an_environment_assignment_does_not_hide_the_order(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A reference in `RUSTFLAGS=...` before the command cannot change the command."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"test:\n\t{LINKER_FLAGS} cargo fetch --locked && {LINKER_FLAGS} cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_shell_in_an_environment_assignment_does_not_hide_a_cold_test(
+    tmp_path: pathlib.Path,
+) -> None:
+    """With the reference read past, a test with no fetch is plainly absent."""
+    put(tmp_path, MAKEFILE, f"test:\n\t{LINKER_FLAGS} cargo test\n")
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_an_unresolved_reference_in_the_test_arguments_is_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo nextest run $(FLAGS)` may carry `--profile`, so it is not read past."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && cargo test $(FLAGS)\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_shell_reference_beside_a_literal_test_does_not_hide_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `$(shell ...)` elsewhere on the line leaves the literal `cargo test` found."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && echo $(shell uname -s) && cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_runner_probe_must_be_proved_in_both_readings(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`$(if $(shell cargo nextest --version),nextest run,test)` runs either one."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"CARGO ?= cargo\n{PROBE}\n\n"
+        "test:\n\tcargo fetch --locked && $(CARGO) $(TEST_CMD)\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_runner_probe_with_no_fetch_is_absent_not_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Both readings are cargo test commands, so the missing fetch is readable."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"CARGO ?= cargo\n{PROBE}\n\ntest:\n\t$(CARGO) $(TEST_CMD)\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_runner_probe_does_not_let_the_plain_branch_borrow_the_setup_script(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A nextest setup script warms `nextest run`, not the `cargo test` branch."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"CARGO ?= cargo\n{PROBE}\n\ntest:\n\t$(CARGO) $(TEST_CMD)\n",
+    )
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        "[scripts.setup.warm]\ncommand = 'cargo fetch --locked'\n\n"
+        "[[profile.default.scripts]]\nfilter = 'all()'\nsetup = 'warm'\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_probe_that_is_not_a_version_query_is_not_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A shell call that may change the machine stays unresolved."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "CARGO ?= cargo\n"
+        "TEST_CMD := $(if $(shell touch built),nextest run,test)\n\n"
+        "test:\n\tcargo fetch --locked && $(CARGO) $(TEST_CMD)\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
 def test_an_oneshell_recipe_is_uncertain(tmp_path: pathlib.Path) -> None:
     """With `.ONESHELL` a line may not stand alone as a command."""
     put(

@@ -31,7 +31,7 @@ from ruamel.yaml.error import YAMLError
 
 from .makefile_expansion import (
     Expansion,
-    expand,
+    expand_readings,
     single_assignments,
 )
 from .makefile_facts import MakefileRefusedError, inspect_makefile
@@ -44,6 +44,11 @@ from .markdown_envelope import (
 from .nested_cargo_conditions import (
     condition_proves_order,
     runs_only_after_success,
+)
+from .nested_cargo_makefile_lines import (
+    are_settled,
+    prefetch_in_prerequisites,
+    rules_by_target,
 )
 from .nested_cargo_nextest import (
     ABSENT,
@@ -70,7 +75,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
-    from .makefile_facts import MakeRecipe, MakeRule, MakeutilReport
+    from .makefile_facts import MakeRecipe, MakeRule
 
 OPERATION_READ_WORKFLOW: typ.Final = "read-nested-cargo-workflow"
 OPERATION_READ_MAKEFILE: typ.Final = "read-nested-cargo-makefile"
@@ -119,55 +124,6 @@ class _TargetScan:
     hidden_reason: str = ""
 
 
-def _rules_by_target(report: MakeutilReport) -> dict[str, list[MakeRule]]:
-    """Index the Makefile's rules by target, in file order."""
-    index: dict[str, list[MakeRule]] = {}
-    for rule in report["rules"]:
-        for target in rule["targets"]:
-            index.setdefault(target, []).append(rule)
-    return index
-
-
-def _prefetch_in_prerequisites(
-    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
-) -> tuple[bool, str, str]:
-    """Walk `test`'s prerequisites, returning proof, uncertainty and a reason."""
-    seen = {TEST_TARGET}
-    pending: list[MakeRule] = list(index[TEST_TARGET])
-    proven = False
-    proven_reason = ""
-    uncertain_reason = ""
-    while pending:
-        rule = pending.pop()
-        for reference in rule["prerequisites"]:
-            expansion = expand(reference, values)
-            if not expansion.is_resolved:
-                uncertain_reason = "a prerequisite names an unresolved variable"
-                continue
-            for name in expansion.text.split():
-                if name in seen:
-                    continue
-                seen.add(name)
-                for nested in index.get(name, []):
-                    pending.append(nested)
-                    if _recipes_fetch(nested["recipes"], values):
-                        proven = True
-                        proven_reason = f"prerequisite {name} runs cargo fetch --locked"
-    return proven, uncertain_reason, proven_reason
-
-
-def _recipes_fetch(recipes: list[MakeRecipe], values: cabc.Mapping[str, str]) -> bool:
-    """Return whether a recipe line fetches with its failure left fatal."""
-    for recipe in recipes:
-        expansion: Expansion = expand(recipe["text"], values)
-        commands = script_commands(expansion.text)
-        if not recipe["ignore_errors"] and line_fetches(
-            commands, is_resolved=expansion.is_resolved
-        ):
-            return True
-    return False
-
-
 def _scan_target(
     index: dict[str, list[MakeRule]],
     values: cabc.Mapping[str, str],
@@ -179,7 +135,7 @@ def _scan_target(
     if not sequencing_holds:
         scan.uncertain_reason = "the Makefile declares .ONESHELL"
     else:
-        proven, uncertain_reason, proven_reason = _prefetch_in_prerequisites(
+        proven, uncertain_reason, proven_reason = prefetch_in_prerequisites(
             index, values
         )
         scan.proven = proven
@@ -209,9 +165,51 @@ def _inspect_line(
     bool
         True when this line holds the target's test command.
     """
-    expansion: Expansion = expand(recipe["text"], values)
+    readings = expand_readings(recipe["text"], values)
+    if len(readings) == 1:
+        return _inspect_reading(
+            scan, recipe, readings[0], sequencing_holds=sequencing_holds
+        )
+    # The line picks its runner at run time (a probe `$(if $(shell ...),..)`),
+    # so each reading is followed from the same start, and the weakest result
+    # stands: an order holds only if it holds whichever branch Make takes.
+    branches = [dataclasses.replace(scan) for _ in readings]
+    found = [
+        _inspect_reading(branch, recipe, reading, sequencing_holds=sequencing_holds)
+        for branch, reading in zip(branches, readings, strict=True)
+    ]
+    weakest = min(
+        branches, key=lambda branch: (branch.proven, branch.test == "nextest")
+    )
+    for field in dataclasses.fields(scan):
+        setattr(scan, field.name, getattr(weakest, field.name))
+    scan.uncertain_reason = next(
+        (branch.uncertain_reason for branch in branches if branch.uncertain_reason),
+        scan.uncertain_reason,
+    )
+    scan.hidden_reason = next(
+        (branch.hidden_reason for branch in branches if branch.hidden_reason),
+        scan.hidden_reason,
+    )
+    return any(found)
+
+
+def _inspect_reading(
+    scan: _TargetScan,
+    recipe: MakeRecipe,
+    expansion: Expansion,
+    *,
+    sequencing_holds: bool,
+) -> bool:
+    """Read one expansion of a recipe line, returning whether it holds the test.
+
+    Returns
+    -------
+    bool
+        True when this reading of the line holds the target's test command.
+    """
     commands = script_commands(expansion.text)
-    if not expansion.is_resolved:
+    if not are_settled(commands):
         scan.uncertain_reason = "a recipe line names an unresolved variable"
     for position, command in enumerate(commands):
         if command.meaning.test is not None:
@@ -220,7 +218,6 @@ def _inspect_line(
                 command,
                 recipe,
                 commands,
-                expansion,
                 position,
                 sequencing_holds=sequencing_holds,
             )
@@ -234,7 +231,7 @@ def _inspect_line(
     if (
         sequencing_holds
         and not recipe["ignore_errors"]
-        and line_fetches(commands, is_resolved=expansion.is_resolved)
+        and line_fetches(commands, is_resolved=are_settled(commands))
     ):
         scan.proven = True
         scan.proven_reason = "an earlier recipe line runs cargo fetch --locked"
@@ -246,7 +243,6 @@ def _record_test(
     command: ScriptCommand,
     recipe: MakeRecipe,
     commands: list[ScriptCommand],
-    expansion: Expansion,
     position: int,
     *,
     sequencing_holds: bool,
@@ -261,12 +257,12 @@ def _record_test(
     if (
         sequencing_holds
         and not recipe["ignore_errors"]
-        and expansion.is_resolved
+        and are_settled(commands)
         and gates_fetch(commands, position)
     ):
         scan.proven = True
         scan.proven_reason = "cargo fetch --locked runs first on the same line"
-    elif not expansion.is_resolved:
+    elif not are_settled(commands):
         scan.uncertain_reason = "the test command names an unresolved variable"
 
 
@@ -334,7 +330,7 @@ def _makefile_entry(
         return _MakefileEntry(None, [], refused=True)
     report = facts.report
     values = read_tool_paths(single_assignments(report["variables"]))
-    index = _rules_by_target(report)
+    index = rules_by_target(report)
     if TEST_TARGET not in index:
         return _MakefileEntry(None, [])
     scan = _scan_target(index, values, sequencing_holds=ONESHELL_TARGET not in index)

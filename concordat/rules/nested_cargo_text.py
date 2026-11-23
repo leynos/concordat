@@ -8,7 +8,79 @@ here on its own.
 
 from __future__ import annotations
 
+import typing as typ
+
 from .rust_source import scan_balanced
+
+_PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
+
+
+def string_end(text: str, index: int) -> int:
+    """Return the index of the quote closing the string whose body starts here."""
+    while index < len(text):
+        if text[index] == "\\":
+            index += 2
+            continue
+        if text[index] == '"':
+            return index
+        index += 1
+    return len(text)
+
+
+def comment_end(text: str, index: int) -> int | None:
+    """Return where the comment starting at *index* ends, or None if none starts.
+
+    rustfmt keeps a comment between the elements of an argument array, and a
+    comment is not a token: it must not hide the literals that follow it. An
+    unterminated block comment runs to the end of the text.
+
+    Returns
+    -------
+    int | None
+        The index just past the comment, or None when no comment starts here.
+    """
+    if text.startswith("//", index):
+        newline = text.find("\n", index)
+        return len(text) if newline == -1 else newline
+    if text.startswith("/*", index):
+        close = text.find("*/", index + 2)
+        return len(text) if close == -1 else close + 2
+    return None
+
+
+def string_literals(text: str) -> list[str] | None:
+    """Return every double-quoted string in *text*, or None if it has another token.
+
+    `["--offline", "--locked"]`, `&["build"]` and `("K", "V")` are all literal
+    sources. An identifier, a call or a macro makes the source one the reader
+    cannot settle, which is answered with `None` rather than a guess. A comment
+    between the elements is skipped.
+
+    Returns
+    -------
+    list[str] | None
+        The literals in source order, or None when anything else appears.
+    """
+    words: list[str] = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            end = string_end(text, index + 1)
+            if end >= len(text):
+                return None
+            words.append(text[index + 1 : end])
+            index = end + 1
+            continue
+        skipped = comment_end(text, index)
+        if skipped is not None:
+            index = skipped
+            continue
+        if char in _PUNCTUATION:
+            index += 1
+            continue
+        return None
+    return words
 
 
 def split_top_level(text: str) -> list[str]:

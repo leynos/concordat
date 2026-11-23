@@ -203,6 +203,34 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   the expression is removed, but the expression may supply the `|| true` that
   makes a failed fetch harmless, so the entry point is `uncertain`.
 
+## How the reader follows the Makefile `test` target
+
+The reader substitutes the plain variables (`:=`, `=`, `?=`) a recipe names and
+treats a `$(shell ...)` call as opaque, with these limits so that it never
+hides a command it could have read:
+
+- An unresolved reference inside an environment assignment before the command
+  (`RUSTFLAGS="$(if $(filter Linux,$(shell uname -s)),...)" cargo test`), or in
+  the arguments of a command that is not cargo, nextest or make, cannot change
+  which cargo command runs, so the entry point stays readable. An unresolved
+  reference in the command word, or in the arguments of a cargo, nextest or
+  make command (`cargo nextest run $(FLAGS)`, which may carry `--profile`),
+  leaves the entry point `uncertain`.
+- A tool-path variable named for its tool (`CARGO`) is read as the tool when
+  every alternative ends in its name. A `$(shell command -v cargo)` lookup
+  qualifies, and so does `$(shell [ -x "P" ] && echo "P")` when both paths are
+  the same word ending in `cargo`.
+- A runner chosen by a version probe,
+  `TEST_CMD := $(if $(shell cargo nextest --version 2>/dev/null),nextest run,test)`,
+  is read in both branches. The order must hold in each: a nextest setup
+  script warms `nextest run` and does not cover the `cargo test` branch, so a
+  recipe that relies on one needs its own `cargo fetch --locked &&` as well.
+  Only a `cargo`, `rustc` or `rustup` version query is read; any other shell
+  call keeps the line unresolved.
+
+A `//` or `/* */` comment inside a `.args([...])` array is not an element: the
+literals after it are still the command's arguments.
+
 ## Exemptions
 
 An exemption is the NC shape `{repository, path, rationale, review_trigger}`.

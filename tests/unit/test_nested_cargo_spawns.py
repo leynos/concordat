@@ -70,6 +70,37 @@ CASES: dict[str, Case] = {
         'fn run() {\n    Command::new("cargo").args(["--offline", "--locked"]);\n}\n',
         (("command_new", "offline"),),
     ),
+    # weaver's `load_manifest.rs`: rustfmt keeps a comment between the elements
+    # of the array, and the elements after it are still the command's words.
+    "frozen-after-line-comment": Case(
+        "fn run() {\n"
+        '    Command::new("cargo").args([\n'
+        '        "run",\n'
+        "        // The enclosing build already fetched the locked\n"
+        "        // dependencies, so this must not download anything.\n"
+        '        "--frozen",\n'
+        '        "-p",\n'
+        "    ]);\n"
+        "}\n",
+        (("command_new", "offline"),),
+    ),
+    "frozen-after-block-comment": Case(
+        "fn run() {\n"
+        '    Command::new("cargo").args(["run", /* no network */ "--frozen"]);\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
+    # A comment is not an escape hatch: an element it hides nothing from still
+    # has to be a literal, so a computed word after it stays unreadable.
+    "computed-word-after-comment": Case(
+        "fn run(extra: &str) {\n"
+        '    Command::new("cargo").args([\n'
+        '        "run", // note\n'
+        "        extra,\n"
+        "    ]);\n"
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
     "offline-alone": Case(
         'fn run() {\n    Command::new("cargo").arg("--offline");\n}\n',
         (("command_new", "online"),),
