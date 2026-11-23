@@ -190,6 +190,22 @@ The compile is *prepared* when any one of these holds:
    `preparation_gates.functions`: a function that fails the timed test, naming
    the preparing command, when the artefacts are missing or stale.
 
+4. **A Makefile preparation.** The Makefile's `test` target compiles before it
+   tests, so every nested build the checkout starts has been paid for outside
+   the timed run. That holds when a prerequisite of `test`, an earlier recipe
+   line, or an earlier command on the test line joined by `&&` runs a cargo
+   command that compiles without running the tests (`build`, `check`, `bench`,
+   `test --no-run`, `nextest run --no-run`, `nextest archive`), directly or
+   through a target it names (`$(MAKE) prepare-nested-builds`). The compile
+   must stop the target when it fails: an ignored-error line (`-cargo build`), a
+   `;` or `||` join, a command inside an `if` and a build that comes after the
+   test command prepare nothing, and a Makefile that declares `.ONESHELL` is
+   not read. A line that picks `nextest run` or `test` by probing the machine
+   is read in both branches, and the preparation must hold in each. The
+   preparation must build with the same features and profile as the tests, or
+   it fills a different directory (it can even overwrite the binaries the tests
+   use). The rule cannot check that, and the repository's own review must.
+
 The defaults for 2 and 3 are the names rstest-bdd chose
 (`nested_fixture_preparation$`; `ensure_prepared`, `ensure_prepared_with`,
 `ensure_prepared_with_probe`, `prepare_now`, `prepare_now_with_probe`). They

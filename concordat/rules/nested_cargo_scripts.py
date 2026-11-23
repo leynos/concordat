@@ -112,6 +112,7 @@ _RECURSIVE_MAKE: typ.Final = re.compile(r"\$[({]MAKE[)}]")
 # command in a recipe whose `CARGO_NEXTEST` is `cargo-nextest`.
 _NEXTEST_BINARIES: typ.Final = frozenset({"cargo-nextest"})
 _NEXTEST_SUBCOMMANDS: typ.Final = frozenset({"nextest", "ntr"})
+_BUILD_SUBCOMMANDS: typ.Final = frozenset({"build", "check", "bench"})
 # A backslash-newline is removed by the shell before it reads the command. The
 # Makefile loader keeps it, so every command after a `;`-continued line begins
 # with one, and a leading assignment or tool would otherwise be misread.
@@ -312,6 +313,12 @@ class CommandMeaning:
     profile: str | None = None
     is_recursive_make: bool = False
     is_unreadable: bool = False
+    # A cargo command that compiles without running the tests (`build`,
+    # `check`, `bench`, `test --no-run`, `nextest archive`), which is what a
+    # preparation target runs. `make_goals` names the targets a make invocation
+    # in this directory runs, so a preparation target can be followed.
+    is_build: bool = False
+    make_goals: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -557,7 +564,11 @@ def _cargo(arguments: list[str]) -> CommandMeaning:
             is_prefetch="--locked" in _flag_words(globals_seen + after)
         )
     if subcommand == "test":
-        return CommandMeaning(test="test")
+        return CommandMeaning(
+            test="test", is_build="--no-run" in _flag_words(globals_seen + after)
+        )
+    if subcommand in _BUILD_SUBCOMMANDS:
+        return CommandMeaning(is_build=True)
     if subcommand in _NEXTEST_SUBCOMMANDS:
         # Everything after `nextest` is the plugin's own argument list; a
         # cargo global in front of it is cargo's, not a nextest option.
@@ -634,9 +645,19 @@ def _nextest(subcommand: str, arguments: list[str]) -> CommandMeaning:
         The test kind and selected profile, or an empty meaning.
     """
     if subcommand == "nextest" and arguments[:1] == ["run"]:
-        return CommandMeaning(test="nextest", profile=_profile(arguments[1:]))
+        return CommandMeaning(
+            test="nextest",
+            profile=_profile(arguments[1:]),
+            is_build="--no-run" in arguments,
+        )
     if subcommand == "ntr":
-        return CommandMeaning(test="nextest", profile=_profile(arguments))
+        return CommandMeaning(
+            test="nextest",
+            profile=_profile(arguments),
+            is_build="--no-run" in arguments,
+        )
+    if subcommand == "nextest" and arguments[:1] == ["archive"]:
+        return CommandMeaning(is_build=True)
     return CommandMeaning()
 
 
@@ -684,7 +705,9 @@ def _make(command: str, arguments: list[str]) -> CommandMeaning:
         return CommandMeaning(test="make")
     # Any other goal runs a target whose ordering this reader cannot follow,
     # and `make -C dir test` reads another Makefile entirely.
-    return CommandMeaning(is_recursive_make=True)
+    return CommandMeaning(
+        is_recursive_make=True, make_goals=() if changes_directory else tuple(goals)
+    )
 
 
 def line_fetches(commands: list[ScriptCommand], *, is_resolved: bool) -> bool:

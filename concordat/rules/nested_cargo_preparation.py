@@ -42,6 +42,7 @@ if typ.TYPE_CHECKING:
 SETUP_SCRIPT: typ.Final = "setup-script"
 PREPARATION_TEST: typ.Final = "preparation-test"
 GATE_CALL: typ.Final = "gate-call"
+MAKEFILE_PREPARATION: typ.Final = "makefile-preparation"
 # A command whose subcommand the reader cannot see, until the crate it belongs
 # to is shown to compile elsewhere.
 MAYBE_KIND: typ.Final = "cargo-unknown"
@@ -71,8 +72,9 @@ class BuildFact(typ.TypedDict):
     crate:
         The directory of the crate that owns the source, `.` for the root.
     prepared_by:
-        Which of `setup-script`, `preparation-test` and `gate-call` apply.
-        Empty means the repository declares no preparation for this source.
+        Which of `setup-script`, `preparation-test`, `gate-call` and
+        `makefile-preparation` apply. Empty means the repository declares no
+        preparation for this source.
     """
 
     path: str
@@ -95,11 +97,15 @@ class Preparation:
         The nextest rules that run a defined setup script.
     gates:
         The configured preparation and compiling-helper names.
+    is_makefile_prepared:
+        Whether the Makefile's `test` target compiles before it tests, which
+        prepares every build the checkout's tests start.
     """
 
     crates: cabc.Mapping[str, str | None]
     rules: list[SetupRule]
     gates: Gates
+    is_makefile_prepared: bool = False
 
 
 def crate_directories(
@@ -303,6 +309,8 @@ def collect_builds(
         prepared = sorted(declared.get(crate, set()))
         if covers(preparation.rules, stem, crates.get(crate)):
             prepared.insert(0, SETUP_SCRIPT)
+        if preparation.is_makefile_prepared:
+            prepared.append(MAKEFILE_PREPARATION)
         builds.append({
             "path": path,
             "line": line,

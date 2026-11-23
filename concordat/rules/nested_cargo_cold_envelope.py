@@ -24,6 +24,7 @@ import typing as typ
 
 from .nested_cargo import load_manifests, origin_slug
 from .nested_cargo_gates import read_gates
+from .nested_cargo_makefile_preparation import makefile_prepares
 from .nested_cargo_preparation import (
     BuildFact,
     Preparation,
@@ -107,6 +108,7 @@ def build_nested_cargo_cold_envelope(
         crate_directories(checkout, manifests),
         read_setup_rules(checkout, problems),
         read_gates(parameters),
+        makefile_prepares(checkout),
     )
     builds = collect_builds(evidence, sources, preparation)
     return {
