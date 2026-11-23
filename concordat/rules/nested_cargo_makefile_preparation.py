@@ -24,6 +24,13 @@ prerequisite counts only when no sibling prerequisite runs tests it does not
 itself prepare for, because Make does not order siblings (`make -j` runs them
 together). A `make` goal reached through `-C`, `-f` or `-n` is not followed:
 another Makefile's targets are not this one's, and a dry run builds nothing.
+
+The reader fails closed. A line counts as preparation only in the forms
+modelled above, exactly; any construct it does not model is not preparation:
+`make -t`, `-q` or `-i`, a group of goals, a `VAR=value` override on the make
+line, a goal the shell computes, prerequisites that read in alternative ways
+(a probe) or that the expansion left unresolved, and a prerequisite that may
+run tests (through a recipe or a `make` goal) without preparing for them.
 """
 
 from __future__ import annotations
@@ -131,9 +138,7 @@ class _Reader:
         self.active.add(name)
         try:
             is_prepared = any(
-                self.prerequisites_prepare(rule)
-                or self.recipes_prepare(rule["recipes"])
-                for rule in self.index.get(name, [])
+                self.rule_prepares(rule) for rule in self.index.get(name, [])
             )
         finally:
             self.active.discard(name)
@@ -151,43 +156,83 @@ class _Reader:
             for name in reading.text.split()
         ]
 
-    def prerequisites_prepare(self, rule: MakeRule) -> bool:
-        """Return whether prerequisites of *rule* compile before anything tests.
+    def _plain_prerequisites(self, rule: MakeRule) -> list[str] | None:
+        """Return the prerequisite names of *rule* when each reads one plain way.
 
-        Make orders a prerequisite before its parent's recipe, but not one
-        prerequisite before a sibling (`make -j` runs them together). So a
-        preparing prerequisite counts only when no sibling runs tests that it
-        does not itself prepare for.
+        A reference that expands to alternative readings, or that the expansion
+        left unresolved, is not a form the reader models, so the rule's
+        prerequisites are not read at all (None): the reader fails closed.
+
+        Returns
+        -------
+        list[str] | None
+            The names, or None when any reference is not read one plain way.
+        """
+        names: list[str] = []
+        for reference in rule["prerequisites"]:
+            readings = expand_readings(reference, self.values)
+            if len(readings) != 1 or not readings[0].is_resolved:
+                return None
+            names.extend(readings[0].text.split())
+        return names
+
+    def rule_prepares(self, rule: MakeRule) -> bool:
+        """Return whether *rule* compiles before anything of its own tests.
+
+        Make runs a rule's prerequisites before its recipe, but does not order
+        one prerequisite before a sibling (`make -j` runs them together). So the
+        rule prepares only when every prerequisite that runs tests also
+        prepares for them, and then either a prerequisite or an early recipe
+        line compiles.
 
         Returns
         -------
         bool
-            True when a prerequisite prepares and no sibling tests unprepared.
+            True when nothing tests unprepared and something compiles first.
         """
-        names = self._prerequisite_names(rule)
-        return any(self.target_prepares(name) for name in names) and all(
-            not self._target_tests(name) or self.target_prepares(name) for name in names
+        names = self._plain_prerequisites(rule)
+        if names is None or any(
+            self._target_tests(name) and not self.target_prepares(name)
+            for name in names
+        ):
+            return False
+        return any(self.target_prepares(name) for name in names) or (
+            self.recipes_prepare(rule["recipes"])
+        )
+
+    def _command_tests(self, command: ScriptCommand, seen: frozenset[str]) -> bool:
+        """Return whether a command may run tests, counting any make it cannot read."""
+        meaning = command.meaning
+        if _runs_tests(command) or meaning.is_unreadable:
+            return True
+        if not meaning.is_recursive_make:
+            return False
+        return not meaning.make_goals or any(
+            self._target_tests(goal, seen) for goal in meaning.make_goals
         )
 
     def _target_tests(self, name: str, seen: frozenset[str] = frozenset()) -> bool:
-        """Return whether target *name*, or one it needs, runs tests."""
+        """Return whether target *name*, or one it needs, may run tests."""
         if name in seen:
             return False
         seen = seen | {name}
         for rule in self.index.get(name, []):
-            for recipe in rule["recipes"]:
-                if any(
-                    _runs_tests(command)
-                    for commands in _line_commands(recipe, self.values)
-                    for command in commands
-                ):
-                    return True
+            if any(self._recipe_tests(recipe, seen) for recipe in rule["recipes"]):
+                return True
             if any(
                 self._target_tests(needed, seen)
                 for needed in self._prerequisite_names(rule)
             ):
                 return True
         return False
+
+    def _recipe_tests(self, recipe: MakeRecipe, seen: frozenset[str]) -> bool:
+        """Return whether a recipe line may run tests, in any reading."""
+        return any(
+            self._command_tests(command, seen)
+            for commands in _line_commands(recipe, self.values)
+            for command in commands
+        )
 
     def recipes_prepare(self, recipes: list[MakeRecipe]) -> bool:
         """Return whether a recipe builds before it tests, or runs a target that does.
@@ -204,18 +249,13 @@ class _Reader:
             readings = _line_commands(recipe, self.values)
             if self._test_line_prepares(recipe, readings):
                 return True
-            if any(_runs_tests(c) for commands in readings for c in commands):
+            if self._recipe_tests(recipe, frozenset()):
                 return False
         return False
 
     def test_prepares(self) -> bool:
         """Return whether `test` prepares before the recipe line that tests."""
-        for rule in self.index[TEST_TARGET]:
-            if self.prerequisites_prepare(rule):
-                return True
-            if self.recipes_prepare(rule["recipes"]):
-                return True
-        return False
+        return any(self.rule_prepares(rule) for rule in self.index[TEST_TARGET])
 
     def _test_line_prepares(
         self, recipe: MakeRecipe, readings: list[list[ScriptCommand]]

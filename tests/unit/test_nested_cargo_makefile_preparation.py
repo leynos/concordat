@@ -157,6 +157,48 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
             "test: run-tests prepare\n\tcargo nextest run\n\n"
             "run-tests:\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
         ),
+        # The reader follows only the forms it models exactly; each class of
+        # shape it does not model is not preparation. Make options that touch,
+        # ask or ignore errors instead of running a build.
+        "test:\n\tmake -t prepare && cargo nextest run\n\nprepare:\n\tcargo build\n",
+        (
+            "test:\n\tmake --touch prepare && cargo nextest run\n\n"
+            "prepare:\n\tcargo build\n"
+        ),
+        "test:\n\tmake -q prepare && cargo nextest run\n\nprepare:\n\tcargo build\n",
+        "test:\n\tmake -i prepare && cargo nextest run\n\nprepare:\n\tcargo build\n",
+        # Group goals: `make -j` runs them together, so none is ordered first.
+        (
+            "test:\n\tmake prepare lint && cargo nextest run\n\n"
+            "prepare:\n\tcargo build\n\nlint:\n\tcargo fmt\n"
+        ),
+        # A `VAR=value` override on the make line can change what the goal does.
+        (
+            "CARGO ?= cargo\ntest:\n\tmake CARGO=true prepare && cargo nextest run\n\n"
+            "prepare:\n\t$(CARGO) build\n"
+        ),
+        # A goal the shell computes names no target the reader can see.
+        (
+            "test:\n\tmake $(shell echo prepare) && cargo nextest run\n\n"
+            "prepare:\n\tcargo build\n"
+        ),
+        # Prerequisites that read two ways (a probe) are not read per reading.
+        (
+            "PRE := $(if $(shell cargo nextest --version 2>/dev/null),"
+            "prepare,other)\n\n"
+            "test: $(PRE)\n\tcargo nextest run\n\n"
+            "prepare:\n\tcargo build\n\nother:\n\tcargo fmt\n"
+        ),
+        # A sibling that reaches the tests through a make goal tests unprepared.
+        (
+            "test: warm gate\n\tcargo nextest run\n\nwarm:\n\tcargo build\n\n"
+            "gate:\n\t$(MAKE) run-tests\n\nrun-tests:\n\tcargo nextest run\n"
+        ),
+        # A recipe build does not prepare when a prerequisite tests before it.
+        (
+            "test: run-tests\n\tcargo build\n\tcargo nextest run\n\n"
+            "run-tests:\n\tcargo nextest run\n"
+        ),
         # A compile-only command after the test prepares nothing for it.
         "test:\n\tcargo nextest run\n\tcargo nextest run --no-run\n",
         # `make -f` reads another Makefile and `make -n` runs nothing.

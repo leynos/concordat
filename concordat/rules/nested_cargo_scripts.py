@@ -22,7 +22,7 @@ import typing as typ
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
 from .makefile_expansion import UNRESOLVED_MARK
-from .nested_cargo_make_options import diverts_make
+from .nested_cargo_make_options import diverts_make, followable_goals
 
 # The make goal that runs a crate's tests. A command naming it as a goal, and
 # not changing directory first, is a test entry point rather than recursion.
@@ -107,8 +107,9 @@ _CARGO_GLOBALS: typ.Final = (
     })
     | _CARGO_VALUE_GLOBALS
 )
-_RECURSIVE_MAKE: typ.Final = re.compile(r"\$[({]MAKE[)}]")
-# nextest's standalone binary accepts the same `nextest run` and `ntr`
+_RECURSIVE_MAKE: typ.Final = re.compile(
+    r"\$[({]MAKE[)}]"
+)  # nextest's standalone binary accepts the same `nextest run` and `ntr`
 # subcommands as the cargo plugin, so `$(CARGO_NEXTEST) nextest run` is a test
 # command in a recipe whose `CARGO_NEXTEST` is `cargo-nextest`.
 _NEXTEST_BINARIES: typ.Final = frozenset({"cargo-nextest"})
@@ -705,7 +706,7 @@ def _make(command: str, arguments: list[str]) -> CommandMeaning:
     # Any other goal runs a target whose ordering this reader cannot follow,
     # and `make -C dir test` reads another Makefile entirely.
     return CommandMeaning(
-        is_recursive_make=True, make_goals=() if diverts else tuple(goals)
+        is_recursive_make=True, make_goals=followable_goals(arguments, goals)
     )
 
 
