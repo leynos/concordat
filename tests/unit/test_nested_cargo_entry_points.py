@@ -16,6 +16,7 @@ import pytest
 
 from concordat.errors import OperationalRuleError
 from concordat.rules.nested_cargo_entry_points import collect_entry_points
+from concordat.rules.nested_cargo_makefile_scan import MAX_PATHS, TargetScan, capped
 from concordat.rules.nested_cargo_scripts import split_commands
 
 if typ.TYPE_CHECKING:
@@ -584,6 +585,32 @@ def test_a_reading_with_no_test_keeps_its_own_later_lines(
     )
     put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
     assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_hidden_command_is_not_covered_by_a_later_setup_script(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`make legacy-test` runs before the nextest line the setup script covers."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "PICK := $(if $(shell cargo nextest --version),"
+        "cargo nextest run --profile ci,$(MAKE) legacy-test)\n\n"
+        "test:\n\t$(PICK)\n\tcargo nextest run --profile ci\n\n"
+        "legacy-test:\n\tcargo test\n",
+    )
+    put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_scan_cut_at_the_path_cap_marks_every_kept_path_truncated() -> None:
+    """Paths past the cap are never checked, so the kept ones cannot vouch for them."""
+    paths = [TargetScan(proven=True, proven_reason=f"path {n}") for n in range(9)]
+    kept = capped(paths)
+    assert len(kept) == MAX_PATHS
+    assert all(path.is_truncated for path in kept)
+    few = [TargetScan(proven_reason=f"path {n}") for n in range(2)]
+    assert not any(path.is_truncated for path in capped(few))
 
 
 def test_a_reading_that_hides_its_test_behind_make_makes_the_target_uncertain(

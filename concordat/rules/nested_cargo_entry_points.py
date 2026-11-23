@@ -207,8 +207,12 @@ def _weakest_path(
     hidden = next(
         (s.hidden_reason for s in scans if not s.is_found and s.hidden_reason), ""
     )
+    line = found[0].line if found else default_line
     if hidden:
-        candidates.append((UNCERTAIN, hidden, found[0].line if found else default_line))
+        candidates.append((UNCERTAIN, hidden, line))
+    if any(scan.is_truncated for scan in scans):
+        reason = "the recipe picks its runner on too many lines to follow"
+        candidates.append((UNCERTAIN, reason, line))
     if not candidates:
         return None
     return min(candidates, key=lambda candidate: _STATE_RANK[candidate[0]])
@@ -218,6 +222,10 @@ def _makefile_state(
     scan: TargetScan, config: NextestConfig, profiles: list[str]
 ) -> tuple[str, str]:
     """Return the state a `test` scan proves, with the reason a reviewer needs."""
+    if scan.is_cold_hidden:
+        # What a delegated or unreadable command ran before any fetch is not
+        # covered by a fetch or setup script that comes after it.
+        return UNCERTAIN, scan.hidden_reason
     if scan.test == "nextest" and not scan.proven:
         # A profile is recorded only where this entry point relies on it: one
         # that fetches first covers its own run, and owes the profile nothing.

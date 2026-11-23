@@ -52,6 +52,11 @@ class TargetScan:
     proven_reason: str = ""
     uncertain_reason: str = ""
     hidden_reason: str = ""
+    # A command the reader cannot follow ran before any fetch proof, so a fetch
+    # or setup script that comes later does not cover what it ran.
+    is_cold_hidden: bool = False
+    # The scan cut paths at MAX_PATHS, so no proof on this one stands for them.
+    is_truncated: bool = False
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -83,17 +88,7 @@ def scan_target(
         One scan per path through the recipe, each stopped at its own first
         test command. A path that never reaches one has ``is_found`` false.
     """
-    start = TargetScan()
-    if not sequencing_holds:
-        start.uncertain_reason = "the Makefile declares .ONESHELL"
-    else:
-        proven, uncertain_reason, proven_reason = prefetch_in_prerequisites(
-            index, values
-        )
-        start.proven = proven
-        start.proven_reason = proven_reason
-        start.uncertain_reason = uncertain_reason
-    open_paths = [start]
+    open_paths = [_start_scan(index, values, sequencing_holds=sequencing_holds)]
     finished: list[TargetScan] = []
     for rule in index[TEST_TARGET]:
         for recipe in rule["recipes"]:
@@ -105,16 +100,32 @@ def scan_target(
                 )
             ]
             finished.extend(branch for branch in forks if branch.is_found)
-            open_paths = _capped([branch for branch in forks if not branch.is_found])
+            open_paths = capped([branch for branch in forks if not branch.is_found])
     return finished + open_paths
 
 
-def _capped(paths: list[TargetScan]) -> list[TargetScan]:
+def _start_scan(
+    index: dict[str, list[MakeRule]],
+    values: cabc.Mapping[str, str],
+    *,
+    sequencing_holds: bool,
+) -> TargetScan:
+    """Return the scan before any recipe line, with what the prerequisites prove."""
+    if not sequencing_holds:
+        return TargetScan(uncertain_reason="the Makefile declares .ONESHELL")
+    proven, uncertain_reason, proven_reason = prefetch_in_prerequisites(index, values)
+    return TargetScan(
+        proven=proven, proven_reason=proven_reason, uncertain_reason=uncertain_reason
+    )
+
+
+def capped(paths: list[TargetScan]) -> list[TargetScan]:
     """Merge open paths that carry the same proof, and bound how many remain.
 
     Open paths differ only in what they have proved so far, so equal ones are
     one. If the distinct ones still pass the cap, the kept paths are marked
-    uncertain rather than silently losing the ones that were cut.
+    truncated, which the entry point reads as uncertain: the paths that were cut
+    are never checked, so no kept proof may stand for them.
 
     Returns
     -------
@@ -126,9 +137,7 @@ def _capped(paths: list[TargetScan]) -> list[TargetScan]:
         return distinct
     kept = distinct[:MAX_PATHS]
     for path in kept:
-        path.uncertain_reason = (
-            "the recipe picks its runner on too many lines to follow"
-        )
+        path.is_truncated = True
     return kept
 
 
@@ -196,6 +205,7 @@ def _note_hidden(scan: TargetScan, command: ScriptCommand) -> None:
         return
     scan.uncertain_reason = reason
     scan.hidden_reason = scan.hidden_reason or reason
+    scan.is_cold_hidden = scan.is_cold_hidden or not scan.proven
 
 
 def _record_test(scan: TargetScan, line: _Line, position: int) -> None:
