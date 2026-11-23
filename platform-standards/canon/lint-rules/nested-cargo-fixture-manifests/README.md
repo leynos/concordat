@@ -59,8 +59,8 @@ manifest kept as recipe data.
 
 The `severity` parameter defaults to `error`: the rule was promoted from
 `warning` on 23 November 2026, when a measurement at every repository's default
-branch found no finding. Set it to `warning` to report without blocking. An
-envelope defect is always an error.
+branch found no finding. The rule manifest's `severity` parameter can lower it
+to `warning` (the CLI has no override). An envelope defect is always an error.
 
 ## What the rule declines to judge
 

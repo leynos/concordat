@@ -3035,11 +3035,13 @@ package reads the working tree below the root with the shared skip list,
 because the audited checkout need not be a Git checkout. Exemptions follow the
 same convention as NC-001: repository, directory, rationale and review trigger,
 matched against the `origin` slug, and a blank rationale or trigger suppresses
-nothing. The package ships at `warning` severity through a `severity`
+nothing. The package shipped at `warning` severity through a `severity`
 parameter, as `nested-cargo-offline-tests` does, because the estate survey
-found five repositories with uncovered manifests; promotion to `error` follows
-once they are clean. Dependency tables are read through `cargo_tables`, so a
-registry dependency under `[target.'cfg(...)'.dependencies]` makes a candidate.
+found five repositories with uncovered manifests. Once they were clean it was
+promoted to `error` on 23 November 2026; the parameter, set in the rule
+manifest (the CLI has no override), can still lower it to `warning`. Dependency
+tables are read through `cargo_tables`, so a registry dependency under
+`[target.'cfg(...)'.dependencies]` makes a candidate.
 
 ##### Nested cargo nextest configuration
 

@@ -847,10 +847,10 @@ rstest-bdd's derived `published-gpui-e2e` fixture, the vendored Telegram crypto
 patch (axinite), the `feldera-size-of` (lille) fork, wireframe's independently
 resolved `tests/feature_gate` package, combobulate's `verus-wiring-probe` and
 rust-prover-tools' `kani_recipe` (recipe data, a copy of the pinned Kani
-manifest). The rule ships at `warning` severity, so findings are reported and
-the exit status stays 0; set the `severity` parameter to `error` to enforce it.
-The audit reads the working tree below the root, skipping hidden, `target`,
-`vendor` and similar directories.
+manifest). The rule ships at `error` severity (promoted from `warning` on
+23 November 2026), so a finding fails the run; the `severity` parameter in the
+rule manifest can lower it to `warning`. The audit reads the working tree below
+the root, skipping hidden, `target`, `vendor` and similar directories.
 
 ### Auditing the nextest configuration of compiler-spawning tests
 
