@@ -848,9 +848,10 @@ patch (axinite), the `feldera-size-of` (lille) fork, wireframe's independently
 resolved `tests/feature_gate` package, combobulate's `verus-wiring-probe` and
 rust-prover-tools' `kani_recipe` (recipe data, a copy of the pinned Kani
 manifest). The rule ships at `error` severity (promoted from `warning` on
-23 November 2026), so a finding fails the run; the `severity` parameter in the
-rule manifest can lower it to `warning`. The audit reads the working tree below
-the root, skipping hidden, `target`, `vendor` and similar directories.
+23 November 2026), so a finding fails the run; the default comes from the rule
+package for every checkout, with no per-repository or CLI override. The audit
+reads the working tree below the root, skipping hidden, `target`, `vendor` and
+similar directories.
 
 ### Auditing the nextest configuration of compiler-spawning tests
 
