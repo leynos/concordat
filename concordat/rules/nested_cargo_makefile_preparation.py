@@ -120,7 +120,8 @@ class _Reader:
         """Return the targets the Makefile declares `.PHONY` in every reading.
 
         A reference that reads in alternative ways, or that the expansion left
-        open, names no target for certain, so it declares none.
+        open, names no target for certain, so it declares none; nor does a
+        declaration inside a conditional, which may not be the active one.
 
         Returns
         -------
@@ -129,6 +130,8 @@ class _Reader:
         """
         names: set[str] = set()
         for rule in self.index.get(PHONY_TARGET, []):
+            if rule["conditions"]:
+                continue
             for reference in rule["prerequisites"]:
                 readings = expand_readings(reference, self.values)
                 if len(readings) == 1 and readings[0].is_resolved:

@@ -236,6 +236,18 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
             "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
             ".PHONY: test $(PHONY_GOAL)\n"
         ),
+        # A `.PHONY` declaration inside a conditional may not be the active one.
+        (
+            ".PHONY: test\nifeq ($(RUN_PREP),yes)\n.PHONY: prepare\nendif\n"
+            "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+        ),
+        # A conditional preparation rule on its own (one rule, no `else`).
+        (
+            "test: prepare\n\tcargo nextest run\n\n"
+            "ifeq ($(RUN_PREP),yes)\nprepare:\n\tcargo build\nendif\n"
+        ),
+        # A double-colon rule runs independently of the target's other rules.
+        "test: prepare\n\tcargo nextest run\n\nprepare::\n\tcargo build\n",
         # A compile-only command after the test prepares nothing for it.
         "test:\n\tcargo nextest run\n\tcargo nextest run --no-run\n",
         # `make -f` reads another Makefile and `make -n` runs nothing.
