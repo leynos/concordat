@@ -28,6 +28,10 @@ if typ.TYPE_CHECKING:
 
 _TOOLS_READ_BY_ARGUMENTS: typ.Final = frozenset({"cargo", "make", "cargo-nextest"})
 _NAME: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_REFERENCE_OPEN: typ.Final = re.compile(r"\$[({]")
+# A quoted span. An unterminated quote runs to the end of the text, so what
+# follows it is not read as bare.
+_QUOTED: typ.Final = re.compile(r"'[^']*(?:'|$)|\"[^\"]*(?:\"|$)")
 
 
 def _has_unquoted_reference(text: str, assigned: cabc.Container[str]) -> bool:
@@ -44,21 +48,13 @@ def _has_unquoted_reference(text: str, assigned: cabc.Container[str]) -> bool:
     bool
         True when an unquoted reference other than environment data appears.
     """
-    quote = ""
-    index = 0
-    while index < len(text):
-        char = text[index]
-        if quote:
-            quote = "" if char == quote else quote
-        elif char in "'\"":
-            quote = char
-        elif text.startswith(("$(", "${"), index):
-            end = _environment_reference_end(text, index, assigned)
-            if end is None:
-                return True
-            index = end
-            continue
-        index += 1
+    bare = _QUOTED.sub("", text)
+    position = 0
+    while (opening := _REFERENCE_OPEN.search(bare, position)) is not None:
+        end = _environment_reference_end(bare, opening.start(), assigned)
+        if end is None:
+            return True
+        position = end
     return False
 
 

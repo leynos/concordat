@@ -8,11 +8,13 @@ here on its own.
 
 from __future__ import annotations
 
+import re
 import typing as typ
 
 from .rust_source import scan_balanced
 
 _PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
+_COMMENT_TOKEN: typ.Final = re.compile(r"/\*|\*/")
 
 
 def string_end(text: str, index: int) -> int:
@@ -59,18 +61,10 @@ def _block_comment_end(text: str, index: int) -> int:
         The index just past the closing `*/`, or the text's length.
     """
     depth = 0
-    position = index
-    while position < len(text):
-        if text.startswith("/*", position):
-            depth += 1
-            position += 2
-        elif text.startswith("*/", position):
-            depth -= 1
-            position += 2
-            if depth == 0:
-                return position
-        else:
-            position += 1
+    for token in _COMMENT_TOKEN.finditer(text, index):
+        depth += 1 if token.group() == "/*" else -1
+        if depth == 0:
+            return token.end()
     return len(text)
 
 

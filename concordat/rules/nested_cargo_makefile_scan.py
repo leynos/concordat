@@ -1,10 +1,11 @@
 """Scan a Makefile's `test` target for its test command and what precedes it.
 
 The scan reads the target's recipe lines in file order and stops at the first
-test command. It records whether a success-gated `cargo fetch --locked` runs
-before that command, and why the order could not be read where it could not. A
-line that picks its runner by probing the machine has more than one reading, and
-the answer must hold in each of them.
+test command on each path. It records whether a success-gated `cargo fetch
+--locked` runs before that command, and why the order could not be read where it
+could not. A line that picks its runner by probing the machine has more than one
+reading: the scan forks there, so each path carries its own proof and the caller
+judges every one.
 """
 
 from __future__ import annotations
@@ -28,18 +29,19 @@ if typ.TYPE_CHECKING:
     from .makefile_expansion import Expansion
     from .makefile_facts import MakeRecipe, MakeRule
 
+# How many paths one scan follows. Each probe `if` doubles them.
+MAX_PATHS: typ.Final = 8
+
 
 @dataclasses.dataclass(slots=True)
 class TargetScan:
-    """What the `test` target says, accumulated line by line.
+    """What one path through the `test` target says, accumulated line by line.
 
     ``uncertain_reason`` explains why a found test command's ordering is not
     proven. ``hidden_reason`` explains why the target may hold a test command
     the reader could not see at all, which is a different claim: a target that
     only builds is not an entry point, but a target whose command is unknown
-    must not be reported as one that runs no tests. ``runners`` holds the test
-    kind and nextest profile of every reading of the test line, because a
-    setup script covers a profile and not the plain `cargo test` beside it.
+    must not be reported as one that runs no tests.
     """
 
     is_found: bool = False
@@ -50,9 +52,21 @@ class TargetScan:
     proven_reason: str = ""
     uncertain_reason: str = ""
     hidden_reason: str = ""
-    runners: list[tuple[str | None, str | None]] = dataclasses.field(
-        default_factory=list
-    )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Line:
+    """One reading of one recipe line, with the commands it expands to."""
+
+    recipe: MakeRecipe
+    commands: list[ScriptCommand]
+    is_settled: bool
+    sequencing_holds: bool
+
+    @property
+    def is_fatal(self) -> bool:
+        """Whether a failure of this line stops the recipe."""
+        return self.sequencing_holds and not self.recipe["ignore_errors"]
 
 
 def scan_target(
@@ -60,134 +74,90 @@ def scan_target(
     values: cabc.Mapping[str, str],
     *,
     sequencing_holds: bool,
-) -> TargetScan:
+) -> list[TargetScan]:
     """Read every rule that defines `test`, in file order, stopping at its test.
 
     Returns
     -------
-    TargetScan
-        The test command found, if any, and what proves or blocks its order.
+    list[TargetScan]
+        One scan per path through the recipe, each stopped at its own first
+        test command. A path that never reaches one has ``is_found`` false.
     """
-    scan = TargetScan()
+    start = TargetScan()
     if not sequencing_holds:
-        scan.uncertain_reason = "the Makefile declares .ONESHELL"
+        start.uncertain_reason = "the Makefile declares .ONESHELL"
     else:
         proven, uncertain_reason, proven_reason = prefetch_in_prerequisites(
             index, values
         )
-        scan.proven = proven
-        scan.proven_reason = proven_reason
-        scan.uncertain_reason = uncertain_reason
+        start.proven = proven
+        start.proven_reason = proven_reason
+        start.uncertain_reason = uncertain_reason
+    open_paths = [start]
+    finished: list[TargetScan] = []
     for rule in index[TEST_TARGET]:
         for recipe in rule["recipes"]:
-            if _inspect_line(scan, recipe, values, sequencing_holds=sequencing_holds):
-                return scan
-    return scan
+            still_open: list[TargetScan] = []
+            for path in open_paths:
+                forks = _fork(path, recipe, values, sequencing_holds=sequencing_holds)
+                for branch in forks:
+                    (finished if branch.is_found else still_open).append(branch)
+            open_paths = still_open[:MAX_PATHS]
+    return finished + open_paths
 
 
-def _inspect_line(
+def _fork(
     scan: TargetScan,
     recipe: MakeRecipe,
     values: cabc.Mapping[str, str],
     *,
     sequencing_holds: bool,
-) -> bool:
-    """Read one recipe line, returning whether the target's test was found.
+) -> list[TargetScan]:
+    """Read one recipe line on every reading, returning one scan per reading.
 
     The scan stops at the first test command. A fetch on a later line runs
     after the test, so it proves nothing about it, whatever `gates_next` says.
 
     Returns
     -------
-    bool
-        True when this line holds the target's test command.
+    list[TargetScan]
+        The scan after each reading of the line; those with ``is_found`` set
+        hold the test command.
     """
     readings = expand_readings(recipe["text"], values)
-    if len(readings) == 1:
-        return _inspect_reading(
-            scan, recipe, readings[0], values, sequencing_holds=sequencing_holds
-        )
-    # The line picks its runner at run time (a probe `$(if $(shell ...),..)`),
-    # so each reading is followed from the same start and the results merged:
-    # an order holds only if it holds whichever branch Make takes.
-    branches = [dataclasses.replace(scan) for _ in readings]
-    found = [
+    scans = [dataclasses.replace(scan) for _ in readings]
+    for branch, expansion in zip(scans, readings, strict=True):
         _inspect_reading(
-            branch, recipe, reading, values, sequencing_holds=sequencing_holds
+            branch,
+            _line_of(recipe, expansion, values, sequencing_holds=sequencing_holds),
         )
-        for branch, reading in zip(branches, readings, strict=True)
-    ]
-    _merge_readings(scan, branches, found)
-    return any(found)
+    return scans
 
 
-def _merge_readings(
-    scan: TargetScan, branches: list[TargetScan], found: list[bool]
-) -> None:
-    """Fold the scans of a line's readings into *scan*, keeping the weakest proof.
-
-    A reading with no test command must not displace one that has it. The merged
-    order is proven only if every reading that holds the test proves it, and
-    every such reading's runner is kept so each profile is judged.
-    """
-    chosen = [
-        branch for branch, is_found in zip(branches, found, strict=True) if is_found
-    ]
-    chosen = chosen or branches
-    first = min(chosen, key=lambda branch: branch.proven)
-    for field in dataclasses.fields(scan):
-        setattr(scan, field.name, getattr(first, field.name))
-    scan.proven = all(branch.proven for branch in chosen)
-    scan.runners = [runner for branch in chosen for runner in branch.runners]
-    scan.uncertain_reason = next(
-        (branch.uncertain_reason for branch in branches if branch.uncertain_reason),
-        "",
-    )
-    scan.hidden_reason = next(
-        (branch.hidden_reason for branch in branches if branch.hidden_reason), ""
-    )
-
-
-def _inspect_reading(
-    scan: TargetScan,
+def _line_of(
     recipe: MakeRecipe,
     expansion: Expansion,
     values: cabc.Mapping[str, str],
     *,
     sequencing_holds: bool,
-) -> bool:
-    """Read one expansion of a recipe line, returning whether it holds the test.
-
-    Returns
-    -------
-    bool
-        True when this reading of the line holds the target's test command.
-    """
+) -> _Line:
+    """Expand one reading's text into the commands the shell would see."""
     commands = script_commands(expansion.text)
-    settled = are_settled(commands, values)
-    if not settled:
+    return _Line(recipe, commands, are_settled(commands, values), sequencing_holds)
+
+
+def _inspect_reading(scan: TargetScan, line: _Line) -> None:
+    """Read one expansion of a recipe line, recording the test if it holds one."""
+    if not line.is_settled:
         scan.uncertain_reason = "a recipe line names an unresolved variable"
-    for position, command in enumerate(commands):
+    for position, command in enumerate(line.commands):
         if command.meaning.test is not None:
-            _record_test(
-                scan,
-                command,
-                recipe,
-                commands,
-                position,
-                is_settled=settled,
-                sequencing_holds=sequencing_holds,
-            )
-            return True
+            _record_test(scan, line, position)
+            return
         _note_hidden(scan, command)
-    if (
-        sequencing_holds
-        and not recipe["ignore_errors"]
-        and line_fetches(commands, is_resolved=settled)
-    ):
+    if line.is_fatal and line_fetches(line.commands, is_resolved=line.is_settled):
         scan.proven = True
         scan.proven_reason = "an earlier recipe line runs cargo fetch --locked"
-    return False
 
 
 def _note_hidden(scan: TargetScan, command: ScriptCommand) -> None:
@@ -202,31 +172,22 @@ def _note_hidden(scan: TargetScan, command: ScriptCommand) -> None:
     scan.hidden_reason = scan.hidden_reason or reason
 
 
-def _record_test(
-    scan: TargetScan,
-    command: ScriptCommand,
-    recipe: MakeRecipe,
-    commands: list[ScriptCommand],
-    position: int,
-    *,
-    is_settled: bool,
-    sequencing_holds: bool,
-) -> None:
-    """Record the first test command of the target, and what precedes it."""
+def _record_test(scan: TargetScan, line: _Line, position: int) -> None:
+    """Record the first test command of the path, and what precedes it."""
+    meaning = line.commands[position].meaning
     scan.is_found = True
-    scan.test = command.meaning.test
-    scan.profile = command.meaning.profile
-    scan.runners = [(command.meaning.test, command.meaning.profile)]
-    scan.line = recipe["location"]["start_line"]
+    scan.test = meaning.test
+    scan.profile = meaning.profile
+    scan.line = line.recipe["location"]["start_line"]
     if scan.proven:
         return
-    if (
-        sequencing_holds
-        and not recipe["ignore_errors"]
-        and is_settled
-        and gates_fetch(commands, position)
-    ):
+    if _fetch_gates_test(line, position):
         scan.proven = True
         scan.proven_reason = "cargo fetch --locked runs first on the same line"
-    elif not is_settled:
+    elif not line.is_settled:
         scan.uncertain_reason = "the test command names an unresolved variable"
+
+
+def _fetch_gates_test(line: _Line, position: int) -> bool:
+    """Return whether a fetch earlier on this line must succeed for the test to run."""
+    return line.is_fatal and line.is_settled and gates_fetch(line.commands, position)

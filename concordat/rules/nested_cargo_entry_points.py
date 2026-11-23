@@ -75,6 +75,8 @@ OPERATION_READ_NEXTEST: typ.Final = "read-nested-cargo-nextest"
 
 MAKEFILE: typ.Final = "Makefile"
 ONESHELL_TARGET: typ.Final = ".ONESHELL"
+# The weakest answer among a probed line's paths is the entry point's answer.
+_STATE_RANK: typ.Final = {ABSENT: 0, UNCERTAIN: 1, BEFORE: 2}
 
 _EXPRESSION: typ.Final = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 _YAML = YAML(typ="rt")
@@ -162,9 +164,11 @@ def _makefile_entry(
     index = rules_by_target(report)
     if TEST_TARGET not in index:
         return _MakefileEntry(None, [])
-    scan = scan_target(index, values, sequencing_holds=ONESHELL_TARGET not in index)
-    if not scan.is_found:
-        if not scan.hidden_reason:
+    scans = scan_target(index, values, sequencing_holds=ONESHELL_TARGET not in index)
+    found = [scan for scan in scans if scan.is_found]
+    if not found:
+        hidden_reason = next((s.hidden_reason for s in scans if s.hidden_reason), "")
+        if not hidden_reason:
             return _MakefileEntry(None, [])
         # The target exists but its test command could not be read. Dropping
         # the entry point would let a workflow step that delegates to it
@@ -175,15 +179,19 @@ def _makefile_entry(
             line=_first_recipe_line(index),
             name=TEST_TARGET,
             state=UNCERTAIN,
-            reason=scan.hidden_reason,
+            reason=hidden_reason,
         )
         return _MakefileEntry(fact, [])
     profiles: list[str] = []
-    state, reason = _makefile_state(scan, config, profiles)
+    # A probed line has a path per runner, and the order has to hold on each.
+    state, reason = min(
+        (_makefile_state(scan, config, profiles) for scan in found),
+        key=lambda result: _STATE_RANK[result[0]],
+    )
     fact = EntryPointFact(
         kind="makefile",
         path=MAKEFILE,
-        line=scan.line,
+        line=found[0].line,
         name=TEST_TARGET,
         state=state,
         reason=reason,
@@ -191,43 +199,19 @@ def _makefile_entry(
     return _MakefileEntry(fact, profiles)
 
 
-def _setup_state(
-    scan: TargetScan, config: NextestConfig, profiles: list[str]
-) -> tuple[str, str] | None:
-    """Return the state the nextest setup scripts prove for every reading, if any.
-
-    A line that picks its runner at run time may run `nextest run` under one
-    profile or another, or plain `cargo test`, which no setup script covers.
-    The scripts prove the order only when every reading is a nextest run and
-    every profile it selects is covered.
-
-    Returns
-    -------
-    tuple[str, str] | None
-        The state and reason, or None when the setup scripts decide nothing.
-    """
-    if scan.proven or not scan.runners:
-        return None
-    # A profile is recorded only where this entry point relies on it: one that
-    # fetches first covers its own run, and owes the profile nothing.
-    nextest = [profile for test, profile in scan.runners if test == "nextest"]
-    profiles.extend(profile or DEFAULT_PROFILE for profile in nextest)
-    if len(nextest) != len(scan.runners):
-        return None
-    states = {config.state(profile) for profile in nextest}
-    if states == {BEFORE}:
-        return BEFORE, "the nextest profile's setup script fetches first"
-    if UNCERTAIN in states and ABSENT not in states:
-        return UNCERTAIN, "the nextest configuration could not be read"
-    return None
-
-
 def _makefile_state(
     scan: TargetScan, config: NextestConfig, profiles: list[str]
 ) -> tuple[str, str]:
     """Return the state a `test` scan proves, with the reason a reviewer needs."""
-    if (covered := _setup_state(scan, config, profiles)) is not None:
-        return covered
+    if scan.test == "nextest" and not scan.proven:
+        # A profile is recorded only where this entry point relies on it: one
+        # that fetches first covers its own run, and owes the profile nothing.
+        profiles.append(scan.profile or DEFAULT_PROFILE)
+        inherited = config.state(scan.profile)
+        if inherited == BEFORE:
+            return BEFORE, "the nextest profile's setup script fetches first"
+        if inherited == UNCERTAIN:
+            return UNCERTAIN, "the nextest configuration could not be read"
     if scan.proven:
         return BEFORE, scan.proven_reason
     if scan.uncertain_reason:

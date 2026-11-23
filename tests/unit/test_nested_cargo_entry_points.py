@@ -565,6 +565,42 @@ def test_an_unquoted_environment_reference_is_plain_data(
     assert makefile_state(tmp_path) == [("test", "before")]
 
 
+CI_SETUP = (
+    "[scripts.setup.warm]\ncommand = 'cargo fetch --locked'\n\n"
+    "[[profile.ci.scripts]]\nfilter = 'all()'\nsetup = 'warm'\n"
+)
+
+
+def test_a_reading_with_no_test_keeps_its_own_later_lines(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The reading that runs `echo` still reaches the `cargo test` below it."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "PICK := $(if $(shell cargo nextest --version),"
+        "cargo nextest run --profile ci,echo fallback)\n\n"
+        "test:\n\t$(PICK)\n\tcargo test\n",
+    )
+    put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_each_reading_is_proved_by_its_own_fetch_or_setup_script(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A reading that fetches itself and one the setup script covers both count."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "RUN := $(if $(shell cargo nextest --version),"
+        "cargo nextest run --profile ci,cargo fetch --locked && cargo test)\n\n"
+        "test:\n\t$(RUN)\n",
+    )
+    put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
 def test_a_runner_probe_needs_every_profile_covered(tmp_path: pathlib.Path) -> None:
     """A setup script on the `ci` profile does not cover the `local` reading."""
     put(
