@@ -49,11 +49,12 @@ def reported(root: pathlib.Path) -> bool:
 def checkout(root: pathlib.Path, makefile: str, *, is_phony: bool = True) -> None:
     """Write a checkout with one trybuild test and the given Makefile.
 
-    Every target is declared `.PHONY` first unless *is_phony* is false, as a
-    Makefile does for targets that name no file.
+    Every target is declared `.PHONY` first, as a Makefile does for targets that
+    name no file, unless *is_phony* is false or the text declares its own.
     """
     targets = re.findall(r"^([A-Za-z][\w-]*):", makefile, flags=re.MULTILINE)
-    declaration = f".PHONY: {' '.join(targets)}\n" if is_phony else ""
+    declares = is_phony and ".PHONY" not in makefile
+    declaration = f".PHONY: {' '.join(targets)}\n" if declares else ""
     put(root, "Cargo.toml", '[package]\nname = "app"\n')
     put(root, "tests/ui.rs", TRYBUILD_TEST)
     put(root, "Makefile", declaration + makefile)
@@ -216,6 +217,24 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
             "RUN := $(shell printf run-tests)\n"
             "test: warm gate\n\tcargo nextest run\n\nwarm:\n\tcargo build\n\n"
             "gate: $(RUN)\n\nrun-tests:\n\tcargo nextest run\n"
+        ),
+        # Separate rules for one target combine their prerequisites, so the
+        # second rule's build is not ordered before the first's tests.
+        (
+            "test: run-tests\ntest: warm\n\tcargo nextest run\n\n"
+            "run-tests:\n\tcargo nextest run\n\nwarm:\n\tcargo build\n"
+        ),
+        # A conditional rule may not be the active one.
+        (
+            "test: prepare\n\tcargo nextest run\n\n"
+            "ifeq ($(RUN_PREP),yes)\nprepare:\n\tcargo build\n"
+            "else\nprepare:\n\t@true\nendif\n"
+        ),
+        # A `.PHONY` list that reads in alternative ways declares nothing.
+        (
+            "PHONY_GOAL := $(if $(shell rustc --version 2>/dev/null),other,prepare)\n"
+            "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+            ".PHONY: test $(PHONY_GOAL)\n"
         ),
         # A compile-only command after the test prepares nothing for it.
         "test:\n\tcargo nextest run\n\tcargo nextest run --no-run\n",

@@ -215,11 +215,13 @@ The compile is *prepared* when any one of these holds:
    override on it, a goal the shell computes, prerequisites that read in
    alternative ways or that the expansion could not resolve, a prerequisite or
    earlier `make` goal that may run tests without preparing for them, and a
-   preparation target not declared `.PHONY` (a file of that name makes Make
-   skip it) are not preparation. The preparation must build with the same
-   features and profile as the tests, or it fills a different directory (it can
-   even overwrite the binaries the tests use). The rule cannot check that, and
-   the repository's own review must.
+   preparation target not declared `.PHONY` in every reading (a file of that
+   name makes Make skip it), and a target with several rules or a conditional
+   rule (Make combines the first and the second may not be the active one) are
+   not preparation. The preparation must build with the same features and
+   profile as the tests, or it fills a different directory (it can even
+   overwrite the binaries the tests use). The rule cannot check that, and the
+   repository's own review must.
 
 The defaults for 2 and 3 are the names rstest-bdd chose
 (`nested_fixture_preparation$`; `ensure_prepared`, `ensure_prepared_with`,

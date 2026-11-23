@@ -117,15 +117,23 @@ class _Reader:
         self.phony = self._phony_names()
 
     def _phony_names(self) -> frozenset[str]:
-        """Return the targets the Makefile declares `.PHONY`."""
-        return frozenset(
-            name
-            for rule in self.index.get(PHONY_TARGET, [])
-            for reference in rule["prerequisites"]
-            for reading in expand_readings(reference, self.values)
-            if reading.is_resolved
-            for name in reading.text.split()
-        )
+        """Return the targets the Makefile declares `.PHONY` in every reading.
+
+        A reference that reads in alternative ways, or that the expansion left
+        open, names no target for certain, so it declares none.
+
+        Returns
+        -------
+        frozenset[str]
+            The names every reading of some `.PHONY` reference agrees on.
+        """
+        names: set[str] = set()
+        for rule in self.index.get(PHONY_TARGET, []):
+            for reference in rule["prerequisites"]:
+                readings = expand_readings(reference, self.values)
+                if len(readings) == 1 and readings[0].is_resolved:
+                    names.update(readings[0].text.split())
+        return frozenset(names)
 
     def target_prepares(self, name: str) -> bool:
         """Return whether running target *name* compiles before it tests.
@@ -146,9 +154,7 @@ class _Reader:
             return False
         self.active.add(name)
         try:
-            is_prepared = any(
-                self.rule_prepares(rule) for rule in self.index.get(name, [])
-            )
+            is_prepared = self.rules_prepare(self.index.get(name, []))
         finally:
             self.active.discard(name)
         if is_prepared:
@@ -184,6 +190,23 @@ class _Reader:
                 return None
             names.extend(readings[0].text.split())
         return names
+
+    def rules_prepare(self, rules: list[MakeRule]) -> bool:
+        """Return whether the rules of one target prepare, read as a unit.
+
+        Make combines the prerequisites of a target's rules, and a conditional
+        rule may not be the active one. So the reader accepts only one plain
+        rule: several rules for a target, a conditional rule and a double-colon
+        rule are not read (the reader fails closed).
+
+        Returns
+        -------
+        bool
+            True when the target has exactly one plain rule and it prepares.
+        """
+        if len(rules) != 1 or rules[0]["conditions"] or rules[0]["double_colon"]:
+            return False
+        return self.rule_prepares(rules[0])
 
     def rule_prepares(self, rule: MakeRule) -> bool:
         """Return whether *rule* compiles before anything of its own tests.
@@ -280,7 +303,7 @@ class _Reader:
 
     def test_prepares(self) -> bool:
         """Return whether `test` prepares before the recipe line that tests."""
-        return any(self.rule_prepares(rule) for rule in self.index[TEST_TARGET])
+        return self.rules_prepare(self.index[TEST_TARGET])
 
     def _test_line_prepares(
         self, recipe: MakeRecipe, readings: list[list[ScriptCommand]]
