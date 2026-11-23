@@ -43,9 +43,35 @@ def comment_end(text: str, index: int) -> int | None:
         newline = text.find("\n", index)
         return len(text) if newline == -1 else newline
     if text.startswith("/*", index):
-        close = text.find("*/", index + 2)
-        return len(text) if close == -1 else close + 2
+        return _block_comment_end(text, index)
     return None
+
+
+def _block_comment_end(text: str, index: int) -> int:
+    """Return the index just past the block comment opening at *index*.
+
+    Rust block comments nest, so the first `*/` closes the outer comment only
+    when no inner `/*` is still open. An unterminated comment runs to the end.
+
+    Returns
+    -------
+    int
+        The index just past the closing `*/`, or the text's length.
+    """
+    depth = 0
+    position = index
+    while position < len(text):
+        if text.startswith("/*", position):
+            depth += 1
+            position += 2
+        elif text.startswith("*/", position):
+            depth -= 1
+            position += 2
+            if depth == 0:
+                return position
+        else:
+            position += 1
+    return len(text)
 
 
 def string_literals(text: str) -> list[str] | None:

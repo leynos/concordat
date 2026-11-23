@@ -522,13 +522,67 @@ def test_an_unresolved_reference_in_the_test_arguments_is_uncertain(
 def test_a_shell_reference_beside_a_literal_test_does_not_hide_it(
     tmp_path: pathlib.Path,
 ) -> None:
-    """A `$(shell ...)` elsewhere on the line leaves the literal `cargo test` found."""
+    """A quoted `$(shell ...)` elsewhere leaves the literal `cargo test` found."""
     put(
         tmp_path,
         MAKEFILE,
-        "test:\n\tcargo fetch --locked && echo $(shell uname -s) && cargo test\n",
+        'test:\n\tcargo fetch --locked && echo "$(shell uname -s)" && cargo test\n',
     )
     assert makefile_state(tmp_path) == [("test", "before")]
+
+
+@pytest.mark.parametrize(
+    "echo",
+    [
+        # Make pastes the output in before the shell reads the line, so the
+        # call may add `|| true` and turn the fetch into one that gates nothing.
+        "echo $(shell printf '|| true')",
+        "echo $(OPAQUE)",
+    ],
+)
+def test_an_unquoted_reference_may_reshape_the_line(
+    echo: str, tmp_path: pathlib.Path
+) -> None:
+    """An unquoted reference that is not environment data could add operators."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"OPAQUE := $(shell printf x)\n\n"
+        f"test:\n\tcargo fetch --locked && {echo} && cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_an_unquoted_environment_reference_is_plain_data(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`$(HOME)` is a variable the Makefile never assigns, so it is not code."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && cp a $(HOME)/b && cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_runner_probe_needs_every_profile_covered(tmp_path: pathlib.Path) -> None:
+    """A setup script on the `ci` profile does not cover the `local` reading."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "CARGO ?= cargo\n"
+        "PICK := $(if $(shell $(CARGO) nextest --version 2>/dev/null),"
+        "--profile ci,--profile local)\n\n"
+        "test:\n\t$(CARGO) nextest run $(PICK)\n",
+    )
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        "[scripts.setup.warm]\ncommand = 'cargo fetch --locked'\n\n"
+        "[[profile.ci.scripts]]\nfilter = 'all()'\nsetup = 'warm'\n\n"
+        "[profile.local]\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
 
 
 def test_a_runner_probe_must_be_proved_in_both_readings(

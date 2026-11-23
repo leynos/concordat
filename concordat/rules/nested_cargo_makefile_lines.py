@@ -8,6 +8,7 @@ can change what it does, and whether a recipe or a prerequisite fetches.
 
 from __future__ import annotations
 
+import re
 import typing as typ
 
 from .makefile_expansion import UNRESOLVED_MARK, Expansion, expand
@@ -18,6 +19,7 @@ from .nested_cargo_scripts import (
     line_fetches,
     script_commands,
 )
+from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -25,25 +27,63 @@ if typ.TYPE_CHECKING:
     from .makefile_facts import MakeRecipe, MakeRule, MakeutilReport
 
 _TOOLS_READ_BY_ARGUMENTS: typ.Final = frozenset({"cargo", "make", "cargo-nextest"})
+_NAME: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
-def is_settled(command: ScriptCommand) -> bool:
-    """Return whether no Make reference the expansion left can change this command.
+def _has_unquoted_reference(text: str, assigned: cabc.Container[str]) -> bool:
+    """Return whether a Make reference outside quotes could change the shell's line.
 
-    A reference left in an environment assignment before the command word
-    (`RUSTFLAGS="$(if ...)" cargo test`) or in the arguments of a command that
-    is not cargo (`echo`, `export`, `cd`) cannot change which cargo command
-    runs or whether it succeeds first. A reference in the command word, or in
-    the arguments of a cargo, nextest or make command, can: it may be `--locked`,
-    `--profile ci` or another target.
+    Make pastes a reference's value into the recipe before the shell reads it,
+    so an unquoted reference may contribute `&&`, `||`, `;` or a pipe. A
+    reference inside quotes is one word whatever it holds. A plain `$(NAME)`
+    naming a variable the Makefile never assigns is environment data, the same
+    assumption `makefile_expansion.is_pure` states, and is left alone.
 
     Returns
     -------
     bool
-        False when the command could not be lexed or an unresolved reference
-        can alter what a cargo, nextest or make command does.
+        True when an unquoted reference other than environment data appears.
     """
-    if command.meaning.is_unreadable:
+    quote = ""
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if quote:
+            quote = "" if char == quote else quote
+        elif char in "'\"":
+            quote = char
+        elif text.startswith(("$(", "${"), index):
+            end = scan_balanced(text, index + 1)
+            if end is None:
+                return True
+            name = text[index + 2 : end - 1]
+            if not (_NAME.fullmatch(name) and name not in assigned):
+                return True
+            index = end
+            continue
+        index += 1
+    return False
+
+
+def is_settled(command: ScriptCommand, assigned: cabc.Container[str] = ()) -> bool:
+    """Return whether no Make reference the expansion left can change this command.
+
+    A reference left in a quoted environment assignment before the command word
+    (`RUSTFLAGS="$(if ...)" cargo test`) or in the quoted arguments of a command
+    that is not cargo (`echo`, `export`, `cd`) cannot change which cargo command
+    runs or whether it succeeds first. A reference in the command word, or in
+    the arguments of a cargo, nextest or make command, can: it may be `--locked`,
+    `--profile ci` or another target. An unquoted reference can also add shell
+    operators to the line, so it is never read past.
+
+    Returns
+    -------
+    bool
+        False when the command could not be lexed, an unquoted reference could
+        reshape the line, or an unresolved reference can alter what a cargo,
+        nextest or make command does.
+    """
+    if command.meaning.is_unreadable or _has_unquoted_reference(command.text, assigned):
         return False
     words = command_words(command.text, names_cargo=False)
     if words is None:
@@ -54,9 +94,10 @@ def is_settled(command: ScriptCommand) -> bool:
     return not (name in _TOOLS_READ_BY_ARGUMENTS or UNRESOLVED_MARK in name)
 
 
-def are_settled(commands: list[ScriptCommand]) -> bool:
+def are_settled(commands: list[ScriptCommand], values: cabc.Mapping[str, str]) -> bool:
     """Return whether every command of a line is settled (see :func:`is_settled`)."""
-    return all(is_settled(command) for command in commands)
+    assigned = getattr(values, "assigned", frozenset())
+    return all(is_settled(command, assigned) for command in commands)
 
 
 def rules_by_target(report: MakeutilReport) -> dict[str, list[MakeRule]]:
@@ -102,7 +143,7 @@ def recipes_fetch(recipes: list[MakeRecipe], values: cabc.Mapping[str, str]) -> 
         expansion: Expansion = expand(recipe["text"], values)
         commands = script_commands(expansion.text)
         if not recipe["ignore_errors"] and line_fetches(
-            commands, is_resolved=are_settled(commands)
+            commands, is_resolved=are_settled(commands, values)
         ):
             return True
     return False

@@ -90,6 +90,24 @@ CASES: dict[str, Case] = {
         "}\n",
         (("command_new", "offline"),),
     ),
+    # Rust block comments nest: the first `*/` closes only the inner comment,
+    # so a flag after it but still inside the outer comment is not a flag.
+    "frozen-inside-a-nested-block-comment": Case(
+        "fn run() {\n"
+        '    Command::new("cargo").args([\n'
+        '        "build",\n'
+        '        /* outer /* inner */ "--frozen", // */\n'
+        '        "--release",\n'
+        "    ]);\n"
+        "}\n",
+        (("command_new", "online"),),
+    ),
+    "frozen-after-a-nested-block-comment": Case(
+        "fn run() {\n"
+        '    Command::new("cargo").args(["build", /* a /* b */ c */ "--frozen"]);\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
     # A comment is not an escape hatch: an element it hides nothing from still
     # has to be a literal, so a computed word after it stays unreadable.
     "computed-word-after-comment": Case(

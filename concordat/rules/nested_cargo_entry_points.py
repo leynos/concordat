@@ -29,11 +29,7 @@ import typing as typ
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from .makefile_expansion import (
-    Expansion,
-    expand_readings,
-    single_assignments,
-)
+from .makefile_expansion import single_assignments
 from .makefile_facts import MakefileRefusedError, inspect_makefile
 from .makefile_tool_paths import read_tool_paths
 from .markdown_envelope import (
@@ -45,11 +41,8 @@ from .nested_cargo_conditions import (
     condition_proves_order,
     runs_only_after_success,
 )
-from .nested_cargo_makefile_lines import (
-    are_settled,
-    prefetch_in_prerequisites,
-    rules_by_target,
-)
+from .nested_cargo_makefile_lines import rules_by_target
+from .nested_cargo_makefile_scan import TargetScan, scan_target
 from .nested_cargo_nextest import (
     ABSENT,
     BEFORE,
@@ -72,10 +65,9 @@ from .nested_cargo_scripts import (
 from .nested_cargo_shells import ShellRule, effective_shell
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import pathlib
 
-    from .makefile_facts import MakeRecipe, MakeRule
+    from .makefile_facts import MakeRule
 
 OPERATION_READ_WORKFLOW: typ.Final = "read-nested-cargo-workflow"
 OPERATION_READ_MAKEFILE: typ.Final = "read-nested-cargo-makefile"
@@ -101,169 +93,6 @@ class EntryPointFact(typ.TypedDict):
     name: str
     state: str
     reason: str
-
-
-@dataclasses.dataclass(slots=True)
-class _TargetScan:
-    """What the `test` target says, accumulated line by line.
-
-    ``uncertain_reason`` explains why a found test command's ordering is not
-    proven. ``hidden_reason`` explains why the target may hold a test command
-    the reader could not see at all, which is a different claim: a target that
-    only builds is not an entry point, but a target whose command is unknown
-    must not be reported as one that runs no tests.
-    """
-
-    is_found: bool = False
-    test: str | None = None
-    profile: str | None = None
-    line: int = 1
-    proven: bool = False
-    proven_reason: str = ""
-    uncertain_reason: str = ""
-    hidden_reason: str = ""
-
-
-def _scan_target(
-    index: dict[str, list[MakeRule]],
-    values: cabc.Mapping[str, str],
-    *,
-    sequencing_holds: bool,
-) -> _TargetScan:
-    """Read every rule that defines `test`, in file order, stopping at its test."""
-    scan = _TargetScan()
-    if not sequencing_holds:
-        scan.uncertain_reason = "the Makefile declares .ONESHELL"
-    else:
-        proven, uncertain_reason, proven_reason = prefetch_in_prerequisites(
-            index, values
-        )
-        scan.proven = proven
-        scan.proven_reason = proven_reason
-        scan.uncertain_reason = uncertain_reason
-    for rule in index[TEST_TARGET]:
-        for recipe in rule["recipes"]:
-            if _inspect_line(scan, recipe, values, sequencing_holds=sequencing_holds):
-                return scan
-    return scan
-
-
-def _inspect_line(
-    scan: _TargetScan,
-    recipe: MakeRecipe,
-    values: cabc.Mapping[str, str],
-    *,
-    sequencing_holds: bool,
-) -> bool:
-    """Read one recipe line, returning whether the target's test was found.
-
-    The scan stops at the first test command. A fetch on a later line runs
-    after the test, so it proves nothing about it, whatever `gates_next` says.
-
-    Returns
-    -------
-    bool
-        True when this line holds the target's test command.
-    """
-    readings = expand_readings(recipe["text"], values)
-    if len(readings) == 1:
-        return _inspect_reading(
-            scan, recipe, readings[0], sequencing_holds=sequencing_holds
-        )
-    # The line picks its runner at run time (a probe `$(if $(shell ...),..)`),
-    # so each reading is followed from the same start, and the weakest result
-    # stands: an order holds only if it holds whichever branch Make takes.
-    branches = [dataclasses.replace(scan) for _ in readings]
-    found = [
-        _inspect_reading(branch, recipe, reading, sequencing_holds=sequencing_holds)
-        for branch, reading in zip(branches, readings, strict=True)
-    ]
-    weakest = min(
-        branches, key=lambda branch: (branch.proven, branch.test == "nextest")
-    )
-    for field in dataclasses.fields(scan):
-        setattr(scan, field.name, getattr(weakest, field.name))
-    scan.uncertain_reason = next(
-        (branch.uncertain_reason for branch in branches if branch.uncertain_reason),
-        scan.uncertain_reason,
-    )
-    scan.hidden_reason = next(
-        (branch.hidden_reason for branch in branches if branch.hidden_reason),
-        scan.hidden_reason,
-    )
-    return any(found)
-
-
-def _inspect_reading(
-    scan: _TargetScan,
-    recipe: MakeRecipe,
-    expansion: Expansion,
-    *,
-    sequencing_holds: bool,
-) -> bool:
-    """Read one expansion of a recipe line, returning whether it holds the test.
-
-    Returns
-    -------
-    bool
-        True when this reading of the line holds the target's test command.
-    """
-    commands = script_commands(expansion.text)
-    if not are_settled(commands):
-        scan.uncertain_reason = "a recipe line names an unresolved variable"
-    for position, command in enumerate(commands):
-        if command.meaning.test is not None:
-            _record_test(
-                scan,
-                command,
-                recipe,
-                commands,
-                position,
-                sequencing_holds=sequencing_holds,
-            )
-            return True
-        if command.meaning.is_recursive_make:
-            scan.uncertain_reason = "the recipe delegates to another make target"
-            scan.hidden_reason = scan.hidden_reason or scan.uncertain_reason
-        elif command.meaning.is_unreadable:
-            scan.uncertain_reason = "a recipe command could not be read"
-            scan.hidden_reason = scan.hidden_reason or scan.uncertain_reason
-    if (
-        sequencing_holds
-        and not recipe["ignore_errors"]
-        and line_fetches(commands, is_resolved=are_settled(commands))
-    ):
-        scan.proven = True
-        scan.proven_reason = "an earlier recipe line runs cargo fetch --locked"
-    return False
-
-
-def _record_test(
-    scan: _TargetScan,
-    command: ScriptCommand,
-    recipe: MakeRecipe,
-    commands: list[ScriptCommand],
-    position: int,
-    *,
-    sequencing_holds: bool,
-) -> None:
-    """Record the first test command of the target, and what precedes it."""
-    scan.is_found = True
-    scan.test = command.meaning.test
-    scan.profile = command.meaning.profile
-    scan.line = recipe["location"]["start_line"]
-    if scan.proven:
-        return
-    if (
-        sequencing_holds
-        and not recipe["ignore_errors"]
-        and are_settled(commands)
-        and gates_fetch(commands, position)
-    ):
-        scan.proven = True
-        scan.proven_reason = "cargo fetch --locked runs first on the same line"
-    elif not are_settled(commands):
-        scan.uncertain_reason = "the test command names an unresolved variable"
 
 
 def _first_recipe_line(index: dict[str, list[MakeRule]]) -> int:
@@ -333,7 +162,7 @@ def _makefile_entry(
     index = rules_by_target(report)
     if TEST_TARGET not in index:
         return _MakefileEntry(None, [])
-    scan = _scan_target(index, values, sequencing_holds=ONESHELL_TARGET not in index)
+    scan = scan_target(index, values, sequencing_holds=ONESHELL_TARGET not in index)
     if not scan.is_found:
         if not scan.hidden_reason:
             return _MakefileEntry(None, [])
@@ -362,19 +191,43 @@ def _makefile_entry(
     return _MakefileEntry(fact, profiles)
 
 
+def _setup_state(
+    scan: TargetScan, config: NextestConfig, profiles: list[str]
+) -> tuple[str, str] | None:
+    """Return the state the nextest setup scripts prove for every reading, if any.
+
+    A line that picks its runner at run time may run `nextest run` under one
+    profile or another, or plain `cargo test`, which no setup script covers.
+    The scripts prove the order only when every reading is a nextest run and
+    every profile it selects is covered.
+
+    Returns
+    -------
+    tuple[str, str] | None
+        The state and reason, or None when the setup scripts decide nothing.
+    """
+    if scan.proven or not scan.runners:
+        return None
+    # A profile is recorded only where this entry point relies on it: one that
+    # fetches first covers its own run, and owes the profile nothing.
+    nextest = [profile for test, profile in scan.runners if test == "nextest"]
+    profiles.extend(profile or DEFAULT_PROFILE for profile in nextest)
+    if len(nextest) != len(scan.runners):
+        return None
+    states = {config.state(profile) for profile in nextest}
+    if states == {BEFORE}:
+        return BEFORE, "the nextest profile's setup script fetches first"
+    if UNCERTAIN in states and ABSENT not in states:
+        return UNCERTAIN, "the nextest configuration could not be read"
+    return None
+
+
 def _makefile_state(
-    scan: _TargetScan, config: NextestConfig, profiles: list[str]
+    scan: TargetScan, config: NextestConfig, profiles: list[str]
 ) -> tuple[str, str]:
     """Return the state a `test` scan proves, with the reason a reviewer needs."""
-    if scan.test == "nextest" and not scan.proven:
-        # A profile is recorded only where this entry point relies on it: one
-        # that fetches first covers its own run, and owes the profile nothing.
-        profiles.append(scan.profile or DEFAULT_PROFILE)
-        inherited = config.state(scan.profile)
-        if inherited == BEFORE:
-            return BEFORE, "the nextest profile's setup script fetches first"
-        if inherited == UNCERTAIN:
-            return UNCERTAIN, "the nextest configuration could not be read"
+    if (covered := _setup_state(scan, config, profiles)) is not None:
+        return covered
     if scan.proven:
         return BEFORE, scan.proven_reason
     if scan.uncertain_reason:

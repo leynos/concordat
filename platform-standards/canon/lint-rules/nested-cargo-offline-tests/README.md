@@ -209,7 +209,12 @@ The reader substitutes the plain variables (`:=`, `=`, `?=`) a recipe names and
 treats a `$(shell ...)` call as opaque, with these limits so that it never
 hides a command it could have read:
 
-- An unresolved reference inside an environment assignment before the command
+- An unquoted reference is never read past, because Make pastes its value into
+  the line before the shell reads it and the value may hold `||` or `;`. Only a
+  plain `$(NAME)` for a variable the Makefile never assigns (environment data
+  such as `$(HOME)`) is left alone unquoted.
+- An unresolved reference inside a quoted environment assignment before the
+  command
   (`RUSTFLAGS="$(if $(filter Linux,$(shell uname -s)),...)" cargo test`), or in
   the arguments of a command that is not cargo, nextest or make, cannot change
   which cargo command runs, so the entry point stays readable. An unresolved
