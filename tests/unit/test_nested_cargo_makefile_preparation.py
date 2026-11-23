@@ -87,6 +87,22 @@ def test_a_checkout_with_no_makefile_preparation_is_reported(
         ),
         # Unresolved flags do not stop a build being a build.
         "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build $(FLAGS)\n",
+        # A compile-only command ahead of the test is the preparation, not the
+        # test boundary, on a recipe line and on a joined line.
+        "test:\n\tcargo test --no-run\n\tcargo nextest run\n",
+        "test:\n\tcargo nextest run --no-run && cargo nextest run\n",
+        # A target that builds and then tests still prepares for its own tests.
+        "test: prepare\n\nprepare:\n\tcargo build\n\tcargo nextest run\n",
+        # A prerequisite that tests is prepared when its own prerequisite builds.
+        (
+            "test: run-tests\n\nrun-tests: prepare\n\tcargo nextest run\n\n"
+            "prepare:\n\tcargo build\n"
+        ),
+        # Sibling prerequisites that only build are all preparation.
+        (
+            "test: warm tools\n\tcargo nextest run\n\n"
+            "warm:\n\tcargo build\n\ntools:\n\tcargo fmt\n"
+        ),
     ],
 )
 def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
@@ -123,6 +139,36 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         ),
         # `.ONESHELL` changes what a failed line does to the next.
         ".ONESHELL:\ntest:\n\tcargo build\n\tcargo nextest run\n",
+        # A build after `||` runs only when the command before it failed, on the
+        # test line and on an earlier line.
+        "test:\n\ttrue || cargo build && cargo nextest run\n",
+        "test:\n\ttrue || cargo build\n\tcargo nextest run\n",
+        # A target that tests before it builds pays for the build inside the run.
+        (
+            "test: prepare\n\tcargo nextest run\n\n"
+            "prepare:\n\tcargo nextest run\n\tcargo build\n"
+        ),
+        (
+            "test: prepare\n\tcargo nextest run\n\n"
+            "prepare:\n\tcargo nextest run && cargo build\n"
+        ),
+        # Sibling prerequisites are not ordered: `make -j` runs them together.
+        (
+            "test: run-tests prepare\n\tcargo nextest run\n\n"
+            "run-tests:\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+        ),
+        # A compile-only command after the test prepares nothing for it.
+        "test:\n\tcargo nextest run\n\tcargo nextest run --no-run\n",
+        # `make -f` reads another Makefile and `make -n` runs nothing.
+        (
+            "test:\n\tmake -f alternate.mk prepare && cargo nextest run\n\n"
+            "prepare:\n\tcargo build\n"
+        ),
+        ("test:\n\tmake -n prepare && cargo nextest run\n\nprepare:\n\tcargo build\n"),
+        (
+            "test:\n\tmake --dry-run prepare && cargo nextest run\n\n"
+            "prepare:\n\tcargo build\n"
+        ),
     ],
 )
 def test_a_compile_that_does_not_gate_the_tests_prepares_nothing(
@@ -142,6 +188,23 @@ def test_a_preparation_that_loops_back_to_the_test_target_is_not_followed_foreve
         "test: prepare\n\tcargo nextest run\n\nprepare: other\n\nother: prepare\n",
     )
     assert reported(tmp_path)
+
+
+def test_two_readings_of_one_line_both_reach_the_same_preparing_target(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A target proved by the first reading is still proved for the second."""
+    probe = (
+        "CARGO ?= cargo\n"
+        "TEST_CMD := $(if $(shell $(CARGO) nextest --version 2>/dev/null),"
+        "nextest run,test)\n"
+    )
+    checkout(
+        tmp_path,
+        f"{probe}\ntest:\n\tmake prepare && cargo $(TEST_CMD)\n\n"
+        "prepare:\n\tcargo build\n",
+    )
+    assert not reported(tmp_path)
 
 
 def test_a_runner_probe_is_prepared_in_both_branches(tmp_path: pathlib.Path) -> None:

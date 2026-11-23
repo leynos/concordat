@@ -201,8 +201,15 @@ The compile is *prepared* when any one of these holds:
    must stop the target when it fails: an ignored-error line (`-cargo build`), a
    `;` or `||` join, a command inside an `if` and a build that comes after the
    test command prepare nothing, and a Makefile that declares `.ONESHELL` is
-   not read. A line that picks `nextest run` or `test` by probing the machine
-   is read in both branches, and the preparation must hold in each. The
+   not read. A build after `||` runs only when the command before it failed, so
+   it prepares nothing either. A target that runs tests before it builds is not
+   a preparation, and `make -C`, `-f` and `-n` goals are not followed: another
+   directory's or Makefile's targets are not this one's, and a dry run builds
+   nothing. Make does not order sibling prerequisites (`make -j` runs them
+   together), so `test: run-tests prepare` proves nothing for `run-tests`, while
+   `test: prepare` with the tests in the recipe, or `run-tests: prepare`,
+   does. A line that picks `nextest run` or `test` by probing the machine is
+   read in both branches, and the preparation must hold in each. The
    preparation must build with the same features and profile as the tests, or
    it fills a different directory (it can even overwrite the binaries the tests
    use). The rule cannot check that, and the repository's own review must.

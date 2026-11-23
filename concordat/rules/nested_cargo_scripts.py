@@ -22,6 +22,7 @@ import typing as typ
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
 from .makefile_expansion import UNRESOLVED_MARK
+from .nested_cargo_make_options import diverts_make
 
 # The make goal that runs a crate's tests. A command naming it as a goal, and
 # not changing directory first, is a test entry point rather than recursion.
@@ -695,18 +696,16 @@ def _make(command: str, arguments: list[str]) -> CommandMeaning:
     """Classify a make invocation, telling the test target from recursion."""
     if UNRESOLVED_MARK in command:
         return CommandMeaning(is_unreadable=True)
-    changes_directory = any(
-        word.startswith(("-C", "--directory")) for word in arguments
-    )
+    diverts = diverts_make(arguments)
     goals = [word for word in arguments if not word.startswith("-") and "=" not in word]
     if any(UNRESOLVED_MARK in goal for goal in goals):
         return CommandMeaning(is_unreadable=True)
-    if TEST_TARGET in goals and not changes_directory:
+    if TEST_TARGET in goals and not diverts:
         return CommandMeaning(test="make")
     # Any other goal runs a target whose ordering this reader cannot follow,
     # and `make -C dir test` reads another Makefile entirely.
     return CommandMeaning(
-        is_recursive_make=True, make_goals=() if changes_directory else tuple(goals)
+        is_recursive_make=True, make_goals=() if diverts else tuple(goals)
     )
 
 

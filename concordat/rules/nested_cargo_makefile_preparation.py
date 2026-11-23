@@ -16,9 +16,14 @@ A preparation is a recipe command that compiles without running the tests
 (`cargo build`, `bench`, `test --no-run`, `nextest archive`), read from
 text the expansion settled, whose failure stops the target: not an
 ignored-error line, not inside a conditional construct, and joined to what
-follows by `&&` or a line break. A prerequisite of `test`, or a target the
-recipe's own `make` goal names, counts when its recipes (or theirs, in turn)
-hold one.
+follows by `&&` or a line break, and that runs on every path to the test (a
+build after `||` runs only when the command before it failed). A prerequisite
+of `test`, or a target the recipe's own `make` goal names, counts when its
+recipes (or theirs, in turn) hold one before any test command of their own. A
+prerequisite counts only when no sibling prerequisite runs tests it does not
+itself prepare for, because Make does not order siblings (`make -j` runs them
+together). A `make` goal reached through `-C`, `-f` or `-n` is not followed:
+another Makefile's targets are not this one's, and a dry run builds nothing.
 """
 
 from __future__ import annotations
@@ -64,29 +69,39 @@ def _line_commands(
     ]
 
 
-def _builds_before_the_end(commands: list[ScriptCommand]) -> bool:
-    """Return whether a build on this line must succeed for the line to finish."""
-    return any(
-        command.meaning.is_build
-        and not command.constructs
-        and all(later.gates_next for later in commands[index:-1])
-        for index, command in enumerate(commands)
+def _runs_tests(command: ScriptCommand) -> bool:
+    """Return whether this command runs tests, as `test --no-run` does not."""
+    return command.meaning.test is not None and not command.meaning.is_build
+
+
+def _first_test(commands: list[ScriptCommand]) -> int:
+    """Return the position of the first command that runs tests, or the length."""
+    return next((i for i, c in enumerate(commands) if _runs_tests(c)), len(commands))
+
+
+def _is_certain(commands: list[ScriptCommand], index: int, end: int) -> bool:
+    """Return whether the command at *index* runs on every path to position *end*.
+
+    It runs when it sits in no conditional construct, every command before it
+    on the line stops the line when it fails (a command after `||` runs only
+    when the one before it failed, and one after `;` does not wait on what came
+    before), and every command from it up to *end* does too, so the line is
+    not reached at *end* without it.
+
+    Returns
+    -------
+    bool
+        True when the command is certain to run before the line reaches *end*.
+    """
+    return (
+        not commands[index].constructs
+        and all(earlier.gates_next for earlier in commands[:index])
+        and all(later.gates_next for later in commands[index:end])
     )
 
 
-def _goals_before_the_end(commands: list[ScriptCommand]) -> list[str]:
-    """Return the `make` goals this line runs that must succeed for it to finish."""
-    return [
-        goal
-        for index, command in enumerate(commands)
-        if not command.constructs
-        and all(later.gates_next for later in commands[index:-1])
-        for goal in command.meaning.make_goals
-    ]
-
-
 class _Reader:
-    """Follow the targets of one Makefile, remembering the ones already walked."""
+    """Follow the targets of one Makefile, remembering what each one proved."""
 
     def __init__(
         self, index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
@@ -94,60 +109,112 @@ class _Reader:
         """Hold the rule index and the substitutable variables."""
         self.index = index
         self.values = values
-        self.seen: set[str] = set()
+        self.active: set[str] = set()
+        self.prepared: set[str] = set()
 
     def target_prepares(self, name: str) -> bool:
-        """Return whether running target *name* compiles before it finishes."""
-        if name in self.seen:
+        """Return whether running target *name* compiles before it tests.
+
+        A target on the walk now is not followed again, which ends a cycle; a
+        target that proved it prepares is remembered, so two readings of one
+        line reaching it both succeed.
+
+        Returns
+        -------
+        bool
+            True when a recipe or prerequisite of the target builds first.
+        """
+        if name in self.prepared:
+            return True
+        if name in self.active:
             return False
-        self.seen.add(name)
-        rules = self.index.get(name, [])
-        return any(
-            self.prerequisites_prepare(rule) or self.recipes_prepare(rule["recipes"])
-            for rule in rules
-        )
+        self.active.add(name)
+        try:
+            is_prepared = any(
+                self.prerequisites_prepare(rule)
+                or self.recipes_prepare(rule["recipes"])
+                for rule in self.index.get(name, [])
+            )
+        finally:
+            self.active.discard(name)
+        if is_prepared:
+            self.prepared.add(name)
+        return is_prepared
+
+    def _prerequisite_names(self, rule: MakeRule) -> list[str]:
+        """Return every settled prerequisite name of *rule*, over all readings."""
+        return [
+            name
+            for reference in rule["prerequisites"]
+            for reading in expand_readings(reference, self.values)
+            if reading.is_resolved
+            for name in reading.text.split()
+        ]
 
     def prerequisites_prepare(self, rule: MakeRule) -> bool:
-        """Return whether a prerequisite of *rule* compiles before it finishes."""
-        for reference in rule["prerequisites"]:
-            for reading in expand_readings(reference, self.values):
-                if reading.is_resolved and any(
-                    self.target_prepares(name) for name in reading.text.split()
+        """Return whether prerequisites of *rule* compile before anything tests.
+
+        Make orders a prerequisite before its parent's recipe, but not one
+        prerequisite before a sibling (`make -j` runs them together). So a
+        preparing prerequisite counts only when no sibling runs tests that it
+        does not itself prepare for.
+
+        Returns
+        -------
+        bool
+            True when a prerequisite prepares and no sibling tests unprepared.
+        """
+        names = self._prerequisite_names(rule)
+        return any(self.target_prepares(name) for name in names) and all(
+            not self._target_tests(name) or self.target_prepares(name) for name in names
+        )
+
+    def _target_tests(self, name: str, seen: frozenset[str] = frozenset()) -> bool:
+        """Return whether target *name*, or one it needs, runs tests."""
+        if name in seen:
+            return False
+        seen = seen | {name}
+        for rule in self.index.get(name, []):
+            for recipe in rule["recipes"]:
+                if any(
+                    _runs_tests(command)
+                    for commands in _line_commands(recipe, self.values)
+                    for command in commands
                 ):
                     return True
-        return False
-
-    def recipes_prepare(self, recipes: list[MakeRecipe]) -> bool:
-        """Return whether a recipe line builds, or runs a target that does."""
-        for recipe in recipes:
-            if recipe["ignore_errors"]:
-                continue
-            readings = _line_commands(recipe, self.values)
-            if readings and all(self._line_prepares(commands) for commands in readings):
+            if any(
+                self._target_tests(needed, seen)
+                for needed in self._prerequisite_names(rule)
+            ):
                 return True
         return False
 
-    def _line_prepares(self, commands: list[ScriptCommand]) -> bool:
-        """Return whether one reading of a line builds or runs a preparing target."""
-        return _builds_before_the_end(commands) or any(
-            self.target_prepares(goal) for goal in _goals_before_the_end(commands)
-        )
+    def recipes_prepare(self, recipes: list[MakeRecipe]) -> bool:
+        """Return whether a recipe builds before it tests, or runs a target that does.
+
+        The search stops at the first line that runs tests: a build after it is
+        paid inside the timed run.
+
+        Returns
+        -------
+        bool
+            True when a line builds, or runs a preparing target, before a test.
+        """
+        for recipe in recipes:
+            readings = _line_commands(recipe, self.values)
+            if self._test_line_prepares(recipe, readings):
+                return True
+            if any(_runs_tests(c) for commands in readings for c in commands):
+                return False
+        return False
 
     def test_prepares(self) -> bool:
         """Return whether `test` prepares before the recipe line that tests."""
         for rule in self.index[TEST_TARGET]:
             if self.prerequisites_prepare(rule):
                 return True
-            for recipe in rule["recipes"]:
-                readings = _line_commands(recipe, self.values)
-                if self._test_line_prepares(recipe, readings):
-                    return True
-                if any(
-                    command.meaning.test is not None
-                    for commands in readings
-                    for command in commands
-                ):
-                    return False
+            if self.recipes_prepare(rule["recipes"]):
+                return True
         return False
 
     def _test_line_prepares(
@@ -159,23 +226,19 @@ class _Reader:
         return all(self._prepares_before_test(commands) for commands in readings)
 
     def _prepares_before_test(self, commands: list[ScriptCommand]) -> bool:
-        """Return whether a gated build or preparing target precedes the test."""
-        position = next(
-            (i for i, c in enumerate(commands) if c.meaning.test is not None),
-            len(commands),
-        )
+        """Return whether a certain build or preparing target precedes the test."""
+        position = _first_test(commands)
         # A line with no test is a whole line that must succeed: its last
         # command ends the line, so only the ones before it have to gate.
         end = position if position < len(commands) else len(commands) - 1
-        gated = [
+        certain = [
             command
             for index, command in enumerate(commands[:position])
-            if not command.constructs
-            and all(later.gates_next for later in commands[index:end])
+            if _is_certain(commands, index, end)
         ]
-        return any(command.meaning.is_build for command in gated) or any(
+        return any(command.meaning.is_build for command in certain) or any(
             self.target_prepares(goal)
-            for command in gated
+            for command in certain
             for goal in command.meaning.make_goals
         )
 
