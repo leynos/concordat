@@ -1017,6 +1017,15 @@ test_a_group_with_no_fallback_in_a_dispatch_workflow_is_a_finding if {
 	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+test_a_run_id_behind_the_ref_is_never_selected if {
+	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}")
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_the_head_ref_may_precede_the_run_id if {
+	count(findings(dual_trigger("${{ github.workflow }}-${{ github.head_ref || github.run_id }}"))) == 0
+}
+
 test_a_quoted_run_id_literal_does_not_make_the_group_unique if {
 	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || 'github.run_id' }}")
 	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}

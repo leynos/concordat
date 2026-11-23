@@ -130,11 +130,14 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   every cancelling block's `group` must carry `github.run_id` inside a
   `${{ ... }}` expression (outside a quoted literal), so that push, schedule
   and dispatch runs each get a group of their own. A bare `github.ref`
-  fallback, or no fallback, is reported: such runs share a group and GitHub
-  drops a pending run when a newer one arrives. The check is textual; whether
-  the run id sits in a fallback the pull request never selects is judged by
-  RC-001, which rejects a run id that a pull request would select. This clause
-  has the same exemptions as the rest of RC-002.
+  fallback, or no fallback, is reported, and so is a run id placed after a
+  reference that is non-empty on every run (`github.ref || github.run_id`),
+  because a `||` chain never reaches it; `github.head_ref || github.run_id` is
+  fine, since the head ref is empty outside pull requests. Such runs share a
+  group and GitHub drops a pending run when a newer one arrives. The check is
+  textual; whether the run id sits in a fallback the pull request never selects
+  is judged by RC-001, which rejects a run id that a pull request would select.
+  This clause has the same exemptions as the rest of RC-002.
 - **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
   pull request through `github.event.pull_request.number` or `github.head_ref`,
   matched case-insensitively, inside a `${{ ... }}` expression. A group that

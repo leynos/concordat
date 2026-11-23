@@ -1923,7 +1923,17 @@ group_unique_per_non_pr_run(value) if {
 	is_string(group)
 	some body in expression_bodies(group)
 	contains(lower(body), "github.run_id")
+	not run_id_shadowed(lower(body))
 }
+
+# `github.run_id` has to be reachable on a non-pull-request run. A `||` chain
+# takes its first truthy branch, and these references are non-empty on every
+# run, so a run id placed after one of them is never selected.
+# `github.event.pull_request.number` and `github.head_ref` are empty outside
+# pull requests, so they may precede it.
+ALWAYS_SET_REFERENCE_PATTERN := `github\.(ref|ref_name|sha|workflow|repository|event_name|run_number|run_attempt)\s*\|\|[^|]*github\.run_id`
+
+run_id_shadowed(body) if regex.match(ALWAYS_SET_REFERENCE_PATTERN, body)
 
 # --------------------------------------------------------------------------
 # Findings
