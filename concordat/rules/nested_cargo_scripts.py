@@ -565,12 +565,13 @@ def _cargo(arguments: list[str]) -> CommandMeaning:
         return CommandMeaning(
             is_prefetch="--locked" in _flag_words(globals_seen + after)
         )
+    flags = _flag_words(globals_seen + after)
+    # `--help` exits successfully without compiling anything.
+    is_help = "--help" in flags or "-h" in flags
     if subcommand == "test":
-        return CommandMeaning(
-            test="test", is_build="--no-run" in _flag_words(globals_seen + after)
-        )
+        return CommandMeaning(test="test", is_build="--no-run" in flags and not is_help)
     if subcommand in _BUILD_SUBCOMMANDS:
-        return CommandMeaning(is_build=True)
+        return CommandMeaning(is_build=not is_help)
     if subcommand in _NEXTEST_SUBCOMMANDS:
         # Everything after `nextest` is the plugin's own argument list; a
         # cargo global in front of it is cargo's, not a nextest option.

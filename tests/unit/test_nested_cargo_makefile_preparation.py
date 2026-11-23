@@ -15,6 +15,7 @@ import typing as typ
 import pytest
 
 from concordat.rules import runner
+from concordat.rules.nested_cargo_makefile_preparation import makefile_prepares
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -258,6 +259,14 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
             "MAKEFLAGS += -i\n"
             "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
         ),
+        # An included file may hold `.IGNORE`; an expanded target name may be a
+        # special target; `--help` compiles nothing.
+        (
+            "SPECIAL := .IGNORE\n$(SPECIAL): prepare\n"
+            "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+        ),
+        "test:\n\tcargo build --help && cargo nextest run\n",
+        "test:\n\tcargo test --no-run --help && cargo nextest run\n",
         # A compile-only command after the test prepares nothing for it.
         "test:\n\tcargo nextest run\n\tcargo nextest run --no-run\n",
         # `make -f` reads another Makefile and `make -n` runs nothing.
@@ -278,6 +287,19 @@ def test_a_compile_that_does_not_gate_the_tests_prepares_nothing(
     """A build the test does not wait on, or may skip, is not a declaration."""
     checkout(tmp_path, makefile)
     assert reported(tmp_path)
+
+
+def test_an_included_file_may_hold_what_the_reader_cannot_see(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An include can add `.IGNORE`, so a Makefile that includes is not read."""
+    makefile = "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+    plain, including = tmp_path / "plain", tmp_path / "including"
+    checkout(plain, makefile)
+    assert makefile_prepares(plain)
+    checkout(including, f"include flags.mk\n{makefile}")
+    put(including, "flags.mk", ".IGNORE: prepare\n")
+    assert not makefile_prepares(including)
 
 
 def test_a_target_not_declared_phony_may_be_skipped_so_it_prepares_nothing(

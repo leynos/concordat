@@ -35,6 +35,7 @@ run tests (through a recipe or a `make` goal) without preparing for them.
 
 from __future__ import annotations
 
+import re
 import typing as typ
 
 from .makefile_expansion import expand_readings, single_assignments
@@ -56,6 +57,7 @@ PHONY_TARGET: typ.Final = ".PHONY"
 # Special targets that change what a failed recipe line does to the next (a
 # `.ONESHELL` recipe runs as one script; `.IGNORE` ignores errors, globally or
 # for the targets it names), so a build before the tests no longer gates them.
+_INCLUDE_LINE: typ.Final = re.compile(r"^[ ]*[-s]?include\b", re.MULTILINE)
 UNSAFE_SPECIAL_TARGETS: typ.Final = frozenset({ONESHELL_TARGET, ".IGNORE"})
 OPERATION_READ_MAKEFILE: typ.Final = "read-nested-cargo-makefile-preparation"
 
@@ -369,8 +371,9 @@ def makefile_prepares(checkout: pathlib.Path) -> bool:
         True when a prerequisite of `test`, an earlier recipe line, or an
         earlier success-gated command on the test line compiles before the
         test command. False when there is no Makefile, it cannot be parsed, it
-        declares `.ONESHELL` or `.IGNORE`, assigns `MAKEFLAGS`, or nothing in it
-        prepares: the reader never guesses a preparation it cannot see.
+        declares `.ONESHELL` or `.IGNORE`, assigns `MAKEFLAGS`, includes
+        another file, names a target by expansion, or nothing in it prepares:
+        the reader never guesses a preparation it cannot see.
     """
     path = checkout / MAKEFILE
     try:
@@ -387,6 +390,14 @@ def makefile_prepares(checkout: pathlib.Path) -> bool:
     if TEST_TARGET not in index or UNSAFE_SPECIAL_TARGETS & index.keys():
         return False
     if any(variable.get("name") == "MAKEFLAGS" for variable in report["variables"]):
+        return False
+    # An included file may hold `.IGNORE`, and a target name that expands may
+    # be a special one, so neither can be read from this Makefile alone.
+    # The parser does not report an include that follows a rule, so the text is
+    # read for one as well.
+    if report["includes"] or any("$" in name for name in index):
+        return False
+    if _INCLUDE_LINE.search(path.read_text(encoding="utf-8", errors="replace")):
         return False
     values = read_tool_paths(single_assignments(report["variables"]))
     return _Reader(index, values).test_prepares()
