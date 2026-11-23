@@ -213,11 +213,13 @@ The compile is *prepared* when any one of these holds:
    fails closed: it counts a line only in the forms described here, exactly.
    `make -t`, `-q` and `-i`, a group of goals on one make line, a `VAR=value`
    override on it, a goal the shell computes, prerequisites that read in
-   alternative ways or that the expansion could not resolve, and a prerequisite
-   that may run tests without preparing for them are not preparation. The
-   preparation must build with the same features and profile as the tests, or
-   it fills a different directory (it can even overwrite the binaries the tests
-   use). The rule cannot check that, and the repository's own review must.
+   alternative ways or that the expansion could not resolve, a prerequisite or
+   earlier `make` goal that may run tests without preparing for them, and a
+   preparation target not declared `.PHONY` (a file of that name makes Make
+   skip it) are not preparation. The preparation must build with the same
+   features and profile as the tests, or it fills a different directory (it can
+   even overwrite the binaries the tests use). The rule cannot check that, and
+   the repository's own review must.
 
 The defaults for 2 and 3 are the names rstest-bdd chose
 (`nested_fixture_preparation$`; `ensure_prepared`, `ensure_prepared_with`,

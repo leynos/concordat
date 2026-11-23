@@ -9,6 +9,7 @@ success-gated command, and the shapes that look similar but prove nothing.
 
 from __future__ import annotations
 
+import re
 import typing as typ
 
 import pytest
@@ -45,11 +46,17 @@ def reported(root: pathlib.Path) -> bool:
     )
 
 
-def checkout(root: pathlib.Path, makefile: str) -> None:
-    """Write a checkout with one trybuild test and the given Makefile."""
+def checkout(root: pathlib.Path, makefile: str, *, is_phony: bool = True) -> None:
+    """Write a checkout with one trybuild test and the given Makefile.
+
+    Every target is declared `.PHONY` first unless *is_phony* is false, as a
+    Makefile does for targets that name no file.
+    """
+    targets = re.findall(r"^([A-Za-z][\w-]*):", makefile, flags=re.MULTILINE)
+    declaration = f".PHONY: {' '.join(targets)}\n" if is_phony else ""
     put(root, "Cargo.toml", '[package]\nname = "app"\n')
     put(root, "tests/ui.rs", TRYBUILD_TEST)
-    put(root, "Makefile", makefile)
+    put(root, "Makefile", declaration + makefile)
 
 
 def test_a_checkout_with_no_makefile_preparation_is_reported(
@@ -199,6 +206,17 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
             "test: run-tests\n\tcargo build\n\tcargo nextest run\n\n"
             "run-tests:\n\tcargo nextest run\n"
         ),
+        # A make goal that may test runs before the build that follows it.
+        (
+            "test:\n\tmake run-tests && cargo build && cargo nextest run\n\n"
+            "run-tests:\n\tcargo nextest run\n"
+        ),
+        # A prerequisite the expansion left open may be a target that tests.
+        (
+            "RUN := $(shell printf run-tests)\n"
+            "test: warm gate\n\tcargo nextest run\n\nwarm:\n\tcargo build\n\n"
+            "gate: $(RUN)\n\nrun-tests:\n\tcargo nextest run\n"
+        ),
         # A compile-only command after the test prepares nothing for it.
         "test:\n\tcargo nextest run\n\tcargo nextest run --no-run\n",
         # `make -f` reads another Makefile and `make -n` runs nothing.
@@ -218,6 +236,18 @@ def test_a_compile_that_does_not_gate_the_tests_prepares_nothing(
 ) -> None:
     """A build the test does not wait on, or may skip, is not a declaration."""
     checkout(tmp_path, makefile)
+    assert reported(tmp_path)
+
+
+def test_a_target_not_declared_phony_may_be_skipped_so_it_prepares_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A file named like the target makes Make skip its recipe."""
+    checkout(
+        tmp_path,
+        "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n",
+        is_phony=False,
+    )
     assert reported(tmp_path)
 
 

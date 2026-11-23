@@ -52,6 +52,7 @@ if typ.TYPE_CHECKING:
 
 MAKEFILE: typ.Final = "Makefile"
 ONESHELL_TARGET: typ.Final = ".ONESHELL"
+PHONY_TARGET: typ.Final = ".PHONY"
 OPERATION_READ_MAKEFILE: typ.Final = "read-nested-cargo-makefile-preparation"
 
 
@@ -79,11 +80,6 @@ def _line_commands(
 def _runs_tests(command: ScriptCommand) -> bool:
     """Return whether this command runs tests, as `test --no-run` does not."""
     return command.meaning.test is not None and not command.meaning.is_build
-
-
-def _first_test(commands: list[ScriptCommand]) -> int:
-    """Return the position of the first command that runs tests, or the length."""
-    return next((i for i, c in enumerate(commands) if _runs_tests(c)), len(commands))
 
 
 def _is_certain(commands: list[ScriptCommand], index: int, end: int) -> bool:
@@ -118,13 +114,26 @@ class _Reader:
         self.values = values
         self.active: set[str] = set()
         self.prepared: set[str] = set()
+        self.phony = self._phony_names()
+
+    def _phony_names(self) -> frozenset[str]:
+        """Return the targets the Makefile declares `.PHONY`."""
+        return frozenset(
+            name
+            for rule in self.index.get(PHONY_TARGET, [])
+            for reference in rule["prerequisites"]
+            for reading in expand_readings(reference, self.values)
+            if reading.is_resolved
+            for name in reading.text.split()
+        )
 
     def target_prepares(self, name: str) -> bool:
         """Return whether running target *name* compiles before it tests.
 
         A target on the walk now is not followed again, which ends a cycle; a
         target that proved it prepares is remembered, so two readings of one
-        line reaching it both succeed.
+        line reaching it both succeed. A target that is not declared `.PHONY`
+        may be skipped when a file of that name exists, so it prepares nothing.
 
         Returns
         -------
@@ -133,7 +142,7 @@ class _Reader:
         """
         if name in self.prepared:
             return True
-        if name in self.active:
+        if name in self.active or name not in self.phony:
             return False
         self.active.add(name)
         try:
@@ -219,12 +228,28 @@ class _Reader:
         for rule in self.index.get(name, []):
             if any(self._recipe_tests(recipe, seen) for recipe in rule["recipes"]):
                 return True
-            if any(
+            if self._has_unresolved_prerequisite(rule) or any(
                 self._target_tests(needed, seen)
                 for needed in self._prerequisite_names(rule)
             ):
                 return True
         return False
+
+    def _has_unresolved_prerequisite(self, rule: MakeRule) -> bool:
+        """Return whether a prerequisite of *rule* is one the expansion left open.
+
+        What it names is unknown, so it may be a target that runs tests.
+
+        Returns
+        -------
+        bool
+            True when any reading of a prerequisite reference is unresolved.
+        """
+        return any(
+            not reading.is_resolved
+            for reference in rule["prerequisites"]
+            for reading in expand_readings(reference, self.values)
+        )
 
     def _recipe_tests(self, recipe: MakeRecipe, seen: frozenset[str]) -> bool:
         """Return whether a recipe line may run tests, in any reading."""
@@ -265,9 +290,31 @@ class _Reader:
             return False
         return all(self._prepares_before_test(commands) for commands in readings)
 
+    def _first_test(self, commands: list[ScriptCommand]) -> int:
+        """Return the position of the first command that may test unprepared.
+
+        A `make` goal that prepares is the preparation, whatever it also tests;
+        one that may test without preparing, or that the reader cannot follow,
+        is a test boundary, so a build after it is paid inside the timed run.
+
+        Returns
+        -------
+        int
+            The position of that command, or the number of commands when none.
+        """
+        return next(
+            (
+                i
+                for i, c in enumerate(commands)
+                if self._command_tests(c, frozenset())
+                and not any(self.target_prepares(g) for g in c.meaning.make_goals)
+            ),
+            len(commands),
+        )
+
     def _prepares_before_test(self, commands: list[ScriptCommand]) -> bool:
         """Return whether a certain build or preparing target precedes the test."""
-        position = _first_test(commands)
+        position = self._first_test(commands)
         # A line with no test is a whole line that must succeed: its last
         # command ends the line, so only the ones before it have to gate.
         end = position if position < len(commands) else len(commands) - 1
