@@ -13,7 +13,7 @@ a nextest setup script is; it is not a claim that the preparation uses the same
 features and profile as the tests, which the reader cannot know.
 
 A preparation is a recipe command that compiles without running the tests
-(`cargo build`, `check`, `bench`, `test --no-run`, `nextest archive`), read from
+(`cargo build`, `bench`, `test --no-run`, `nextest archive`), read from
 text the expansion settled, whose failure stops the target: not an
 ignored-error line, not inside a conditional construct, and joined to what
 follows by `&&` or a line break. A prerequisite of `test`, or a target the

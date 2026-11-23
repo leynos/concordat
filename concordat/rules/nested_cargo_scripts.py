@@ -112,7 +112,7 @@ _RECURSIVE_MAKE: typ.Final = re.compile(r"\$[({]MAKE[)}]")
 # command in a recipe whose `CARGO_NEXTEST` is `cargo-nextest`.
 _NEXTEST_BINARIES: typ.Final = frozenset({"cargo-nextest"})
 _NEXTEST_SUBCOMMANDS: typ.Final = frozenset({"nextest", "ntr"})
-_BUILD_SUBCOMMANDS: typ.Final = frozenset({"build", "check", "bench"})
+_BUILD_SUBCOMMANDS: typ.Final = frozenset({"build", "bench"})
 # A backslash-newline is removed by the shell before it reads the command. The
 # Makefile loader keeps it, so every command after a `;`-continued line begins
 # with one, and a leading assignment or tool would otherwise be misread.

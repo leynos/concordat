@@ -194,8 +194,9 @@ The compile is *prepared* when any one of these holds:
    tests, so every nested build the checkout starts has been paid for outside
    the timed run. That holds when a prerequisite of `test`, an earlier recipe
    line, or an earlier command on the test line joined by `&&` runs a cargo
-   command that compiles without running the tests (`build`, `check`, `bench`,
-   `test --no-run`, `nextest run --no-run`, `nextest archive`), directly or
+   command that compiles without running the tests (`build`, `bench`,
+   `test --no-run`, `nextest run --no-run`, `nextest archive`; `check` and
+   `clippy` leave only metadata, so they do not warm a build), directly or
    through a target it names (`$(MAKE) prepare-nested-builds`). The compile
    must stop the target when it fails: an ignored-error line (`-cargo build`), a
    `;` or `||` join, a command inside an `if` and a build that comes after the

@@ -111,6 +111,9 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         'test:\n\tif [ -n "$(X)" ]; then cargo build; fi\n\tcargo nextest run\n',
         # A prerequisite that only checks tools, formats or lints.
         "test: tools\n\tcargo nextest run\n\ntools:\n\tcargo fmt --check\n",
+        # `cargo check` and clippy leave only metadata, which a build recompiles.
+        "test: tools\n\tcargo nextest run\n\ntools:\n\tcargo check --all-targets\n",
+        "test: tools\n\tcargo nextest run\n\ntools:\n\tcargo clippy\n",
         # A target only a different target reaches.
         "test:\n\tcargo nextest run\n\nprepare:\n\tcargo build\n",
         # A recursive make into another directory reads another Makefile.
