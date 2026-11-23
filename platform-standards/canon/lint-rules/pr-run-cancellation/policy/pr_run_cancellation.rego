@@ -1922,9 +1922,13 @@ group_unique_per_non_pr_run(value) if {
 	group := object.get(value, "group", null)
 	is_string(group)
 	some body in expression_bodies(group)
-	contains(lower(body), "github.run_id")
+	regex.match(RUN_ID_PATTERN, lower(body))
 	not run_id_shadowed(lower(body))
 }
+
+# The property name must end where the reference does: `github.run_id_suffix`
+# is a different property, which GitHub resolves to an empty string.
+RUN_ID_PATTERN := `github\.run_id([^a-z0-9_]|$)`
 
 # `github.run_id` has to be reachable on a non-pull-request run. A `||` chain
 # takes its first truthy branch, and these references are non-empty on every

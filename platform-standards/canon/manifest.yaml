@@ -340,7 +340,7 @@ artifacts:
     description: >-
       Sensor requiring every pull-request-triggered workflow to cancel
       superseded runs and to name the pull request in its concurrency group.
-    sha256: af7fbdde5cb99cf332c81dae8e077668a74a2d15f7b31698ab8f78136afe20e5
+    sha256: 275f64bf58a6a7c5402782a22e09d93993ad75965a092d37252909044cc281f2
   - id: lint-rule-pr-run-cancellation-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/pr-run-cancellation/rule.yaml

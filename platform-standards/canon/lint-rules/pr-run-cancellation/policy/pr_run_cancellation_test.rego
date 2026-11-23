@@ -1022,6 +1022,11 @@ test_a_run_id_behind_the_ref_is_never_selected if {
 	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+test_a_longer_property_name_is_not_the_run_id if {
+	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id_suffix }}")
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 test_the_head_ref_may_precede_the_run_id if {
 	count(findings(dual_trigger("${{ github.workflow }}-${{ github.head_ref || github.run_id }}"))) == 0
 }
