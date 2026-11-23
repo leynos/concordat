@@ -1904,9 +1904,11 @@ declared_events(workflow) := object.keys(on) if {
 	is_object(on)
 }
 
-# A run that is not a pull-request run has no pull request number, so the
-# expression falls through to its fallback. A fallback shared by every such run
-# (a bare `github.ref`, or no fallback at all) puts every push to `main`, every
+# A run on an event other than a pull request carries no pull request number,
+# unless the event is one whose payload holds a pull request (such as
+# `pull_request_review_comment`); the rule judges declared event names only, so
+# it treats every such event as needing the fallback. A fallback shared by every
+# such run (a bare `github.ref`, or no fallback at all) puts every push to `main`, every
 # schedule and every dispatch on one ref in the same group, where GitHub
 # replaces a pending run with a newer one even when `cancel-in-progress` is
 # false. `github.run_id` makes each of those runs its own group. The check is
@@ -1935,25 +1937,39 @@ RUN_ID_PATTERN := `github\.run_id([^a-z0-9_]|$)`
 # run, so a run id placed after one of them is never selected.
 # `github.event.pull_request.number` and `github.head_ref` are empty outside
 # pull requests, so they may precede it.
-ALWAYS_SET_PREFIX_PATTERN := `github\.(ref|ref_name|sha|workflow|repository|event_name|run_number|run_attempt)\b[^&]*\|\|[^&]*$`
+ALWAYS_SET_ALTERNATIVE_PATTERN := `^github\.(ref|ref_name|sha|workflow|repository|event_name|run_number|run_attempt)\b\s*\|\|`
 
 # One selectable occurrence is enough: in
 # `(github.ref || github.run_id) && github.run_id` the first run id is shadowed
-# but the last one is what the expression yields. An occurrence is shadowed
-# when, within the `&&` operand that holds it, an always-set reference comes
-# before an `||` that precedes it.
+# but the last one is what the expression yields.
 run_id_reachable(body) if {
-	parts := regex.split(RUN_ID_PATTERN, body)
+	parts := split(body, "github.run_id")
 	some i in numbers.range(1, count(parts) - 1)
-	prefix := concat("github.run_id ", array.slice(parts, 0, i))
-	operand := regexp_last_operand(prefix)
-	not regex.match(ALWAYS_SET_PREFIX_PATTERN, operand)
+	regex.match(`^([^a-z0-9_]|$)`, parts[i])
+	prefix := concat("github.run_id", array.slice(parts, 0, i))
+	not run_id_shadowed_in(prefix)
 }
 
-# The text after the last `&&` of a prefix: the operand the next reference sits in.
-regexp_last_operand(prefix) := last if {
-	operands := split(prefix, "&")
-	last := operands[count(operands) - 1]
+# A run id is shadowed when an always-set reference stands as a bare
+# alternative (not an `&&` operand) before an `||`, and the parenthesised group
+# holding that alternative is still open where the run id appears. A group that
+# closes first, as in `(github.ref || x) && github.run_id`, no longer
+# constrains what follows it.
+run_id_shadowed_in(prefix) if {
+	some p in numbers.range(0, count(prefix) - 1)
+	tail := substring(prefix, p, -1)
+	regex.match(ALWAYS_SET_ALTERNATIVE_PATTERN, tail)
+	not endswith(trim_right(substring(prefix, 0, p), " "), "&")
+	matched := regex.find_n(ALWAYS_SET_ALTERNATIVE_PATTERN, tail, 1)[0]
+	not group_closes(substring(tail, count(matched), -1))
+}
+
+# Whether a `)` in the text has no `(` before it in the same text.
+group_closes(text) if {
+	chars := split(text, "")
+	some j in numbers.range(1, count(chars))
+	seen := array.slice(chars, 0, j)
+	count([c | some c in seen; c == ")"]) > count([c | some c in seen; c == "("])
 }
 
 # --------------------------------------------------------------------------

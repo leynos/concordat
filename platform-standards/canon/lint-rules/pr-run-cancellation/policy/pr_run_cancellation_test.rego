@@ -1050,6 +1050,11 @@ test_an_event_that_may_carry_a_pull_request_still_counts_as_a_non_pr_event if {
 	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
 }
 
+test_a_run_id_inside_a_group_behind_the_ref_is_never_selected if {
+	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || (github.sha && github.run_id) }}")
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 test_a_longer_property_name_is_not_the_run_id if {
 	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id_suffix }}")
 	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
