@@ -179,12 +179,7 @@ def _inspect_reading(
                 sequencing_holds=sequencing_holds,
             )
             return True
-        if command.meaning.is_recursive_make:
-            scan.uncertain_reason = "the recipe delegates to another make target"
-            scan.hidden_reason = scan.hidden_reason or scan.uncertain_reason
-        elif command.meaning.is_unreadable:
-            scan.uncertain_reason = "a recipe command could not be read"
-            scan.hidden_reason = scan.hidden_reason or scan.uncertain_reason
+        _note_hidden(scan, command)
     if (
         sequencing_holds
         and not recipe["ignore_errors"]
@@ -193,6 +188,18 @@ def _inspect_reading(
         scan.proven = True
         scan.proven_reason = "an earlier recipe line runs cargo fetch --locked"
     return False
+
+
+def _note_hidden(scan: TargetScan, command: ScriptCommand) -> None:
+    """Record a command before the test whose effect the reader cannot follow."""
+    if command.meaning.is_recursive_make:
+        reason = "the recipe delegates to another make target"
+    elif command.meaning.is_unreadable:
+        reason = "a recipe command could not be read"
+    else:
+        return
+    scan.uncertain_reason = reason
+    scan.hidden_reason = scan.hidden_reason or reason
 
 
 def _record_test(

@@ -53,16 +53,31 @@ def _has_unquoted_reference(text: str, assigned: cabc.Container[str]) -> bool:
         elif char in "'\"":
             quote = char
         elif text.startswith(("$(", "${"), index):
-            end = scan_balanced(text, index + 1)
+            end = _environment_reference_end(text, index, assigned)
             if end is None:
-                return True
-            name = text[index + 2 : end - 1]
-            if not (_NAME.fullmatch(name) and name not in assigned):
                 return True
             index = end
             continue
         index += 1
     return False
+
+
+def _environment_reference_end(
+    text: str, index: int, assigned: cabc.Container[str]
+) -> int | None:
+    """Return the index past the plain environment reference at *index*, or None.
+
+    Returns
+    -------
+    int | None
+        None when the reference is unbalanced or is anything but `$(NAME)` for
+        a name the Makefile never assigns.
+    """
+    end = scan_balanced(text, index + 1)
+    if end is None:
+        return None
+    name = text[index + 2 : end - 1]
+    return end if _NAME.fullmatch(name) and name not in assigned else None
 
 
 def is_settled(command: ScriptCommand, assigned: cabc.Container[str] = ()) -> bool:
@@ -115,26 +130,43 @@ def prefetch_in_prerequisites(
     """Walk `test`'s prerequisites, returning proof, uncertainty and a reason."""
     seen = {TEST_TARGET}
     pending: list[MakeRule] = list(index[TEST_TARGET])
-    proven = False
     proven_reason = ""
     uncertain_reason = ""
     while pending:
         rule = pending.pop()
-        for reference in rule["prerequisites"]:
-            expansion = expand(reference, values)
-            if not expansion.is_resolved:
-                uncertain_reason = "a prerequisite names an unresolved variable"
-                continue
-            for name in expansion.text.split():
-                if name in seen:
-                    continue
-                seen.add(name)
-                for nested in index.get(name, []):
-                    pending.append(nested)
-                    if recipes_fetch(nested["recipes"], values):
-                        proven = True
-                        proven_reason = f"prerequisite {name} runs cargo fetch --locked"
-    return proven, uncertain_reason, proven_reason
+        names, is_unresolved = _new_prerequisites(rule, values, seen)
+        if is_unresolved:
+            uncertain_reason = "a prerequisite names an unresolved variable"
+        for name in names:
+            for nested in index.get(name, []):
+                pending.append(nested)
+                if recipes_fetch(nested["recipes"], values):
+                    proven_reason = f"prerequisite {name} runs cargo fetch --locked"
+    return bool(proven_reason), uncertain_reason, proven_reason
+
+
+def _new_prerequisites(
+    rule: MakeRule, values: cabc.Mapping[str, str], seen: set[str]
+) -> tuple[list[str], bool]:
+    """Return the prerequisite names of *rule* not yet walked, and whether one hid.
+
+    Returns
+    -------
+    tuple[list[str], bool]
+        The new names, which are added to *seen*, and whether a reference in
+        the prerequisites could not be resolved.
+    """
+    names: list[str] = []
+    is_unresolved = False
+    for reference in rule["prerequisites"]:
+        expansion = expand(reference, values)
+        if not expansion.is_resolved:
+            is_unresolved = True
+            continue
+        fresh = [n for n in dict.fromkeys(expansion.text.split()) if n not in seen]
+        names.extend(fresh)
+        seen.update(fresh)
+    return names, is_unresolved
 
 
 def recipes_fetch(recipes: list[MakeRecipe], values: cabc.Mapping[str, str]) -> bool:

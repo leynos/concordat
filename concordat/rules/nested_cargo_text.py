@@ -90,23 +90,32 @@ def string_literals(text: str) -> list[str] | None:
     words: list[str] = []
     index = 0
     while index < len(text):
-        char = text[index]
-        if char == '"':
+        if text[index] == '"':
             end = string_end(text, index + 1)
             if end >= len(text):
                 return None
             words.append(text[index + 1 : end])
             index = end + 1
             continue
-        skipped = comment_end(text, index)
-        if skipped is not None:
-            index = skipped
-            continue
-        if char in _PUNCTUATION:
-            index += 1
-            continue
-        return None
+        step = _skippable(text, index)
+        if step is None:
+            return None
+        index = step
     return words
+
+
+def _skippable(text: str, index: int) -> int | None:
+    """Return the index past a comment or punctuation at *index*, or None.
+
+    Returns
+    -------
+    int | None
+        None when the character starts a token the reader cannot settle.
+    """
+    skipped = comment_end(text, index)
+    if skipped is not None:
+        return skipped
+    return index + 1 if text[index] in _PUNCTUATION else None
 
 
 def split_top_level(text: str) -> list[str]:
