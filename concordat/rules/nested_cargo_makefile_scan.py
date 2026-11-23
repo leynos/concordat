@@ -189,23 +189,29 @@ def _inspect_reading(scan: TargetScan, line: _Line) -> None:
         if command.meaning.test is not None:
             _record_test(scan, line, position)
             return
-        _note_hidden(scan, command)
+        _note_hidden(scan, line, position)
     if line.is_fatal and line_fetches(line.commands, is_resolved=line.is_settled):
         scan.proven = True
         scan.proven_reason = "an earlier recipe line runs cargo fetch --locked"
 
 
-def _note_hidden(scan: TargetScan, command: ScriptCommand) -> None:
-    """Record a command before the test whose effect the reader cannot follow."""
-    if command.meaning.is_recursive_make:
+def _note_hidden(scan: TargetScan, line: _Line, position: int) -> None:
+    """Record a command before the test whose effect the reader cannot follow.
+
+    A hidden command is cold unless a fetch proved earlier in the recipe, or an
+    earlier command on this same line that must succeed, runs before it.
+    """
+    meaning = line.commands[position].meaning
+    if meaning.is_recursive_make:
         reason = "the recipe delegates to another make target"
-    elif command.meaning.is_unreadable:
+    elif meaning.is_unreadable:
         reason = "a recipe command could not be read"
     else:
         return
     scan.uncertain_reason = reason
     scan.hidden_reason = scan.hidden_reason or reason
-    scan.is_cold_hidden = scan.is_cold_hidden or not scan.proven
+    is_gated = scan.proven or _fetch_gates_test(line, position)
+    scan.is_cold_hidden = scan.is_cold_hidden or not is_gated
 
 
 def _record_test(scan: TargetScan, line: _Line, position: int) -> None:

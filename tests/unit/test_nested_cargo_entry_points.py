@@ -603,6 +603,32 @@ def test_a_hidden_command_is_not_covered_by_a_later_setup_script(
     assert makefile_state(tmp_path) == [("test", "uncertain")]
 
 
+def test_a_delegation_gated_by_a_fetch_on_the_same_line_is_covered(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`make legacy-test` runs only once the fetch before it has succeeded."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && $(MAKE) legacy-test\n\tcargo test\n\n"
+        "legacy-test:\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_delegation_before_the_fetch_on_the_same_line_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`make legacy-test` runs before the fetch, so the fetch does not cover it."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\t$(MAKE) legacy-test && cargo fetch --locked\n\tcargo test\n\n"
+        "legacy-test:\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
 def test_a_scan_cut_at_the_path_cap_marks_every_kept_path_truncated() -> None:
     """Paths past the cap are never checked, so the kept ones cannot vouch for them."""
     paths = [TargetScan(proven=True, proven_reason=f"path {n}") for n in range(9)]
