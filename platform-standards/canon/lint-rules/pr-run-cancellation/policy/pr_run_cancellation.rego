@@ -6,7 +6,9 @@
 # them. RC-001 requires a cancelling concurrency block: at workflow level, or
 # on every job that is not disabled with `if: false`. RC-002 requires every
 # cancelling block to name the pull request in its group, so two pull requests
-# do not cancel each other's runs.
+# do not cancel each other's runs. In a workflow that also runs on other
+# events, RC-002 further requires `github.run_id` in the group, so those runs
+# are never grouped together and a pending run is never replaced.
 #
 # A workflow this policy cannot decode, whose trigger it cannot classify, or
 # whose concurrency shape it cannot read is indeterminate rather than a pass.
@@ -1886,6 +1888,100 @@ rc_audited(workflow) if {
 	not is_exempt(workflow_path(workflow))
 }
 
+# The events a workflow declares, whichever shape its trigger takes.
+declared_events(workflow) := {on} if {
+	on := workflow_on(workflow)
+	is_string(on)
+}
+
+declared_events(workflow) := {event | some event in on} if {
+	on := workflow_on(workflow)
+	is_array(on)
+}
+
+declared_events(workflow) := object.keys(on) if {
+	on := workflow_on(workflow)
+	is_object(on)
+}
+
+# A run on an event other than a pull request carries no pull request number,
+# unless the event is one whose payload holds a pull request (such as
+# `pull_request_review_comment`); the rule judges declared event names only, so
+# it treats every such event as needing the fallback. A fallback shared by every
+# such run (a bare `github.ref`, or no fallback at all) puts every push to `main`, every
+# schedule and every dispatch on one ref in the same group, where GitHub
+# replaces a pending run with a newer one even when `cancel-in-progress` is
+# false. `github.run_id` makes each of those runs its own group. The check is
+# textual: the rendered group has to carry the run id somewhere. The PR-run
+# judgement above already rules out a run id the pull request would select.
+has_non_pr_event(workflow) if {
+	some event in declared_events(workflow)
+	not api_event(event)
+}
+
+group_unique_per_non_pr_run(value) if {
+	is_object(value)
+	group := object.get(value, "group", null)
+	is_string(group)
+	some body in expression_bodies(group)
+	regex.match(RUN_ID_PATTERN, lower(body))
+	run_id_reachable(lower(body))
+}
+
+# The property name must end where the reference does: `github.run_id_suffix`
+# is a different property, which GitHub resolves to an empty string.
+RUN_ID_PATTERN := `github\.run_id([^a-z0-9_]|$)`
+
+# `github.run_id` has to be reachable on a non-pull-request run. A `||` chain
+# takes its first truthy branch, and these references are non-empty on every
+# run, so a run id placed after one of them is never selected.
+# `github.event.pull_request.number` and `github.head_ref` are empty outside
+# pull requests, so they may precede it.
+ALWAYS_SET_ALTERNATIVE_PATTERN := `^github\.(ref|ref_name|sha|workflow|repository|event_name|run_number|run_attempt)\b\s*\|\|`
+
+# One selectable occurrence is enough: in
+# `(github.ref || github.run_id) && github.run_id` the first run id is shadowed
+# but the last one is what the expression yields.
+run_id_reachable(body) if {
+	parts := split(body, "github.run_id")
+	some i in numbers.range(1, count(parts) - 1)
+	regex.match(`^([^a-z0-9_]|$)`, parts[i])
+	prefix := concat("github.run_id", array.slice(parts, 0, i))
+	not run_id_shadowed_in(prefix)
+}
+
+# A run id is shadowed when an always-set reference stands as a bare
+# alternative (not an `&&` operand) before an `||`, and nothing ends its hold
+# before the run id appears. A parenthesised group that holds the alternative
+# is as truthy as the alternative, so closing it does not end the hold:
+# `(github.ref || github.sha) || github.run_id` is still shadowed. What ends it
+# is a group that closes and is followed by `&&`, because an `&&` chain yields
+# its last operand: `(github.ref || x) && github.run_id` selects the run id.
+run_id_shadowed_in(prefix) if {
+	some p in numbers.range(0, count(prefix) - 1)
+	tail := substring(prefix, p, -1)
+	regex.match(ALWAYS_SET_ALTERNATIVE_PATTERN, tail)
+	not endswith(trim_right(substring(prefix, 0, p), " "), "&")
+	matched := regex.find_n(ALWAYS_SET_ALTERNATIVE_PATTERN, tail, 1)[0]
+	not hold_ends(substring(tail, count(matched), -1))
+}
+
+# Whether a group closing in the text (a `)` that takes the running depth below
+# every earlier point) is followed by `&&`.
+hold_ends(text) if {
+	chars := split(text, "")
+	depths := [d | some j in numbers.range(1, count(chars)); d := depth_after(chars, j)]
+	some j in numbers.range(1, count(chars))
+	chars[j - 1] == ")"
+	depths[j - 1] < 0
+	every earlier in array.slice(depths, 0, j - 1) {
+		depths[j - 1] < earlier
+	}
+	regex.match(`^\s*&&`, substring(text, j, -1))
+}
+
+depth_after(chars, j) := count([c | some c in array.slice(chars, 0, j); c == "("]) - count([c | some c in array.slice(chars, 0, j); c == ")"])
+
 # --------------------------------------------------------------------------
 # Findings
 # --------------------------------------------------------------------------
@@ -2065,6 +2161,42 @@ deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow
 	not group_identity_unknown_at(job_concurrency(job), event)
 	msg := sprintf(
 		"job %s of %s cancels superseded runs, but its concurrency group does not name the pull request. Include github.event.pull_request.number to keep different pull requests apart; github.head_ref is accepted but is only the source branch name",
+		[name, workflow_path(workflow)],
+	)
+}
+# RC-002, non-pull-request runs. A workflow that also runs on `push`, a
+# schedule or a dispatch must give each of those runs its own group, or GitHub
+# drops the pending run for an earlier push when a later one arrives.
+deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow), 0, msg) if {
+	envelope_ok
+	some workflow in input.workflows
+	evaluable_workflow(workflow)
+	concurrency_evaluable(workflow)
+	rc_audited(workflow)
+	has_non_pr_event(workflow)
+	workflow_cancels_somewhere(workflow)
+	not group_unique_per_non_pr_run(workflow_concurrency(workflow))
+	msg := sprintf(
+		"workflow %s also runs on events other than pull requests, but its concurrency group does not fall back to github.run_id for them. Use `${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}`: a shared group such as github.ref lets GitHub replace a pending run for an earlier push",
+		[workflow_path(workflow)],
+	)
+}
+
+deny contains finding("RC-002", severity, "noncompliant", workflow_path(workflow), 0, msg) if {
+	envelope_ok
+	some workflow in input.workflows
+	evaluable_workflow(workflow)
+	concurrency_evaluable(workflow)
+	rc_audited(workflow)
+	has_non_pr_event(workflow)
+	jobs := workflow_jobs(workflow)
+	some name in object.keys(jobs)
+	job := jobs[name]
+	not job_disabled(job)
+	job_cancels_somewhere(job, pr_events(workflow))
+	not group_unique_per_non_pr_run(job_concurrency(job))
+	msg := sprintf(
+		"job %s of %s also runs on events other than pull requests, but its concurrency group does not fall back to github.run_id for them. Use a group such as `${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}`: a shared group lets GitHub replace a pending run for an earlier push",
 		[name, workflow_path(workflow)],
 	)
 }

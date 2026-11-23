@@ -25,19 +25,31 @@ The reference shape is:
 
 ```yaml
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
 
-The `||` fallback keeps push runs on `main` in the same group as each other, so
-a push run supersedes the previous push run while the event test leaves push
-runs uncancelled. The group must still name the pull request explicitly: what
-`github.ref` holds depends on the event. An ordinary `pull_request` run has
-`refs/pull/<number>/merge`, which already separates pull requests, but a
-`pull_request_target` run has the base branch ref, which every pull request
-targeting that branch shares, so a group built only from `github.ref` there
-lets one pull request's run cancel another's. Requiring the marker makes the
-intent explicit and holds for both events.
+The `||` fallback gives every push, schedule and dispatch run its own group,
+and the event test leaves those runs uncancelled. (The rule judges declared
+event names only: every event other than `pull_request` and
+`pull_request_target`, including `pull_request_review_comment`, puts the
+workflow under the run-id requirement, although some of those events carry a
+pull request and select its number at run time. It does not check which branch
+of the expression an individual event selects.) A shared fallback such as
+`github.ref` would put every push to `main` (and every dispatch on one ref) in
+one group. `cancel-in-progress: false` protects only the run that is executing:
+GitHub still replaces a *pending* run in the group with a newer one, so with
+three quick pushes the middle commit would get no run at all. A workflow that
+also runs on `push`, a schedule or a dispatch is therefore required to carry
+`github.run_id` in its cancelling group (RC-002, below). A pull-request-only
+workflow has no such runs, so the requirement does not apply to it. The group
+must still name the pull request explicitly: what `github.ref` holds depends on
+the event. An ordinary `pull_request` run has `refs/pull/<number>/merge`, which
+already separates pull requests, but a `pull_request_target` run has the base
+branch ref, which every pull request targeting that branch shares, so a group
+built only from `github.ref` there lets one pull request's run cancel
+another's. Requiring the marker makes the intent explicit and holds for both
+events.
 
 The event test in this shape covers `pull_request`. A workflow triggered by
 `pull_request_target` evaluates it false, so test that event too:
@@ -118,6 +130,19 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name
   the same expression with `true` does not, and a run value behind a
   constant-first fallback in its own argument, as in
   `format('{0}', 'ci' || github.run_id)`, is not selected.
+- **RC-002** (warning, noncompliant), non-pull-request runs: in a workflow that
+  also declares an event other than `pull_request` and `pull_request_target`,
+  every cancelling block's `group` must carry `github.run_id` inside a
+  `${{ ... }}` expression (outside a quoted literal), so that push, schedule
+  and dispatch runs each get a group of their own. A bare `github.ref`
+  fallback, or no fallback, is reported, and so is a run id placed after a
+  reference that is non-empty on every run (`github.ref || github.run_id`),
+  because a `||` chain never reaches it; `github.head_ref || github.run_id` is
+  fine, since the head ref is empty outside pull requests. Such runs share a
+  group and GitHub drops a pending run when a newer one arrives. The check is
+  textual; whether the run id sits in a fallback the pull request never selects
+  is judged by RC-001, which rejects a run id that a pull request would select.
+  This clause has the same exemptions as the rest of RC-002.
 - **RC-002** (warning, noncompliant): a cancelling block's `group` must name the
   pull request through `github.event.pull_request.number` or `github.head_ref`,
   matched case-insensitively, inside a `${{ ... }}` expression. A group that

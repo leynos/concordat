@@ -31,7 +31,7 @@ name: CI
 on:
   pull_request:
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
@@ -47,14 +47,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     concurrency:
-      group: ci-test-${{ github.head_ref }}
+      group: ci-test-${{ github.head_ref || github.run_id }}
       cancel-in-progress: true
     steps:
       - run: echo ok
   lint:
     runs-on: ubuntu-latest
     concurrency:
-      group: ci-lint-${{ github.head_ref }}
+      group: ci-lint-${{ github.head_ref || github.run_id }}
       cancel-in-progress: true
     steps:
       - run: echo ok

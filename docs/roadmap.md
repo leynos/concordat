@@ -587,6 +587,15 @@ actuators that remediate them. Each check ships as a lint rule package under
   policy through `concordat artefact rule run`; and an estate survey populates
   the Ubicloud subset before promotion. Shipped at `warning` severity, with the
   `severity` parameter raising it to `error`.
+- [x] Require a per-run group for non-pull-request runs (RC-002, amends
+  leynos/concordat#388): a workflow that also runs on `push`, a schedule or a
+  dispatch carries `github.run_id` in its cancelling group. A shared
+  `github.ref` fallback lets GitHub replace a pending run for an earlier push to
+  `main`, so an intermediate commit gets no run. The reference group falls
+  back from `github.event.pull_request.number` to `github.run_id`. Acceptance:
+  Rego tests cover the run-id fallback, a bare ref fallback, no fallback, a
+  quoted literal, a pull-request-only workflow, a job-level group and an
+  exemption.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for
