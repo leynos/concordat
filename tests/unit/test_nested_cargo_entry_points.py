@@ -240,6 +240,28 @@ def test_a_prefetch_on_the_test_line_before_the_test_proves_the_order(
     assert makefile_state(tmp_path) == [("test", "before")]
 
 
+def test_a_prefetch_after_a_fallback_is_not_proof(tmp_path: pathlib.Path) -> None:
+    """A fetch after `||` runs only when the command before it failed."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\ttrue || cargo fetch --locked && cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_prefetch_after_a_fallback_does_not_gate_a_delegation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A fetch the line may skip does not order the test that follows it."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\ttrue || cargo fetch --locked && cargo test\n",
+    )
+    assert makefile_state(tmp_path) != [("test", "before")]
+
+
 def test_a_semicolon_before_the_test_is_not_proof(tmp_path: pathlib.Path) -> None:
     """A failed fetch followed by `;` still reaches the test."""
     put(

@@ -12,11 +12,11 @@ import re
 import typing as typ
 
 from .makefile_expansion import UNRESOLVED_MARK, Expansion, expand
+from .nested_cargo_fetch_order import line_fetches
 from .nested_cargo_scripts import (
     TEST_TARGET,
     ScriptCommand,
     command_words,
-    line_fetches,
     script_commands,
 )
 from .rust_source import scan_balanced
