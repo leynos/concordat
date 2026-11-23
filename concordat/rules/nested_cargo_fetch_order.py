@@ -91,21 +91,22 @@ def conditional_fetch_precedes(commands: list[ScriptCommand], position: int) -> 
 def _is_reached_after_success(commands: list[ScriptCommand], index: int) -> bool:
     """Return whether the line reaches the command at *index* only after success.
 
-    Only the commands in the same construct count: the condition of an `if`
-    sits outside the body it guards, and skipping the body skips the fetch too.
-    A `||` or `;` before the command means it may run without what came first
-    having succeeded.
+    Only a command outside every construct is judged. Inside an `if` body the
+    guard's own command precedes it by `;`, and the body is skipped together
+    with the fetch, so what runs before the body does not decide the order. At
+    the top level, a `||` or `;` before the command means it may run without
+    what came first having succeeded.
 
     Returns
     -------
     bool
-        True when every earlier command in the same construct gates the next.
+        True when the command is inside a construct, or every earlier command
+        at the top level gates the next.
     """
-    scope = commands[index].constructs
+    if commands[index].constructs:
+        return True
     return all(
-        earlier.gates_next
-        for earlier in commands[:index]
-        if earlier.constructs == scope
+        earlier.gates_next for earlier in commands[:index] if not earlier.constructs
     )
 
 

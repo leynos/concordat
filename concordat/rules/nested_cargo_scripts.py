@@ -649,20 +649,19 @@ def _nextest(subcommand: str, arguments: list[str]) -> CommandMeaning:
     """
     # `--help` exits successfully without compiling anything.
     is_help = "--help" in arguments or "-h" in arguments
+    is_compile_only = "--no-run" in arguments and not is_help
+    if subcommand == "nextest" and arguments[:1] == ["archive"]:
+        return CommandMeaning(is_build=not is_help)
     if subcommand == "nextest" and arguments[:1] == ["run"]:
         return CommandMeaning(
             test="nextest",
             profile=_profile(arguments[1:]),
-            is_build="--no-run" in arguments and not is_help,
+            is_build=is_compile_only,
         )
     if subcommand == "ntr":
         return CommandMeaning(
-            test="nextest",
-            profile=_profile(arguments),
-            is_build="--no-run" in arguments and not is_help,
+            test="nextest", profile=_profile(arguments), is_build=is_compile_only
         )
-    if subcommand == "nextest" and arguments[:1] == ["archive"]:
-        return CommandMeaning(is_build=not is_help)
     return CommandMeaning()
 
 

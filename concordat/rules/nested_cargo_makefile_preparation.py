@@ -49,7 +49,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
-    from .makefile_facts import MakeRecipe, MakeRule
+    from .makefile_facts import MakeRecipe, MakeRule, MakeutilReport
 
 MAKEFILE: typ.Final = "Makefile"
 ONESHELL_TARGET: typ.Final = ".ONESHELL"
@@ -109,6 +109,11 @@ def _is_certain(commands: list[ScriptCommand], index: int, end: int) -> bool:
     )
 
 
+def _is_plain_rule(rule: MakeRule) -> bool:
+    """Return whether *rule* is neither conditional nor a double-colon rule."""
+    return not rule["conditions"] and not rule["double_colon"]
+
+
 class _Reader:
     """Follow the targets of one Makefile, remembering what each one proved."""
 
@@ -134,15 +139,22 @@ class _Reader:
         frozenset[str]
             The names every reading of some `.PHONY` reference agrees on.
         """
-        names: set[str] = set()
-        for rule in self.index.get(PHONY_TARGET, []):
-            if rule["conditions"]:
-                continue
-            for reference in rule["prerequisites"]:
-                readings = expand_readings(reference, self.values)
-                if len(readings) == 1 and readings[0].is_resolved:
-                    names.update(readings[0].text.split())
-        return frozenset(names)
+        unconditional = [
+            rule for rule in self.index.get(PHONY_TARGET, []) if not rule["conditions"]
+        ]
+        return frozenset(
+            name
+            for rule in unconditional
+            for reference in rule["prerequisites"]
+            for name in self._certain_names(reference)
+        )
+
+    def _certain_names(self, reference: str) -> list[str]:
+        """Return the names a reference reads as when it reads one plain way."""
+        readings = expand_readings(reference, self.values)
+        if len(readings) != 1 or not readings[0].is_resolved:
+            return []
+        return readings[0].text.split()
 
     def target_prepares(self, name: str) -> bool:
         """Return whether running target *name* compiles before it tests.
@@ -213,7 +225,7 @@ class _Reader:
         bool
             True when the target has exactly one plain rule and it prepares.
         """
-        if len(rules) != 1 or rules[0]["conditions"] or rules[0]["double_colon"]:
+        if len(rules) != 1 or not _is_plain_rule(rules[0]):
             return False
         return self.rule_prepares(rules[0])
 
@@ -232,13 +244,17 @@ class _Reader:
             True when nothing tests unprepared and something compiles first.
         """
         names = self._plain_prerequisites(rule)
-        if names is None or any(
-            self._target_tests(name) and not self.target_prepares(name)
-            for name in names
-        ):
+        if names is None or self._some_test_unprepared(names):
             return False
         return any(self.target_prepares(name) for name in names) or (
             self.recipes_prepare(rule["recipes"])
+        )
+
+    def _some_test_unprepared(self, names: list[str]) -> bool:
+        """Return whether any named target may test without preparing for it."""
+        return any(
+            self._target_tests(name) and not self.target_prepares(name)
+            for name in names
         )
 
     def _command_tests(self, command: ScriptCommand, seen: frozenset[str]) -> bool:
@@ -375,29 +391,57 @@ def makefile_prepares(checkout: pathlib.Path) -> bool:
         another file, names a target by expansion, or nothing in it prepares:
         the reader never guesses a preparation it cannot see.
     """
+    read = _read_makefile(checkout)
+    if read is None:
+        return False
+    report, text = read
+    index = rules_by_target(report)
+    if TEST_TARGET not in index or not _is_fully_readable(report, index, text):
+        return False
+    values = read_tool_paths(single_assignments(report["variables"]))
+    return _Reader(index, values).test_prepares()
+
+
+def _read_makefile(checkout: pathlib.Path) -> tuple[MakeutilReport, str] | None:
+    """Return the parsed Makefile and its text, or None when it cannot be read.
+
+    Returns
+    -------
+    tuple[MakeutilReport, str] | None
+        The report and the source text, or None for no Makefile, one outside
+        the checkout, or one the parser refuses.
+    """
     path = checkout / MAKEFILE
     try:
         root = checkout.resolve(strict=True)
     except OSError:
         root = checkout
     if not path.is_file() or not within_checkout(root, path, OPERATION_READ_MAKEFILE):
-        return False
+        return None
     try:
         report = inspect_makefile(path).report
     except MakefileRefusedError:
-        return False
-    index = rules_by_target(report)
-    if TEST_TARGET not in index or UNSAFE_SPECIAL_TARGETS & index.keys():
-        return False
-    if any(variable.get("name") == "MAKEFLAGS" for variable in report["variables"]):
-        return False
-    # An included file may hold `.IGNORE`, and a target name that expands may
-    # be a special one, so neither can be read from this Makefile alone.
-    # The parser does not report an include that follows a rule, so the text is
-    # read for one as well.
-    if report["includes"] or any("$" in name for name in index):
-        return False
-    if _INCLUDE_LINE.search(path.read_text(encoding="utf-8", errors="replace")):
-        return False
-    values = read_tool_paths(single_assignments(report["variables"]))
-    return _Reader(index, values).test_prepares()
+        return None
+    return report, path.read_text(encoding="utf-8", errors="replace")
+
+
+def _is_fully_readable(
+    report: MakeutilReport, index: dict[str, list[MakeRule]], text: str
+) -> bool:
+    """Return whether nothing in the Makefile can change what its recipes do.
+
+    Special targets and `MAKEFLAGS` change what a failed line does to the next;
+    an included file may hold either, and a target name that expands may be a
+    special one, so neither can be read from this Makefile alone. The parser
+    does not report an include that follows a rule, so the text is scanned too.
+
+    Returns
+    -------
+    bool
+        True when none of those appears.
+    """
+    has_flags = any(v.get("name") == "MAKEFLAGS" for v in report["variables"])
+    has_include = bool(report["includes"]) or bool(_INCLUDE_LINE.search(text))
+    has_special = bool(UNSAFE_SPECIAL_TARGETS & index.keys())
+    has_expanded = any("$" in name for name in index)
+    return not (has_flags or has_include or has_special or has_expanded)
