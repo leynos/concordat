@@ -22,6 +22,7 @@ import typing as typ
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
 from .makefile_expansion import UNRESOLVED_MARK
+from .nested_cargo_make_options import diverts_make, followable_goals
 
 # The make goal that runs a crate's tests. A command naming it as a goal, and
 # not changing directory first, is a test entry point rather than recursion.
@@ -106,12 +107,14 @@ _CARGO_GLOBALS: typ.Final = (
     })
     | _CARGO_VALUE_GLOBALS
 )
-_RECURSIVE_MAKE: typ.Final = re.compile(r"\$[({]MAKE[)}]")
-# nextest's standalone binary accepts the same `nextest run` and `ntr`
+_RECURSIVE_MAKE: typ.Final = re.compile(
+    r"\$[({]MAKE[)}]"
+)  # nextest's standalone binary accepts the same `nextest run` and `ntr`
 # subcommands as the cargo plugin, so `$(CARGO_NEXTEST) nextest run` is a test
 # command in a recipe whose `CARGO_NEXTEST` is `cargo-nextest`.
 _NEXTEST_BINARIES: typ.Final = frozenset({"cargo-nextest"})
 _NEXTEST_SUBCOMMANDS: typ.Final = frozenset({"nextest", "ntr"})
+_BUILD_SUBCOMMANDS: typ.Final = frozenset({"build", "bench"})
 # A backslash-newline is removed by the shell before it reads the command. The
 # Makefile loader keeps it, so every command after a `;`-continued line begins
 # with one, and a leading assignment or tool would otherwise be misread.
@@ -312,6 +315,12 @@ class CommandMeaning:
     profile: str | None = None
     is_recursive_make: bool = False
     is_unreadable: bool = False
+    # A cargo command that compiles without running the tests (`build`,
+    # `check`, `bench`, `test --no-run`, `nextest archive`), which is what a
+    # preparation target runs. `make_goals` names the targets a make invocation
+    # in this directory runs, so a preparation target can be followed.
+    is_build: bool = False
+    make_goals: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -556,8 +565,13 @@ def _cargo(arguments: list[str]) -> CommandMeaning:
         return CommandMeaning(
             is_prefetch="--locked" in _flag_words(globals_seen + after)
         )
+    flags = _flag_words(globals_seen + after)
+    # `--help` exits successfully without compiling anything.
+    is_help = "--help" in flags or "-h" in flags
     if subcommand == "test":
-        return CommandMeaning(test="test")
+        return CommandMeaning(test="test", is_build="--no-run" in flags and not is_help)
+    if subcommand in _BUILD_SUBCOMMANDS:
+        return CommandMeaning(is_build=not is_help)
     if subcommand in _NEXTEST_SUBCOMMANDS:
         # Everything after `nextest` is the plugin's own argument list; a
         # cargo global in front of it is cargo's, not a nextest option.
@@ -633,10 +647,22 @@ def _nextest(subcommand: str, arguments: list[str]) -> CommandMeaning:
     CommandMeaning
         The test kind and selected profile, or an empty meaning.
     """
+    # `--help` exits successfully without compiling anything.
+    is_help = "--help" in arguments or "-h" in arguments
     if subcommand == "nextest" and arguments[:1] == ["run"]:
-        return CommandMeaning(test="nextest", profile=_profile(arguments[1:]))
+        return CommandMeaning(
+            test="nextest",
+            profile=_profile(arguments[1:]),
+            is_build="--no-run" in arguments and not is_help,
+        )
     if subcommand == "ntr":
-        return CommandMeaning(test="nextest", profile=_profile(arguments))
+        return CommandMeaning(
+            test="nextest",
+            profile=_profile(arguments),
+            is_build="--no-run" in arguments and not is_help,
+        )
+    if subcommand == "nextest" and arguments[:1] == ["archive"]:
+        return CommandMeaning(is_build=not is_help)
     return CommandMeaning()
 
 
@@ -674,17 +700,17 @@ def _make(command: str, arguments: list[str]) -> CommandMeaning:
     """Classify a make invocation, telling the test target from recursion."""
     if UNRESOLVED_MARK in command:
         return CommandMeaning(is_unreadable=True)
-    changes_directory = any(
-        word.startswith(("-C", "--directory")) for word in arguments
-    )
+    diverts = diverts_make(arguments)
     goals = [word for word in arguments if not word.startswith("-") and "=" not in word]
     if any(UNRESOLVED_MARK in goal for goal in goals):
         return CommandMeaning(is_unreadable=True)
-    if TEST_TARGET in goals and not changes_directory:
+    if TEST_TARGET in goals and not diverts:
         return CommandMeaning(test="make")
     # Any other goal runs a target whose ordering this reader cannot follow,
     # and `make -C dir test` reads another Makefile entirely.
-    return CommandMeaning(is_recursive_make=True)
+    return CommandMeaning(
+        is_recursive_make=True, make_goals=followable_goals(arguments, goals)
+    )
 
 
 def line_fetches(commands: list[ScriptCommand], *, is_resolved: bool) -> bool:

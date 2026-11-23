@@ -190,6 +190,40 @@ The compile is *prepared* when any one of these holds:
    `preparation_gates.functions`: a function that fails the timed test, naming
    the preparing command, when the artefacts are missing or stale.
 
+4. **A Makefile preparation.** The Makefile's `test` target compiles before it
+   tests, so every nested build the checkout starts has been paid for outside
+   the timed run. That holds when a prerequisite of `test`, an earlier recipe
+   line, or an earlier command on the test line joined by `&&` runs a cargo
+   command that compiles without running the tests (`build`, `bench`,
+   `test --no-run`, `nextest run --no-run`, `nextest archive`; `check` and
+   `clippy` leave only metadata, so they do not warm a build), directly or
+   through a target it names (`$(MAKE) prepare-nested-builds`). The compile
+   must stop the target when it fails: an ignored-error line (`-cargo build`), a
+   `;` or `||` join, a command inside an `if` and a build that comes after the
+   test command prepare nothing, and a Makefile that declares `.ONESHELL` or
+   `.IGNORE`, or assigns `MAKEFLAGS`, is not read. A build after `||` runs only
+   when the command before it failed, so it prepares nothing either. A target
+   that runs tests before it builds is not a preparation, and `make -C`, `-f`
+   and `-n` goals are not followed: another directory's or Makefile's targets
+   are not this one's, and a dry run builds nothing. Make does not order
+   sibling prerequisites (`make -j` runs them together), so
+   `test: run-tests prepare` proves nothing for `run-tests`, while
+   `test: prepare` with the tests in the recipe, or `run-tests: prepare`, does.
+   A line that picks `nextest run` or `test` by probing the machine is read in
+   both branches, and the preparation must hold in each. The reader fails
+   closed: it counts a line only in the forms described here, exactly.
+   `make -t`, `-q` and `-i`, a group of goals on one make line, a `VAR=value`
+   override on it, a goal the shell computes, prerequisites that read in
+   alternative ways or that the expansion could not resolve, a prerequisite or
+   earlier `make` goal that may run tests without preparing for them, and a
+   preparation target not declared `.PHONY` in every reading (a file of that
+   name makes Make skip it), and a target with several rules or a conditional
+   rule (Make combines the first and the second may not be the active one) are
+   not preparation. The preparation must build with the same features and
+   profile as the tests, or it fills a different directory (it can even
+   overwrite the binaries the tests use). The rule cannot check that, and the
+   repository's own review must.
+
 The defaults for 2 and 3 are the names rstest-bdd chose
 (`nested_fixture_preparation$`; `ensure_prepared`, `ensure_prepared_with`,
 `ensure_prepared_with_probe`, `prepare_now`, `prepare_now_with_probe`). They
