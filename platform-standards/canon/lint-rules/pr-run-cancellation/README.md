@@ -30,24 +30,26 @@ concurrency:
 ```
 
 The `||` fallback gives every push, schedule and dispatch run its own group,
-and the event test leaves those runs uncancelled. (Events whose payload carries
-a pull request, such as `pull_request_review_comment`, select the pull-request
-number instead; they are PR-scoped and are not covered by the run-id
-requirement, which is judged on the declared event names only.) A shared
-fallback such as `github.ref` would put every push to `main` (and every
-dispatch on one ref) in one group. `cancel-in-progress: false` protects only
-the run that is executing: GitHub still replaces a *pending* run in the group
-with a newer one, so with three quick pushes the middle commit would get no run
-at all. A workflow that also runs on `push`, a schedule or a dispatch is
-therefore required to carry `github.run_id` in its cancelling group (RC-002,
-below). A pull-request-only workflow has no such runs, so the requirement does
-not apply to it. The group must still name the pull request explicitly: what
-`github.ref` holds depends on the event. An ordinary `pull_request` run has
-`refs/pull/<number>/merge`, which already separates pull requests, but a
-`pull_request_target` run has the base branch ref, which every pull request
-targeting that branch shares, so a group built only from `github.ref` there
-lets one pull request's run cancel another's. Requiring the marker makes the
-intent explicit and holds for both events.
+and the event test leaves those runs uncancelled. (The rule judges declared
+event names only: every event other than `pull_request` and
+`pull_request_target`, including `pull_request_review_comment`, puts the
+workflow under the run-id requirement, although some of those events carry a
+pull request and select its number at run time. It does not check which branch
+of the expression an individual event selects.) A shared fallback such as
+`github.ref` would put every push to `main` (and every dispatch on one ref) in
+one group. `cancel-in-progress: false` protects only the run that is executing:
+GitHub still replaces a *pending* run in the group with a newer one, so with
+three quick pushes the middle commit would get no run at all. A workflow that
+also runs on `push`, a schedule or a dispatch is therefore required to carry
+`github.run_id` in its cancelling group (RC-002, below). A pull-request-only
+workflow has no such runs, so the requirement does not apply to it. The group
+must still name the pull request explicitly: what `github.ref` holds depends on
+the event. An ordinary `pull_request` run has `refs/pull/<number>/merge`, which
+already separates pull requests, but a `pull_request_target` run has the base
+branch ref, which every pull request targeting that branch shares, so a group
+built only from `github.ref` there lets one pull request's run cancel
+another's. Requiring the marker makes the intent explicit and holds for both
+events.
 
 The event test in this shape covers `pull_request`. A workflow triggered by
 `pull_request_target` evaluates it false, so test that event too:

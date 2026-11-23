@@ -1923,7 +1923,7 @@ group_unique_per_non_pr_run(value) if {
 	is_string(group)
 	some body in expression_bodies(group)
 	regex.match(RUN_ID_PATTERN, lower(body))
-	not run_id_shadowed(lower(body))
+	run_id_reachable(lower(body))
 }
 
 # The property name must end where the reference does: `github.run_id_suffix`
@@ -1935,9 +1935,26 @@ RUN_ID_PATTERN := `github\.run_id([^a-z0-9_]|$)`
 # run, so a run id placed after one of them is never selected.
 # `github.event.pull_request.number` and `github.head_ref` are empty outside
 # pull requests, so they may precede it.
-ALWAYS_SET_REFERENCE_PATTERN := `github\.(ref|ref_name|sha|workflow|repository|event_name|run_number|run_attempt)\b[^&]*\|\|[^&]*github\.run_id`
+ALWAYS_SET_PREFIX_PATTERN := `github\.(ref|ref_name|sha|workflow|repository|event_name|run_number|run_attempt)\b[^&]*\|\|[^&]*$`
 
-run_id_shadowed(body) if regex.match(ALWAYS_SET_REFERENCE_PATTERN, body)
+# One selectable occurrence is enough: in
+# `(github.ref || github.run_id) && github.run_id` the first run id is shadowed
+# but the last one is what the expression yields. An occurrence is shadowed
+# when, within the `&&` operand that holds it, an always-set reference comes
+# before an `||` that precedes it.
+run_id_reachable(body) if {
+	parts := regex.split(RUN_ID_PATTERN, body)
+	some i in numbers.range(1, count(parts) - 1)
+	prefix := concat("github.run_id ", array.slice(parts, 0, i))
+	operand := regexp_last_operand(prefix)
+	not regex.match(ALWAYS_SET_PREFIX_PATTERN, operand)
+}
+
+# The text after the last `&&` of a prefix: the operand the next reference sits in.
+regexp_last_operand(prefix) := last if {
+	operands := split(prefix, "&")
+	last := operands[count(operands) - 1]
+}
 
 # --------------------------------------------------------------------------
 # Findings

@@ -1032,6 +1032,24 @@ test_a_run_id_after_a_guarded_always_set_reference_is_not_judged_shadowed if {
 	count(findings(fixture)) == 0
 }
 
+test_a_run_id_selected_by_a_later_operand_is_not_judged_shadowed if {
+	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || ((github.ref || github.run_id) && github.run_id) }}")
+	count(findings(fixture)) == 0
+}
+
+test_a_run_id_only_inside_a_shadowing_operand_is_a_finding if {
+	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || ((github.ref || github.run_id) && github.sha) }}")
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_an_event_that_may_carry_a_pull_request_still_counts_as_a_non_pr_event if {
+	fixture := json.patch(
+		dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"),
+		[{"op": "replace", "path": "/workflows/0/parsed/on", "value": ["pull_request", "pull_request_review_comment"]}],
+	)
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
 test_a_longer_property_name_is_not_the_run_id if {
 	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id_suffix }}")
 	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
