@@ -1068,9 +1068,16 @@ that do run. The reference shape is:
 
 ```yaml
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
+
+A workflow that also runs on `push`, a schedule or a dispatch must fall back to
+`github.run_id`, as above. A shared fallback such as `github.ref` puts every
+push to `main` in one group, and GitHub replaces a pending run in a group with
+a newer one even when `cancel-in-progress` is false, so an intermediate commit
+gets no run. RC-002 reports a cancelling block in such a workflow whose group
+does not carry `github.run_id`. A pull-request-only workflow is not affected.
 
 That event test covers `pull_request`. A workflow triggered by
 `pull_request_target` evaluates it false there, so the rule does not count it

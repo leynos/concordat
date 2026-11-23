@@ -52,7 +52,7 @@ jobs:
 DUAL_TRIGGER = """\
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
@@ -64,7 +64,7 @@ jobs:
 DUAL_TRIGGER_WITH_CODESCENE = """\
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   coverage:

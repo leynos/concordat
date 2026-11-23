@@ -991,3 +991,59 @@ test_an_envelope_defect_is_an_error_whatever_the_configured_severity if {
 	raised := {"severity": "warning", "exemptions": [], "repository_exemptions": []}
 	profile_with(data.fixtures.unknown_schema_version, raised) == {["EN-001", "error", "indeterminate", ".github/workflows"]}
 }
+
+# Non-pull-request runs. A workflow that also runs on push, a schedule or a
+# dispatch must give those runs a group of their own: a shared `github.ref`
+# group lets GitHub replace a pending run for an earlier push to `main`.
+dual_trigger(group) := json.patch(data.fixtures.compliant_reference, [
+	{"op": "replace", "path": "/workflows/0/parsed/on", "value": {"pull_request": null, "push": {"branches": ["main"]}}},
+	{"op": "replace", "path": "/workflows/0/parsed/concurrency/group", "value": group},
+])
+
+test_a_dual_trigger_workflow_with_the_run_id_fallback_is_compliant if {
+	count(findings(dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"))) == 0
+}
+
+test_a_ref_fallback_in_a_push_workflow_is_a_finding if {
+	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}")
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_group_with_no_fallback_in_a_dispatch_workflow_is_a_finding if {
+	fixture := json.patch(
+		dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number }}"),
+		[{"op": "replace", "path": "/workflows/0/parsed/on", "value": ["pull_request", "workflow_dispatch"]}],
+	)
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_quoted_run_id_literal_does_not_make_the_group_unique if {
+	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || 'github.run_id' }}")
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_a_pull_request_only_workflow_may_fall_back_to_the_ref if {
+	fixture := json.patch(data.fixtures.compliant_reference, [{
+		"op": "replace",
+		"path": "/workflows/0/parsed/concurrency/group",
+		"value": "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
+	}])
+	count(findings(fixture)) == 0
+}
+
+test_a_job_group_in_a_push_workflow_needs_the_run_id_fallback if {
+	fixture := json.patch(data.fixtures.compliant_reference, [
+		{"op": "replace", "path": "/workflows/0/parsed/on", "value": ["pull_request", "push"]},
+		{"op": "remove", "path": "/workflows/0/parsed/concurrency"},
+		{"op": "add", "path": "/workflows/0/parsed/jobs/test/concurrency", "value": {
+			"group": "${{ github.workflow }}-test-${{ github.event.pull_request.number || github.ref }}",
+			"cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+		}},
+	])
+	profile(fixture) == {["RC-002", "warning", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+test_an_exemption_suppresses_the_non_pull_request_group_finding if {
+	fixture := dual_trigger("${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}")
+	count(findings_with(fixture, parameters(exemption))) == 0
+}
