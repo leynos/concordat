@@ -1935,7 +1935,7 @@ RUN_ID_PATTERN := `github\.run_id([^a-z0-9_]|$)`
 # run, so a run id placed after one of them is never selected.
 # `github.event.pull_request.number` and `github.head_ref` are empty outside
 # pull requests, so they may precede it.
-ALWAYS_SET_REFERENCE_PATTERN := `github\.(ref|ref_name|sha|workflow|repository|event_name|run_number|run_attempt)\s*\|\|[^|]*github\.run_id`
+ALWAYS_SET_REFERENCE_PATTERN := `github\.(ref|ref_name|sha|workflow|repository|event_name|run_number|run_attempt)\b[^&]*\|\|[^&]*github\.run_id`
 
 run_id_shadowed(body) if regex.match(ALWAYS_SET_REFERENCE_PATTERN, body)
 
