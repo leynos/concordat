@@ -37,7 +37,7 @@ import re
 import typing as typ
 
 from .nested_cargo_source import RustSource, enclosing_block
-from .nested_cargo_text import environment_slots
+from .nested_cargo_text import environment_slots, string_literals
 from .nested_cargo_variable_names import (
     OFFLINE_VARIABLE,
     is_other_variable,
@@ -79,7 +79,6 @@ TARGET_METHODS: typ.Final = (
 UNSEEN_CALL: typ.Final = "unseen"
 UNSEEN_ARGUMENTS: typ.Final = "unseen-arguments"
 PROGRAM_FORM: typ.Final = "program"
-_PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
 
 COMMAND_NEW: typ.Final = re.compile(r"\bCommand\s*::\s*new\s*\(")
 _RETURN_COMMAND: typ.Final = re.compile(r"->\s*(?:[A-Za-z_]\w*\s*::\s*)*Command\b")
@@ -163,7 +162,7 @@ class CargoCommand:
 
     def add_arguments(self, text: str) -> None:
         """Record `.arg(..)`/`.args(..)` text; an unreadable source is unknown."""
-        words = _string_literals(text)
+        words = string_literals(text)
         if words is None:
             self.words.append(None)
             return
@@ -224,7 +223,7 @@ class CargoCommand:
         if method == ENVIRONMENT_CLEAR:
             self._record_offline_operation(offline=False)
             return
-        names = _string_literals(text)
+        names = string_literals(text)
         if names is None:
             self._record_offline_operation(offline=None)
             return
@@ -307,52 +306,10 @@ class CargoCommand:
             self.has_offline_override = definition.has_offline_override
 
 
-def _string_end(text: str, index: int) -> int:
-    """Return the index of the quote closing the string whose body starts here."""
-    while index < len(text):
-        if text[index] == "\\":
-            index += 2
-            continue
-        if text[index] == '"':
-            return index
-        index += 1
-    return len(text)
-
-
 def first_literal(text: str) -> str | None:
     """Return the first double-quoted string's contents in *text*, or None."""
     found = _FIRST_STRING.search(text)
     return found.group(1) if found is not None else None
-
-
-def _string_literals(text: str) -> list[str] | None:
-    """Return every double-quoted string in *text*, or None if it has another token.
-
-    `["--offline", "--locked"]`, `&["build"]` and `("K", "V")` are all literal
-    sources. An identifier, a call or a macro makes the source one the reader
-    cannot settle, which is answered with `None` rather than a guess.
-
-    Returns
-    -------
-    list[str] | None
-        The literals in source order, or None when anything else appears.
-    """
-    words: list[str] = []
-    index = 0
-    while index < len(text):
-        char = text[index]
-        if char == '"':
-            end = _string_end(text, index + 1)
-            if end >= len(text):
-                return None
-            words.append(text[index + 1 : end])
-            index = end + 1
-            continue
-        if char in _PUNCTUATION:
-            index += 1
-            continue
-        return None
-    return words
 
 
 def _environment_pairs(text: str) -> list[tuple[str | None, str | None]] | None:
@@ -374,8 +331,8 @@ def _environment_pairs(text: str) -> list[tuple[str | None, str | None]] | None:
         return None
     pairs: list[tuple[str | None, str | None]] = []
     for name_slot, value_slot in slots:
-        name = _string_literals(name_slot)
-        value = _string_literals(value_slot) if value_slot is not None else None
+        name = string_literals(name_slot)
+        value = string_literals(value_slot) if value_slot is not None else None
         pairs.append((name[0] if name else None, value[0] if value else None))
     return pairs
 
@@ -459,7 +416,7 @@ def _cargo_form(masked_argument: str, original_argument: str) -> str | None:
         `command_new`, `env_cargo`, or None when the program is not cargo.
     """
     stripped = masked_argument.strip()
-    if _string_literals(original_argument) == ["cargo"]:
+    if string_literals(original_argument) == ["cargo"]:
         return "command_new"
     if _ENV_MACRO.match(stripped) and first_literal(original_argument) == "CARGO":
         return "env_cargo"
@@ -582,9 +539,7 @@ def _may_name_offline_variable(method: str, text: str) -> bool:
         return may_include_offline_variable(
             None if pairs is None else [key for key, _value in pairs]
         )
-    return method != "env_remove" or may_include_offline_variable(
-        _string_literals(text)
-    )
+    return method != "env_remove" or may_include_offline_variable(string_literals(text))
 
 
 def construction(

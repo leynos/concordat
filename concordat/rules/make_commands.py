@@ -21,13 +21,15 @@ _ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 _WRAPPERS: typ.Final = frozenset({"time", "nice", "command", "exec"})
 
 
-def blank_references(text: str) -> str:
+def blank_references(text: str, *, names_cargo: bool = True) -> str:
     """Replace each balanced `$(...)` or `${...}` Make reference with one word.
 
     A reference that names cargo (`$(CARGO)`, or the
     `$(or $(shell command -v cargo), ...)` it expands to when the variable is
     conditional) stands for the tool and becomes the word `cargo`; any other
-    becomes the unresolved mark.
+    becomes the unresolved mark. With ``names_cargo`` false every reference
+    becomes the unresolved mark, which is how a caller finds the ones that
+    reach a command.
 
     Returns
     -------
@@ -46,7 +48,8 @@ def blank_references(text: str) -> str:
             out.append(text[index])
             index += 1
             continue
-        out.append(" cargo " if "cargo" in text[index:end].lower() else UNRESOLVED_MARK)
+        is_cargo = names_cargo and "cargo" in text[index:end].lower()
+        out.append(" cargo " if is_cargo else UNRESOLVED_MARK)
         index = end
     return "".join(out)
 

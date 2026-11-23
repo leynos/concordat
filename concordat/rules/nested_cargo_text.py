@@ -8,7 +8,108 @@ here on its own.
 
 from __future__ import annotations
 
+import re
+import typing as typ
+
 from .rust_source import scan_balanced
+
+_PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
+_COMMENT_TOKEN: typ.Final = re.compile(r"/\*|\*/")
+
+
+def string_end(text: str, index: int) -> int:
+    """Return the index of the quote closing the string whose body starts here."""
+    while index < len(text):
+        if text[index] == "\\":
+            index += 2
+            continue
+        if text[index] == '"':
+            return index
+        index += 1
+    return len(text)
+
+
+def comment_end(text: str, index: int) -> int | None:
+    """Return where the comment starting at *index* ends, or None if none starts.
+
+    rustfmt keeps a comment between the elements of an argument array, and a
+    comment is not a token: it must not hide the literals that follow it. An
+    unterminated block comment runs to the end of the text.
+
+    Returns
+    -------
+    int | None
+        The index just past the comment, or None when no comment starts here.
+    """
+    if text.startswith("//", index):
+        newline = text.find("\n", index)
+        return len(text) if newline == -1 else newline
+    if text.startswith("/*", index):
+        return _block_comment_end(text, index)
+    return None
+
+
+def _block_comment_end(text: str, index: int) -> int:
+    """Return the index just past the block comment opening at *index*.
+
+    Rust block comments nest, so the first `*/` closes the outer comment only
+    when no inner `/*` is still open. An unterminated comment runs to the end.
+
+    Returns
+    -------
+    int
+        The index just past the closing `*/`, or the text's length.
+    """
+    depth = 0
+    for token in _COMMENT_TOKEN.finditer(text, index):
+        depth += 1 if token.group() == "/*" else -1
+        if depth == 0:
+            return token.end()
+    return len(text)
+
+
+def string_literals(text: str) -> list[str] | None:
+    """Return every double-quoted string in *text*, or None if it has another token.
+
+    `["--offline", "--locked"]`, `&["build"]` and `("K", "V")` are all literal
+    sources. An identifier, a call or a macro makes the source one the reader
+    cannot settle, which is answered with `None` rather than a guess. A comment
+    between the elements is skipped.
+
+    Returns
+    -------
+    list[str] | None
+        The literals in source order, or None when anything else appears.
+    """
+    words: list[str] = []
+    index = 0
+    while index < len(text):
+        if text[index] == '"':
+            end = string_end(text, index + 1)
+            if end >= len(text):
+                return None
+            words.append(text[index + 1 : end])
+            index = end + 1
+            continue
+        step = _skippable(text, index)
+        if step is None:
+            return None
+        index = step
+    return words
+
+
+def _skippable(text: str, index: int) -> int | None:
+    """Return the index past a comment or punctuation at *index*, or None.
+
+    Returns
+    -------
+    int | None
+        None when the character starts a token the reader cannot settle.
+    """
+    skipped = comment_end(text, index)
+    if skipped is not None:
+        return skipped
+    return index + 1 if text[index] in _PUNCTUATION else None
 
 
 def split_top_level(text: str) -> list[str]:

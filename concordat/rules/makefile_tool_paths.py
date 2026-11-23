@@ -15,7 +15,9 @@ The reading is deliberately narrow. The variable must be named for the tool
 
 * a path word (letters, digits, `_`, `.`, `/`, `-`, plain `$(NAME)` references
   in its directory part, no glob characters) whose last component is the name;
-* `$(shell command -v NAME)`, optionally with `2>/dev/null`, and no other shell;
+* `$(shell command -v NAME)`, optionally with `2>/dev/null`, and no other shell
+  but `$(shell [ -x "PATH" ] && echo "PATH")`, which prints the one path word
+  it tests or nothing;
 * `$(wildcard PATH)` with a path word as its argument;
 * `$(or ...)` over qualifying alternatives;
 * `$(if COND,THEN,ELSE)` over qualifying branches, whose condition is a
@@ -48,6 +50,9 @@ _PATH_WORD: typ.Final = re.compile(r"[A-Za-z0-9_./$()-]+")
 _REFERENCE: typ.Final = re.compile(r"\$\(([A-Za-z_][A-Za-z0-9_]*)\)")
 _SHELL_BODY: typ.Final = re.compile(
     r"command\s+-v\s+(?P<name>[A-Za-z][A-Za-z0-9_-]*)(?:\s+2>/dev/null)?"
+)
+_EXECUTABLE_BODY: typ.Final = re.compile(
+    r'\[\s+-x\s+"(?P<tested>[^"]+)"\s+\]\s+&&\s+echo\s+"(?P<printed>[^"]+)"'
 )
 
 
@@ -98,6 +103,17 @@ def _condition_is_safe(condition: str, known: Assignments) -> bool:
     return is_pure(condition, known, known.assigned)
 
 
+def _shell_tool(body: str, known: Assignments) -> str | None:
+    """Return the tool a `$(shell ...)` body looks up, or None for any other shell."""
+    lookup = _SHELL_BODY.fullmatch(body)
+    if lookup is not None:
+        return lookup.group("name")
+    probe = _EXECUTABLE_BODY.fullmatch(body)
+    if probe is not None and probe.group("tested") == probe.group("printed"):
+        return _path_name(probe.group("printed"), known)
+    return None
+
+
 def _alternative(text: str, known: Assignments) -> str | None:
     """Return the tool name every value *text* can take ends in, or None."""
     text = text.strip()
@@ -118,8 +134,7 @@ def _alternative(text: str, known: Assignments) -> str | None:
         case "if" if len(parts) == 3 and _condition_is_safe(parts[0], known):
             return _single([_alternative(part, known) for part in parts[1:]])
         case "shell":
-            shell = _SHELL_BODY.fullmatch(body.strip())
-            return shell.group("name") if shell is not None else None
+            return _shell_tool(body.strip(), known)
         case "wildcard":
             return _path_name(body, known)
         case _:

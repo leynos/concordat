@@ -16,6 +16,7 @@ import pytest
 
 from concordat.errors import OperationalRuleError
 from concordat.rules.nested_cargo_entry_points import collect_entry_points
+from concordat.rules.nested_cargo_makefile_scan import MAX_PATHS, TargetScan, capped
 from concordat.rules.nested_cargo_scripts import split_commands
 
 if typ.TYPE_CHECKING:
@@ -448,6 +449,328 @@ def test_an_unresolved_cargo_variable_is_uncertain(tmp_path: pathlib.Path) -> No
         tmp_path,
         MAKEFILE,
         "test:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+WHITAKER_CARGO = (
+    "CARGO ?= $(or $(shell command -v cargo 2>/dev/null),"
+    '$(shell [ -x "$(HOME)/.cargo/bin/cargo" ] && echo "$(HOME)/.cargo/bin/cargo"))'
+)
+LINKER_FLAGS = (
+    'RUSTFLAGS="$(if $(filter Linux,$(shell uname -s)),-C link-arg=-fuse-ld=mold)"'
+)
+PROBE = (
+    "TEST_CMD := $(if $(shell $(CARGO) nextest --version 2>/dev/null),nextest run,test)"
+)
+
+
+def test_an_executable_probe_shell_is_a_cargo_lookup(tmp_path: pathlib.Path) -> None:
+    """`[ -x P ] && echo P` prints the one path it tests, so it ends in cargo."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"{WHITAKER_CARGO}\n\ntest:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_an_executable_probe_that_prints_another_path_is_not_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The path tested and the path printed must be the same cargo."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        'CARGO ?= $(shell [ -x "/bin/cargo" ] && echo "/bin/true")\n\n'
+        "test:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_shell_in_an_environment_assignment_does_not_hide_the_order(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A reference in `RUSTFLAGS=...` before the command cannot change the command."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"test:\n\t{LINKER_FLAGS} cargo fetch --locked && {LINKER_FLAGS} cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_shell_in_an_environment_assignment_does_not_hide_a_cold_test(
+    tmp_path: pathlib.Path,
+) -> None:
+    """With the reference read past, a test with no fetch is plainly absent."""
+    put(tmp_path, MAKEFILE, f"test:\n\t{LINKER_FLAGS} cargo test\n")
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_an_unresolved_reference_in_the_test_arguments_is_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo nextest run $(FLAGS)` may carry `--profile`, so it is not read past."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && cargo test $(FLAGS)\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_shell_reference_beside_a_literal_test_does_not_hide_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A quoted `$(shell ...)` elsewhere leaves the literal `cargo test` found."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        'test:\n\tcargo fetch --locked && echo "$(shell uname -s)" && cargo test\n',
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+@pytest.mark.parametrize(
+    "echo",
+    [
+        # Make pastes the output in before the shell reads the line, so the
+        # call may add `|| true` and turn the fetch into one that gates nothing.
+        "echo $(shell printf '|| true')",
+        "echo $(OPAQUE)",
+    ],
+)
+def test_an_unquoted_reference_may_reshape_the_line(
+    echo: str, tmp_path: pathlib.Path
+) -> None:
+    """An unquoted reference that is not environment data could add operators."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"OPAQUE := $(shell printf x)\n\n"
+        f"test:\n\tcargo fetch --locked && {echo} && cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_an_unquoted_environment_reference_is_plain_data(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`$(HOME)` is a variable the Makefile never assigns, so it is not code."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && cp a $(HOME)/b && cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+CI_SETUP = (
+    "[scripts.setup.warm]\ncommand = 'cargo fetch --locked'\n\n"
+    "[[profile.ci.scripts]]\nfilter = 'all()'\nsetup = 'warm'\n"
+)
+
+
+def test_a_reading_with_no_test_keeps_its_own_later_lines(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The reading that runs `echo` still reaches the `cargo test` below it."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "PICK := $(if $(shell cargo nextest --version),"
+        "cargo nextest run --profile ci,echo fallback)\n\n"
+        "test:\n\t$(PICK)\n\tcargo test\n",
+    )
+    put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_hidden_command_is_not_covered_by_a_later_setup_script(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`make legacy-test` runs before the nextest line the setup script covers."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "PICK := $(if $(shell cargo nextest --version),"
+        "cargo nextest run --profile ci,$(MAKE) legacy-test)\n\n"
+        "test:\n\t$(PICK)\n\tcargo nextest run --profile ci\n\n"
+        "legacy-test:\n\tcargo test\n",
+    )
+    put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_delegation_gated_by_a_fetch_on_the_same_line_is_covered(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`make legacy-test` runs only once the fetch before it has succeeded."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && $(MAKE) legacy-test\n\tcargo test\n\n"
+        "legacy-test:\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_delegation_before_the_fetch_on_the_same_line_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`make legacy-test` runs before the fetch, so the fetch does not cover it."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\t$(MAKE) legacy-test && cargo fetch --locked\n\tcargo test\n\n"
+        "legacy-test:\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_scan_cut_at_the_path_cap_marks_every_kept_path_truncated() -> None:
+    """Paths past the cap are never checked, so the kept ones cannot vouch for them."""
+    paths = [TargetScan(proven=True, proven_reason=f"path {n}") for n in range(9)]
+    kept = capped(paths)
+    assert len(kept) == MAX_PATHS
+    assert all(path.is_truncated for path in kept)
+    few = [TargetScan(proven_reason=f"path {n}") for n in range(2)]
+    assert not any(path.is_truncated for path in capped(few))
+
+
+def test_a_reading_that_hides_its_test_behind_make_makes_the_target_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The runner that delegates to another target may run tests cold."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "PICK := $(if $(shell cargo nextest --version),"
+        "cargo nextest run --profile ci,$(MAKE) legacy-test)\n\n"
+        "test:\n\t$(PICK)\n\nlegacy-test:\n\tcargo test\n",
+    )
+    put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_probes_on_several_lines_keep_the_unproven_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Paths that carry the same proof merge, so none is dropped to a cap."""
+    probes = "".join(
+        f"P{n} := $(if $(shell cargo --version),echo a{n},echo b{n})\n"
+        for n in range(2, 6)
+    )
+    put(
+        tmp_path,
+        MAKEFILE,
+        "P1 := $(if $(shell cargo --version),cargo fetch --locked,echo skipped)\n"
+        f"{probes}\n"
+        "test:\n\t$(P1)\n\t$(P2)\n\t$(P3)\n\t$(P4)\n\t$(P5)\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_an_escaped_quote_does_not_quote_a_reference(tmp_path: pathlib.Path) -> None:
+    """A backslash-escaped quote opens no quoted span, so the reference is bare."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && echo \\\"$(shell printf '|| true ||')\\\""
+        " && cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_each_reading_is_proved_by_its_own_fetch_or_setup_script(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A reading that fetches itself and one the setup script covers both count."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "RUN := $(if $(shell cargo nextest --version),"
+        "cargo nextest run --profile ci,cargo fetch --locked && cargo test)\n\n"
+        "test:\n\t$(RUN)\n",
+    )
+    put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_runner_probe_needs_every_profile_covered(tmp_path: pathlib.Path) -> None:
+    """A setup script on the `ci` profile does not cover the `local` reading."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "CARGO ?= cargo\n"
+        "PICK := $(if $(shell $(CARGO) nextest --version 2>/dev/null),"
+        "--profile ci,--profile local)\n\n"
+        "test:\n\t$(CARGO) nextest run $(PICK)\n",
+    )
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        "[scripts.setup.warm]\ncommand = 'cargo fetch --locked'\n\n"
+        "[[profile.ci.scripts]]\nfilter = 'all()'\nsetup = 'warm'\n\n"
+        "[profile.local]\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_runner_probe_must_be_proved_in_both_readings(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`$(if $(shell cargo nextest --version),nextest run,test)` runs either one."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"CARGO ?= cargo\n{PROBE}\n\n"
+        "test:\n\tcargo fetch --locked && $(CARGO) $(TEST_CMD)\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_runner_probe_with_no_fetch_is_absent_not_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Both readings are cargo test commands, so the missing fetch is readable."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"CARGO ?= cargo\n{PROBE}\n\ntest:\n\t$(CARGO) $(TEST_CMD)\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_runner_probe_does_not_let_the_plain_branch_borrow_the_setup_script(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A nextest setup script warms `nextest run`, not the `cargo test` branch."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"CARGO ?= cargo\n{PROBE}\n\ntest:\n\t$(CARGO) $(TEST_CMD)\n",
+    )
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        "[scripts.setup.warm]\ncommand = 'cargo fetch --locked'\n\n"
+        "[[profile.default.scripts]]\nfilter = 'all()'\nsetup = 'warm'\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_probe_that_is_not_a_version_query_is_not_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A shell call that may change the machine stays unresolved."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "CARGO ?= cargo\n"
+        "TEST_CMD := $(if $(shell touch built),nextest run,test)\n\n"
+        "test:\n\tcargo fetch --locked && $(CARGO) $(TEST_CMD)\n",
     )
     assert makefile_state(tmp_path) == [("test", "uncertain")]
 
