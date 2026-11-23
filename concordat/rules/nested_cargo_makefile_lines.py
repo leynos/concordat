@@ -31,7 +31,13 @@ _NAME: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _REFERENCE_OPEN: typ.Final = re.compile(r"\$[({]")
 # A quoted span. An unterminated quote runs to the end of the text, so what
 # follows it is not read as bare.
-_QUOTED: typ.Final = re.compile(r"'[^']*(?:'|$)|\"[^\"]*(?:\"|$)")
+#
+# A backslash outside quotes escapes the next character, so `\"` opens no span;
+# `\$` is left alone because Make still expands `$(` after a backslash. Inside
+# double quotes a backslash pairs with the character after it.
+_QUOTED: typ.Final = re.compile(
+    r"\\[^$]|'[^']*(?:'|$)|\"(?:\\.|[^\"\\])*(?:\"|$)", re.DOTALL
+)
 
 
 def _has_unquoted_reference(text: str, assigned: cabc.Container[str]) -> bool:

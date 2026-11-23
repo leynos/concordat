@@ -97,13 +97,39 @@ def scan_target(
     finished: list[TargetScan] = []
     for rule in index[TEST_TARGET]:
         for recipe in rule["recipes"]:
-            still_open: list[TargetScan] = []
-            for path in open_paths:
-                forks = _fork(path, recipe, values, sequencing_holds=sequencing_holds)
-                for branch in forks:
-                    (finished if branch.is_found else still_open).append(branch)
-            open_paths = still_open[:MAX_PATHS]
+            forks = [
+                branch
+                for path in open_paths
+                for branch in _fork(
+                    path, recipe, values, sequencing_holds=sequencing_holds
+                )
+            ]
+            finished.extend(branch for branch in forks if branch.is_found)
+            open_paths = _capped([branch for branch in forks if not branch.is_found])
     return finished + open_paths
+
+
+def _capped(paths: list[TargetScan]) -> list[TargetScan]:
+    """Merge open paths that carry the same proof, and bound how many remain.
+
+    Open paths differ only in what they have proved so far, so equal ones are
+    one. If the distinct ones still pass the cap, the kept paths are marked
+    uncertain rather than silently losing the ones that were cut.
+
+    Returns
+    -------
+    list[TargetScan]
+        At most :data:`MAX_PATHS` distinct paths.
+    """
+    distinct = list({dataclasses.astuple(path): path for path in paths}.values())
+    if len(distinct) <= MAX_PATHS:
+        return distinct
+    kept = distinct[:MAX_PATHS]
+    for path in kept:
+        path.uncertain_reason = (
+            "the recipe picks its runner on too many lines to follow"
+        )
+    return kept
 
 
 def _fork(

@@ -586,6 +586,50 @@ def test_a_reading_with_no_test_keeps_its_own_later_lines(
     assert makefile_state(tmp_path) == [("test", "absent")]
 
 
+def test_a_reading_that_hides_its_test_behind_make_makes_the_target_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The runner that delegates to another target may run tests cold."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "PICK := $(if $(shell cargo nextest --version),"
+        "cargo nextest run --profile ci,$(MAKE) legacy-test)\n\n"
+        "test:\n\t$(PICK)\n\nlegacy-test:\n\tcargo test\n",
+    )
+    put(tmp_path, NEXTEST_CONFIG, CI_SETUP)
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_probes_on_several_lines_keep_the_unproven_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Paths that carry the same proof merge, so none is dropped to a cap."""
+    probes = "".join(
+        f"P{n} := $(if $(shell cargo --version),echo a{n},echo b{n})\n"
+        for n in range(2, 6)
+    )
+    put(
+        tmp_path,
+        MAKEFILE,
+        "P1 := $(if $(shell cargo --version),cargo fetch --locked,echo skipped)\n"
+        f"{probes}\n"
+        "test:\n\t$(P1)\n\t$(P2)\n\t$(P3)\n\t$(P4)\n\t$(P5)\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_an_escaped_quote_does_not_quote_a_reference(tmp_path: pathlib.Path) -> None:
+    """A backslash-escaped quote opens no quoted span, so the reference is bare."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && echo \\\"$(shell printf '|| true ||')\\\""
+        " && cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
 def test_each_reading_is_proved_by_its_own_fetch_or_setup_script(
     tmp_path: pathlib.Path,
 ) -> None:

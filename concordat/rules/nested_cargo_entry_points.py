@@ -165,38 +165,53 @@ def _makefile_entry(
     if TEST_TARGET not in index:
         return _MakefileEntry(None, [])
     scans = scan_target(index, values, sequencing_holds=ONESHELL_TARGET not in index)
-    found = [scan for scan in scans if scan.is_found]
-    if not found:
-        hidden_reason = next((s.hidden_reason for s in scans if s.hidden_reason), "")
-        if not hidden_reason:
-            return _MakefileEntry(None, [])
-        # The target exists but its test command could not be read. Dropping
-        # the entry point would let a workflow step that delegates to it
-        # inherit `absent`, which claims a cold cache the reader cannot see.
-        fact = EntryPointFact(
-            kind="makefile",
-            path=MAKEFILE,
-            line=_first_recipe_line(index),
-            name=TEST_TARGET,
-            state=UNCERTAIN,
-            reason=hidden_reason,
-        )
-        return _MakefileEntry(fact, [])
     profiles: list[str] = []
-    # A probed line has a path per runner, and the order has to hold on each.
-    state, reason = min(
-        (_makefile_state(scan, config, profiles) for scan in found),
-        key=lambda result: _STATE_RANK[result[0]],
-    )
+    weakest = _weakest_path(scans, config, profiles, _first_recipe_line(index))
+    if weakest is None:
+        return _MakefileEntry(None, [])
+    state, reason, line = weakest
     fact = EntryPointFact(
         kind="makefile",
         path=MAKEFILE,
-        line=found[0].line,
+        line=line,
         name=TEST_TARGET,
         state=state,
         reason=reason,
     )
     return _MakefileEntry(fact, profiles)
+
+
+def _weakest_path(
+    scans: list[TargetScan],
+    config: NextestConfig,
+    profiles: list[str],
+    default_line: int,
+) -> tuple[str, str, int] | None:
+    """Return the state, reason and line of the weakest path through `test`.
+
+    A probed line has a path per runner and the order has to hold on each. A
+    path that never reaches a test command may still hide one behind another
+    target; the target then exists but its test could not be read, and
+    dropping it would let a workflow step that delegates to it inherit
+    `absent`, which claims a cold cache the reader cannot see.
+
+    Returns
+    -------
+    tuple[str, str, int] | None
+        The weakest answer, or None when no path has a test or hides one.
+    """
+    found = [scan for scan in scans if scan.is_found]
+    candidates = [
+        (*_makefile_state(scan, config, profiles), scan.line) for scan in found
+    ]
+    hidden = next(
+        (s.hidden_reason for s in scans if not s.is_found and s.hidden_reason), ""
+    )
+    if hidden:
+        candidates.append((UNCERTAIN, hidden, found[0].line if found else default_line))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda candidate: _STATE_RANK[candidate[0]])
 
 
 def _makefile_state(
