@@ -17,7 +17,7 @@ corpus behind the rule is rstest-bdd, whose nested fixtures were added to
 
 ## Checks
 
-- **NC-003** (warning by default): a manifest below the root that no workspace
+- **NC-003** (error by default): a manifest below the root that no workspace
   owns, and that declares a registry dependency, is not covered by any `cargo`
   entry of `.github/dependabot.yml`. A `directories` entry may be a literal
   path or a glob (`*` within a segment, `**` across segments), as Dependabot
@@ -57,10 +57,10 @@ manifest kept as recipe data.
 
 ## Severity
 
-The `severity` parameter defaults to `warning`: findings are reported and the
-rule's exit status stays 0, so the estate can be surveyed before the rule
-blocks. Set it to `error` to enforce the rule. An envelope defect is always an
-error.
+The `severity` parameter defaults to `error`: the rule was promoted from
+`warning` on 23 November 2026, when a measurement at every repository's default
+branch found no finding. Set it to `warning` to report without blocking. An
+envelope defect is always an error.
 
 ## What the rule declines to judge
 

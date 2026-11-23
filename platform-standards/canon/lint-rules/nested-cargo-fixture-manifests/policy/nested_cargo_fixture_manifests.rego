@@ -9,9 +9,9 @@
 # than a pass.
 #
 # NC-003 and the indeterminate findings that report evidence the reader could
-# not establish carry the configured severity, which defaults to `warning` so
-# the package ships as a survey: a warning is reported and does not block. An
-# envelope defect is always an error.
+# not establish carry the configured severity, which defaults to `error` since
+# the promotion of 23 November 2026; a repository may configure `warning` to
+# report without blocking. An envelope defect is always an error.
 package canon.lint_rules.nested_cargo_fixture_manifests
 
 import rego.v1
@@ -34,7 +34,7 @@ envelope_ok if {
 	is_array(input.problems)
 }
 
-default severity := "warning"
+default severity := "error"
 
 severity := data.parameters.severity
 

@@ -225,24 +225,26 @@ def exemption(**overrides: str) -> dict[str, str]:
     } | overrides
 
 
-def test_a_finding_is_reported_but_does_not_block(tmp_path: pathlib.Path) -> None:
-    """The package ships at warning, so the estate can be surveyed first."""
+def test_a_finding_blocks_by_default(tmp_path: pathlib.Path) -> None:
+    """The package was promoted from warning to error on 23 November 2026."""
     uncovered_fixture(tmp_path)
     result = runner.run_rule(RULE_ID, tmp_path)
-    assert {f.severity for f in result.findings} == {"warning"}
+    assert {f.severity for f in result.findings} == {"error"}
     assert result.verdict == "noncompliant"
-    assert result.exit_code == 0
-    assert result.blocking is False
+    assert result.exit_code == 1
+    assert result.blocking is True
 
 
-def test_the_severity_parameter_restores_blocking(
+def test_the_severity_parameter_can_lower_a_finding_to_a_warning(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Promotion is a parameter change, not a policy edit."""
+    """A repository may still configure the survey behaviour."""
     uncovered_fixture(tmp_path)
-    result = result_with(monkeypatch, tmp_path, {"severity": "error", "exemptions": []})
-    assert {f.severity for f in result.findings} == {"error"}
-    assert result.exit_code == 1
+    result = result_with(
+        monkeypatch, tmp_path, {"severity": "warning", "exemptions": []}
+    )
+    assert {f.severity for f in result.findings} == {"warning"}
+    assert result.exit_code == 0
 
 
 def test_a_complete_exemption_takes_the_manifest_out(
