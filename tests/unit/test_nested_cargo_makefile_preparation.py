@@ -267,6 +267,8 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         ),
         "test:\n\tcargo build --help && cargo nextest run\n",
         "test:\n\tcargo test --no-run --help && cargo nextest run\n",
+        "test:\n\tcargo nextest run --no-run --help && cargo nextest run\n",
+        "test:\n\tcargo nextest archive --help && cargo nextest run\n",
         # A compile-only command after the test prepares nothing for it.
         "test:\n\tcargo nextest run\n\tcargo nextest run --no-run\n",
         # `make -f` reads another Makefile and `make -n` runs nothing.
@@ -300,6 +302,12 @@ def test_an_included_file_may_hold_what_the_reader_cannot_see(
     checkout(including, f"include flags.mk\n{makefile}")
     put(including, "flags.mk", ".IGNORE: prepare\n")
     assert not makefile_prepares(including)
+    # The parser does not report an include that follows a rule, so the text
+    # scan is what catches this one.
+    after_rule = tmp_path / "after-rule"
+    checkout(after_rule, f"{makefile}\ninclude flags.mk\n")
+    put(after_rule, "flags.mk", ".IGNORE: prepare\n")
+    assert not makefile_prepares(after_rule)
 
 
 def test_a_target_not_declared_phony_may_be_skipped_so_it_prepares_nothing(

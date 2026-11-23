@@ -647,20 +647,22 @@ def _nextest(subcommand: str, arguments: list[str]) -> CommandMeaning:
     CommandMeaning
         The test kind and selected profile, or an empty meaning.
     """
+    # `--help` exits successfully without compiling anything.
+    is_help = "--help" in arguments or "-h" in arguments
     if subcommand == "nextest" and arguments[:1] == ["run"]:
         return CommandMeaning(
             test="nextest",
             profile=_profile(arguments[1:]),
-            is_build="--no-run" in arguments,
+            is_build="--no-run" in arguments and not is_help,
         )
     if subcommand == "ntr":
         return CommandMeaning(
             test="nextest",
             profile=_profile(arguments),
-            is_build="--no-run" in arguments,
+            is_build="--no-run" in arguments and not is_help,
         )
     if subcommand == "nextest" and arguments[:1] == ["archive"]:
-        return CommandMeaning(is_build=True)
+        return CommandMeaning(is_build=not is_help)
     return CommandMeaning()
 
 
