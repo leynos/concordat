@@ -10,9 +10,9 @@ description: >-
   so a fixture is updated only when its directory, or a glob reaching it, is
   named. A path-only manifest has nothing to update. A named exemption, with
   its repository, directory, rationale and review trigger, takes a manifest out
-  of the check. The rule ships at `warning` severity so the estate can be
-  surveyed before it blocks; the `severity` parameter raises it to `error`
-  without a code change. Audit-only: this rule declares no mutations.
+  of the check. The rule ships at `error` severity (promoted from `warning` on
+  23 November 2026, once the estate read clean); the `severity` parameter can
+  lower it to `warning` without a code change. Audit-only: this rule declares no mutations.
 version: 0.1.0
 sensor:
   type: conftest
@@ -35,8 +35,8 @@ parameters:
           findings that report evidence the reader could not establish. An
           envelope defect is always `error`: it says the rule could not run,
           not that the repository is unsafe. A `warning` finding is reported
-          but does not block; promotion to `error` is the intended end state
-          once the estate survey is clean.
+          but does not block. The default is `error` since the promotion of
+          23 November 2026.
       exemptions:
         type: array
         items:
@@ -63,7 +63,7 @@ parameters:
           blank, because an exemption nobody must revisit is not a record. A
           vendored patch that is deliberately left alone belongs here.
   defaults:
-    severity: warning
+    severity: error
     exemptions:
       - repository: leynos/rstest-bdd
         path: tests/fixtures/published-gpui-e2e

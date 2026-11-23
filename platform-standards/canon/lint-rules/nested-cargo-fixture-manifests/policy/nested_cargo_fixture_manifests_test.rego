@@ -83,9 +83,13 @@ test_an_exemption_without_a_review_trigger_suppresses_nothing if {
 	{f.rule_id | some f in fs} == {"NC-003"}
 }
 
-# The package ships as a survey: no configured severity means a warning.
-test_the_default_severity_is_a_warning if {
-	severities(data.fixtures.uncovered_fixture, {"exemptions": []}) == {"warning"}
+# Promoted on 23 November 2026: no configured severity means an error.
+test_the_default_severity_is_an_error if {
+	severities(data.fixtures.uncovered_fixture, {"exemptions": []}) == {"error"}
+}
+
+test_a_configured_warning_survives_promotion if {
+	severities(data.fixtures.uncovered_fixture, {"exemptions": [], "severity": "warning"}) == {"warning"}
 }
 
 test_the_configured_severity_applies if {

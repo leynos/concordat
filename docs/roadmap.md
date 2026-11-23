@@ -549,27 +549,30 @@ actuators that remediate them. Each check ships as a lint rule package under
   first. Acceptance: leynos/whitaker before and after #518 and
   leynos/theoremc's main give the expected result for every case, and the
   fixture-lock package's exemptions do not reach it. Promotion to `error` is a
-  separate change made once the estate survey is clean. Fixture manifest
-  coverage (NC-003, `nested-cargo-fixture-manifests`) is shipped as the third:
-  every standalone manifest with a registry dependency is covered by a `cargo`
-  entry of `dependabot.yml`. The nextest configuration check (NC-004, NC-005,
-  `nested-cargo-nextest`) is the fourth: where Rust tests spawn `cargo` or
-  `rustc`, the configuration serializes them, sets a `slow-timeout` and a
-  `global-timeout`, and names each spawning test binary in a grouped override.
-  The CI wiring check (NC-006, `nested-cargo-ci-wiring`) is the fourth: no
-  workflow sets `CARGO_TARGET_DIR` to a per-run or temporary path, and a job
-  that opts out of `setup-rust`'s wrapper export names `RUSTC_WRAPPER` itself.
-  The cold-build check (NC-009, NC-010, `nested-cargo-cold-build`) follows,
-  shipped at `warning` severity: a test-scope command that compiles must not
-  build into a private target directory (NC-009), and a test source that
-  compiles in a timed test must have a preparation declared outside it
-  (NC-010): a nextest setup script covering it, a named preparation test in its
-  crate, or a call to a preparation gate in its crate, with the names
-  configurable. Acceptance: rstest-bdd before and after #916 (the three tests
-  of #910 report, and the head reports none of them), the ortho-config
-  per-scenario target before its fix (reported as indeterminate, because the
-  value comes from another file), netsuke after #913 and #939 and a clean
-  repository give the expected result for every case.
+  separate change made once the estate survey is clean. On 23 November 2026 the
+  three clean packages were measured at 0 findings across the estate: fixture
+  lockfiles (NC-001, NC-002) and CI wiring (NC-006) already report at `error`
+  severity, and fixture manifests (NC-003) was promoted from `warning` to
+  `error`. Fixture manifest coverage (NC-003, `nested-cargo-fixture-manifests`)
+  is shipped as the third: every standalone manifest with a registry dependency
+  is covered by a `cargo` entry of `dependabot.yml`. The nextest configuration
+  check (NC-004, NC-005, `nested-cargo-nextest`) is the fourth: where Rust
+  tests spawn `cargo` or `rustc`, the configuration serializes them, sets a
+  `slow-timeout` and a `global-timeout`, and names each spawning test binary in
+  a grouped override. The CI wiring check (NC-006, `nested-cargo-ci-wiring`) is
+  the fourth: no workflow sets `CARGO_TARGET_DIR` to a per-run or temporary
+  path, and a job that opts out of `setup-rust`'s wrapper export names
+  `RUSTC_WRAPPER` itself. The cold-build check (NC-009, NC-010,
+  `nested-cargo-cold-build`) follows, shipped at `warning` severity: a
+  test-scope command that compiles must not build into a private target
+  directory (NC-009), and a test source that compiles in a timed test must have
+  a preparation declared outside it (NC-010): a nextest setup script covering
+  it, a named preparation test in its crate, or a call to a preparation gate in
+  its crate, with the names configurable. Acceptance: rstest-bdd before and
+  after #916 (the three tests of #910 report, and the head reports none of
+  them), the ortho-config per-scenario target before its fix (reported as
+  indeterminate, because the value comes from another file), netsuke after #913
+  and #939 and a clean repository give the expected result for every case.
 - [x] Ship the pull-request run cancellation rule (RC-001, RC-002,
   `pr-run-cancellation`, leynos/concordat#388): every workflow triggered by
   `pull_request` or `pull_request_target` has a cancelling `concurrency` block,
