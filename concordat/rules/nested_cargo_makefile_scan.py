@@ -14,14 +14,9 @@ import dataclasses
 import typing as typ
 
 from .makefile_expansion import expand_readings
+from .nested_cargo_fetch_order import gates_fetch, line_fetches
 from .nested_cargo_makefile_lines import are_settled, prefetch_in_prerequisites
-from .nested_cargo_scripts import (
-    TEST_TARGET,
-    ScriptCommand,
-    gates_fetch,
-    line_fetches,
-    script_commands,
-)
+from .nested_cargo_scripts import TEST_TARGET, ScriptCommand, script_commands
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc

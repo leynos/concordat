@@ -41,6 +41,11 @@ from .nested_cargo_conditions import (
     condition_proves_order,
     runs_only_after_success,
 )
+from .nested_cargo_fetch_order import (
+    conditional_fetch_precedes,
+    gates_fetch,
+    line_fetches,
+)
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_scan import TargetScan, scan_target
 from .nested_cargo_nextest import (
@@ -57,9 +62,6 @@ from .nested_cargo_scripts import (
     TEST_TARGET,
     CommandMeaning,
     ScriptCommand,
-    conditional_fetch_precedes,
-    gates_fetch,
-    line_fetches,
     script_commands,
 )
 from .nested_cargo_shells import ShellRule, effective_shell
