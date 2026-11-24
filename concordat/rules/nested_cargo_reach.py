@@ -24,10 +24,10 @@ if typ.TYPE_CHECKING:
     from .nested_cargo_source import RustSource
 
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"#\[\s*path\s*=\s*\"(?P<value>[^\"]*)\"")
-# Rust allows any of the three macro delimiters around the literal.
-_INCLUDE: typ.Final = re.compile(
-    r"\binclude!\s*[(\[{]\s*\"(?P<value>[^\"]*)\"\s*[)\]}]"
-)
+# Rust allows any of the three macro delimiters, a raw string and a trailing
+# comma, so the argument is taken whole and every string literal in it is read.
+_INCLUDE: typ.Final = re.compile(r"\binclude!\s*[(\[{](?P<argument>[^)\]}]*)")
+_LITERAL: typ.Final = re.compile(r"r#*\"(?P<raw>[^\"]*)\"|\"(?P<text>[^\"]*)\"")
 
 FRESH: typ.Final = "fresh"
 TOUCHED: typ.Final = "touched"
@@ -213,7 +213,10 @@ def _library_path_tails(sources: cabc.Iterable[RustSource]) -> frozenset[str]:
         for match in _PATH_ATTRIBUTE.finditer(source.text)
     )
     includes = (
-        match["value"] for source in sources for match in _INCLUDE.finditer(source.text)
+        literal["raw"] or literal["text"]
+        for source in sources
+        for call in _INCLUDE.finditer(source.text)
+        for literal in _LITERAL.finditer(call["argument"])
     )
     return frozenset(_tail(value) for value in (*paths, *includes))
 
