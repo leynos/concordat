@@ -1394,6 +1394,21 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
         ),
         pytest.param(
             {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/ui.rs": "mod support;\n",
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": 'include!("../../a/tests/support/mod.rs");\n',
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="a-reached-support-file-also-included-from-another-package",
+        ),
+        pytest.param(
+            {
                 "tests/ui.rs": "mod support;\n",
                 "src/lib.rs": (
                     '#[path = "../tests/support/tmp/../mod.rs"]\nmod support;\n'

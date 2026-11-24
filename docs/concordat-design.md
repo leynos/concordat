@@ -3118,10 +3118,14 @@ declares as a target with an explicit `path` (a `[[test]]` target is recorded
 as the `tests/<name>.rs` that `binary(<name>)` selects). These owners are
 seeded before the resolver runs, so every file they declare inherits them. The
 tail match is loose on purpose, because the only error it can make is a missed
-exemption. A top-level binary that another target imports is covered only if
-that target is too. A helper that receives its target directory as an argument
-is a different gap (the reader does not follow a call's literal argument into
-the helper) and is not resolved here.
+exemption. An `include!("file.rs")` literal counts the same way, in any source
+and any package, so a file pasted into a covered binary also reads as an unseen
+owner: that is the price of not modelling `include!`. A reached file is covered
+only when every recorded owner is, and a file no target reaches is covered only
+by a rule that selects every test. A top-level binary that another target
+imports is covered only if that target is too. A helper that receives its
+target directory as an argument is a different gap (the reader does not follow
+a call's literal argument into the helper) and is not resolved here.
 
 Decisions the design rests on:
 

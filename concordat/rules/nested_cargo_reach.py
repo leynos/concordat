@@ -24,6 +24,7 @@ if typ.TYPE_CHECKING:
     from .nested_cargo_source import RustSource
 
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"#\[\s*path\s*=\s*\"(?P<value>[^\"]*)\"")
+_INCLUDE: typ.Final = re.compile(r"\binclude!\s*\(\s*\"(?P<value>[^\"]*)\"\s*\)")
 
 FRESH: typ.Final = "fresh"
 TOUCHED: typ.Final = "touched"
@@ -190,18 +191,28 @@ def _library_path_tails(sources: cabc.Iterable[RustSource]) -> frozenset[str]:
     tail match is deliberately loose: it can only make a file count as reached
     by an owner no setup rule covers, which is the safe error.
 
+    An `include!("file.rs")` pastes a file into whichever source names it,
+    in any package, and the resolver does not record that either. It is read
+    from every source, test code included: the importer's coverage is unknown,
+    and a file pasted into a covered binary reads as an unseen owner too. That
+    is the fail-closed price of not modelling `include!`.
+
     Returns
     -------
     frozenset[str]
         The two-component tails of every `#[path = "..."]` value in code that
-        is not whole-file test code.
+        is not whole-file test code, and of every `include!` literal.
     """
-    return frozenset(
-        _tail(match["value"])
+    paths = (
+        match["value"]
         for source in sources
         if not whole_file_scope(source.relative)
         for match in _PATH_ATTRIBUTE.finditer(source.text)
     )
+    includes = (
+        match["value"] for source in sources for match in _INCLUDE.finditer(source.text)
+    )
+    return frozenset(_tail(value) for value in (*paths, *includes))
 
 
 def _target_tables(document: dict[str, object]) -> list[tuple[str, dict[str, object]]]:
