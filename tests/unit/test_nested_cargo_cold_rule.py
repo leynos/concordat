@@ -1240,6 +1240,25 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
             False,
             id="also-reached-through-an-ordinary-library-module",
         ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "helpers/lib.rs"]\nmod helper;\n',
+                "tests/helpers/lib.rs": "mod build;\n",
+                "tests/helpers/build.rs": SUPPORT_BUILD,
+            },
+            "tests/helpers/build.rs",
+            True,
+            id="a-lib-rs-outside-src-is-not-a-target",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "../src/lib.rs"]\nmod app;\n',
+                "src/lib.rs": SUPPORT_BUILD,
+            },
+            "src/lib.rs",
+            False,
+            id="a-library-also-reached-by-a-covered-binary-is-still-a-target",
+        ),
     ],
 )
 def test_a_support_file_is_covered_when_every_binary_that_reaches_it_is(

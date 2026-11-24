@@ -28,7 +28,7 @@ import typing as typ
 
 from .fs_probe import probe_file
 from .nested_cargo_commands import first_literal
-from .nested_cargo_reach import Reach
+from .nested_cargo_reach import CRATE_ROOT_DIRECTORIES, Reach, is_target_root
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -40,10 +40,6 @@ from .nested_cargo_text import split_top_level
 from .rust_source import scan_balanced, skip_trivia
 
 CRATE_ROOT_STEMS: typ.Final = frozenset({"lib", "main", "mod"})
-
-# Cargo builds every `.rs` file directly inside one of these directories as a
-# target of its own, so such a file is also a crate root.
-CRATE_ROOT_DIRECTORIES: typ.Final = frozenset({"tests", "benches", "examples"})
 
 _ATTRIBUTE: typ.Final = re.compile(r"#\[")
 _MODULE: typ.Final = re.compile(r"mod\s+(?P<name>[A-Za-z_]\w*)")
@@ -296,24 +292,6 @@ def is_crate_root(relative: pathlib.PurePosixPath) -> bool:
     if parent.name in CRATE_ROOT_DIRECTORIES:
         return True
     return parent.name == "bin" and parent.parent.name == "src"
-
-
-def is_target_root(relative: pathlib.PurePosixPath) -> bool:
-    """Report whether Cargo builds this file as a target, not just resolves like one.
-
-    A `mod.rs` resolves its declarations as a crate root does, but it is a
-    module of whichever file declares it, so only one that sits directly in
-    `tests/`, `benches/` or `examples/` is a target (a `tests/mod.rs` is built
-    and run as a test binary of its own).
-
-    Returns
-    -------
-    bool
-        True when the file is a `lib`, `main`, or auto-discovered target.
-    """
-    if not is_crate_root(relative):
-        return False
-    return relative.stem != "mod" or relative.parent.name in CRATE_ROOT_DIRECTORIES
 
 
 def _own_directories(

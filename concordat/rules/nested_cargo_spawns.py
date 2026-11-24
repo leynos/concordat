@@ -50,7 +50,7 @@ from .nested_cargo_modules import (
     resolve_declarations,
     scan_scope,
 )
-from .nested_cargo_reach import Reach
+from .nested_cargo_reach import Reach, reached_by
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -788,9 +788,5 @@ def collect_rust_evidence(
             trybuild,
             key=operator.itemgetter("path", "line", "form"),
         ),
-        reached_by={
-            relative.as_posix(): sorted(reach.roots)
-            for relative, reach in sorted(reaches.items())
-            if reach.roots
-        },
+        reached_by=reached_by(reaches),
     )

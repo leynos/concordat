@@ -10,6 +10,43 @@ declare it is prepared when those binaries are.
 from __future__ import annotations
 
 import dataclasses
+import typing as typ
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    import pathlib
+
+# Cargo builds every `.rs` file directly inside one of these directories as a
+# target of its own, so such a file is also a crate root.
+CRATE_ROOT_DIRECTORIES: typ.Final = frozenset({"tests", "benches", "examples"})
+
+
+def is_target_root(relative: pathlib.PurePosixPath) -> bool:
+    """Report whether Cargo builds this file as a target, not just resolves like one.
+
+    Cargo's own discovery is narrower than the stems the module resolver accepts
+    for resolving declarations: `lib.rs` and `main.rs` are targets only at
+    `src/lib.rs` and `src/main.rs`, and a `mod.rs` is a module of whichever file
+    declares it unless it sits directly in `tests/`, `benches/` or `examples/`
+    (a `tests/mod.rs` is built and run as a test binary of its own). A file
+    that is none of these is not a target, so it does not stand for one.
+
+    Returns
+    -------
+    bool
+        True when Cargo discovers the file as a target of its own.
+    """
+    parent = relative.parent
+    if relative.stem in {"lib", "main"} and parent.name == "src":
+        return True
+    if parent.name in CRATE_ROOT_DIRECTORIES:
+        return True
+    grandparent = parent.parent
+    if relative.stem == "main" and grandparent.name in CRATE_ROOT_DIRECTORIES:
+        return True
+    if relative.stem == "main" and grandparent.name == "bin":
+        return grandparent.parent.name == "src"
+    return parent.name == "bin" and grandparent.name == "src"
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -51,3 +88,25 @@ class Reach:
             by_path=self.by_path or other.by_path,
             roots=self.roots | other.roots,
         )
+
+
+def reached_by(
+    reaches: cabc.Mapping[pathlib.PurePosixPath, Reach],
+) -> dict[str, list[str]]:
+    """Return the sorted targets that compile each reached file.
+
+    A file Cargo also builds as a target is compiled by itself too, whoever
+    else declares it, so it counts among its own targets.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Root-relative path to the targets whose module tree holds the file.
+    """
+    return {
+        relative.as_posix(): sorted(
+            reach.roots | ({relative.as_posix()} if is_target_root(relative) else set())
+        )
+        for relative, reach in sorted(reaches.items())
+        if reach.roots
+    }
