@@ -323,8 +323,12 @@ def _is_setup_covered(
     roots = reached_by.get(path, [])
     are_roots_covered = all(_is_root_covered(root, preparation) for root in roots)
     # A reached file runs in every target that reaches it, so the source
-    # package's own rule cannot stand for an importer in another package.
-    return are_roots_covered if roots else is_own_covered
+    # package's own rule cannot stand for an importer in another package. A
+    # support file nothing reaches may be `include!`d from anywhere, so only a
+    # rule that selects every test covers it; a binary stands for itself.
+    if roots:
+        return are_roots_covered
+    return is_own_covered if stem is not None else covers(preparation.rules, None, None)
 
 
 def collect_builds(
