@@ -3101,6 +3101,17 @@ exemption. Preparation is matched by crate, because one crate's preparation
 test stamps several test binaries; a finer match would demand a stamp per file
 and report the common shape as a defect.
 
+A setup script is the exception to the per-crate match, because nextest selects
+by test binary. The module resolver records, for each file a `mod` declaration
+or `#[path]` reaches, the Cargo targets whose module tree contains it (the
+`roots` of its `Reach`, carried to the policy as `reached_by`). A support file
+that is not a binary itself counts as covered when it is reached and every
+target that reaches it is a covered `tests/<stem>.rs` binary. A library or an
+uncovered binary among the targets that reach it, or no target at all, leaves
+it uncovered: the rule fails closed. A helper that receives its target
+directory as an argument is a different gap (the reader does not follow a
+call's literal argument into the helper) and is not resolved here.
+
 Decisions the design rests on:
 
 - **A fixed `target/...` directory in the crate is `dedicated`, not `private`.**

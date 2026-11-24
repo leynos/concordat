@@ -1133,3 +1133,99 @@ def test_a_source_the_reader_cannot_decode_is_indeterminate(
     assert [(f.rule_id, f.verdict) for f in result.findings] == [
         ("EN-001", "indeterminate")
     ]
+
+
+BINARY_UI_SCRIPT = SETUP_SCRIPT.format(filter="binary(ui)", setup="prepare-nested")
+SUPPORT_BUILD = """\
+pub fn build() {
+    let t = trybuild::TestCases::new();
+    t.pass("x.rs");
+}
+"""
+
+
+def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
+    """Write a package whose `ui` binary a setup script covers, plus *files*."""
+    put(root, "Cargo.toml", '[package]\nname = "app"\n')
+    put(root, ".config/nextest.toml", BINARY_UI_SCRIPT)
+    for relative, text in files.items():
+        put(root, relative, text)
+
+
+@pytest.mark.parametrize(
+    ("files", "support", "is_covered"),
+    [
+        pytest.param(
+            {"tests/ui.rs": "mod support;\n", "tests/support/mod.rs": SUPPORT_BUILD},
+            "tests/support/mod.rs",
+            True,
+            id="mod-from-covered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "helpers/build.rs"]\nmod build;\n',
+                "tests/helpers/build.rs": SUPPORT_BUILD,
+            },
+            "tests/helpers/build.rs",
+            True,
+            id="path-from-covered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod outer;\n",
+                "tests/outer/mod.rs": "mod inner;\n",
+                "tests/outer/inner.rs": SUPPORT_BUILD,
+            },
+            "tests/outer/inner.rs",
+            True,
+            id="second-hop-from-covered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "tests/other.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="also-reached-from-an-uncovered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": (
+                    '#[cfg(test)]\n#[path = "../tests/support/mod.rs"]\nmod support;\n'
+                ),
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="also-reached-from-the-library",
+        ),
+        pytest.param(
+            {"tests/ui.rs": "// no module\n", "tests/support/mod.rs": SUPPORT_BUILD},
+            "tests/support/mod.rs",
+            False,
+            id="reached-by-nothing",
+        ),
+        pytest.param(
+            {
+                "tests/other.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="reached-only-from-an-uncovered-binary",
+        ),
+    ],
+)
+def test_a_support_file_is_covered_when_every_binary_that_reaches_it_is(
+    tmp_path: pathlib.Path,
+    files: dict[str, str],
+    support: str,
+    *,
+    is_covered: bool,
+) -> None:
+    """A setup rule that covers a binary also covers the files only it compiles in."""
+    support_checkout(tmp_path, files)
+    assert (("NC-010", support) in profile(tmp_path)) is not is_covered

@@ -272,6 +272,46 @@ def _first_lines(
     return first
 
 
+def _is_binary_covered(root: str, preparation: Preparation) -> bool:
+    """Report whether a setup rule covers the test binary built from *root*."""
+    binary = _BINARY.search(root)
+    if binary is None:
+        return False
+    package = preparation.crates.get(owning_crate(root, preparation.crates))
+    return covers(preparation.rules, binary["stem"], package)
+
+
+def _is_setup_covered(
+    path: str,
+    stem: str | None,
+    reached_by: cabc.Mapping[str, list[str]],
+    preparation: Preparation,
+) -> bool:
+    """Report whether a setup rule runs before the tests that compile *path*.
+
+    A top-level `tests/<stem>.rs` is its own binary. Any other file compiles
+    only inside the targets whose `mod` or `#[path]` chain reaches it, so it is
+    covered when every one of them is a covered test binary. A file no target
+    reaches, or one a library or an uncovered binary also reaches, is not: the
+    setup script then does not run before every test that pays for the build.
+
+    Returns
+    -------
+    bool
+        True when the setup rules cover the file's binary, or every binary that
+        reaches the file.
+    """
+    crate = owning_crate(path, preparation.crates)
+    if covers(preparation.rules, stem, preparation.crates.get(crate)):
+        return True
+    roots = reached_by.get(path, [])
+    return (
+        stem is None
+        and bool(roots)
+        and all(_is_binary_covered(root, preparation) for root in roots)
+    )
+
+
 def collect_builds(
     evidence: RustEvidence, sources: list[RustSource], preparation: Preparation
 ) -> list[BuildFact]:
@@ -307,7 +347,7 @@ def collect_builds(
         binary = _BINARY.search(path)
         stem = binary["stem"] if binary else None
         prepared = sorted(declared.get(crate, set()))
-        if covers(preparation.rules, stem, crates.get(crate)):
+        if _is_setup_covered(path, stem, evidence.reached_by, preparation):
             prepared.insert(0, SETUP_SCRIPT)
         if preparation.is_makefile_prepared:
             prepared.append(MAKEFILE_PREPARATION)

@@ -179,7 +179,12 @@ The compile is *prepared* when any one of these holds:
    platform under test, so each is reported and neither counts. The
    configuration is read only when its path resolves inside the checkout; a
    symlink (to the file or to a directory above it) that leaves it is reported
-   and not followed.
+   and not followed. A support file that is not a test binary of its own
+   (`tests/common/cargo.rs`, `tests/support/mod.rs`) is covered when every test
+   binary that reaches it through `mod` or `#[path]`, directly or through other
+   support files, is covered. A file that no target reaches, or that a library
+   or an uncovered binary also reaches, is not: the script would not run before
+   every test that pays for the build.
 2. **A named preparation test in the same crate.** A test function (carrying
    `#[test]`, `#[rstest]`, `#[test_case]` or a `::test` attribute) whose name
    matches a pattern in `preparation_gates.tests`. An ordinary function of the

@@ -28,6 +28,7 @@ import typing as typ
 
 from .fs_probe import probe_file
 from .nested_cargo_commands import first_literal
+from .nested_cargo_reach import Reach
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -50,40 +51,6 @@ _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class Reach:
-    """How the compiler was seen reaching one source file.
-
-    A file can be reached in both ways at once — `tests/it.rs` is a target
-    Cargo builds on its own, and is also a file another test's `mod it;` may
-    name — so each flag records evidence rather than a single verdict.
-
-    Attributes
-    ----------
-    by_name:
-        Declared by a plain `mod name;`, which makes the file a module whose
-        own children live in a directory named after it.
-    by_path:
-        Named by `#[path = "..."]`, which keeps the file's children beside it.
-    """
-
-    by_name: bool = False
-    by_path: bool = False
-
-    def merged(self, other: Reach) -> Reach:
-        """Return the reach that has everything either of these recorded.
-
-        Returns
-        -------
-        Reach
-            The union of both observations.
-        """
-        return Reach(
-            by_name=self.by_name or other.by_name,
-            by_path=self.by_path or other.by_path,
-        )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -329,6 +296,20 @@ def is_crate_root(relative: pathlib.PurePosixPath) -> bool:
     if parent.name in CRATE_ROOT_DIRECTORIES:
         return True
     return parent.name == "bin" and parent.parent.name == "src"
+
+
+def is_target_root(relative: pathlib.PurePosixPath) -> bool:
+    """Report whether Cargo builds this file as a target, not just resolves like one.
+
+    `mod.rs` resolves its declarations as a crate root does, but it is a module
+    of whichever file declares it, never a target.
+
+    Returns
+    -------
+    bool
+        True when the file is a `lib`, `main`, or auto-discovered target.
+    """
+    return is_crate_root(relative) and relative.stem != "mod"
 
 
 def _own_directories(
@@ -676,6 +657,27 @@ class Discovered:
     touched: tuple[pathlib.PurePosixPath, ...]
 
 
+def _observed_reach(
+    declaring: pathlib.PurePosixPath, reach: Reach, declaration: _Declaration
+) -> Reach:
+    """Return how *declaration* reaches the file it names.
+
+    The named file is compiled by each target that compiles the declaring file,
+    and by the declaring file itself when Cargo builds that as a target.
+
+    Returns
+    -------
+    Reach
+        The way the file was named, and the targets whose tree now holds it.
+    """
+    own = {declaring.as_posix()} if is_target_root(declaring) else set()
+    return Reach(
+        by_path=declaration.path is not None,
+        by_name=declaration.path is None,
+        roots=reach.roots | own,
+    )
+
+
 def resolve_declarations(
     checkout: pathlib.Path,
     source: RustSource,
@@ -747,14 +749,12 @@ def resolve_declarations(
                 _declaration_problem(source, declaration, f"names no file ({named})")
             )
             continue
-        observed = Reach(
-            by_path=declaration.path is not None, by_name=declaration.path is None
-        )
+        observed = _observed_reach(source.relative, reach, declaration)
         for candidate in present:
             if in_fixture(candidate, fixtures):
                 continue
             before = reaches.get(candidate, Reach())
-            reaches[candidate] = before.merged(observed)
+            reaches[candidate] = before | observed
             known = scopes.get(candidate)
             if known is None:
                 scopes[candidate] = TestScope(whole_file=True)

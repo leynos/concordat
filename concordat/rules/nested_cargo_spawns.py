@@ -46,11 +46,11 @@ from .nested_cargo_commands import (
 from .nested_cargo_compiles import COMPILES_UNKNOWN, compiles_state
 from .nested_cargo_helpers import helper_call_sites, helper_definition
 from .nested_cargo_modules import (
-    Reach,
     is_crate_root,
     resolve_declarations,
     scan_scope,
 )
+from .nested_cargo_reach import Reach
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -141,11 +141,16 @@ class RustEvidence:
         Every test-scope `macrotest::expand` reference. Macrotest builds in
         its own `<target>/tests/macrotest` tree, so it is a nested build the
         outer build never warms, as trybuild is.
+    reached_by:
+        For each file a `mod` declaration or `#[path]` reaches, the sorted
+        Cargo targets whose module tree contains it. A file no target reaches
+        has no entry.
     """
 
     spawns: list[SpawnFact]
     trybuild: list[TrybuildFact]
     macrotest: list[TrybuildFact] = dataclasses.field(default_factory=list)
+    reached_by: dict[str, list[str]] = dataclasses.field(default_factory=dict)
 
 
 MACROTEST_USE: typ.Final = re.compile(r"\bmacrotest\s*::\s*expand\w*")
@@ -646,7 +651,7 @@ def _discover_scope(
     fixtures: frozenset[str],
     sources: list[RustSource],
     problems: list[str],
-) -> dict[pathlib.PurePosixPath, TestScope]:
+) -> tuple[dict[pathlib.PurePosixPath, TestScope], dict[pathlib.PurePosixPath, Reach]]:
     """Return the scope of every file the checkout's compiler builds as test code.
 
     A file's scope and reach are both inputs to its own scan: a declaration
@@ -662,8 +667,9 @@ def _discover_scope(
 
     Returns
     -------
-    dict[pathlib.PurePosixPath, TestScope]
-        The scope of every source read, keyed by its root-relative path.
+    tuple[dict[pathlib.PurePosixPath, TestScope], dict[pathlib.PurePosixPath, Reach]]
+        The scope of every source read, keyed by its root-relative path, and
+        how each declared file was reached, including the targets that reach it.
     """
     scopes = {
         source.relative: TestScope(whole_file_scope(source.relative))
@@ -716,7 +722,7 @@ def _discover_scope(
             pending.append(known_source)
     for source in sources:
         problems.extend(reported.get(source.relative, ()))
-    return scopes
+    return scopes, reaches
 
 
 def collect_rust_evidence(
@@ -749,7 +755,7 @@ def collect_rust_evidence(
     """
     fixtures = fixture_directories(checkout, manifests)
     sources = read_sources(checkout, fixtures, problems)
-    scopes = _discover_scope(checkout, fixtures, sources, problems)
+    scopes, reaches = _discover_scope(checkout, fixtures, sources, problems)
     spawns = [
         fact
         for source in sources
@@ -782,4 +788,9 @@ def collect_rust_evidence(
             trybuild,
             key=operator.itemgetter("path", "line", "form"),
         ),
+        reached_by={
+            relative.as_posix(): sorted(reach.roots)
+            for relative, reach in sorted(reaches.items())
+            if reach.roots
+        },
     )
