@@ -508,6 +508,81 @@ test_python_variable if {
   count(findings) == 0
 }
 
+# `env -u NAME` only unsets a variable, so it may prefix the runner.
+test_env_unset_prefix if {
+  findings := policy.deny with input as data.fixtures.env_unset_prefix
+  count(findings) == 0
+}
+
+# The prefix does not hide an old interpreter from the floor.
+test_env_unset_prefix_old if {
+  findings := policy.deny with input as data.fixtures.env_unset_prefix_old
+  profile(findings) == {
+    ["PD-014", "noncompliant", 4, "\"spelling\"-path recipe runs typos-config-builder under Python 3.12, below the floor 3.14"],
+  }
+}
+
+# A uv runner located by `$(shell command -v uv ...)` is the runner word.
+test_uv_shell_lookup if {
+  findings := policy.deny with input as data.fixtures.uv_shell_lookup
+  count(findings) == 0
+}
+
+# Once resolved, the runner is judged like any other: no --python fails PD-014.
+test_uvx_shell_lookup_absent if {
+  findings := policy.deny with input as data.fixtures.uvx_shell_lookup_absent
+  profile(findings) == {
+    ["PD-014", "noncompliant", 4, "\"spelling\"-path recipe runs typos-config-builder without --python; the builder needs Python 3.14 or later, and a UV_PYTHON from a CI matrix can hand it an older one"],
+  }
+}
+
+# Any other `$(shell ...)` value cannot be read, so the verdict is unknown.
+test_other_shell_lookup if {
+  findings := policy.deny with input as data.fixtures.other_shell_lookup
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+# A fallback that may run something else than uv proves nothing about the runner.
+test_shell_lookup_other_fallback if {
+  findings := policy.deny with input as data.fixtures.shell_lookup_other_fallback
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+# The fallback must name the same tool as the lookup: uvx is not uv.
+test_shell_lookup_mismatched_fallback if {
+  findings := policy.deny with input as data.fixtures.shell_lookup_mismatched_fallback
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+# An escape in the printf format can change the output, so it proves nothing.
+test_shell_lookup_escaped_fallback if {
+  findings := policy.deny with input as data.fixtures.shell_lookup_escaped_fallback
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+# GNU Make accepts brace delimiters and a tab after `shell`; both stay unreadable.
+test_shell_brace_form if {
+  findings := policy.deny with input as data.fixtures.shell_brace_form
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+test_shell_tab_form if {
+  findings := policy.deny with input as data.fixtures.shell_tab_form
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
 # A runner that names no interpreter takes whatever UV_PYTHON says.
 test_python_absent if {
   findings := policy.deny with input as data.fixtures.python_absent

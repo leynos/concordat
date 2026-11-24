@@ -171,7 +171,28 @@ single_valued(name) if {
 
 joined(text) := regex.replace(text, `\\\n[[:space:]]*`, " ")
 
-variable_value[name] := joined(variable.raw_value) if {
+# A uv runner located at assignment time (`UV ?= $(shell command -v uv ||
+# printf '%s/.local/bin/uv' "$$HOME")`) is the runner word itself: whichever
+# path the lookup finds, the command that runs is `uv` or `uvx`. Only the
+# lookup, an optional `2>/dev/null` and a `printf` of a path ending in the same
+# tool as fallback (plain path characters, no escapes) establish that; any other fallback (`|| printf /bin/true`)
+# could run something else, so every other `$(shell ...)` value is left as
+# written and stays unresolvable.
+# The lookup and the fallback must name the same tool; RE2 has no
+# back-references, so the pattern is built once per runner word.
+shell_runner_lookup(tool) := sprintf(
+	`^[[:space:]]*\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+%s([[:space:]]+2>/dev/null)?([[:space:]]*\|\|[[:space:]]*printf[[:space:]]+'%%s/(?:[A-Za-z0-9._-]+/)*%s'[[:space:]]+"\$\$HOME")?[[:space:]]*\)[[:space:]]*$`,
+	[tool, tool],
+)
+
+shell_runner_tools := {"uv", "uvx"}
+
+resolved_value(variable) := tool if {
+	some tool in shell_runner_tools
+	regex.match(shell_runner_lookup(tool), joined(variable.raw_value))
+} else := joined(variable.raw_value)
+
+variable_value[name] := resolved_value(variable) if {
 	some variable in input.makefile.variables
 	name := variable.name
 	single_valued(name)
@@ -232,7 +253,7 @@ unresolved_references(text) := {name |
 	)
 	name := match[1]
 	name != "MAKE"
-}
+} | {"$(shell ...)" | regex.match(`\$[({]shell[[:space:]]`, expand(text))}
 
 # -- static closure from the spelling target -------------------------------------
 #
@@ -372,9 +393,13 @@ segment_start := `(^|[;&(]|[^|]\|)[[:space:]]*[-@+]*[[:space:]]*`
 
 runner := `(?:uvx|uv[[:space:]]+tool[[:space:]]+run)`
 
+# `env -u NAME ...` only removes variables from the command's environment, so
+# it may prefix the runner as an environment assignment does.
+env_command_prefix := `env[[:space:]]+(?:-u[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+)+`
+
 builder_core := sprintf(
-	`%s(?:%s)*(?:(%s)((?:[[:space:]]+[^[:space:];|&]+)*?)[[:space:]]+)?(?:[^[:space:];|&()"']*/)?typos-config-builder((?:[[:space:]][^;|&]*)?)`,
-	[segment_start, env_assignment_prefix, runner],
+	`%s(?:%s)?(?:%s)*(?:(%s)((?:[[:space:]]+[^[:space:];|&]+)*?)[[:space:]]+)?(?:[^[:space:];|&()"']*/)?typos-config-builder((?:[[:space:]][^;|&]*)?)`,
+	[segment_start, env_command_prefix, env_assignment_prefix, runner],
 )
 
 builder_pattern := builder_core

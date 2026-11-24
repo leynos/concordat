@@ -114,6 +114,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "python_range": Scenario(makefile="python-range"),
     "python_quoted_option": Scenario(makefile="python-quoted-option"),
     "python_continued": Scenario(makefile="python-continued"),
+    "env_unset_prefix": Scenario(makefile="env-unset-prefix"),
+    "uv_shell_lookup": Scenario(makefile="uv-shell-lookup"),
     "not_applicable": BARE,
     # -- PD-007: the spelling gate -----------------------------------------
     "python_absent": Scenario(makefile="python-absent"),
@@ -121,6 +123,16 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "python_variable_old": Scenario(makefile="python-variable-old"),
     "python_non_version": Scenario(makefile="python-non-version"),
     "python_unresolved": Scenario(makefile="python-unresolved"),
+    "env_unset_prefix_old": Scenario(makefile="env-unset-prefix-old"),
+    "uvx_shell_lookup_absent": Scenario(makefile="uvx-shell-lookup-absent"),
+    "other_shell_lookup": Scenario(makefile="other-shell-lookup"),
+    "shell_lookup_other_fallback": Scenario(makefile="shell-lookup-other-fallback"),
+    "shell_lookup_mismatched_fallback": Scenario(
+        makefile="shell-lookup-mismatched-fallback"
+    ),
+    "shell_lookup_escaped_fallback": Scenario(makefile="shell-lookup-escaped-fallback"),
+    "shell_brace_form": Scenario(makefile="shell-brace-form"),
+    "shell_tab_form": Scenario(makefile="shell-tab-form"),
     "no_makefile": Scenario(makefile=None),
     "no_spelling_target": Scenario(makefile="no-spelling-target"),
     "no_gate": Scenario(makefile="no-gate"),
