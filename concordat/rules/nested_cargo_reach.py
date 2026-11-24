@@ -207,18 +207,28 @@ def _library_path_tails(sources: cabc.Iterable[RustSource]) -> frozenset[str]:
         is not whole-file test code, and of every `include!` literal.
     """
     paths = (
-        match["value"]
+        (source, match["value"])
         for source in sources
         if not whole_file_scope(source.relative)
         for match in _PATH_ATTRIBUTE.finditer(source.text)
     )
     includes = (
-        literal["raw"] or literal["text"]
+        (source, literal["raw"] or literal["text"])
         for source in sources
         for call in _INCLUDE.finditer(source.text)
         for literal in _LITERAL.finditer(call["argument"])
     )
-    return frozenset(_tail(value) for value in (*paths, *includes))
+    # Each value is read both as written and resolved against the directory of
+    # the source that names it, which is what Rust does: a bare `build.rs` or a
+    # `../mod.rs` only names a file once it is placed beside its importer.
+    return frozenset(
+        _tail(candidate)
+        for source, value in (*paths, *includes)
+        for candidate in (
+            value,
+            posixpath.join(source.relative.parent.as_posix(), value),
+        )
+    )
 
 
 def _target_tables(document: dict[str, object]) -> list[tuple[str, dict[str, object]]]:

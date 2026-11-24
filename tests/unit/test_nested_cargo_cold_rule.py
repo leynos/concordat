@@ -1469,6 +1469,31 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
         ),
         pytest.param(
             {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="binary(ui)", setup="prepare-nested"
+                ),
+                "tests/ui.rs": '#[path = "support/build.rs"]\nmod build;\n',
+                "tests/other.rs": "mod bridge;\n",
+                "tests/bridge/mod.rs": 'include!("build.rs");\n',
+                "tests/bridge/build.rs": SUPPORT_BUILD,
+                "tests/support/build.rs": "// the covered binary's own file\n",
+            },
+            "tests/bridge/build.rs",
+            False,
+            id="an-include-of-a-bare-file-name",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": '#[path = "../mod.rs"]\nmod support;\n',
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            True,
+            id="a-parent-path-resolved-beside-its-importer-names-another-file",
+        ),
+        pytest.param(
+            {
                 "tests/ui.rs": "mod support;\n",
                 "src/lib.rs": (
                     '#[path = "../tests/support/tmp/../mod.rs"]\nmod support;\n'
