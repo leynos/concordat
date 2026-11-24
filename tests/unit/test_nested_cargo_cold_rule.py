@@ -1472,11 +1472,10 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
                 ".config/nextest.toml": SETUP_SCRIPT.format(
                     filter="binary(ui)", setup="prepare-nested"
                 ),
-                "tests/ui.rs": '#[path = "support/build.rs"]\nmod build;\n',
+                "tests/ui.rs": '#[path = "bridge/build.rs"]\nmod build;\n',
                 "tests/other.rs": "mod bridge;\n",
                 "tests/bridge/mod.rs": 'include!("build.rs");\n',
                 "tests/bridge/build.rs": SUPPORT_BUILD,
-                "tests/support/build.rs": "// the covered binary's own file\n",
             },
             "tests/bridge/build.rs",
             False,
