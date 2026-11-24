@@ -93,6 +93,29 @@ def _first_scans(
     ]
 
 
+def _source_for(
+    checkout: pathlib.Path,
+    relative: pathlib.PurePosixPath,
+    by_relative: dict[pathlib.PurePosixPath, RustSource],
+    problems: list[str],
+) -> RustSource | None:
+    """Return the source at *relative*, reading it when it is new.
+
+    Returns
+    -------
+    RustSource | None
+        The known or freshly read source; None when it cannot be read, in which
+        case the reason is added to *problems*.
+    """
+    known = by_relative.get(relative)
+    if known is not None:
+        return known
+    source, error = read_source(checkout, relative)
+    if error is not None:
+        problems.append(error)
+    return source
+
+
 def discover_scope(
     checkout: pathlib.Path,
     fixtures: frozenset[str],
@@ -150,13 +173,10 @@ def discover_scope(
             state = (scopes[relative].whole_file, reaches.get(relative, Reach()))
             if scanned.get(relative) == state:
                 continue
-            known_source = by_relative.get(relative)
+            known_source = _source_for(checkout, relative, by_relative, problems)
             if known_source is None:
-                known_source, error = read_source(checkout, relative)
-                if error is not None:
-                    problems.append(error)
-                if known_source is None:
-                    continue
+                continue
+            if relative not in by_relative:
                 sources.append(known_source)
                 by_relative[relative] = known_source
             pending.append(known_source)

@@ -26,6 +26,7 @@ import re
 import typing as typ
 
 from .nested_cargo_compiles import COMPILES_NO, COMPILES_YES
+from .nested_cargo_reach import UNSEEN
 from .nested_cargo_setup_scripts import covers
 from .nested_cargo_spawn import TEST_PATH
 
@@ -284,7 +285,9 @@ def _is_root_covered(root: str, preparation: Preparation) -> bool:
     bool
         True when the setup rules cover the root's tests.
     """
-    binary = _BINARY.search(root)
+    # An unseen owner is named for the file it stands behind, which may be a
+    # `tests/<stem>.rs`; it is not that binary, so its name is never read.
+    binary = None if root.startswith(UNSEEN) else _BINARY.search(root)
     stem = binary["stem"] if binary else None
     package = preparation.crates.get(owning_crate(root, preparation.crates))
     return covers(preparation.rules, stem, package)

@@ -216,20 +216,21 @@ def _target_tables(document: dict[str, object]) -> list[tuple[str, dict[str, obj
 
 def _manifest_targets(
     checkout: pathlib.Path, manifests: cabc.Mapping[pathlib.Path, dict[str, object]]
-) -> dict[pathlib.PurePosixPath, str]:
+) -> list[tuple[pathlib.PurePosixPath, str]]:
     """Return the files manifests declare as targets with an explicit `path`.
 
     A `[[test]]` target is named by its `name`, not by its file, so its owner is
     recorded as the `tests/<name>.rs` a setup rule's `binary(<name>)` selects.
-    Any other target is recorded by its own path.
+    Any other target is recorded as an unseen owner. One file can be declared
+    by several targets, so each declaration is its own entry.
 
     Returns
     -------
-    dict[pathlib.PurePosixPath, str]
+    list[tuple[pathlib.PurePosixPath, str]]
         Each declared target file, root-relative and normalised, with the owner
         that stands for the target it is built as.
     """
-    found: dict[pathlib.PurePosixPath, str] = {}
+    found: list[tuple[pathlib.PurePosixPath, str]] = []
     for manifest, document in manifests.items():
         base = manifest.parent.relative_to(checkout).as_posix()
         for kind, table in _target_tables(document):
@@ -239,9 +240,9 @@ def _manifest_targets(
             path = pathlib.PurePosixPath(posixpath.normpath(f"{base}/{value}"))
             name = table.get("name")
             if kind == "test" and isinstance(name, str):
-                found[path] = posixpath.normpath(f"{base}/tests/{name}.rs")
+                found.append((path, posixpath.normpath(f"{base}/tests/{name}.rs")))
             else:
-                found[path] = f"{UNSEEN}{path.as_posix()}"
+                found.append((path, f"{UNSEEN}{path.as_posix()}"))
     return found
 
 
@@ -274,7 +275,7 @@ def unseen_owners(
             owners.setdefault(source.relative, set()).add(
                 f"{UNSEEN}{source.relative.as_posix()}"
             )
-    for path, owner in _manifest_targets(checkout, manifests).items():
+    for path, owner in _manifest_targets(checkout, manifests):
         owners.setdefault(path, set()).add(owner)
     return {path: Reach(roots=frozenset(found)) for path, found in owners.items()}
 

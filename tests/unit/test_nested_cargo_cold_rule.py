@@ -1341,6 +1341,29 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
         ),
         pytest.param(
             {
+                "crates/app/Cargo.toml": '[package]\nname = "inner"\n',
+                "crates/app/tests/ui.rs": SUPPORT_BUILD,
+                "crates/app/src/lib.rs": '#[path = "../tests/ui.rs"]\nmod ui;\n',
+            },
+            "crates/app/tests/ui.rs",
+            False,
+            id="an-unseen-owner-in-a-nested-crate-is-not-a-binary",
+        ),
+        pytest.param(
+            {
+                "Cargo.toml": (
+                    '[package]\nname = "app"\n[lib]\npath = "tests/support/mod.rs"\n'
+                    '[[test]]\nname = "ui"\npath = "tests/support/mod.rs"\n'
+                ),
+                "tests/ui.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="two-manifest-targets-share-one-file",
+        ),
+        pytest.param(
+            {
                 "tests/ui.rs": '#[path = "../src/lib.rs"]\nmod app;\n',
                 "src/lib.rs": SUPPORT_BUILD,
             },
