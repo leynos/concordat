@@ -28,7 +28,7 @@ _BUILDER: typ.Final = "git+https://github.com/leynos/typos-config-builder.git"
 _GATE_MAKEFILE: typ.Final = """\
 .PHONY: spelling
 spelling:
-\tuvx --from "{builder}@{release}" typos-config-builder gate --scope all
+\tuvx --python 3.14 --from "{builder}@{release}" typos-config-builder gate --scope all
 """
 _LEGACY_MAKEFILE: typ.Final = """\
 TYPOS_VERSION ?= 1.48.0

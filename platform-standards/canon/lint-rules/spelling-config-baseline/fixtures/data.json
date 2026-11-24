@@ -22,8 +22,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -61,13 +61,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -77,7 +77,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -449,8 +449,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "addd74ec3351b8217cb3904d65f542773417c18ed253c40f75b81d2a888fe265",
-          "byte_length": 193
+          "sha256": "c9e007d232f202ba6a612d0264e1dede1ad7e2d00ed8f227bab0e8d963e544a8",
+          "byte_length": 207
         },
         "parse": {
           "status": "complete",
@@ -509,13 +509,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 91,
-                  "end_byte": 193,
+                  "end_byte": 207,
                   "start_line": 5,
                   "start_column": 1,
                   "end_line": 6,
@@ -525,7 +525,7 @@
             ],
             "location": {
               "start_byte": 76,
-              "end_byte": 193,
+              "end_byte": 207,
               "start_line": 4,
               "start_column": 1,
               "end_line": 6,
@@ -606,8 +606,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e0bd0bde86bb3ecf85021f7b9dd884d8d75d20fb57f8de35c81636328ff45e71",
-          "byte_length": 164
+          "sha256": "7d4aa220496308aba8b64c3e926d6b626d299a440fadc7473b5f8b448793108c",
+          "byte_length": 178
         },
         "parse": {
           "status": "complete",
@@ -645,13 +645,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.2.0\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.2.0\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 164,
+                  "end_byte": 178,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -661,7 +661,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 164,
+              "end_byte": 178,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -742,8 +742,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "740a88eb51fcbfe320f366a556e6169c70325643c29ad5466eba9ba280ec5e9a",
-          "byte_length": 192
+          "sha256": "03a643767824ba6c4cfe33e5906ed4507a041158cc2d2876745f63ee395fd866",
+          "byte_length": 206
         },
         "parse": {
           "status": "complete",
@@ -796,13 +796,13 @@
               },
               {
                 "ordinal": 1,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 90,
-                  "end_byte": 192,
+                  "end_byte": 206,
                   "start_line": 4,
                   "start_column": 1,
                   "end_line": 5,
@@ -812,7 +812,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 192,
+              "end_byte": 206,
               "start_line": 2,
               "start_column": 1,
               "end_line": 5,
@@ -890,8 +890,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -929,13 +929,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -945,7 +945,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -1003,6 +1003,977 @@
       },
       "vendored": []
     },
+    "python_equals_form": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "13c65a973efbbbd40baf1dbe427804afb9d3ddde1ebbfc3600f91a54ab7caf20",
+          "byte_length": 178
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python=3.15 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 178,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 178,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_short_flag": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "062333fc76a1bec8aec79138b476474e4400546d8b11fa1a5189ca507620716e",
+          "byte_length": 180
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uv tool run -p 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 180,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 180,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_free_threaded": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "4de51ae3ce4493160240e7d478ab42a4400b6feadbd3028c41fdbb570b1eb259",
+          "byte_length": 205
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python cpython-3.14.2-linux-x86_64-gnu --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 205,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 205,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_variable": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "aa09852f1e9f021fa16be54a041d1b03de4a92ec3aacd39b4db6fec74f3b328f",
+          "byte_length": 213
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 22,
+              "end_byte": 39,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python $(BUILDER_PYTHON) --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 84,
+                  "end_byte": 213,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 213,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "BUILDER_PYTHON",
+            "operator": "=",
+            "raw_value": "3.14",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 22,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_range": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "5a0d8fcfa7c9ad21a5876593aea960ad3e917aee90c97bebe44f04ddac1067c9",
+          "byte_length": 182
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python \">=3.14\" --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 182,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 182,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_quoted_option": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "ad3a6d90a78d1da659eebecac7c03d410d1bd49f6c7f380e8dc22f69ebed8568",
+          "byte_length": 180
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx \"--python=3.14\" --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 180,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 180,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_continued": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "428048d8f317f1fecf0e79a142277f3828ea4b8fc269ca32b27edea677796f93",
+          "byte_length": 181
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python=\\\n3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 181,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 181,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
     "not_applicable": {
       "schema_version": 1,
       "kind": "policy-input/spelling-config-baseline",
@@ -1020,6 +1991,705 @@
       "typos_local": null,
       "gitignore": null,
       "agents_md": null,
+      "vendored": []
+    },
+    "python_absent": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "643dedb28537d4fc2500148b0149f1f2f718cffb76c3cd55fe295459d58bb23d",
+          "byte_length": 164
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 164,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 164,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_too_old": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "6dba3d858f541deb4fb11ff4220f345e44cc81a49ba4ef3c797a78273608d935",
+          "byte_length": 178
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python 3.12 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 178,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 178,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_variable_old": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "68bf512372364d17b1fe880c8f84803ed33fe073cd26f8d18d9f023cb3c479fb",
+          "byte_length": 213
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 22,
+              "end_byte": 39,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python $(BUILDER_PYTHON) --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 84,
+                  "end_byte": 213,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 213,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "BUILDER_PYTHON",
+            "operator": "=",
+            "raw_value": "3.12",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 22,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_non_version": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "77321d6394781a99000ba8de523fe1526dc4e6d07dfcda0ad9e4f225fcabe2b8",
+          "byte_length": 181
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python python3 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 181,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 181,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "python_unresolved": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "87de6dfb3a0f8833da5942edecc732c9b8be50dd7995eefaaa68408c179bc690",
+          "byte_length": 186
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --python $(CI_PYTHON) --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 186,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 186,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "no_makefile": {
@@ -1513,8 +3183,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "9e149a1d7a8de41cbb15826739bdc6885b1c8633ce09f438c05c4548a41a8cf5",
-          "byte_length": 198
+          "sha256": "1aa73e8006aa73d5b1d3197547df3f43da85f0fb137733f19f33f50279dd9aff",
+          "byte_length": 212
         },
         "parse": {
           "status": "complete",
@@ -1552,13 +3222,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@d6da92f02240a79a945c835f69bdd08a888da1d0\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@d6da92f02240a79a945c835f69bdd08a888da1d0\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 198,
+                  "end_byte": 212,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -1568,7 +3238,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 198,
+              "end_byte": 212,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -1649,8 +3319,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "f456b0027dc50c825cde31caff157cab9511d3a2efefd0623d0bf20c8ba750a6",
-          "byte_length": 162
+          "sha256": "7e548570d226443552e3691a506703e330ff92311f05570ad646ca29c6f5e406",
+          "byte_length": 176
         },
         "parse": {
           "status": "complete",
@@ -1688,13 +3358,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@main\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@main\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 162,
+                  "end_byte": 176,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -1704,7 +3374,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 162,
+              "end_byte": 176,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -1785,8 +3455,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "cb5759f0ccabf7da7c39519db5bc34dbbf072982ea16f6a74451016d6ec4dbd4",
-          "byte_length": 164
+          "sha256": "2303598f048da8b80efe9c16e979831ca636c8bf3c41ed81255a71af93d381af",
+          "byte_length": 178
         },
         "parse": {
           "status": "complete",
@@ -1824,13 +3494,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 164,
+                  "end_byte": 178,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -1840,7 +3510,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 164,
+              "end_byte": 178,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -1921,8 +3591,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "b2ad7b52475648dd8caf013614dc1d763719fe4052814618f35711db311ea47a",
-          "byte_length": 165
+          "sha256": "2b5f8c35e3c7a09912c74c0dc0a873dcd498e8ea0b9adbd349ada82e4936ae06",
+          "byte_length": 179
         },
         "parse": {
           "status": "complete",
@@ -1960,13 +3630,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/example/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/example/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 165,
+                  "end_byte": 179,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -1976,7 +3646,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 165,
+              "end_byte": 179,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -2057,8 +3727,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "90fbb9ebe4dd26d1d28a5b435745fa65013fe23bb3c6dbbbc539323ef231d8d9",
-          "byte_length": 172
+          "sha256": "7646373e369647ccac5cc8a92333b46ddb70f968b299569c77efac9dd5fe6a74",
+          "byte_length": 186
         },
         "parse": {
           "status": "complete",
@@ -2096,13 +3766,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate || true",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate || true",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 172,
+                  "end_byte": 186,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -2112,7 +3782,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 172,
+              "end_byte": 186,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -2193,8 +3863,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "689949ec820d66187883534296851dc65f6dbe61fe1e684f21ea22017f6a9de4",
-          "byte_length": 174
+          "sha256": "8c334f18f436073ac73309c354672706f8071f5f982490ce5e477f0db7f376f6",
+          "byte_length": 188
         },
         "parse": {
           "status": "complete",
@@ -2232,13 +3902,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder --repository .",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder --repository .",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 174,
+                  "end_byte": 188,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -2248,7 +3918,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 174,
+              "end_byte": 188,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -2329,8 +3999,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "046c8e7375fc35bc4b103f5e8bd877ce4db9d01c4658251163ff1015bea39039",
-          "byte_length": 182
+          "sha256": "1b0f379335e223d061554ff5c2520e3c9b340fe58a5d1b65255c08f08b18581e",
+          "byte_length": 196
         },
         "parse": {
           "status": "complete",
@@ -2368,13 +4038,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder --repository . --check",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder --repository . --check",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 182,
+                  "end_byte": 196,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -2384,7 +4054,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 182,
+              "end_byte": 196,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -2465,8 +4135,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "85a51297ec53df16203d5b4d4bff17e34fe165e4b4cd636e4cf025a48c993e0f",
-          "byte_length": 232
+          "sha256": "8a25660bd217bcf4458be5e5c1ceffe0c8148fed8f3fd2568408d9d4f49c2149",
+          "byte_length": 246
         },
         "parse": {
           "status": "complete",
@@ -2504,13 +4174,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 47,
-                  "end_byte": 149,
+                  "end_byte": 163,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -2524,8 +4194,8 @@
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
-                  "start_byte": 149,
-                  "end_byte": 232,
+                  "start_byte": 163,
+                  "end_byte": 246,
                   "start_line": 4,
                   "start_column": 1,
                   "end_line": 5,
@@ -2535,7 +4205,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 232,
+              "end_byte": 246,
               "start_line": 2,
               "start_column": 1,
               "end_line": 5,
@@ -2752,8 +4422,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "00b65e5b1a528dda33f68622c6e2cdc5ee4e4fb78716b0c4c7be97a59afe4e80",
-          "byte_length": 256
+          "sha256": "238300bcf7af7a2b0bc444633ff9d4bdfaf280a4ccc4e13ad258fbab34b946b0",
+          "byte_length": 270
         },
         "parse": {
           "status": "complete",
@@ -2791,13 +4461,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@$(BUILDER_VERSION)\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@$(BUILDER_VERSION)\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 142,
-                  "end_byte": 256,
+                  "end_byte": 270,
                   "start_line": 9,
                   "start_column": 1,
                   "end_line": 10,
@@ -2807,7 +4477,7 @@
             ],
             "location": {
               "start_byte": 97,
-              "end_byte": 256,
+              "end_byte": 270,
               "start_line": 8,
               "start_column": 1,
               "end_line": 10,
@@ -2953,8 +4623,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "9a642939d4ae7de032f750fcb255b302ea57020e11be3a90bf0781bc8051f243",
-          "byte_length": 256
+          "sha256": "3095faea8f1dc9fee0d4553b1fd004a69f0eb09d61da8771b103b4ca85a97f3d",
+          "byte_length": 270
         },
         "parse": {
           "status": "complete",
@@ -2992,13 +4662,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@${BUILDER_VERSION}\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@${BUILDER_VERSION}\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 142,
-                  "end_byte": 256,
+                  "end_byte": 270,
                   "start_line": 9,
                   "start_column": 1,
                   "end_line": 10,
@@ -3008,7 +4678,7 @@
             ],
             "location": {
               "start_byte": 97,
-              "end_byte": 256,
+              "end_byte": 270,
               "start_line": 8,
               "start_column": 1,
               "end_line": 10,
@@ -3154,8 +4824,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e7eeaee76b3bbd312ffd316aee2b876fbe6e4d49de32b47102c1118c2fddf80f",
-          "byte_length": 147
+          "sha256": "4798b30b2de60efa54ec58f89d7c6d36d495374a7323053829ffa03e64b8ab4d",
+          "byte_length": 161
         },
         "parse": {
           "status": "complete",
@@ -3193,13 +4863,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 45,
-                  "end_byte": 147,
+                  "end_byte": 161,
                   "start_line": 4,
                   "start_column": 1,
                   "end_line": 5,
@@ -3209,7 +4879,7 @@
             ],
             "location": {
               "start_byte": 35,
-              "end_byte": 147,
+              "end_byte": 161,
               "start_line": 3,
               "start_column": 1,
               "end_line": 5,
@@ -3306,8 +4976,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "65b38389b0dd4a2ff8ddb4f4e9a786a9e539ab5e593e1053d7be18850da0428e",
-          "byte_length": 430
+          "sha256": "232a6fe7f85af28c47cc2af4d4faf2ecec0bdee041d2ff5180dd6974b331c835",
+          "byte_length": 444
         },
         "parse": {
           "status": "complete",
@@ -3345,13 +5015,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 328,
-                  "end_byte": 430,
+                  "end_byte": 444,
                   "start_line": 9,
                   "start_column": 1,
                   "end_line": 10,
@@ -3361,7 +5031,7 @@
             ],
             "location": {
               "start_byte": 318,
-              "end_byte": 430,
+              "end_byte": 444,
               "start_line": 8,
               "start_column": 1,
               "end_line": 10,
@@ -3551,8 +5221,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "5cac455a25838fcb365d2822563ff9abb258130a4e1be4356c89fbf21c8ca53b",
-          "byte_length": 293
+          "sha256": "f8fd83717b12f10bdcec87aed41494f6c8a7aabeb9d600eb7e213b0ddf9c5634",
+          "byte_length": 307
         },
         "parse": {
           "status": "complete",
@@ -3593,13 +5263,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 86,
-                  "end_byte": 188,
+                  "end_byte": 202,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -3609,7 +5279,7 @@
             ],
             "location": {
               "start_byte": 76,
-              "end_byte": 189,
+              "end_byte": 203,
               "start_line": 2,
               "start_column": 1,
               "end_line": 5,
@@ -3632,8 +5302,8 @@
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
-                  "start_byte": 211,
-                  "end_byte": 224,
+                  "start_byte": 225,
+                  "end_byte": 238,
                   "start_line": 6,
                   "start_column": 1,
                   "end_line": 7,
@@ -3642,8 +5312,8 @@
               }
             ],
             "location": {
-              "start_byte": 189,
-              "end_byte": 225,
+              "start_byte": 203,
+              "end_byte": 239,
               "start_line": 5,
               "start_column": 1,
               "end_line": 8,
@@ -3666,8 +5336,8 @@
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
-                  "start_byte": 248,
-                  "end_byte": 262,
+                  "start_byte": 262,
+                  "end_byte": 276,
                   "start_line": 9,
                   "start_column": 1,
                   "end_line": 10,
@@ -3676,8 +5346,8 @@
               }
             ],
             "location": {
-              "start_byte": 225,
-              "end_byte": 263,
+              "start_byte": 239,
+              "end_byte": 277,
               "start_line": 8,
               "start_column": 1,
               "end_line": 11,
@@ -3700,8 +5370,8 @@
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
-                  "start_byte": 280,
-                  "end_byte": 293,
+                  "start_byte": 294,
+                  "end_byte": 307,
                   "start_line": 12,
                   "start_column": 1,
                   "end_line": 13,
@@ -3710,8 +5380,8 @@
               }
             ],
             "location": {
-              "start_byte": 263,
-              "end_byte": 293,
+              "start_byte": 277,
+              "end_byte": 307,
               "start_line": 11,
               "start_column": 1,
               "end_line": 13,
@@ -3792,8 +5462,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -3831,13 +5501,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -3847,7 +5517,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -3953,8 +5623,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -3992,13 +5662,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -4008,7 +5678,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -4087,8 +5757,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -4126,13 +5796,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -4142,7 +5812,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -4221,8 +5891,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -4260,13 +5930,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -4276,7 +5946,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -4355,8 +6025,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -4394,13 +6064,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -4410,7 +6080,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -4492,8 +6162,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -4531,13 +6201,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -4547,7 +6217,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -4625,8 +6295,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -4664,13 +6334,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -4680,7 +6350,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -4758,8 +6428,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -4797,13 +6467,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -4813,7 +6483,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -4924,8 +6594,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -4963,13 +6633,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -4979,7 +6649,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -5052,8 +6722,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -5091,13 +6761,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -5107,7 +6777,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -5186,8 +6856,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -5225,13 +6895,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -5241,7 +6911,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -5320,8 +6990,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -5359,13 +7029,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -5375,7 +7045,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -5458,8 +7128,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -5497,13 +7167,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -5513,7 +7183,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -5593,8 +7263,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -5632,13 +7302,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -5648,7 +7318,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -5728,8 +7398,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -5767,13 +7437,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -5783,7 +7453,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -5858,8 +7528,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -5897,13 +7567,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -5913,7 +7583,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -5994,8 +7664,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -6033,13 +7703,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -6049,7 +7719,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -6132,8 +7802,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -6171,13 +7841,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -6187,7 +7857,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -6266,8 +7936,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -6305,13 +7975,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -6321,7 +7991,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -6402,8 +8072,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -6441,13 +8111,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -6457,7 +8127,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -6538,8 +8208,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -6577,13 +8247,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -6593,7 +8263,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -6670,8 +8340,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -6709,13 +8379,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -6725,7 +8395,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -6806,8 +8476,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -6845,13 +8515,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -6861,7 +8531,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -6942,8 +8612,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -6981,13 +8651,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -6997,7 +8667,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -7078,8 +8748,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -7117,13 +8787,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -7133,7 +8803,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -7214,8 +8884,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "3dc7af16eb85c2ad021b3fe3ff391d648e56a0000fae3b8b2b821b46355987b1",
-          "byte_length": 176
+          "sha256": "8411940bba175ba3b6cec6d7f9435b394e8643d34531870433304571fda20e78",
+          "byte_length": 190
         },
         "parse": {
           "status": "complete",
@@ -7253,13 +8923,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate --scope all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 176,
+                  "end_byte": 190,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -7269,7 +8939,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 176,
+              "end_byte": 190,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,
@@ -7350,8 +9020,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e0bd0bde86bb3ecf85021f7b9dd884d8d75d20fb57f8de35c81636328ff45e71",
-          "byte_length": 164
+          "sha256": "7d4aa220496308aba8b64c3e926d6b626d299a440fadc7473b5f8b448793108c",
+          "byte_length": 178
         },
         "parse": {
           "status": "complete",
@@ -7389,13 +9059,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.2.0\" typos-config-builder gate",
+                "text": "uvx --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.2.0\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 62,
-                  "end_byte": 164,
+                  "end_byte": 178,
                   "start_line": 3,
                   "start_column": 1,
                   "end_line": 4,
@@ -7405,7 +9075,7 @@
             ],
             "location": {
               "start_byte": 17,
-              "end_byte": 164,
+              "end_byte": 178,
               "start_line": 2,
               "start_column": 1,
               "end_line": 4,

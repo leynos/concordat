@@ -1,4 +1,4 @@
-# Fixture tests for spelling-config-baseline (PD-007 to PD-013).
+# Fixture tests for spelling-config-baseline (PD-007 to PD-014).
 package canon.lint_rules.spelling_config_baseline_test
 
 import rego.v1
@@ -480,4 +480,88 @@ test_no_configured_text_is_indeterminate if {
   profile(findings) == {
     ["PD-013", "indeterminate", 0, "no canonical AGENTS.md spelling block is configured; the block cannot be compared"],
   }
+}
+
+# -- PD-014: the builder's interpreter -----------------------------------------
+
+# `--python=3.15` is above the floor.
+test_python_equals_form if {
+  findings := policy.deny with input as data.fixtures.python_equals_form
+  count(findings) == 0
+}
+
+# `-p 3.14` is the short form of the same option.
+test_python_short_flag if {
+  findings := policy.deny with input as data.fixtures.python_short_flag
+  count(findings) == 0
+}
+
+# A managed-install request names its version.
+test_python_free_threaded if {
+  findings := policy.deny with input as data.fixtures.python_free_threaded
+  count(findings) == 0
+}
+
+# A variable with one assignment is expanded before the version is read.
+test_python_variable if {
+  findings := policy.deny with input as data.fixtures.python_variable
+  count(findings) == 0
+}
+
+# A runner that names no interpreter takes whatever UV_PYTHON says.
+test_python_absent if {
+  findings := policy.deny with input as data.fixtures.python_absent
+  profile(findings) == {
+    ["PD-014", "noncompliant", 3, "\"spelling\"-path recipe runs typos-config-builder without --python; the builder needs Python 3.14 or later, and a UV_PYTHON from a CI matrix can hand it an older one"],
+  }
+}
+
+# Python 3.12 is below the floor.
+test_python_too_old if {
+  findings := policy.deny with input as data.fixtures.python_too_old
+  profile(findings) == {
+    ["PD-014", "noncompliant", 3, "\"spelling\"-path recipe runs typos-config-builder under Python 3.12, below the floor 3.14"],
+  }
+}
+
+# The same holds when the old version arrives through a variable.
+test_python_variable_old if {
+  findings := policy.deny with input as data.fixtures.python_variable_old
+  profile(findings) == {
+    ["PD-014", "noncompliant", 4, "\"spelling\"-path recipe runs typos-config-builder under Python 3.12, below the floor 3.14"],
+  }
+}
+
+# `python3` names no version to compare.
+test_python_non_version if {
+  findings := policy.deny with input as data.fixtures.python_non_version
+  profile(findings) == {
+    ["PD-014", "indeterminate", 3, "\"spelling\"-path recipe names the builder's interpreter \"python3\", which is not a version the policy can compare"],
+  }
+}
+
+# A variable the Makefile never assigns cannot be proven.
+test_python_unresolved if {
+  findings := policy.deny with input as data.fixtures.python_unresolved
+  profile(findings) == {
+    ["PD-014", "indeterminate", 3, "\"spelling\"-path recipe names the builder's interpreter with unresolved Make variables ($(CI_PYTHON)); the version cannot be proven"],
+  }
+}
+
+# A quoted `>=` request is a version at the floor.
+test_python_range if {
+  findings := policy.deny with input as data.fixtures.python_range
+  count(findings) == 0
+}
+
+# A backslash-newline inside an option is removed by the shell, not turned into a space.
+test_python_continued if {
+  findings := policy.deny with input as data.fixtures.python_continued
+  count(findings) == 0
+}
+
+# A fully quoted option reaches the shell as the same option.
+test_python_quoted_option if {
+  findings := policy.deny with input as data.fixtures.python_quoted_option
+  count(findings) == 0
 }

@@ -1,4 +1,4 @@
-# spelling-config-baseline: PD-007 to PD-013.
+# spelling-config-baseline: PD-007 to PD-014.
 #
 # Input is a policy-input/spelling-config-baseline envelope. Makefile facts come
 # from the pinned `makeutil parse` report, workflows from a YAML decode, the
@@ -24,6 +24,13 @@ spelling_target := data.parameters.spelling_target
 default builder_floor := "v0.1.3"
 
 builder_floor := data.parameters.builder_floor
+
+# The lowest interpreter the builder's runner may be told to use, as MAJOR.MINOR.
+# The builder declares requires-python >= 3.14, so a CI matrix that exports
+# UV_PYTHON per lane hands an older interpreter to a runner that names none.
+default builder_python_floor := "3.14"
+
+builder_python_floor := data.parameters.builder_python_floor
 
 default builder_repository := "github.com/leynos/typos-config-builder"
 
@@ -432,6 +439,56 @@ version_at_least(version, floor) if {
 
 floor_version := release_version(builder_floor)
 
+# -- builder interpreter -----------------------------------------------------------
+#
+# The runner's options name the interpreter with `--python X`, `--python=X`, `-p X`
+# or `-pX`. X is read as a version after dropping a `cpython-` or `cpython@`
+# prefix, an `>=` request operator and a trailing `t` (free-threaded build): a
+# request such as `3.14`, `3.14.1`, `3.14t`, `cpython-3.14.2-linux-x86_64-gnu` or
+# `>=3.14` is a version; `3`, `python3` or a path is not.
+
+# `--python=` may be followed by whitespace: a continuation inside the option, which
+# the shell removes, reaches the policy as a space. The whole option may be quoted.
+python_option_pattern := `(?:^|[[:space:]])["']?(?:--python(?:=[[:space:]]*|[[:space:]]+)|-p[[:space:]]*)["']?([^"'[:space:]]+)["']?`
+
+python_requests(invocation) := [m[1] |
+	some m in regex.find_all_string_submatch_n(python_option_pattern, invocation[1], -1)
+]
+
+python_version(request) := [to_number(p[1]), to_number(p[2])] if {
+	p := regex.find_all_string_submatch_n(
+		`^(?:cpython[-@])?(?:>=)?([0-9]+)\.([0-9]+)(?:\.[0-9]+)?t?(?:-[a-z0-9_-]+)?$`, request, 1,
+	)[0]
+}
+
+python_floor_version := [to_number(p[1]), to_number(p[2])] if {
+	p := regex.find_all_string_submatch_n(`^([0-9]+)\.([0-9]+)$`, builder_python_floor, 1)[0]
+}
+
+python_at_least(version) if version[0] > python_floor_version[0]
+
+python_at_least(version) if {
+	version[0] == python_floor_version[0]
+	version[1] >= python_floor_version[1]
+}
+
+# The verdict on one invocation's interpreter: [verdict, message], or undefined
+# when it is acceptable.
+python_problem(invocation) := ["noncompliant", sprintf("runs typos-config-builder without --python; the builder needs Python %s or later, and a UV_PYTHON from a CI matrix can hand it an older one", [builder_python_floor])] if {
+	count(python_requests(invocation)) == 0
+} else := ["indeterminate", sprintf("names the builder's interpreter with unresolved Make variables (%s); the version cannot be proven", [request])] if {
+	request := python_requests(invocation)[0]
+	unresolved_spec(request)
+} else := ["indeterminate", sprintf("names the builder's interpreter %q, which is not a version the policy can compare", [request])] if {
+	request := python_requests(invocation)[0]
+	not unresolved_spec(request)
+	not python_version(request)
+} else := ["noncompliant", sprintf("runs typos-config-builder under Python %s, below the floor %s", [request, builder_python_floor])] if {
+	request := python_requests(invocation)[0]
+	version := python_version(request)
+	not python_at_least(version)
+}
+
 # Why a pin is not an acceptable release: the finding names the pin it saw.
 pin_problem(invocation) := "runs typos-config-builder without pinning a release; run it with uvx --from the tagged repository" if {
 	not from_spec(invocation)
@@ -465,6 +522,10 @@ pin_verdict(invocation) := "indeterminate" if {
 # instead of judging every pin against nothing.
 malformed_parameters contains ["PD-007", sprintf("builder_floor %q", [builder_floor])] if {
 	not release_version(builder_floor)
+}
+
+malformed_parameters contains ["PD-014", sprintf("builder_python_floor %q", [builder_python_floor])] if {
+	not python_floor_version
 }
 
 malformed_parameters contains ["PD-013", sprintf("agents_md_blocks key %q", [key])] if {
@@ -608,6 +669,22 @@ deny contains f if {
 		"PD-007", "noncompliant", makefile_path, 0,
 		sprintf("no recipe reachable from %q runs typos-config-builder gate", [spelling_target]),
 	)
+}
+
+# -- PD-014: the builder runs under a new enough interpreter ----------------------
+#
+# Judged only for the gate invocations PD-007 reads through a uv runner; without
+# one, or with the builder run as a bare command that has no runner options to
+# read, PD-007 already fails, so PD-014 stays silent rather than reporting twice.
+
+deny contains f if {
+	applicable
+	some recipe in spelling_recipes
+	some invocation in builder_invocations(recipe)
+	runs_gate(invocation)
+	invocation[0] != ""
+	problem := python_problem(invocation)
+	f := finding("PD-014", problem[0], makefile_path, recipe.location.start_line, sprintf("%q-path recipe %s", [spelling_target, problem[1]]))
 }
 
 # -- PD-008: no legacy pins or helper targets --------------------------------------
