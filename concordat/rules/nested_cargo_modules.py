@@ -719,6 +719,32 @@ def resolve_declarations(
     return Discovered(fresh=tuple(discovered), touched=tuple(touched))
 
 
+def _checked_candidate(
+    checkout: pathlib.Path, root: pathlib.Path, declared: pathlib.PurePosixPath
+) -> tuple[pathlib.PurePosixPath | None, str | None]:
+    """Fold one candidate path and say why the checkout cannot supply it.
+
+    Returns
+    -------
+    tuple[pathlib.PurePosixPath | None, str | None]
+        The folded candidate and no reason when it is usable, else no candidate
+        and the reason it was refused.
+    """
+    named = declared.as_posix()
+    if declared.is_absolute():
+        return (
+            None,
+            f"names an absolute path, which the checkout cannot supply ({named})",
+        )
+    candidate = _folded(declared)
+    if candidate is None:
+        return None, f"climbs out of the checkout with `..` ({named})"
+    refused = _refused_candidate(checkout, root, candidate)
+    if refused is not None:
+        return None, f"{refused} ({candidate.as_posix()})"
+    return candidate, None
+
+
 def _present_files(
     checkout: pathlib.Path,
     source: RustSource,
@@ -741,20 +767,14 @@ def _present_files(
     for declared in _module_files(
         source.relative, declaration.chain, declaration.name, declaration.path, reach
     ):
-        named = declared.as_posix()
-        if declared.is_absolute():
-            reason = (
-                f"names an absolute path, which the checkout cannot supply ({named})"
-            )
-        elif (candidate := _folded(declared)) is None:
-            reason = f"climbs out of the checkout with `..` ({named})"
-        elif (refused := _refused_candidate(checkout, root, candidate)) is not None:
-            reason = f"{refused} ({candidate.as_posix()})"
-        else:
-            if probe_file(checkout / candidate.as_posix()).present:
-                present.append(candidate)
-            continue
-        problems.append(_declaration_problem(source, declaration, reason))
+        candidate, reason = _checked_candidate(checkout, root, declared)
+        if reason is not None:
+            problems.append(_declaration_problem(source, declaration, reason))
+        elif (
+            candidate is not None
+            and probe_file(checkout / candidate.as_posix()).present
+        ):
+            present.append(candidate)
     if not present:
         named = (
             declaration.path or f"{declaration.name}.rs or {declaration.name}/mod.rs"
