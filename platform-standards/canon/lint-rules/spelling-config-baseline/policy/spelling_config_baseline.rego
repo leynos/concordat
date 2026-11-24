@@ -171,7 +171,19 @@ single_valued(name) if {
 
 joined(text) := regex.replace(text, `\\\n[[:space:]]*`, " ")
 
-variable_value[name] := joined(variable.raw_value) if {
+# A uv runner located at assignment time (`UV ?= $(shell command -v uv ||
+# printf '%s/.local/bin/uv' "$$HOME")`) is the runner word itself: whichever
+# path the lookup finds, the command that runs is `uv` or `uvx`. Any other
+# `$(shell ...)` value is left as written and stays unresolvable.
+shell_runner_lookup := `^[[:space:]]*\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+(uvx|uv)([[:space:]][^)]*)?\)[[:space:]]*$`
+
+resolved_value(variable) := name if {
+	matches := regex.find_all_string_submatch_n(shell_runner_lookup, joined(variable.raw_value), 1)
+	count(matches) == 1
+	name := matches[0][1]
+} else := joined(variable.raw_value)
+
+variable_value[name] := resolved_value(variable) if {
 	some variable in input.makefile.variables
 	name := variable.name
 	single_valued(name)
@@ -232,7 +244,7 @@ unresolved_references(text) := {name |
 	)
 	name := match[1]
 	name != "MAKE"
-}
+} | {"$(shell ...)" | contains(expand(text), "$(shell ")}
 
 # -- static closure from the spelling target -------------------------------------
 #
@@ -372,9 +384,13 @@ segment_start := `(^|[;&(]|[^|]\|)[[:space:]]*[-@+]*[[:space:]]*`
 
 runner := `(?:uvx|uv[[:space:]]+tool[[:space:]]+run)`
 
+# `env -u NAME ...` only removes variables from the command's environment, so
+# it may prefix the runner as an environment assignment does.
+env_command_prefix := `env[[:space:]]+(?:-u[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+)+`
+
 builder_core := sprintf(
-	`%s(?:%s)*(?:(%s)((?:[[:space:]]+[^[:space:];|&]+)*?)[[:space:]]+)?(?:[^[:space:];|&()"']*/)?typos-config-builder((?:[[:space:]][^;|&]*)?)`,
-	[segment_start, env_assignment_prefix, runner],
+	`%s(?:%s)?(?:%s)*(?:(%s)((?:[[:space:]]+[^[:space:];|&]+)*?)[[:space:]]+)?(?:[^[:space:];|&()"']*/)?typos-config-builder((?:[[:space:]][^;|&]*)?)`,
+	[segment_start, env_command_prefix, env_assignment_prefix, runner],
 )
 
 builder_pattern := builder_core

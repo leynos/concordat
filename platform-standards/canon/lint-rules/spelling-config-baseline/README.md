@@ -35,7 +35,12 @@ phrase corrections Typos cannot express.
   floor. A branch, another repository, an unpinned `typos-config-builder`, the
   default command (which renders `typos.toml` but neither runs Typos nor checks
   phrases), `--check`, and a direct Typos run on the same path are each
-  reported in their own right.
+  reported in their own right. The runner word may come from a Make variable: a
+  single assignment of `$(shell command -v uv ...)` or
+  `$(shell command -v uvx …)` (with any fallback) resolves to `uv` or `uvx`,
+  any other `$(shell …)` value leaves the verdict `indeterminate`, and an
+  `env -u NAME` prefix on the command is accepted as it only removes variables
+  from the environment.
 - **PD-014** (error): the uv runner that runs the builder's `gate` names an
   interpreter at or above `builder_python_floor` (`3.14` by default), as
   `--python X`, `--python=X` or `-p X`. The builder declares
