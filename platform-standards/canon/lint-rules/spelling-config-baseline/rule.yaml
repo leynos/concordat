@@ -10,10 +10,11 @@ description: >-
   directly nor drift-checks the regenerated typos.toml (PD-010); the
   builder's cache is ignored (PD-011); typos.local.toml exists at schema 1
   (PD-012); and AGENTS.md carries the builder's canonical spelling block
-  for the pinned release (PD-013). A repository with no spelling setup is
-  out of scope.
+  for the pinned release (PD-013); and the builder's uv runner names an
+  interpreter at or above the floor, since the builder needs Python 3.14
+  (PD-014). A repository with no spelling setup is out of scope.
   Audit-only: this rule declares no mutations.
-version: 0.1.0
+version: 0.2.0
 sensor:
   type: conftest
   input: policy-input/spelling-config-baseline
@@ -36,6 +37,13 @@ parameters:
         description: >-
           The lowest typos-config-builder release tag the gate may pin, as
           vMAJOR.MINOR.PATCH.
+      builder_python_floor:
+        type: string
+        pattern: '^[0-9]+\.[0-9]+$'
+        description: >-
+          The lowest Python the builder's uv runner may be told to use
+          (`--python`), as MAJOR.MINOR. The builder declares
+          requires-python >= 3.14.
       builder_repository:
         type: string
         description: The repository whose release the gate must pin.
@@ -77,6 +85,7 @@ parameters:
   defaults:
     spelling_target: spelling
     builder_floor: v0.1.3
+    builder_python_floor: '3.14'
     builder_repository: github.com/leynos/typos-config-builder
     legacy_variables:
       - TYPOS_VERSION

@@ -36,6 +36,17 @@ phrase corrections Typos cannot express.
   default command (which renders `typos.toml` but neither runs Typos nor checks
   phrases), `--check`, and a direct Typos run on the same path are each
   reported in their own right.
+- **PD-014** (error): the uv runner that runs the builder's `gate` names an
+  interpreter at or above `builder_python_floor` (`3.14` by default), as
+  `--python X`, `--python=X` or `-p X`. The builder declares
+  `requires-python >= 3.14`, so a runner that names none takes whatever
+  `UV_PYTHON` says, and a CI matrix that exports `UV_PYTHON` per lane hands it
+  an older interpreter. X is read as a version after dropping a `cpython-` or
+  `cpython@` prefix, a `>=` operator and a trailing `t`: `3.14`, `3.14.1`,
+  `3.14t`, `cpython-3.14.2-linux-x86_64-gnu` and `>=3.14` are versions. A Make
+  variable the policy cannot resolve, or a name that is no version (`python3`),
+  is `indeterminate`. PD-014 judges the invocations PD-007 reads through a
+  runner; without one PD-007 already fails, so PD-014 stays silent.
 - **PD-008** (error): the Makefile assigns none of the legacy pins
   (`TYPOS_VERSION`, `PATHSPEC_VERSION`, or a builder commit variable) and
   defines none of the legacy helper targets (`spelling-helper-test`,
@@ -136,9 +147,10 @@ checkout's only possible spelling evidence the repository's scope is itself
 numbers, so PD-010 findings cite line `0`.
 
 A `builder_floor` parameter or `agents_md_blocks` key that is not a
-`vMAJOR.MINOR.PATCH` release is also `indeterminate`, and the finding names it:
-the manifest schema declares the pattern, but concordat does not enforce the
-schema at run time, and a floor that cannot be compared judges nothing.
+`vMAJOR.MINOR.PATCH` release, or a `builder_python_floor` that is not
+`MAJOR.MINOR`, is also `indeterminate`, and the finding names it: the manifest
+schema declares the pattern, but concordat does not enforce the schema at run
+time, and a floor that cannot be compared judges nothing.
 
 ## Verdicts
 

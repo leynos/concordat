@@ -35,7 +35,7 @@ _SPELLING_GITIGNORE: typ.Final = (
     ".typos-oxendict-base.json\n.typos-oxendict-base.toml\n"
 )
 _SPELLING_RECIPE: typ.Final = (
-    "\tuvx --from "
+    "\tuvx --python 3.14 --from "
     '"git+https://github.com/leynos/typos-config-builder.git@v0.1.3" '
     "typos-config-builder gate --scope all"
 )

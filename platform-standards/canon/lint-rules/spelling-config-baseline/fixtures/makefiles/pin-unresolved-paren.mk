@@ -6,4 +6,4 @@ endif
 
 .PHONY: spelling
 spelling: ## Enforce en-GB-oxendict spelling
-	uvx --from "git+https://github.com/leynos/typos-config-builder.git@$(BUILDER_VERSION)" typos-config-builder gate
+	uvx --python 3.14 --from "git+https://github.com/leynos/typos-config-builder.git@$(BUILDER_VERSION)" typos-config-builder gate

@@ -107,8 +107,17 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         makefile="echo-mention", workflows={"ci.yml": "echo-mention"}
     ),
     "gitignore_rooted": Scenario(gitignore="rooted"),
+    "python_equals_form": Scenario(makefile="python-equals-form"),
+    "python_short_flag": Scenario(makefile="python-short-flag"),
+    "python_free_threaded": Scenario(makefile="python-free-threaded"),
+    "python_variable": Scenario(makefile="python-variable"),
     "not_applicable": BARE,
     # -- PD-007: the spelling gate -----------------------------------------
+    "python_absent": Scenario(makefile="python-absent"),
+    "python_too_old": Scenario(makefile="python-too-old"),
+    "python_variable_old": Scenario(makefile="python-variable-old"),
+    "python_non_version": Scenario(makefile="python-non-version"),
+    "python_unresolved": Scenario(makefile="python-unresolved"),
     "no_makefile": Scenario(makefile=None),
     "no_spelling_target": Scenario(makefile="no-spelling-target"),
     "no_gate": Scenario(makefile="no-gate"),
