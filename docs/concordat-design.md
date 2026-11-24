@@ -3101,6 +3101,32 @@ exemption. Preparation is matched by crate, because one crate's preparation
 test stamps several test binaries; a finer match would demand a stamp per file
 and report the common shape as a defect.
 
+A setup script is the exception to the per-crate match, because nextest selects
+by test binary. The module resolver records, for each file a `mod` declaration
+or `#[path]` reaches, the Cargo targets whose module tree contains it (the
+`roots` of its `Reach`, carried to the policy as `reached_by`). A support file
+that is not a binary itself counts as covered when it is reached and every
+target that reaches it is a covered `tests/<stem>.rs` binary. A library or an
+uncovered binary among the targets that reach it, or no target at all, leaves
+it uncovered: the rule fails closed, and so does a file outside the test
+directories that a test binary imports by `#[path]` (`src/component.rs`): the
+library may declare it as an ordinary module, which the resolver does not
+follow, so the file also stands for that unseen owner. The same goes for a file
+whose last two path components (ignoring `.`) match a `#[path]` value in
+library code, which names it without `#[cfg(test)]`, and for a file a manifest
+declares as a target with an explicit `path` (a `[[test]]` target is recorded
+as the `tests/<name>.rs` that `binary(<name>)` selects). These owners are
+seeded before the resolver runs, so every file they declare inherits them. The
+tail match is loose on purpose, because the only error it can make is a missed
+exemption. An `include!("file.rs")` literal counts the same way, in any source
+and any package, so a file pasted into a covered binary also reads as an unseen
+owner: that is the price of not modelling `include!`. A reached file is covered
+only when every recorded owner is, and a file no target reaches is covered only
+by a rule that selects every test. A top-level binary that another target
+imports is covered only if that target is too. A helper that receives its
+target directory as an argument is a different gap (the reader does not follow
+a call's literal argument into the helper) and is not resolved here.
+
 Decisions the design rests on:
 
 - **A fixed `target/...` directory in the crate is `dedicated`, not `private`.**

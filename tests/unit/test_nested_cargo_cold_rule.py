@@ -1133,3 +1133,419 @@ def test_a_source_the_reader_cannot_decode_is_indeterminate(
     assert [(f.rule_id, f.verdict) for f in result.findings] == [
         ("EN-001", "indeterminate")
     ]
+
+
+BINARY_UI_SCRIPT = SETUP_SCRIPT.format(filter="binary(ui)", setup="prepare-nested")
+SUPPORT_BUILD = """\
+pub fn build() {
+    let t = trybuild::TestCases::new();
+    t.pass("x.rs");
+}
+"""
+
+
+def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
+    """Write a package whose `ui` binary a setup script covers, plus *files*."""
+    put(root, "Cargo.toml", '[package]\nname = "app"\n')
+    put(root, ".config/nextest.toml", BINARY_UI_SCRIPT)
+    for relative, text in files.items():
+        put(root, relative, text)
+
+
+@pytest.mark.parametrize(
+    ("files", "support", "is_covered"),
+    [
+        pytest.param(
+            {"tests/ui.rs": "mod support;\n", "tests/support/mod.rs": SUPPORT_BUILD},
+            "tests/support/mod.rs",
+            True,
+            id="mod-from-covered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "helpers/build.rs"]\nmod build;\n',
+                "tests/helpers/build.rs": SUPPORT_BUILD,
+            },
+            "tests/helpers/build.rs",
+            True,
+            id="path-from-covered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod outer;\n",
+                "tests/outer/mod.rs": "mod inner;\n",
+                "tests/outer/inner.rs": SUPPORT_BUILD,
+            },
+            "tests/outer/inner.rs",
+            True,
+            id="second-hop-from-covered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "tests/other.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="also-reached-from-an-uncovered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": (
+                    '#[cfg(test)]\n#[path = "../tests/support/mod.rs"]\nmod support;\n'
+                ),
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="also-reached-from-the-library",
+        ),
+        pytest.param(
+            {"tests/ui.rs": "// no module\n", "tests/support/mod.rs": SUPPORT_BUILD},
+            "tests/support/mod.rs",
+            False,
+            id="reached-by-nothing",
+        ),
+        pytest.param(
+            {
+                "tests/other.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="reached-only-from-an-uncovered-binary",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "tests/mod.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="also-reached-from-a-top-level-tests-mod-rs",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": "mod foo;\n",
+                "src/foo.rs": (
+                    '#[cfg(test)]\n#[path = "../tests/support/mod.rs"]\nmod support;\n'
+                ),
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="also-reached-through-an-ordinary-library-module",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "helpers/lib.rs"]\nmod helper;\n',
+                "tests/helpers/lib.rs": "mod build;\n",
+                "tests/helpers/build.rs": SUPPORT_BUILD,
+            },
+            "tests/helpers/build.rs",
+            True,
+            id="a-lib-rs-outside-src-is-not-a-target",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "../src/component.rs"]\nmod component;\n',
+                "src/lib.rs": "mod component;\n",
+                "src/component.rs": (
+                    '#[cfg(test)]\n#[path = "../tests/support/mod.rs"]\nmod support;\n'
+                ),
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-library-module-a-covered-binary-also-imports-by-path",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": '#[path = "../tests/support/mod.rs"]\nmod support;\n',
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-library-declaration-that-points-into-the-test-directory",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": '#[path = "../tests/support/./mod.rs"]\nmod support;\n',
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-library-path-with-a-dot-component",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": '#[path = "../tests/support/mod.rs"]\nmod support;\n',
+                "tests/support/mod.rs": "mod inner;\n",
+                "tests/support/inner.rs": SUPPORT_BUILD,
+            },
+            "tests/support/inner.rs",
+            False,
+            id="a-file-below-one-the-library-names-by-path",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "// the covered binary\n" + SUPPORT_BUILD,
+                "tests/other.rs": '#[path = "ui.rs"]\nmod ui;\n',
+            },
+            "tests/ui.rs",
+            False,
+            id="a-covered-binary-an-uncovered-one-also-imports",
+        ),
+        pytest.param(
+            {
+                "Cargo.toml": (
+                    '[package]\nname = "app"\n[[test]]\nname = "support"\n'
+                    'path = "tests/support/mod.rs"\n'
+                ),
+                "tests/ui.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-manifest-declared-test-target",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": SUPPORT_BUILD,
+                "src/lib.rs": '#[path = "../tests/ui.rs"]\nmod ui;\n',
+            },
+            "tests/ui.rs",
+            False,
+            id="a-library-owner-is-not-mistaken-for-the-binary-of-the-same-file",
+        ),
+        pytest.param(
+            {
+                "Cargo.toml": (
+                    '[package]\nname = "app"\n[[test]]\nname = "ui"\n'
+                    'path = "tests/support/mod.rs"\n'
+                ),
+                "src/lib.rs": '#[path = "../tests/support/mod.rs"]\nmod support;\n',
+                "tests/ui.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-manifest-target-does-not-replace-the-library-owner",
+        ),
+        pytest.param(
+            {
+                "crates/app/Cargo.toml": '[package]\nname = "inner"\n',
+                "crates/app/tests/ui.rs": SUPPORT_BUILD,
+                "crates/app/src/lib.rs": '#[path = "../tests/ui.rs"]\nmod ui;\n',
+            },
+            "crates/app/tests/ui.rs",
+            False,
+            id="an-unseen-owner-in-a-nested-crate-is-not-a-binary",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="binary(ui) | package(=app)", setup="prepare-nested"
+                ),
+                "crates/app/Cargo.toml": '[package]\nname = "inner"\n',
+                "crates/app/tests/ui.rs": SUPPORT_BUILD,
+                "crates/app/src/lib.rs": '#[path = "../tests/ui.rs"]\nmod ui;\n',
+            },
+            "crates/app/tests/ui.rs",
+            False,
+            id="an-unseen-owner-is-not-in-the-root-package",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": (
+                    '#[path = "../../a/tests/support/mod.rs"]\nmod support;\n'
+                ),
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="a-source-package-rule-does-not-cover-an-importer-in-another",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": ('include!("../../a/tests/support/mod.rs");\n'),
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="an-unreached-support-file-is-not-covered-by-its-source-package",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/ui.rs": "mod support;\n",
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": 'include!("../../a/tests/support/mod.rs");\n',
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="a-reached-support-file-also-included-from-another-package",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/ui.rs": "mod support;\n",
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": 'include! { "../../a/tests/support/mod.rs" }\n',
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="an-include-with-braces",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/ui.rs": "mod support;\n",
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": 'include![ "../../a/tests/support/mod.rs" ];\n',
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="an-include-with-brackets",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/ui.rs": "mod support;\n",
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": 'include!(r"../../a/tests/support/mod.rs");\n',
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="an-include-of-a-raw-string",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/ui.rs": "mod support;\n",
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": 'include!("../../a/tests/support/mod.rs",);\n',
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="an-include-with-a-trailing-comma",
+        ),
+        pytest.param(
+            {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="binary(ui)", setup="prepare-nested"
+                ),
+                "tests/ui.rs": '#[path = "bridge/build.rs"]\nmod build;\n',
+                "tests/other.rs": "mod bridge;\n",
+                "tests/bridge/mod.rs": 'include!("build.rs");\n',
+                "tests/bridge/build.rs": SUPPORT_BUILD,
+            },
+            "tests/bridge/build.rs",
+            False,
+            id="an-include-of-a-bare-file-name",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": '#[path = "../mod.rs"]\nmod support;\n',
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            True,
+            id="a-parent-path-resolved-beside-its-importer-names-another-file",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": (
+                    '#[path = "../tests/support/tmp/../mod.rs"]\nmod support;\n'
+                ),
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-library-path-with-a-parent-component",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "shared/leaf.rs"]\nmod leaf;\n',
+                "src/lib.rs": '#[path = "../tests/shared/bridge.rs"]\nmod bridge;\n',
+                "tests/shared/bridge.rs": "mod leaf;\n",
+                "tests/shared/leaf.rs": SUPPORT_BUILD,
+                "tests/shared/bridge/leaf.rs": "// a decoy beside the wrong stem\n",
+            },
+            "tests/shared/leaf.rs",
+            False,
+            id="a-library-path-seed-resolves-its-children-beside-it",
+        ),
+        pytest.param(
+            {
+                "Cargo.toml": (
+                    '[package]\nname = "app"\n[lib]\npath = "tests/support/mod.rs"\n'
+                    '[[test]]\nname = "ui"\npath = "tests/support/mod.rs"\n'
+                ),
+                "tests/ui.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="two-manifest-targets-share-one-file",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "../src/lib.rs"]\nmod app;\n',
+                "src/lib.rs": SUPPORT_BUILD,
+            },
+            "src/lib.rs",
+            False,
+            id="a-library-also-reached-by-a-covered-binary-is-still-a-target",
+        ),
+    ],
+)
+def test_a_support_file_is_covered_when_every_binary_that_reaches_it_is(
+    tmp_path: pathlib.Path,
+    files: dict[str, str],
+    support: str,
+    *,
+    is_covered: bool,
+) -> None:
+    """A setup rule that covers a binary also covers the files only it compiles in."""
+    support_checkout(tmp_path, files)
+    assert (("NC-010", support) in profile(tmp_path)) is not is_covered

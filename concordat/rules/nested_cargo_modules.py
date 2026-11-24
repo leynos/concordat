@@ -26,8 +26,16 @@ import pathlib
 import re
 import typing as typ
 
+from . import nested_cargo_reach as reach_module
 from .fs_probe import probe_file
 from .nested_cargo_commands import first_literal
+from .nested_cargo_reach import (
+    CRATE_ROOT_DIRECTORIES,
+    UNSEEN,
+    Reach,
+    is_target_root,
+    record_reach,
+)
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -40,50 +48,12 @@ from .rust_source import scan_balanced, skip_trivia
 
 CRATE_ROOT_STEMS: typ.Final = frozenset({"lib", "main", "mod"})
 
-# Cargo builds every `.rs` file directly inside one of these directories as a
-# target of its own, so such a file is also a crate root.
-CRATE_ROOT_DIRECTORIES: typ.Final = frozenset({"tests", "benches", "examples"})
-
 _ATTRIBUTE: typ.Final = re.compile(r"#\[")
 _MODULE: typ.Final = re.compile(r"mod\s+(?P<name>[A-Za-z_]\w*)")
 _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class Reach:
-    """How the compiler was seen reaching one source file.
-
-    A file can be reached in both ways at once — `tests/it.rs` is a target
-    Cargo builds on its own, and is also a file another test's `mod it;` may
-    name — so each flag records evidence rather than a single verdict.
-
-    Attributes
-    ----------
-    by_name:
-        Declared by a plain `mod name;`, which makes the file a module whose
-        own children live in a directory named after it.
-    by_path:
-        Named by `#[path = "..."]`, which keeps the file's children beside it.
-    """
-
-    by_name: bool = False
-    by_path: bool = False
-
-    def merged(self, other: Reach) -> Reach:
-        """Return the reach that has everything either of these recorded.
-
-        Returns
-        -------
-        Reach
-            The union of both observations.
-        """
-        return Reach(
-            by_name=self.by_name or other.by_name,
-            by_path=self.by_path or other.by_path,
-        )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -676,6 +646,42 @@ class Discovered:
     touched: tuple[pathlib.PurePosixPath, ...]
 
 
+def _observed_reach(
+    declaring: pathlib.PurePosixPath,
+    reach: Reach,
+    declaration: _Declaration,
+    *,
+    is_test_file: bool,
+) -> Reach:
+    """Return how *declaration* reaches the file it names.
+
+    The named file is compiled by each target that compiles the declaring file,
+    and by the declaring file itself when Cargo builds that as a target. A
+    declaring file that is ordinary library code and no target's tree is known
+    to hold is a module the resolver did not follow (it only follows
+    declarations in test scope), so who compiles it is unknown. It stands in
+    for its own unknown owner, which is no covered test binary, so the file it
+    names is never counted as prepared on the strength of some other reaching
+    binary alone. A test file nothing reaches is compiled by no one, so it
+    contributes nothing.
+
+    Returns
+    -------
+    Reach
+        The way the file was named, and the targets whose tree now holds it.
+    """
+    own: set[str] = set()
+    if is_target_root(declaring):
+        own.add(declaring.as_posix())
+    elif not reach.roots and not is_test_file:
+        own.add(f"{UNSEEN}{declaring.as_posix()}")
+    return Reach(
+        by_path=declaration.path is not None,
+        by_name=declaration.path is None,
+        roots=reach.roots | own,
+    )
+
+
 def resolve_declarations(
     checkout: pathlib.Path,
     source: RustSource,
@@ -692,80 +698,92 @@ def resolve_declarations(
     Discovered
         The files to read for the first time, and the ones whose state moved.
     """
-    root = checkout.resolve()
     discovered: list[pathlib.PurePosixPath] = []
     touched: list[pathlib.PurePosixPath] = []
     reach = reaches.get(source.relative, Reach())
     for declaration in declarations:
-        present: list[pathlib.PurePosixPath] = []
-        for declared in _module_files(
-            source.relative,
-            declaration.chain,
-            declaration.name,
-            declaration.path,
-            reach,
-        ):
-            named = declared.as_posix()
-            if declared.is_absolute():
-                problems.append(
-                    _declaration_problem(
-                        source,
-                        declaration,
-                        f"names an absolute path, which the checkout cannot "
-                        f"supply ({named})",
-                    )
-                )
-                continue
-            candidate = _folded(declared)
-            if candidate is None:
-                problems.append(
-                    _declaration_problem(
-                        source,
-                        declaration,
-                        f"climbs out of the checkout with `..` ({named})",
-                    )
-                )
-                continue
-            refused = _refused_candidate(checkout, root, candidate)
-            if refused is not None:
-                problems.append(
-                    _declaration_problem(
-                        source,
-                        declaration,
-                        f"{refused} ({candidate.as_posix()})",
-                    )
-                )
-                continue
-            if probe_file(checkout / candidate.as_posix()).present:
-                present.append(candidate)
+        present = _present_files(checkout, source, declaration, reach, problems)
         if not present:
-            named = (
-                declaration.path
-                or f"{declaration.name}.rs or {declaration.name}/mod.rs"
-            )
-            problems.append(
-                _declaration_problem(source, declaration, f"names no file ({named})")
-            )
             continue
-        observed = Reach(
-            by_path=declaration.path is not None, by_name=declaration.path is None
+        observed = _observed_reach(
+            source.relative,
+            reach,
+            declaration,
+            is_test_file=scopes[source.relative].whole_file,
         )
         for candidate in present:
             if in_fixture(candidate, fixtures):
                 continue
-            before = reaches.get(candidate, Reach())
-            reaches[candidate] = before.merged(observed)
-            known = scopes.get(candidate)
-            if known is None:
-                scopes[candidate] = TestScope(whole_file=True)
-                discovered.append(candidate)
-            elif not known.whole_file:
-                # Read as ordinary library code, whose scan cannot see the
-                # declarations only test code holds.
-                known.whole_file = True
-                touched.append(candidate)
-            elif before != reaches[candidate]:
-                # Already test code, but reached in a way it was not before, so
-                # its own declarations may now resolve elsewhere.
-                touched.append(candidate)
+            moved = record_reach(candidate, observed, scopes, reaches)
+            match moved:
+                case reach_module.FRESH:
+                    discovered.append(candidate)
+                case reach_module.TOUCHED:
+                    touched.append(candidate)
     return Discovered(fresh=tuple(discovered), touched=tuple(touched))
+
+
+def _checked_candidate(
+    checkout: pathlib.Path, root: pathlib.Path, declared: pathlib.PurePosixPath
+) -> tuple[pathlib.PurePosixPath | None, str | None]:
+    """Fold one candidate path and say why the checkout cannot supply it.
+
+    Returns
+    -------
+    tuple[pathlib.PurePosixPath | None, str | None]
+        The folded candidate and no reason when it is usable, else no candidate
+        and the reason it was refused.
+    """
+    named = declared.as_posix()
+    if declared.is_absolute():
+        return (
+            None,
+            f"names an absolute path, which the checkout cannot supply ({named})",
+        )
+    candidate = _folded(declared)
+    if candidate is None:
+        return None, f"climbs out of the checkout with `..` ({named})"
+    refused = _refused_candidate(checkout, root, candidate)
+    if refused is not None:
+        return None, f"{refused} ({candidate.as_posix()})"
+    return candidate, None
+
+
+def _present_files(
+    checkout: pathlib.Path,
+    source: RustSource,
+    declaration: _Declaration,
+    reach: Reach,
+    problems: list[str],
+) -> list[pathlib.PurePosixPath]:
+    """Return the files a declaration names that exist inside the checkout.
+
+    A candidate that is absolute, climbs out of the checkout or is refused is
+    reported as a problem, as is a declaration that names no file at all.
+
+    Returns
+    -------
+    list[pathlib.PurePosixPath]
+        Each existing file, folded and root-relative; empty when none exists.
+    """
+    root = checkout.resolve()
+    present: list[pathlib.PurePosixPath] = []
+    for declared in _module_files(
+        source.relative, declaration.chain, declaration.name, declaration.path, reach
+    ):
+        candidate, reason = _checked_candidate(checkout, root, declared)
+        if reason is not None:
+            problems.append(_declaration_problem(source, declaration, reason))
+        elif (
+            candidate is not None
+            and probe_file(checkout / candidate.as_posix()).present
+        ):
+            present.append(candidate)
+    if not present:
+        named = (
+            declaration.path or f"{declaration.name}.rs or {declaration.name}/mod.rs"
+        )
+        problems.append(
+            _declaration_problem(source, declaration, f"names no file ({named})")
+        )
+    return present

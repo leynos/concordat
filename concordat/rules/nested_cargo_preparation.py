@@ -26,6 +26,7 @@ import re
 import typing as typ
 
 from .nested_cargo_compiles import COMPILES_NO, COMPILES_YES
+from .nested_cargo_reach import UNSEEN
 from .nested_cargo_setup_scripts import covers
 from .nested_cargo_spawn import TEST_PATH
 
@@ -272,6 +273,64 @@ def _first_lines(
     return first
 
 
+def _is_root_covered(root: str, preparation: Preparation) -> bool:
+    """Report whether a setup rule runs before the tests built from *root*.
+
+    A `tests/<stem>.rs` root is a test binary of that name; any other root (a
+    library, or an owner the resolver did not follow) has no binary name, so
+    only a rule that selects every test or its whole package covers it.
+
+    Returns
+    -------
+    bool
+        True when the setup rules cover the root's tests.
+    """
+    # An unseen owner is named for the file it stands behind, which may be a
+    # `tests/<stem>.rs`; it is not that binary, so its name is never read.
+    if root.startswith(UNSEEN):
+        # Its package is unknown too, so only a rule that selects every test
+        # covers it; reading the prefix as a path would pick the root package.
+        return covers(preparation.rules, None, None)
+    binary = _BINARY.search(root)
+    stem = binary["stem"] if binary else None
+    package = preparation.crates.get(owning_crate(root, preparation.crates))
+    return covers(preparation.rules, stem, package)
+
+
+def _is_setup_covered(
+    path: str,
+    stem: str | None,
+    reached_by: cabc.Mapping[str, list[str]],
+    preparation: Preparation,
+) -> bool:
+    """Report whether a setup rule runs before the tests that compile *path*.
+
+    A top-level `tests/<stem>.rs` is its own binary, and it is covered only if
+    every other target that imports it is covered too. Any other file compiles
+    only inside the targets whose `mod` or `#[path]` chain reaches it, so it is
+    covered when every one of them is. A file no target reaches, or one a
+    library or an uncovered binary also reaches, is not: the setup script then
+    does not run before every test that pays for the build.
+
+    Returns
+    -------
+    bool
+        True when the setup rules cover the file and every target that reaches
+        it.
+    """
+    package = preparation.crates.get(owning_crate(path, preparation.crates))
+    is_own_covered = covers(preparation.rules, stem, package)
+    roots = reached_by.get(path, [])
+    are_roots_covered = all(_is_root_covered(root, preparation) for root in roots)
+    # A reached file runs in every target that reaches it, so the source
+    # package's own rule cannot stand for an importer in another package. A
+    # support file nothing reaches may be `include!`d from anywhere, so only a
+    # rule that selects every test covers it; a binary stands for itself.
+    if roots:
+        return are_roots_covered
+    return is_own_covered if stem is not None else covers(preparation.rules, None, None)
+
+
 def collect_builds(
     evidence: RustEvidence, sources: list[RustSource], preparation: Preparation
 ) -> list[BuildFact]:
@@ -307,7 +366,7 @@ def collect_builds(
         binary = _BINARY.search(path)
         stem = binary["stem"] if binary else None
         prepared = sorted(declared.get(crate, set()))
-        if covers(preparation.rules, stem, crates.get(crate)):
+        if _is_setup_covered(path, stem, evidence.reached_by, preparation):
             prepared.insert(0, SETUP_SCRIPT)
         if preparation.is_makefile_prepared:
             prepared.append(MAKEFILE_PREPARATION)
