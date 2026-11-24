@@ -175,13 +175,13 @@ joined(text) := regex.replace(text, `\\\n[[:space:]]*`, " ")
 # printf '%s/.local/bin/uv' "$$HOME")`) is the runner word itself: whichever
 # path the lookup finds, the command that runs is `uv` or `uvx`. Only the
 # lookup, an optional `2>/dev/null` and a `printf` of a path ending in the same
-# tool as fallback establish that; any other fallback (`|| printf /bin/true`)
+# tool as fallback (plain path characters, no escapes) establish that; any other fallback (`|| printf /bin/true`)
 # could run something else, so every other `$(shell ...)` value is left as
 # written and stays unresolvable.
 # The lookup and the fallback must name the same tool; RE2 has no
 # back-references, so the pattern is built once per runner word.
 shell_runner_lookup(tool) := sprintf(
-	`^[[:space:]]*\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+%s([[:space:]]+2>/dev/null)?([[:space:]]*\|\|[[:space:]]*printf[[:space:]]+'%%s/[^'[:space:]]*/%s'[[:space:]]+"\$\$HOME")?[[:space:]]*\)[[:space:]]*$`,
+	`^[[:space:]]*\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+%s([[:space:]]+2>/dev/null)?([[:space:]]*\|\|[[:space:]]*printf[[:space:]]+'%%s/(?:[A-Za-z0-9._-]+/)*%s'[[:space:]]+"\$\$HOME")?[[:space:]]*\)[[:space:]]*$`,
 	[tool, tool],
 )
 

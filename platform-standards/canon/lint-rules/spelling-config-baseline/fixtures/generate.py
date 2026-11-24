@@ -130,6 +130,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "shell_lookup_mismatched_fallback": Scenario(
         makefile="shell-lookup-mismatched-fallback"
     ),
+    "shell_lookup_escaped_fallback": Scenario(makefile="shell-lookup-escaped-fallback"),
     "shell_brace_form": Scenario(makefile="shell-brace-form"),
     "shell_tab_form": Scenario(makefile="shell-tab-form"),
     "no_makefile": Scenario(makefile=None),
