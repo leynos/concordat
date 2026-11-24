@@ -10,6 +10,7 @@ declare it is prepared when those binaries are.
 from __future__ import annotations
 
 import dataclasses
+import re
 import typing as typ
 
 from .nested_cargo_source import TestScope, whole_file_scope
@@ -17,6 +18,10 @@ from .nested_cargo_source import TestScope, whole_file_scope
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
+
+    from .nested_cargo_source import RustSource
+
+_PATH_ATTRIBUTE: typ.Final = re.compile(r"#\[\s*path\s*=\s*\"(?P<value>[^\"]*)\"")
 
 FRESH: typ.Final = "fresh"
 TOUCHED: typ.Final = "touched"
@@ -152,23 +157,55 @@ def record_reach(
     return TOUCHED if before != reaches[candidate] else None
 
 
+def _tail(path: str) -> str:
+    """Return the last two components of *path*, which name a file closely enough."""
+    return "/".join(path.replace("\\", "/").split("/")[-2:])
+
+
+def _library_path_tails(sources: cabc.Iterable[RustSource]) -> frozenset[str]:
+    """Return the tails of the files library code names with `#[path]`.
+
+    The resolver follows only declarations in test scope, so a library that
+    includes a file by `#[path]` without `#[cfg(test)]` is invisible to it. A
+    tail match is deliberately loose: it can only make a file count as reached
+    by an owner no setup rule covers, which is the safe error.
+
+    Returns
+    -------
+    frozenset[str]
+        The two-component tails of every `#[path = "..."]` value in code that
+        is not whole-file test code.
+    """
+    return frozenset(
+        _tail(match["value"])
+        for source in sources
+        if not whole_file_scope(source.relative)
+        for match in _PATH_ATTRIBUTE.finditer(source.text)
+    )
+
+
 def reached_by(
     reaches: cabc.Mapping[pathlib.PurePosixPath, Reach],
+    sources: cabc.Iterable[RustSource],
 ) -> dict[str, list[str]]:
     """Return the sorted targets that compile each reached file.
 
     A file Cargo also builds as a target is compiled by itself too, whoever
-    else declares it, so it counts among its own targets.
+    else declares it, so it counts among its own targets. A file that library
+    code also names by `#[path]` has an owner the resolver did not follow, so
+    it stands for that owner as well.
 
     Returns
     -------
     dict[str, list[str]]
         Root-relative path to the targets whose module tree holds the file.
     """
-    return {
-        relative.as_posix(): sorted(
-            reach.roots | ({relative.as_posix()} if is_target_root(relative) else set())
-        )
-        for relative, reach in sorted(reaches.items())
-        if reach.roots
-    }
+    library_tails = _library_path_tails(sources)
+    found: dict[str, list[str]] = {}
+    for relative, reach in sorted(reaches.items()):
+        if not reach.roots:
+            continue
+        posix = relative.as_posix()
+        own = is_target_root(relative) or _tail(posix) in library_tails
+        found[posix] = sorted(reach.roots | ({posix} if own else set()))
+    return found

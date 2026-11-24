@@ -1265,6 +1265,16 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
         ),
         pytest.param(
             {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": '#[path = "../tests/support/mod.rs"]\nmod support;\n',
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-library-declaration-that-points-into-the-test-directory",
+        ),
+        pytest.param(
+            {
                 "tests/ui.rs": '#[path = "../src/lib.rs"]\nmod app;\n',
                 "src/lib.rs": SUPPORT_BUILD,
             },

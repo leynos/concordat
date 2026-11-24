@@ -788,5 +788,5 @@ def collect_rust_evidence(
             trybuild,
             key=operator.itemgetter("path", "line", "form"),
         ),
-        reached_by=reached_by(reaches),
+        reached_by=reached_by(reaches, sources),
     )
