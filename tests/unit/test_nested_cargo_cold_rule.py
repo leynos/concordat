@@ -1364,6 +1364,46 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
         ),
         pytest.param(
             {
+                ".config/nextest.toml": SETUP_SCRIPT.format(
+                    filter="package(=a)", setup="prepare-nested"
+                ),
+                "a/Cargo.toml": '[package]\nname = "a"\n',
+                "b/Cargo.toml": '[package]\nname = "b"\n',
+                "a/tests/support/mod.rs": SUPPORT_BUILD,
+                "b/tests/other.rs": (
+                    '#[path = "../../a/tests/support/mod.rs"]\nmod support;\n'
+                ),
+            },
+            "a/tests/support/mod.rs",
+            False,
+            id="a-source-package-rule-does-not-cover-an-importer-in-another",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": (
+                    '#[path = "../tests/support/tmp/../mod.rs"]\nmod support;\n'
+                ),
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-library-path-with-a-parent-component",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": '#[path = "shared/leaf.rs"]\nmod leaf;\n',
+                "src/lib.rs": '#[path = "../tests/shared/bridge.rs"]\nmod bridge;\n',
+                "tests/shared/bridge.rs": "mod leaf;\n",
+                "tests/shared/leaf.rs": SUPPORT_BUILD,
+                "tests/shared/bridge/leaf.rs": "// a decoy beside the wrong stem\n",
+            },
+            "tests/shared/leaf.rs",
+            False,
+            id="a-library-path-seed-resolves-its-children-beside-it",
+        ),
+        pytest.param(
+            {
                 "Cargo.toml": (
                     '[package]\nname = "app"\n[lib]\npath = "tests/support/mod.rs"\n'
                     '[[test]]\nname = "ui"\npath = "tests/support/mod.rs"\n'

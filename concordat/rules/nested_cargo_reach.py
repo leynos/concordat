@@ -166,8 +166,8 @@ def record_reach(
 def _tail(path: str) -> str:
     """Return the last two components of *path*, which name a file closely enough.
 
-    A `.` component names the directory it is in, so `support/./mod.rs` and
-    `support/mod.rs` have the same tail.
+    The path is folded first, so a `.` or `..` component cannot hide a file:
+    `support/./mod.rs` and `support/tmp/../mod.rs` have the tail `support/mod.rs`.
 
     Returns
     -------
@@ -175,7 +175,9 @@ def _tail(path: str) -> str:
         The final two non-empty, non-`.` components joined by `/`.
     """
     parts = [
-        part for part in path.replace("\\", "/").split("/") if part not in {"", "."}
+        part
+        for part in posixpath.normpath(path.replace("\\", "/")).split("/")
+        if part not in {"", "."}
     ]
     return "/".join(parts[-2:])
 
@@ -277,7 +279,13 @@ def unseen_owners(
             )
     for path, owner in _manifest_targets(checkout, manifests):
         owners.setdefault(path, set()).add(owner)
-    return {path: Reach(roots=frozenset(found)) for path, found in owners.items()}
+    # A file named by `#[path]` or as a target keeps its children beside it, so
+    # the seed says so; otherwise its declarations would resolve under a stem
+    # directory and the owner would be handed to the wrong file.
+    return {
+        path: Reach(by_path=True, roots=frozenset(found))
+        for path, found in owners.items()
+    }
 
 
 def reached_by(

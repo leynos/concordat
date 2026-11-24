@@ -322,9 +322,9 @@ def _is_setup_covered(
     is_own_covered = covers(preparation.rules, stem, package)
     roots = reached_by.get(path, [])
     are_roots_covered = all(_is_root_covered(root, preparation) for root in roots)
-    if stem is not None:
-        return is_own_covered and are_roots_covered
-    return is_own_covered or (bool(roots) and are_roots_covered)
+    # A reached file runs in every target that reaches it, so the source
+    # package's own rule cannot stand for an importer in another package.
+    return are_roots_covered if roots else is_own_covered
 
 
 def collect_builds(
