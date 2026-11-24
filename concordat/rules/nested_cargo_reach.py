@@ -24,7 +24,10 @@ if typ.TYPE_CHECKING:
     from .nested_cargo_source import RustSource
 
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"#\[\s*path\s*=\s*\"(?P<value>[^\"]*)\"")
-_INCLUDE: typ.Final = re.compile(r"\binclude!\s*\(\s*\"(?P<value>[^\"]*)\"\s*\)")
+# Rust allows any of the three macro delimiters around the literal.
+_INCLUDE: typ.Final = re.compile(
+    r"\binclude!\s*[(\[{]\s*\"(?P<value>[^\"]*)\"\s*[)\]}]"
+)
 
 FRESH: typ.Final = "fresh"
 TOUCHED: typ.Final = "touched"
