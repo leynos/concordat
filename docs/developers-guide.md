@@ -1595,6 +1595,20 @@ This is Cargo commit `344c4567c634a25837e3c3476aac08af84cf9203`
 JSON numbers; OPA cannot establish the raw Cargo TOML token's syntax or type.
 Cargo manifest parsing and packaged-rule checks use separate routes.
 
+The cognitive-complexity requirement has two ways to be met. Clippy's
+`cognitive_complexity = "deny"` with `cognitive-complexity-threshold = 9` is
+the default. A repository may instead opt in to Whitaker's macro-aware lint:
+the optional `dylint` input (the decoded `dylint.toml`) lists
+`macro_aware_cognitive_complexity` under `[whitaker] experimental`, sets an
+integer `max_complexity` from 1 to 9, and `clippy.toml` carries no
+`cognitive-complexity-threshold`. When all three hold, the policy stops
+requiring the two Clippy settings. An opt-in with a bad `max_complexity` or a
+leftover Clippy threshold is reported, and a repository with neither gate fails
+as before. The cases live in
+`platform-standards/canon/policies/rust/lints_macro_aware_test.rego`. The
+policy checks configuration only; the repository's `lint-whitaker` recipe must
+still make the lint's warnings fail the build.
+
 [cargo-schema]: https://github.com/rust-lang/cargo/blob/344c4567c634a25837e3c3476aac08af84cf9203/crates/cargo-util-schemas/src/manifest/mod.rs
 
 ### The `OperationalRuleError` contract
