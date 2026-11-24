@@ -547,3 +547,15 @@ test_python_unresolved if {
     ["PD-014", "indeterminate", 3, "\"spelling\"-path recipe names the builder's interpreter with unresolved Make variables ($(CI_PYTHON)); the version cannot be proven"],
   }
 }
+
+# A quoted `>=` request is a version at the floor.
+test_python_range if {
+  findings := policy.deny with input as data.fixtures.python_range
+  count(findings) == 0
+}
+
+# A backslash-newline inside an option is removed by the shell, not turned into a space.
+test_python_continued if {
+  findings := policy.deny with input as data.fixtures.python_continued
+  count(findings) == 0
+}

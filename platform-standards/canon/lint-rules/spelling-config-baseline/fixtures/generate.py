@@ -111,6 +111,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "python_short_flag": Scenario(makefile="python-short-flag"),
     "python_free_threaded": Scenario(makefile="python-free-threaded"),
     "python_variable": Scenario(makefile="python-variable"),
+    "python_range": Scenario(makefile="python-range"),
+    "python_continued": Scenario(makefile="python-continued"),
     "not_applicable": BARE,
     # -- PD-007: the spelling gate -----------------------------------------
     "python_absent": Scenario(makefile="python-absent"),

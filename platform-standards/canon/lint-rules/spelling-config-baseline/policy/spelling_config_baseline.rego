@@ -447,7 +447,9 @@ floor_version := release_version(builder_floor)
 # request such as `3.14`, `3.14.1`, `3.14t`, `cpython-3.14.2-linux-x86_64-gnu` or
 # `>=3.14` is a version; `3`, `python3` or a path is not.
 
-python_option_pattern := `(?:^|[[:space:]])(?:--python(?:=|[[:space:]]+)|-p[[:space:]]*)["']?([^"'[:space:]]+)["']?`
+# `--python=` may be followed by whitespace: a continuation inside the option, which
+# the shell removes, reaches the policy as a space.
+python_option_pattern := `(?:^|[[:space:]])(?:--python(?:=[[:space:]]*|[[:space:]]+)|-p[[:space:]]*)["']?([^"'[:space:]]+)["']?`
 
 python_requests(invocation) := [m[1] |
 	some m in regex.find_all_string_submatch_n(python_option_pattern, invocation[1], -1)
