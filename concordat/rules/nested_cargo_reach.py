@@ -12,9 +12,14 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
+from .nested_cargo_source import TestScope, whole_file_scope
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
+
+FRESH: typ.Final = "fresh"
+TOUCHED: typ.Final = "touched"
 
 # Cargo builds every `.rs` file directly inside one of these directories as a
 # target of its own, so such a file is also a crate root.
@@ -96,6 +101,55 @@ class Reach:
             by_path=self.by_path or other.by_path,
             roots=self.roots | other.roots,
         )
+
+
+def _unseen_owner(candidate: pathlib.PurePosixPath) -> Reach:
+    """Return the owner a file outside test directories may have beyond the ones seen.
+
+    A file under `src/` that a test binary imports by `#[path]` may equally be
+    an ordinary module of the library, whose own `mod name;` declaration the
+    resolver does not follow. The library's tests compile it too, so the file
+    stands for that unseen owner, which no setup rule covers.
+
+    Returns
+    -------
+    Reach
+        One recording the file as its own owner, or nothing for a file that
+        only test code can reach.
+    """
+    if whole_file_scope(candidate):
+        return Reach()
+    return Reach(roots=frozenset({candidate.as_posix()}))
+
+
+def record_reach(
+    candidate: pathlib.PurePosixPath,
+    observed: Reach,
+    scopes: dict[pathlib.PurePosixPath, TestScope],
+    reaches: dict[pathlib.PurePosixPath, Reach],
+) -> str | None:
+    """Record that a declaration reached *candidate*, and say what moved.
+
+    Returns
+    -------
+    str | None
+        `FRESH` for a file not seen before, `TOUCHED` for one whose scope or
+        reach changed, and None when nothing about it moved.
+    """
+    before = reaches.get(candidate, Reach())
+    reaches[candidate] = before | observed | _unseen_owner(candidate)
+    known = scopes.get(candidate)
+    if known is None:
+        scopes[candidate] = TestScope(whole_file=True)
+        return FRESH
+    if not known.whole_file:
+        # Read as ordinary library code, whose scan cannot see the declarations
+        # only test code holds.
+        known.whole_file = True
+        return TOUCHED
+    # Already test code, but a reach it did not have before means its own
+    # declarations may now resolve elsewhere.
+    return TOUCHED if before != reaches[candidate] else None
 
 
 def reached_by(

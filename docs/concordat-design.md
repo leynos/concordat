@@ -3108,9 +3108,12 @@ or `#[path]` reaches, the Cargo targets whose module tree contains it (the
 that is not a binary itself counts as covered when it is reached and every
 target that reaches it is a covered `tests/<stem>.rs` binary. A library or an
 uncovered binary among the targets that reach it, or no target at all, leaves
-it uncovered: the rule fails closed. A helper that receives its target
-directory as an argument is a different gap (the reader does not follow a
-call's literal argument into the helper) and is not resolved here.
+it uncovered: the rule fails closed, and so does a file outside the test
+directories that a test binary imports by `#[path]` (`src/component.rs`): the
+library may declare it as an ordinary module, which the resolver does not
+follow, so the file also stands for that unseen owner. A helper that receives
+its target directory as an argument is a different gap (the reader does not
+follow a call's literal argument into the helper) and is not resolved here.
 
 Decisions the design rests on:
 

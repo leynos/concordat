@@ -26,9 +26,15 @@ import pathlib
 import re
 import typing as typ
 
+from . import nested_cargo_reach as reach_module
 from .fs_probe import probe_file
 from .nested_cargo_commands import first_literal
-from .nested_cargo_reach import CRATE_ROOT_DIRECTORIES, Reach, is_target_root
+from .nested_cargo_reach import (
+    CRATE_ROOT_DIRECTORIES,
+    Reach,
+    is_target_root,
+    record_reach,
+)
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -704,46 +710,13 @@ def resolve_declarations(
         for candidate in present:
             if in_fixture(candidate, fixtures):
                 continue
-            moved = _record_reach(candidate, observed, scopes, reaches)
-            if moved is _FRESH:
-                discovered.append(candidate)
-            elif moved is _TOUCHED:
-                touched.append(candidate)
+            moved = record_reach(candidate, observed, scopes, reaches)
+            match moved:
+                case reach_module.FRESH:
+                    discovered.append(candidate)
+                case reach_module.TOUCHED:
+                    touched.append(candidate)
     return Discovered(fresh=tuple(discovered), touched=tuple(touched))
-
-
-_FRESH: typ.Final = "fresh"
-_TOUCHED: typ.Final = "touched"
-
-
-def _record_reach(
-    candidate: pathlib.PurePosixPath,
-    observed: Reach,
-    scopes: dict[pathlib.PurePosixPath, TestScope],
-    reaches: dict[pathlib.PurePosixPath, Reach],
-) -> str | None:
-    """Record that a declaration reached *candidate*, and say what moved.
-
-    Returns
-    -------
-    str | None
-        `fresh` for a file not seen before, `touched` for one whose scope or
-        reach changed, and None when nothing about it moved.
-    """
-    before = reaches.get(candidate, Reach())
-    reaches[candidate] = before | observed
-    known = scopes.get(candidate)
-    if known is None:
-        scopes[candidate] = TestScope(whole_file=True)
-        return _FRESH
-    if not known.whole_file:
-        # Read as ordinary library code, whose scan cannot see the declarations
-        # only test code holds.
-        known.whole_file = True
-        return _TOUCHED
-    # Already test code, but a reach it did not have before means its own
-    # declarations may now resolve elsewhere.
-    return _TOUCHED if before != reaches[candidate] else None
 
 
 def _present_files(

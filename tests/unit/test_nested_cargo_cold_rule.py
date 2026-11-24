@@ -1252,6 +1252,19 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
         ),
         pytest.param(
             {
+                "tests/ui.rs": '#[path = "../src/component.rs"]\nmod component;\n',
+                "src/lib.rs": "mod component;\n",
+                "src/component.rs": (
+                    '#[cfg(test)]\n#[path = "../tests/support/mod.rs"]\nmod support;\n'
+                ),
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-library-module-a-covered-binary-also-imports-by-path",
+        ),
+        pytest.param(
+            {
                 "tests/ui.rs": '#[path = "../src/lib.rs"]\nmod app;\n',
                 "src/lib.rs": SUPPORT_BUILD,
             },
