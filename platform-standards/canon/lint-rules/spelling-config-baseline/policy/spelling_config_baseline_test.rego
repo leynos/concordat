@@ -552,6 +552,14 @@ test_shell_lookup_other_fallback if {
   }
 }
 
+# The fallback must name the same tool as the lookup: uvx is not uv.
+test_shell_lookup_mismatched_fallback if {
+  findings := policy.deny with input as data.fixtures.shell_lookup_mismatched_fallback
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
 # GNU Make accepts brace delimiters and a tab after `shell`; both stay unreadable.
 test_shell_brace_form if {
   findings := policy.deny with input as data.fixtures.shell_brace_form

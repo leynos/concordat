@@ -178,12 +178,18 @@ joined(text) := regex.replace(text, `\\\n[[:space:]]*`, " ")
 # tool as fallback establish that; any other fallback (`|| printf /bin/true`)
 # could run something else, so every other `$(shell ...)` value is left as
 # written and stays unresolvable.
-shell_runner_lookup := `^[[:space:]]*\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+(uvx|uv)([[:space:]]+2>/dev/null)?([[:space:]]*\|\|[[:space:]]*printf[[:space:]]+'%s/[^'[:space:]]*/(?:uvx|uv)'[[:space:]]+"\$\$HOME")?[[:space:]]*\)[[:space:]]*$`
+# The lookup and the fallback must name the same tool; RE2 has no
+# back-references, so the pattern is built once per runner word.
+shell_runner_lookup(tool) := sprintf(
+	`^[[:space:]]*\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+%s([[:space:]]+2>/dev/null)?([[:space:]]*\|\|[[:space:]]*printf[[:space:]]+'%%s/[^'[:space:]]*/%s'[[:space:]]+"\$\$HOME")?[[:space:]]*\)[[:space:]]*$`,
+	[tool, tool],
+)
 
-resolved_value(variable) := name if {
-	matches := regex.find_all_string_submatch_n(shell_runner_lookup, joined(variable.raw_value), 1)
-	count(matches) == 1
-	name := matches[0][1]
+shell_runner_tools := {"uv", "uvx"}
+
+resolved_value(variable) := tool if {
+	some tool in shell_runner_tools
+	regex.match(shell_runner_lookup(tool), joined(variable.raw_value))
 } else := joined(variable.raw_value)
 
 variable_value[name] := resolved_value(variable) if {

@@ -127,6 +127,9 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "uvx_shell_lookup_absent": Scenario(makefile="uvx-shell-lookup-absent"),
     "other_shell_lookup": Scenario(makefile="other-shell-lookup"),
     "shell_lookup_other_fallback": Scenario(makefile="shell-lookup-other-fallback"),
+    "shell_lookup_mismatched_fallback": Scenario(
+        makefile="shell-lookup-mismatched-fallback"
+    ),
     "shell_brace_form": Scenario(makefile="shell-brace-form"),
     "shell_tab_form": Scenario(makefile="shell-tab-form"),
     "no_makefile": Scenario(makefile=None),
