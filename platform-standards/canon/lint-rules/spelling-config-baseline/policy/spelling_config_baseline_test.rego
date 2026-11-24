@@ -559,3 +559,9 @@ test_python_continued if {
   findings := policy.deny with input as data.fixtures.python_continued
   count(findings) == 0
 }
+
+# A fully quoted option reaches the shell as the same option.
+test_python_quoted_option if {
+  findings := policy.deny with input as data.fixtures.python_quoted_option
+  count(findings) == 0
+}

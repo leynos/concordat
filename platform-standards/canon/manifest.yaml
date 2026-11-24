@@ -384,7 +384,7 @@ artifacts:
       Audit-only PD-007 to PD-014 policy holding the spelling gate to one
       pinned typos-config-builder gate with no legacy machinery, and
       AGENTS.md to the builder's published spelling block.
-    sha256: 98968f435d5050670a84dd296fdbdc94efa5221f8bfb3eeee06c4785dea51e06
+    sha256: f8ad78e65901d13cb81e90c175770afc55cef73b43ced6d0bc192528764b649f
   - id: lint-rule-spelling-config-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/spelling-config-baseline/rule.yaml
