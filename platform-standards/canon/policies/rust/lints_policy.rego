@@ -204,6 +204,21 @@ macro_aware_max_complexity_valid if {
   macro_aware_max_complexity <= macro_aware_max_complexity_ceiling
 }
 
+# Whitaker deserializes the table with `deny_unknown_fields` and falls back to
+# its default limit of 25 when that fails, so an extra key would leave the gate
+# far weaker than the declared max_complexity. The `max_complexity` TOML type
+# (a float such as 9.0 is also rejected by Whitaker) is invisible here, because
+# normalized JSON numbers do not keep it: the decoder that builds `dylint` must
+# refuse non-integer TOML numbers.
+macro_aware_known_fields := {"max_complexity"}
+
+macro_aware_table_has_only_known_fields if {
+  is_object(dylint_config)
+  table := object.get(dylint_config, macro_aware_lint, {})
+  is_object(table)
+  count({field | some field, _ in table; not field in macro_aware_known_fields}) == 0
+}
+
 clippy_threshold_removed if {
   object.get(object.get(input, "clippy", {}), "cognitive-complexity-threshold", null) == null
 }
@@ -211,6 +226,7 @@ clippy_threshold_removed if {
 macro_aware_gate_active if {
   macro_aware_opted_in
   macro_aware_max_complexity_valid
+  macro_aware_table_has_only_known_fields
   clippy_threshold_removed
 }
 
@@ -431,6 +447,12 @@ deny contains msg if {
     "dylint.toml %s max_complexity must be an integer from 1 to %d",
     [macro_aware_lint, macro_aware_max_complexity_ceiling],
   )
+}
+
+deny contains msg if {
+  macro_aware_opted_in
+  not macro_aware_table_has_only_known_fields
+  msg := sprintf("dylint.toml %s accepts only max_complexity", [macro_aware_lint])
 }
 
 deny contains msg if {

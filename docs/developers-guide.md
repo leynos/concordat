@@ -1600,11 +1600,14 @@ The cognitive-complexity requirement has two ways to be met. Clippy's
 the default. A repository may instead opt in to Whitaker's macro-aware lint:
 the optional `dylint` input (the decoded `dylint.toml`) lists
 `macro_aware_cognitive_complexity` under `[whitaker] experimental`, sets an
-integer `max_complexity` from 1 to 9, and `clippy.toml` carries no
-`cognitive-complexity-threshold`. When all three hold, the policy stops
-requiring the two Clippy settings. An opt-in with a bad `max_complexity` or a
+integer `max_complexity` from 1 to 9 as the table's only key, and `clippy.toml`
+carries no `cognitive-complexity-threshold`. When all of these hold, the policy
+stops requiring the two Clippy settings. An opt-in with a bad `max_complexity`,
+an unknown key (Whitaker rejects it and falls back to a limit of 25) or a
 leftover Clippy threshold is reported, and a repository with neither gate fails
-as before. The cases live in
+as before. Normalized JSON numbers do not keep their TOML type, so the decoder
+that builds the `dylint` input must refuse a float such as `9.0`, which
+Whitaker also rejects. The cases live in
 `platform-standards/canon/policies/rust/lints_macro_aware_test.rego`. The
 policy checks configuration only; the repository's `lint-whitaker` recipe must
 still make the lint's warnings fail the build.

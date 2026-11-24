@@ -102,3 +102,44 @@ test_malformed_dylint_tables_do_not_opt_in if {
   result := macro_aware_result(dylint, without_clippy_threshold)
   result[_] == "clippy lint cognitive_complexity must equal \"deny\""
 }
+
+test_opt_in_with_unknown_field_is_rejected if {
+  dylint := object.union(macro_aware_dylint, {
+    "macro_aware_cognitive_complexity": {"max_complexity": 9, "extra": true},
+  })
+  result := macro_aware_result(dylint, without_clippy_threshold)
+  result[_] == "dylint.toml macro_aware_cognitive_complexity accepts only max_complexity"
+  result[_] == "clippy lint cognitive_complexity must equal \"deny\""
+}
+
+test_opt_in_at_lowest_threshold_passes if {
+  dylint := object.union(macro_aware_dylint, {
+    "macro_aware_cognitive_complexity": {"max_complexity": 1},
+  })
+  result := macro_aware_result(dylint, without_clippy_threshold)
+  count(result) == 0
+}
+
+test_opt_in_with_zero_threshold_is_rejected if {
+  dylint := object.union(macro_aware_dylint, {
+    "macro_aware_cognitive_complexity": {"max_complexity": 0},
+  })
+  result := macro_aware_result(dylint, without_clippy_threshold)
+  result[_] == "dylint.toml macro_aware_cognitive_complexity max_complexity must be an integer from 1 to 9"
+}
+
+test_opt_in_alongside_other_experimental_lints_passes if {
+  dylint := object.union(macro_aware_dylint, {
+    "whitaker": {"experimental": ["other_lint", 7, "macro_aware_cognitive_complexity"]},
+  })
+  result := macro_aware_result(dylint, without_clippy_threshold)
+  count(result) == 0
+}
+
+test_experimental_that_is_not_a_list_does_not_opt_in if {
+  dylint := object.union(macro_aware_dylint, {
+    "whitaker": {"experimental": "macro_aware_cognitive_complexity"},
+  })
+  result := macro_aware_result(dylint, without_clippy_threshold)
+  result[_] == "clippy lint cognitive_complexity must equal \"deny\""
+}
