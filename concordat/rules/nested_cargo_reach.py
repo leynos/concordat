@@ -36,17 +36,25 @@ def is_target_root(relative: pathlib.PurePosixPath) -> bool:
     bool
         True when Cargo discovers the file as a target of its own.
     """
+    return _is_single_file_target(relative) or _is_directory_target(relative)
+
+
+def _is_single_file_target(relative: pathlib.PurePosixPath) -> bool:
+    """Report whether *relative* is a target that is one `.rs` file."""
     parent = relative.parent
     if relative.stem in {"lib", "main"} and parent.name == "src":
         return True
-    if parent.name in CRATE_ROOT_DIRECTORIES:
-        return True
-    grandparent = parent.parent
-    if relative.stem == "main" and grandparent.name in CRATE_ROOT_DIRECTORIES:
-        return True
-    if relative.stem == "main" and grandparent.name == "bin":
-        return grandparent.parent.name == "src"
-    return parent.name == "bin" and grandparent.name == "src"
+    is_in_bin = parent.name == "bin" and parent.parent.name == "src"
+    return is_in_bin or parent.name in CRATE_ROOT_DIRECTORIES
+
+
+def _is_directory_target(relative: pathlib.PurePosixPath) -> bool:
+    """Report whether *relative* is the `main.rs` of a target kept in a directory."""
+    if relative.stem != "main":
+        return False
+    holder = relative.parent.parent
+    is_in_bin = holder.name == "bin" and holder.parent.name == "src"
+    return is_in_bin or holder.name in CRATE_ROOT_DIRECTORIES
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

@@ -688,60 +688,12 @@ def resolve_declarations(
     Discovered
         The files to read for the first time, and the ones whose state moved.
     """
-    root = checkout.resolve()
     discovered: list[pathlib.PurePosixPath] = []
     touched: list[pathlib.PurePosixPath] = []
     reach = reaches.get(source.relative, Reach())
     for declaration in declarations:
-        present: list[pathlib.PurePosixPath] = []
-        for declared in _module_files(
-            source.relative,
-            declaration.chain,
-            declaration.name,
-            declaration.path,
-            reach,
-        ):
-            named = declared.as_posix()
-            if declared.is_absolute():
-                problems.append(
-                    _declaration_problem(
-                        source,
-                        declaration,
-                        f"names an absolute path, which the checkout cannot "
-                        f"supply ({named})",
-                    )
-                )
-                continue
-            candidate = _folded(declared)
-            if candidate is None:
-                problems.append(
-                    _declaration_problem(
-                        source,
-                        declaration,
-                        f"climbs out of the checkout with `..` ({named})",
-                    )
-                )
-                continue
-            refused = _refused_candidate(checkout, root, candidate)
-            if refused is not None:
-                problems.append(
-                    _declaration_problem(
-                        source,
-                        declaration,
-                        f"{refused} ({candidate.as_posix()})",
-                    )
-                )
-                continue
-            if probe_file(checkout / candidate.as_posix()).present:
-                present.append(candidate)
+        present = _present_files(checkout, source, declaration, reach, problems)
         if not present:
-            named = (
-                declaration.path
-                or f"{declaration.name}.rs or {declaration.name}/mod.rs"
-            )
-            problems.append(
-                _declaration_problem(source, declaration, f"names no file ({named})")
-            )
             continue
         observed = _observed_reach(
             source.relative,
@@ -752,19 +704,89 @@ def resolve_declarations(
         for candidate in present:
             if in_fixture(candidate, fixtures):
                 continue
-            before = reaches.get(candidate, Reach())
-            reaches[candidate] = before | observed
-            known = scopes.get(candidate)
-            if known is None:
-                scopes[candidate] = TestScope(whole_file=True)
+            moved = _record_reach(candidate, observed, scopes, reaches)
+            if moved is _FRESH:
                 discovered.append(candidate)
-            elif not known.whole_file:
-                # Read as ordinary library code, whose scan cannot see the
-                # declarations only test code holds.
-                known.whole_file = True
-                touched.append(candidate)
-            elif before != reaches[candidate]:
-                # Already test code, but reached in a way it was not before, so
-                # its own declarations may now resolve elsewhere.
+            elif moved is _TOUCHED:
                 touched.append(candidate)
     return Discovered(fresh=tuple(discovered), touched=tuple(touched))
+
+
+_FRESH: typ.Final = "fresh"
+_TOUCHED: typ.Final = "touched"
+
+
+def _record_reach(
+    candidate: pathlib.PurePosixPath,
+    observed: Reach,
+    scopes: dict[pathlib.PurePosixPath, TestScope],
+    reaches: dict[pathlib.PurePosixPath, Reach],
+) -> str | None:
+    """Record that a declaration reached *candidate*, and say what moved.
+
+    Returns
+    -------
+    str | None
+        `fresh` for a file not seen before, `touched` for one whose scope or
+        reach changed, and None when nothing about it moved.
+    """
+    before = reaches.get(candidate, Reach())
+    reaches[candidate] = before | observed
+    known = scopes.get(candidate)
+    if known is None:
+        scopes[candidate] = TestScope(whole_file=True)
+        return _FRESH
+    if not known.whole_file:
+        # Read as ordinary library code, whose scan cannot see the declarations
+        # only test code holds.
+        known.whole_file = True
+        return _TOUCHED
+    # Already test code, but a reach it did not have before means its own
+    # declarations may now resolve elsewhere.
+    return _TOUCHED if before != reaches[candidate] else None
+
+
+def _present_files(
+    checkout: pathlib.Path,
+    source: RustSource,
+    declaration: _Declaration,
+    reach: Reach,
+    problems: list[str],
+) -> list[pathlib.PurePosixPath]:
+    """Return the files a declaration names that exist inside the checkout.
+
+    A candidate that is absolute, climbs out of the checkout or is refused is
+    reported as a problem, as is a declaration that names no file at all.
+
+    Returns
+    -------
+    list[pathlib.PurePosixPath]
+        Each existing file, folded and root-relative; empty when none exists.
+    """
+    root = checkout.resolve()
+    present: list[pathlib.PurePosixPath] = []
+    for declared in _module_files(
+        source.relative, declaration.chain, declaration.name, declaration.path, reach
+    ):
+        named = declared.as_posix()
+        if declared.is_absolute():
+            reason = (
+                f"names an absolute path, which the checkout cannot supply ({named})"
+            )
+        elif (candidate := _folded(declared)) is None:
+            reason = f"climbs out of the checkout with `..` ({named})"
+        elif (refused := _refused_candidate(checkout, root, candidate)) is not None:
+            reason = f"{refused} ({candidate.as_posix()})"
+        else:
+            if probe_file(checkout / candidate.as_posix()).present:
+                present.append(candidate)
+            continue
+        problems.append(_declaration_problem(source, declaration, reason))
+    if not present:
+        named = (
+            declaration.path or f"{declaration.name}.rs or {declaration.name}/mod.rs"
+        )
+        problems.append(
+            _declaration_problem(source, declaration, f"names no file ({named})")
+        )
+    return present
