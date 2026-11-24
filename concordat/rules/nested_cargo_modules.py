@@ -301,15 +301,19 @@ def is_crate_root(relative: pathlib.PurePosixPath) -> bool:
 def is_target_root(relative: pathlib.PurePosixPath) -> bool:
     """Report whether Cargo builds this file as a target, not just resolves like one.
 
-    `mod.rs` resolves its declarations as a crate root does, but it is a module
-    of whichever file declares it, never a target.
+    A `mod.rs` resolves its declarations as a crate root does, but it is a
+    module of whichever file declares it, so only one that sits directly in
+    `tests/`, `benches/` or `examples/` is a target (a `tests/mod.rs` is built
+    and run as a test binary of its own).
 
     Returns
     -------
     bool
         True when the file is a `lib`, `main`, or auto-discovered target.
     """
-    return is_crate_root(relative) and relative.stem != "mod"
+    if not is_crate_root(relative):
+        return False
+    return relative.stem != "mod" or relative.parent.name in CRATE_ROOT_DIRECTORIES
 
 
 def _own_directories(
@@ -658,19 +662,31 @@ class Discovered:
 
 
 def _observed_reach(
-    declaring: pathlib.PurePosixPath, reach: Reach, declaration: _Declaration
+    declaring: pathlib.PurePosixPath,
+    reach: Reach,
+    declaration: _Declaration,
+    *,
+    is_test_file: bool,
 ) -> Reach:
     """Return how *declaration* reaches the file it names.
 
     The named file is compiled by each target that compiles the declaring file,
-    and by the declaring file itself when Cargo builds that as a target.
+    and by the declaring file itself when Cargo builds that as a target. A
+    declaring file that is ordinary library code and no target's tree is known
+    to hold is a module the resolver did not follow (it only follows
+    declarations in test scope), so who compiles it is unknown. It stands in
+    for its own unknown owner, which is no covered test binary, so the file it
+    names is never counted as prepared on the strength of some other reaching
+    binary alone. A test file nothing reaches is compiled by no one, so it
+    contributes nothing.
 
     Returns
     -------
     Reach
         The way the file was named, and the targets whose tree now holds it.
     """
-    own = {declaring.as_posix()} if is_target_root(declaring) else set()
+    is_own_owner = is_target_root(declaring) or (not reach.roots and not is_test_file)
+    own = {declaring.as_posix()} if is_own_owner else set()
     return Reach(
         by_path=declaration.path is not None,
         by_name=declaration.path is None,
@@ -749,7 +765,12 @@ def resolve_declarations(
                 _declaration_problem(source, declaration, f"names no file ({named})")
             )
             continue
-        observed = _observed_reach(source.relative, reach, declaration)
+        observed = _observed_reach(
+            source.relative,
+            reach,
+            declaration,
+            is_test_file=scopes[source.relative].whole_file,
+        )
         for candidate in present:
             if in_fixture(candidate, fixtures):
                 continue

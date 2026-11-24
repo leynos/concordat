@@ -1217,6 +1217,29 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
             False,
             id="reached-only-from-an-uncovered-binary",
         ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "tests/mod.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="also-reached-from-a-top-level-tests-mod-rs",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": "mod foo;\n",
+                "src/foo.rs": (
+                    '#[cfg(test)]\n#[path = "../tests/support/mod.rs"]\nmod support;\n'
+                ),
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="also-reached-through-an-ordinary-library-module",
+        ),
     ],
 )
 def test_a_support_file_is_covered_when_every_binary_that_reaches_it_is(
