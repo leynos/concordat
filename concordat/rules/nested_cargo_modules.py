@@ -31,6 +31,7 @@ from .fs_probe import probe_file
 from .nested_cargo_commands import first_literal
 from .nested_cargo_reach import (
     CRATE_ROOT_DIRECTORIES,
+    UNSEEN,
     Reach,
     is_target_root,
     record_reach,
@@ -669,8 +670,11 @@ def _observed_reach(
     Reach
         The way the file was named, and the targets whose tree now holds it.
     """
-    is_own_owner = is_target_root(declaring) or (not reach.roots and not is_test_file)
-    own = {declaring.as_posix()} if is_own_owner else set()
+    own: set[str] = set()
+    if is_target_root(declaring):
+        own.add(declaring.as_posix())
+    elif not reach.roots and not is_test_file:
+        own.add(f"{UNSEEN}{declaring.as_posix()}")
     return Reach(
         by_path=declaration.path is not None,
         by_name=declaration.path is None,

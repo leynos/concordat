@@ -27,6 +27,10 @@ _PATH_ATTRIBUTE: typ.Final = re.compile(r"#\[\s*path\s*=\s*\"(?P<value>[^\"]*)\"
 
 FRESH: typ.Final = "fresh"
 TOUCHED: typ.Final = "touched"
+# Marks an owner the resolver cannot see. No setup rule's binary selector can
+# match a name with this prefix, so such an owner is never covered, whatever
+# file it is recorded against.
+UNSEEN: typ.Final = "unseen:"
 
 # Cargo builds every `.rs` file directly inside one of these directories as a
 # target of its own, so such a file is also a crate root.
@@ -126,7 +130,7 @@ def _unseen_owner(candidate: pathlib.PurePosixPath) -> Reach:
     """
     if whole_file_scope(candidate):
         return Reach()
-    return Reach(roots=frozenset({candidate.as_posix()}))
+    return Reach(roots=frozenset({f"{UNSEEN}{candidate.as_posix()}"}))
 
 
 def record_reach(
@@ -237,7 +241,7 @@ def _manifest_targets(
             if kind == "test" and isinstance(name, str):
                 found[path] = posixpath.normpath(f"{base}/tests/{name}.rs")
             else:
-                found[path] = path.as_posix()
+                found[path] = f"{UNSEEN}{path.as_posix()}"
     return found
 
 
@@ -264,13 +268,15 @@ def unseen_owners(
     """
     sources = list(sources)
     tails = _library_path_tails(sources)
-    owners = {
-        source.relative: source.relative.as_posix()
-        for source in sources
-        if _tail(source.relative.as_posix()) in tails
-    }
-    owners.update(_manifest_targets(checkout, manifests))
-    return {path: Reach(roots=frozenset({owner})) for path, owner in owners.items()}
+    owners: dict[pathlib.PurePosixPath, set[str]] = {}
+    for source in sources:
+        if _tail(source.relative.as_posix()) in tails:
+            owners.setdefault(source.relative, set()).add(
+                f"{UNSEEN}{source.relative.as_posix()}"
+            )
+    for path, owner in _manifest_targets(checkout, manifests).items():
+        owners.setdefault(path, set()).add(owner)
+    return {path: Reach(roots=frozenset(found)) for path, found in owners.items()}
 
 
 def reached_by(

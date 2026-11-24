@@ -1318,6 +1318,29 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
         ),
         pytest.param(
             {
+                "tests/ui.rs": SUPPORT_BUILD,
+                "src/lib.rs": '#[path = "../tests/ui.rs"]\nmod ui;\n',
+            },
+            "tests/ui.rs",
+            False,
+            id="a-library-owner-is-not-mistaken-for-the-binary-of-the-same-file",
+        ),
+        pytest.param(
+            {
+                "Cargo.toml": (
+                    '[package]\nname = "app"\n[[test]]\nname = "ui"\n'
+                    'path = "tests/support/mod.rs"\n'
+                ),
+                "src/lib.rs": '#[path = "../tests/support/mod.rs"]\nmod support;\n',
+                "tests/ui.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-manifest-target-does-not-replace-the-library-owner",
+        ),
+        pytest.param(
+            {
                 "tests/ui.rs": '#[path = "../src/lib.rs"]\nmod app;\n',
                 "src/lib.rs": SUPPORT_BUILD,
             },
