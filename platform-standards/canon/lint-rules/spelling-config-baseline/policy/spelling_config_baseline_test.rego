@@ -544,6 +544,29 @@ test_other_shell_lookup if {
   }
 }
 
+# A fallback that may run something else than uv proves nothing about the runner.
+test_shell_lookup_other_fallback if {
+  findings := policy.deny with input as data.fixtures.shell_lookup_other_fallback
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+# GNU Make accepts brace delimiters and a tab after `shell`; both stay unreadable.
+test_shell_brace_form if {
+  findings := policy.deny with input as data.fixtures.shell_brace_form
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+test_shell_tab_form if {
+  findings := policy.deny with input as data.fixtures.shell_tab_form
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
 # A runner that names no interpreter takes whatever UV_PYTHON says.
 test_python_absent if {
   findings := policy.deny with input as data.fixtures.python_absent

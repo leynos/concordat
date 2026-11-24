@@ -173,9 +173,12 @@ joined(text) := regex.replace(text, `\\\n[[:space:]]*`, " ")
 
 # A uv runner located at assignment time (`UV ?= $(shell command -v uv ||
 # printf '%s/.local/bin/uv' "$$HOME")`) is the runner word itself: whichever
-# path the lookup finds, the command that runs is `uv` or `uvx`. Any other
-# `$(shell ...)` value is left as written and stays unresolvable.
-shell_runner_lookup := `^[[:space:]]*\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+(uvx|uv)([[:space:]][^)]*)?\)[[:space:]]*$`
+# path the lookup finds, the command that runs is `uv` or `uvx`. Only the
+# lookup, an optional `2>/dev/null` and a `printf` of a path ending in the same
+# tool as fallback establish that; any other fallback (`|| printf /bin/true`)
+# could run something else, so every other `$(shell ...)` value is left as
+# written and stays unresolvable.
+shell_runner_lookup := `^[[:space:]]*\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+(uvx|uv)([[:space:]]+2>/dev/null)?([[:space:]]*\|\|[[:space:]]*printf[[:space:]]+'%s/[^'[:space:]]*/(?:uvx|uv)'[[:space:]]+"\$\$HOME")?[[:space:]]*\)[[:space:]]*$`
 
 resolved_value(variable) := name if {
 	matches := regex.find_all_string_submatch_n(shell_runner_lookup, joined(variable.raw_value), 1)
@@ -244,7 +247,7 @@ unresolved_references(text) := {name |
 	)
 	name := match[1]
 	name != "MAKE"
-} | {"$(shell ...)" | contains(expand(text), "$(shell ")}
+} | {"$(shell ...)" | regex.match(`\$[({]shell[[:space:]]`, expand(text))}
 
 # -- static closure from the spelling target -------------------------------------
 #
