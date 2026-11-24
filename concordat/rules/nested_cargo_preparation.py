@@ -287,7 +287,11 @@ def _is_root_covered(root: str, preparation: Preparation) -> bool:
     """
     # An unseen owner is named for the file it stands behind, which may be a
     # `tests/<stem>.rs`; it is not that binary, so its name is never read.
-    binary = None if root.startswith(UNSEEN) else _BINARY.search(root)
+    if root.startswith(UNSEEN):
+        # Its package is unknown too, so only a rule that selects every test
+        # covers it; reading the prefix as a path would pick the root package.
+        return covers(preparation.rules, None, None)
+    binary = _BINARY.search(root)
     stem = binary["stem"] if binary else None
     package = preparation.crates.get(owning_crate(root, preparation.crates))
     return covers(preparation.rules, stem, package)
