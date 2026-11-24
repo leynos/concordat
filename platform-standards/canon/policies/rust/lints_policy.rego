@@ -169,6 +169,82 @@ valid_disallowed_method(method) if {
   optional_boolean_field_is_valid(method, "allow-invalid")
 }
 
+# Cognitive complexity is gated either by Clippy (deny plus a threshold of 9)
+# or by Whitaker's macro-aware lint opted in through dylint.toml with Clippy's
+# threshold removed, so only one gate owns the budget.
+macro_aware_lint := "macro_aware_cognitive_complexity"
+
+macro_aware_max_complexity_ceiling := 9
+
+dylint_config := object.get(input, "dylint", {})
+
+dylint_experimental_lints := experimental if {
+  is_object(dylint_config)
+  whitaker := object.get(dylint_config, "whitaker", {})
+  is_object(whitaker)
+  experimental := object.get(whitaker, "experimental", null)
+  is_array(experimental)
+  # Whitaker reads the list as Vec<String> and ends the compilation otherwise,
+  # so a list with any non-string entry is not a working opt-in.
+  every entry in experimental {
+    is_string(entry)
+  }
+}
+
+macro_aware_opted_in if {
+  macro_aware_lint in dylint_experimental_lints
+}
+
+macro_aware_max_complexity := max_complexity if {
+  is_object(dylint_config)
+  table := object.get(dylint_config, macro_aware_lint, {})
+  is_object(table)
+  max_complexity := object.get(table, "max_complexity", null)
+}
+
+macro_aware_max_complexity_valid if {
+  is_number(macro_aware_max_complexity)
+  floor(macro_aware_max_complexity) == macro_aware_max_complexity
+  macro_aware_max_complexity >= 1
+  macro_aware_max_complexity <= macro_aware_max_complexity_ceiling
+}
+
+# Whitaker deserializes the table with `deny_unknown_fields` and falls back to
+# its default limit of 25 when that fails, so an extra key would leave the gate
+# far weaker than the declared max_complexity. The `max_complexity` TOML type
+# (a float such as 9.0 is also rejected by Whitaker) is invisible here, because
+# normalized JSON numbers do not keep it: the decoder that builds `dylint` must
+# refuse non-integer TOML numbers.
+macro_aware_known_fields := {"max_complexity"}
+
+macro_aware_table_has_only_known_fields if {
+  is_object(dylint_config)
+  table := object.get(dylint_config, macro_aware_lint, {})
+  is_object(table)
+  count({field | some field, _ in table; not field in macro_aware_known_fields}) == 0
+}
+
+clippy_threshold_removed if {
+  object.get(object.get(input, "clippy", {}), "cognitive-complexity-threshold", null) == null
+}
+
+macro_aware_gate_active if {
+  macro_aware_opted_in
+  macro_aware_max_complexity_valid
+  macro_aware_table_has_only_known_fields
+  clippy_threshold_removed
+}
+
+macro_aware_replaces_clippy_lint(key) if {
+  key == "cognitive_complexity"
+  macro_aware_gate_active
+}
+
+macro_aware_replaces_clippy_threshold(key) if {
+  key == "cognitive-complexity-threshold"
+  macro_aware_gate_active
+}
+
 cargo_manifest := object.get(input, "cargo", null)
 workspace_block := object.get(cargo_manifest, "workspace", null)
 workspace_lints := object.get(workspace_block, "lints", null)
@@ -229,6 +305,7 @@ deny contains msg if {
   clippy := scope["clippy"]
   required := clippy_scalar_lints[key]
   key != "disallowed_methods"
+  not macro_aware_replaces_clippy_lint(key)
   actual := object.get(clippy, key, "")
   actual != required
   msg := sprintf("clippy lint %s must equal %q", [key, required])
@@ -303,6 +380,7 @@ deny contains msg if {
   cargo_manifest != null
   clippy_config != null
   expected := clippy_thresholds[key]
+  not macro_aware_replaces_clippy_threshold(key)
   actual := object.get(clippy_config, key, null)
   actual != expected
   msg := sprintf("clippy.toml %s must equal %v", [key, expected])
@@ -365,4 +443,25 @@ deny contains "clippy.toml disallowed-methods paths must be unique" if {
   actual_paths := array.concat(bare_method_paths, table_method_paths)
   unique_paths := {path | some path in actual_paths}
   count(actual_paths) != count(unique_paths)
+}
+
+deny contains msg if {
+  macro_aware_opted_in
+  not macro_aware_max_complexity_valid
+  msg := sprintf(
+    "dylint.toml %s max_complexity must be an integer from 1 to %d",
+    [macro_aware_lint, macro_aware_max_complexity_ceiling],
+  )
+}
+
+deny contains msg if {
+  macro_aware_opted_in
+  not macro_aware_table_has_only_known_fields
+  msg := sprintf("dylint.toml %s accepts only max_complexity", [macro_aware_lint])
+}
+
+deny contains msg if {
+  macro_aware_opted_in
+  not clippy_threshold_removed
+  msg := "clippy.toml must drop cognitive-complexity-threshold when the macro-aware lint is opted in"
 }
