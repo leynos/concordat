@@ -1275,6 +1275,49 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
         ),
         pytest.param(
             {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": '#[path = "../tests/support/./mod.rs"]\nmod support;\n',
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-library-path-with-a-dot-component",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "mod support;\n",
+                "src/lib.rs": '#[path = "../tests/support/mod.rs"]\nmod support;\n',
+                "tests/support/mod.rs": "mod inner;\n",
+                "tests/support/inner.rs": SUPPORT_BUILD,
+            },
+            "tests/support/inner.rs",
+            False,
+            id="a-file-below-one-the-library-names-by-path",
+        ),
+        pytest.param(
+            {
+                "tests/ui.rs": "// the covered binary\n" + SUPPORT_BUILD,
+                "tests/other.rs": '#[path = "ui.rs"]\nmod ui;\n',
+            },
+            "tests/ui.rs",
+            False,
+            id="a-covered-binary-an-uncovered-one-also-imports",
+        ),
+        pytest.param(
+            {
+                "Cargo.toml": (
+                    '[package]\nname = "app"\n[[test]]\nname = "support"\n'
+                    'path = "tests/support/mod.rs"\n'
+                ),
+                "tests/ui.rs": "mod support;\n",
+                "tests/support/mod.rs": SUPPORT_BUILD,
+            },
+            "tests/support/mod.rs",
+            False,
+            id="a-manifest-declared-test-target",
+        ),
+        pytest.param(
+            {
                 "tests/ui.rs": '#[path = "../src/lib.rs"]\nmod app;\n',
                 "src/lib.rs": SUPPORT_BUILD,
             },

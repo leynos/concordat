@@ -3112,11 +3112,16 @@ it uncovered: the rule fails closed, and so does a file outside the test
 directories that a test binary imports by `#[path]` (`src/component.rs`): the
 library may declare it as an ordinary module, which the resolver does not
 follow, so the file also stands for that unseen owner. The same goes for a file
-whose last two path components match a `#[path]` value in library code, which
-names it without `#[cfg(test)]`; the match is loose on purpose, because the
-only error it can make is a missed exemption. A helper that receives its target
-directory as an argument is a different gap (the reader does not follow a
-call's literal argument into the helper) and is not resolved here.
+whose last two path components (ignoring `.`) match a `#[path]` value in
+library code, which names it without `#[cfg(test)]`, and for a file a manifest
+declares as a target with an explicit `path` (a `[[test]]` target is recorded
+as the `tests/<name>.rs` that `binary(<name>)` selects). These owners are
+seeded before the resolver runs, so every file they declare inherits them. The
+tail match is loose on purpose, because the only error it can make is a missed
+exemption. A top-level binary that another target imports is covered only if
+that target is too. A helper that receives its target directory as an argument
+is a different gap (the reader does not follow a call's literal argument into
+the helper) and is not resolved here.
 
 Decisions the design rests on:
 

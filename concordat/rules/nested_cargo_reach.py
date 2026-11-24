@@ -10,14 +10,16 @@ declare it is prepared when those binaries are.
 from __future__ import annotations
 
 import dataclasses
+import pathlib
+import posixpath
 import re
 import typing as typ
 
+from .dependency_family_coverage import mapping, sequence
 from .nested_cargo_source import TestScope, whole_file_scope
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import pathlib
 
     from .nested_cargo_source import RustSource
 
@@ -158,8 +160,20 @@ def record_reach(
 
 
 def _tail(path: str) -> str:
-    """Return the last two components of *path*, which name a file closely enough."""
-    return "/".join(path.replace("\\", "/").split("/")[-2:])
+    """Return the last two components of *path*, which name a file closely enough.
+
+    A `.` component names the directory it is in, so `support/./mod.rs` and
+    `support/mod.rs` have the same tail.
+
+    Returns
+    -------
+    str
+        The final two non-empty, non-`.` components joined by `/`.
+    """
+    parts = [
+        part for part in path.replace("\\", "/").split("/") if part not in {"", "."}
+    ]
+    return "/".join(parts[-2:])
 
 
 def _library_path_tails(sources: cabc.Iterable[RustSource]) -> frozenset[str]:
@@ -184,28 +198,98 @@ def _library_path_tails(sources: cabc.Iterable[RustSource]) -> frozenset[str]:
     )
 
 
+def _target_tables(document: dict[str, object]) -> list[tuple[str, dict[str, object]]]:
+    """Return each `[lib]` and `[[bin|test|bench|example]]` table with its kind."""
+    found: list[tuple[str, dict[str, object]]] = []
+    library = mapping(document.get("lib"))
+    if library is not None:
+        found.append(("lib", library))
+    for kind in ("bin", "test", "bench", "example"):
+        items = (mapping(item) for item in sequence(document.get(kind)) or [])
+        found.extend((kind, table) for table in items if table is not None)
+    return found
+
+
+def _manifest_targets(
+    checkout: pathlib.Path, manifests: cabc.Mapping[pathlib.Path, dict[str, object]]
+) -> dict[pathlib.PurePosixPath, str]:
+    """Return the files manifests declare as targets with an explicit `path`.
+
+    A `[[test]]` target is named by its `name`, not by its file, so its owner is
+    recorded as the `tests/<name>.rs` a setup rule's `binary(<name>)` selects.
+    Any other target is recorded by its own path.
+
+    Returns
+    -------
+    dict[pathlib.PurePosixPath, str]
+        Each declared target file, root-relative and normalised, with the owner
+        that stands for the target it is built as.
+    """
+    found: dict[pathlib.PurePosixPath, str] = {}
+    for manifest, document in manifests.items():
+        base = manifest.parent.relative_to(checkout).as_posix()
+        for kind, table in _target_tables(document):
+            value = table.get("path")
+            if not isinstance(value, str):
+                continue
+            path = pathlib.PurePosixPath(posixpath.normpath(f"{base}/{value}"))
+            name = table.get("name")
+            if kind == "test" and isinstance(name, str):
+                found[path] = posixpath.normpath(f"{base}/tests/{name}.rs")
+            else:
+                found[path] = path.as_posix()
+    return found
+
+
+def unseen_owners(
+    sources: cabc.Iterable[RustSource],
+    checkout: pathlib.Path,
+    manifests: cabc.Mapping[pathlib.Path, dict[str, object]],
+) -> dict[pathlib.PurePosixPath, Reach]:
+    """Return the files that have an owner the resolver does not follow.
+
+    The resolver follows only declarations in test scope, and it finds targets
+    by Cargo's directory conventions. A file that library code names by
+    `#[path]` without `#[cfg(test)]`, or that a manifest declares as a target
+    with an explicit `path`, is compiled by an owner it never sees. Each such
+    file is seeded as its own owner, which no setup rule covers, before the
+    resolver runs, so every file it declares inherits the owner too. A tail
+    match on the `#[path]` value is deliberately loose: its only error is a
+    missed exemption.
+
+    Returns
+    -------
+    dict[pathlib.PurePosixPath, Reach]
+        The reach to start the resolver from, keyed by root-relative path.
+    """
+    sources = list(sources)
+    tails = _library_path_tails(sources)
+    owners = {
+        source.relative: source.relative.as_posix()
+        for source in sources
+        if _tail(source.relative.as_posix()) in tails
+    }
+    owners.update(_manifest_targets(checkout, manifests))
+    return {path: Reach(roots=frozenset({owner})) for path, owner in owners.items()}
+
+
 def reached_by(
     reaches: cabc.Mapping[pathlib.PurePosixPath, Reach],
-    sources: cabc.Iterable[RustSource],
 ) -> dict[str, list[str]]:
     """Return the sorted targets that compile each reached file.
 
     A file Cargo also builds as a target is compiled by itself too, whoever
-    else declares it, so it counts among its own targets. A file that library
-    code also names by `#[path]` has an owner the resolver did not follow, so
-    it stands for that owner as well.
+    else declares it, so it counts among its own targets.
 
     Returns
     -------
     dict[str, list[str]]
         Root-relative path to the targets whose module tree holds the file.
     """
-    library_tails = _library_path_tails(sources)
-    found: dict[str, list[str]] = {}
-    for relative, reach in sorted(reaches.items()):
-        if not reach.roots:
-            continue
-        posix = relative.as_posix()
-        own = is_target_root(relative) or _tail(posix) in library_tails
-        found[posix] = sorted(reach.roots | ({posix} if own else set()))
-    return found
+    return {
+        relative.as_posix(): sorted(
+            reach.roots | ({relative.as_posix()} if is_target_root(relative) else set())
+        )
+        for relative, reach in sorted(reaches.items())
+        if reach.roots
+    }

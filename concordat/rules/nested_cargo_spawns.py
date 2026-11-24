@@ -50,7 +50,7 @@ from .nested_cargo_modules import (
     resolve_declarations,
     scan_scope,
 )
-from .nested_cargo_reach import Reach, reached_by
+from .nested_cargo_reach import Reach, reached_by, unseen_owners
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -651,6 +651,7 @@ def _discover_scope(
     fixtures: frozenset[str],
     sources: list[RustSource],
     problems: list[str],
+    seeds: dict[pathlib.PurePosixPath, Reach],
 ) -> tuple[dict[pathlib.PurePosixPath, TestScope], dict[pathlib.PurePosixPath, Reach]]:
     """Return the scope of every file the checkout's compiler builds as test code.
 
@@ -663,7 +664,9 @@ def _discover_scope(
     settles its owner has run.
 
     Files are appended to *sources* as declarations reach them, so the caller
-    keeps the complete set to report from.
+    keeps the complete set to report from. The *seeds* are files with an owner
+    the resolver cannot see; they start with that owner recorded and are
+    scanned at once, so what they declare inherits it.
 
     Returns
     -------
@@ -675,7 +678,7 @@ def _discover_scope(
         source.relative: TestScope(whole_file_scope(source.relative))
         for source in sources
     }
-    reaches: dict[pathlib.PurePosixPath, Reach] = {}
+    reaches = dict(seeds)
     by_relative = {source.relative: source for source in sources}
     # The scope and reach each file was scanned under. A file's declarations
     # resolve differently once either moves, so the pair is what decides
@@ -694,7 +697,9 @@ def _discover_scope(
     pending = [
         source
         for source in sources
-        if not scopes[source.relative].whole_file or is_crate_root(source.relative)
+        if not scopes[source.relative].whole_file
+        or is_crate_root(source.relative)
+        or source.relative in seeds
     ]
     while pending:
         source = pending.pop()
@@ -755,7 +760,8 @@ def collect_rust_evidence(
     """
     fixtures = fixture_directories(checkout, manifests)
     sources = read_sources(checkout, fixtures, problems)
-    scopes, reaches = _discover_scope(checkout, fixtures, sources, problems)
+    seeds = unseen_owners(sources, checkout, manifests)
+    scopes, reaches = _discover_scope(checkout, fixtures, sources, problems, seeds)
     spawns = [
         fact
         for source in sources
@@ -788,5 +794,5 @@ def collect_rust_evidence(
             trybuild,
             key=operator.itemgetter("path", "line", "form"),
         ),
-        reached_by=reached_by(reaches, sources),
+        reached_by=reached_by(reaches),
     )
