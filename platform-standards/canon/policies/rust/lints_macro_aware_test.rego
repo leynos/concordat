@@ -130,7 +130,7 @@ test_opt_in_with_zero_threshold_is_rejected if {
 
 test_opt_in_alongside_other_experimental_lints_passes if {
   dylint := object.union(macro_aware_dylint, {
-    "whitaker": {"experimental": ["bumpy_road_function", "macro_aware_cognitive_complexity"]},
+    "whitaker": {"experimental": ["rstest_helper_should_be_fixture", "macro_aware_cognitive_complexity"]},
   })
   result := macro_aware_result(dylint, without_clippy_threshold)
   count(result) == 0
