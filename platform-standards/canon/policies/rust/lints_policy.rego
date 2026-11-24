@@ -184,6 +184,11 @@ dylint_experimental_lints := experimental if {
   is_object(whitaker)
   experimental := object.get(whitaker, "experimental", null)
   is_array(experimental)
+  # Whitaker reads the list as Vec<String> and ends the compilation otherwise,
+  # so a list with any non-string entry is not a working opt-in.
+  every entry in experimental {
+    is_string(entry)
+  }
 }
 
 macro_aware_opted_in if {
