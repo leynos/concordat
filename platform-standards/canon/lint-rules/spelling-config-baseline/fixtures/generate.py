@@ -118,6 +118,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "uv_shell_lookup": Scenario(makefile="uv-shell-lookup"),
     "env_assignment_prefix": Scenario(makefile="env-assignment-prefix"),
     "uv_wildcard_lookup": Scenario(makefile="uv-wildcard-lookup"),
+    "uv_or_lookup": Scenario(makefile="uv-or-lookup"),
+    "uv_quoted_runner": Scenario(makefile="uv-quoted-runner"),
     "not_applicable": BARE,
     # -- PD-007: the spelling gate -----------------------------------------
     "python_absent": Scenario(makefile="python-absent"),
@@ -129,6 +131,10 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "uvx_shell_lookup_absent": Scenario(makefile="uvx-shell-lookup-absent"),
     "other_shell_lookup": Scenario(makefile="other-shell-lookup"),
     "env_assignment_prefix_old": Scenario(makefile="env-assignment-prefix-old"),
+    "uv_quoted_runner_old": Scenario(makefile="uv-quoted-runner-old"),
+    "uv_unbalanced_quote": Scenario(makefile="uv-unbalanced-quote"),
+    "or_lookup_other_fallback": Scenario(makefile="or-lookup-other-fallback"),
+    "or_lookup_mismatched_fallback": Scenario(makefile="or-lookup-mismatched-fallback"),
     "wildcard_lookup_other_fallback": Scenario(
         makefile="wildcard-lookup-other-fallback"
     ),
