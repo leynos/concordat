@@ -132,6 +132,9 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "wildcard_lookup_other_fallback": Scenario(
         makefile="wildcard-lookup-other-fallback"
     ),
+    "wildcard_lookup_variable_branch": Scenario(
+        makefile="wildcard-lookup-variable-branch"
+    ),
     "wildcard_lookup_mismatched_branch": Scenario(
         makefile="wildcard-lookup-mismatched-branch"
     ),

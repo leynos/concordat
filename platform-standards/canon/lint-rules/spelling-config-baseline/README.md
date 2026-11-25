@@ -42,9 +42,10 @@ phrase corrections Typos cannot express.
   `$(shell …)` value, in `$(…)`, `${…}` or tab-separated form, leaves the
   verdict `indeterminate`. A single assignment of
   `$(if $(wildcard PATH),PATH,uv)` (or `uvx`), whose branches are plain paths
-  ending in the same tool, also resolves to that runner word. An `env` prefix
-  on the command, with `-u NAME` options or environment assignments, is
-  accepted as it only changes the environment.
+  (`$(HOME)` is the only variable allowed in them) ending in the same tool,
+  also resolves to that runner word. An `env` prefix on the command, with
+  `-u NAME` options or environment assignments, is accepted as it only changes
+  the environment.
 - **PD-014** (error): the uv runner that runs the builder's `gate` names an
   interpreter at or above `builder_python_floor` (`3.14` by default), as
   `--python X`, `--python=X` or `-p X`. The builder declares

@@ -189,10 +189,11 @@ shell_runner_tools := {"uv", "uvx"}
 
 # `$(if $(wildcard PATH),PATH,uv)` picks a located binary or the bare tool word;
 # either branch runs `uv` or `uvx`, so the value is the runner word. Both
-# branches must be plain path characters (a `$(HOME)` style variable is
-# allowed) ending in the tool, with no escapes, quotes or other functions.
+# branches must be plain path characters (`$(HOME)` is the only variable
+# allowed; any other variable's value is unproven and could hold a command)
+# ending in the tool, with no escapes, quotes or other functions.
 wildcard_runner_lookup(tool) := sprintf(
-	`^[[:space:]]*\$\(if[[:space:]]+\$\(wildcard[[:space:]]+(?:[A-Za-z0-9._/-]|\$\([A-Za-z_]+\))*/%s\)[[:space:]]*,[[:space:]]*(?:[A-Za-z0-9._/-]|\$\([A-Za-z_]+\))*/%s[[:space:]]*,[[:space:]]*%s[[:space:]]*\)[[:space:]]*$`,
+	`^[[:space:]]*\$\(if[[:space:]]+\$\(wildcard[[:space:]]+(?:[A-Za-z0-9._/-]|\$\(HOME\))*/%s\)[[:space:]]*,[[:space:]]*(?:[A-Za-z0-9._/-]|\$\(HOME\))*/%s[[:space:]]*,[[:space:]]*%s[[:space:]]*\)[[:space:]]*$`,
 	[tool, tool, tool],
 )
 

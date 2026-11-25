@@ -572,6 +572,14 @@ test_wildcard_lookup_other_fallback if {
   }
 }
 
+# A branch that reads another variable proves nothing: its value could hold a command.
+test_wildcard_lookup_variable_branch if {
+  findings := policy.deny with input as data.fixtures.wildcard_lookup_variable_branch
+  profile(findings) == {
+    ["PD-007", "noncompliant", 0, "no recipe reachable from \"spelling\" runs typos-config-builder gate"],
+  }
+}
+
 # The located branch must name the same tool as the fallback.
 test_wildcard_lookup_mismatched_branch if {
   findings := policy.deny with input as data.fixtures.wildcard_lookup_mismatched_branch
