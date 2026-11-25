@@ -541,12 +541,23 @@ def has_unresolved_command_word(text: str) -> bool:
 
 
 def _action(runner: str, subcommand: str) -> Action | None:
-    """Return whether the subcommand runs tests or compiles, None for neither."""
+    """Return whether the subcommand runs tests or compiles, None for neither.
+
+    A Make reference in the subcommand position (`cargo $(TEST_CMD) ...`, where
+    `TEST_CMD` is `nextest run` or `test` by a probe of the machine) is the
+    runner the repository picked. Either builds the same artefacts, so the
+    command is read as a test run and its options decide the signature.
+
+    Returns
+    -------
+    Action | None
+        What the command does, or None when it is neither a test nor a build.
+    """
     if runner == "nextest":
         if subcommand in _NEXTEST_RUN:
             return Action.RUN
         return Action.COMPILE if subcommand == "archive" else None
-    if subcommand == "test":
+    if subcommand == "test" or _is_opaque(subcommand):
         return Action.RUN
     if subcommand in _BUILD_SUBCOMMANDS:
         return Action.COMPILE

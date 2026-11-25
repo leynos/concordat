@@ -71,6 +71,9 @@ _PURE_CALL_OPEN: typ.Final = re.compile(
 _FUNCTION_CALL: typ.Final = re.compile(
     r"\$\((dir|notdir|lastword|firstword|abspath|realpath|strip)\s+([^()$]*)\)"
 )
+# `$(filter-out PATTERNS,TEXT)` with plain words in both: a repository drops
+# `--all-targets` from its test flags to reuse them for one named test target.
+_FILTER_OUT_CALL: typ.Final = re.compile(r"\$\(filter-out\s+([^(),$]*),([^()$]*)\)")
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -188,6 +191,34 @@ def _call_function(match: re.Match[str]) -> str:
         The function's result, as Make would produce it for these arguments.
     """
     return " ".join(_FUNCTIONS[match.group(1)](match.group(2).split()))
+
+
+def _matches_pattern(pattern: str, word: str) -> bool:
+    """Return whether *word* matches a Make pattern, `%` standing for any run."""
+    prefix, percent, suffix = pattern.partition("%")
+    if not percent:
+        return word == pattern
+    return (
+        len(word) >= len(prefix) + len(suffix)
+        and word.startswith(prefix)
+        and word.endswith(suffix)
+    )
+
+
+def _call_filter_out(match: re.Match[str]) -> str:
+    """Evaluate `$(filter-out PATTERNS,TEXT)` over plain words.
+
+    Returns
+    -------
+    str
+        The words of TEXT that no pattern matches, as Make would produce them.
+    """
+    patterns = match.group(1).split()
+    return " ".join(
+        word
+        for word in match.group(2).split()
+        if not any(_matches_pattern(pattern, word) for pattern in patterns)
+    )
 
 
 def close_of(text: str, start: int) -> int | None:
@@ -365,10 +396,13 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
 
     current = text.replace("$$", SHELL_DOLLAR)
     for _ in range(EXPANSION_PASSES):
-        updated = _FUNCTION_CALL.sub(
-            _call_function,
-            _VARIABLE_REFERENCE.sub(
-                substitute, _drop_error_guards(current, known, assigned)
+        updated = _FILTER_OUT_CALL.sub(
+            _call_filter_out,
+            _FUNCTION_CALL.sub(
+                _call_function,
+                _VARIABLE_REFERENCE.sub(
+                    substitute, _drop_error_guards(current, known, assigned)
+                ),
             ),
         )
         if updated == current:

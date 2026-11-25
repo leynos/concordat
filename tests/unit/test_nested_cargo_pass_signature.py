@@ -104,6 +104,18 @@ def test_commands_that_build_something_different_have_unequal_signatures(
     assert signature(left) != signature(right)
 
 
+def test_a_runner_picked_by_a_make_reference_is_a_test_run() -> None:
+    """`cargo $(TEST_CMD) ..` (nextest or test) builds what `cargo test` builds."""
+    run = read_invocation("cargo $(TEST_CMD) --all-targets --all-features")
+    compile_only = read_invocation("cargo $(TEST_CMD) --no-run --all-features")
+    assert run is not None
+    assert compile_only is not None
+    assert run.action is Action.RUN
+    assert compile_only.action is Action.COMPILE
+    assert run.signature == signature("cargo test --all-features")
+    assert compile_only.signature == signature("cargo test --all-features")
+
+
 def test_an_environment_variable_that_does_not_build_is_ignored() -> None:
     """Only the variables cargo builds with are part of the signature."""
     assert signature("FOO=1 cargo test") == signature("cargo test")

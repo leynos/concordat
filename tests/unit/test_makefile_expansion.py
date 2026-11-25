@@ -109,6 +109,38 @@ def test_the_file_name_functions_are_evaluated(text: str, expected: str) -> None
     assert expand(text, {}).text == expected
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("$(filter-out --all-targets,--all-targets --all-features)", "--all-features"),
+        ("$(filter-out a b,a b c d)", "c d"),
+        ("$(filter-out --x,--y --z)", "--y --z"),
+        ("$(filter-out %.rs,a.rs b.toml c.rs)", "b.toml"),
+        ("$(filter-out a,)", ""),
+    ],
+)
+def test_filter_out_drops_the_words_its_patterns_match(
+    text: str, expected: str
+) -> None:
+    """`filter-out` keeps the words no pattern matches, `%` standing for any run."""
+    result = expand(text, {})
+    assert result.text == expected
+    assert result.is_resolved is True
+
+
+def test_filter_out_reads_a_variable_it_is_given() -> None:
+    """A variable in the text settles before `filter-out` reads it."""
+    values = {"FLAGS": "--all-targets --all-features"}
+    assert expand("$(filter-out --all-targets,$(FLAGS))", values).text == (
+        "--all-features"
+    )
+
+
+def test_a_filter_out_with_an_unresolved_reference_stays_unresolved() -> None:
+    """The words a reference may add are unknown, so the call is left alone."""
+    assert expand("$(filter-out a,$(UNKNOWN))", {}).is_resolved is False
+
+
 def test_an_error_only_guard_expands_to_nothing() -> None:
     """`$(if COND,$(error ...))` either aborts Make or adds no text."""
     guard = (
