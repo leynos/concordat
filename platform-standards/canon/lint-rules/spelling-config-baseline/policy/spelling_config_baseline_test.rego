@@ -616,6 +616,14 @@ test_uv_quoted_runner if {
   count(findings) == 0
 }
 
+# An unclosed quote makes one word of the whole command, which is no runner.
+test_uv_unbalanced_quote if {
+  findings := policy.deny with input as data.fixtures.uv_unbalanced_quote
+  profile(findings) == {
+    ["PD-007", "noncompliant", 0, "no recipe reachable from \"spelling\" runs typos-config-builder gate"],
+  }
+}
+
 # The quotes do not hide a missing --python from PD-014.
 test_uv_quoted_runner_old if {
   findings := policy.deny with input as data.fixtures.uv_quoted_runner_old

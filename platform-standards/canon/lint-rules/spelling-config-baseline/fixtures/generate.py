@@ -132,6 +132,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "other_shell_lookup": Scenario(makefile="other-shell-lookup"),
     "env_assignment_prefix_old": Scenario(makefile="env-assignment-prefix-old"),
     "uv_quoted_runner_old": Scenario(makefile="uv-quoted-runner-old"),
+    "uv_unbalanced_quote": Scenario(makefile="uv-unbalanced-quote"),
     "or_lookup_other_fallback": Scenario(makefile="or-lookup-other-fallback"),
     "or_lookup_mismatched_fallback": Scenario(makefile="or-lookup-mismatched-fallback"),
     "wildcard_lookup_other_fallback": Scenario(

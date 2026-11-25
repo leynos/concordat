@@ -418,7 +418,7 @@ spelling_recipes := {recipe |
 segment_start := `(^|[;&(]|[^|]\|)[[:space:]]*[-@+]*[[:space:]]*`
 
 # The runner word may be quoted (`"$(UV)" tool run`), as a path with spaces needs.
-runner := `(?:["']?uvx["']?|["']?uv["']?[[:space:]]+tool[[:space:]]+run)`
+runner := `(?:"uvx"|'uvx'|uvx|(?:"uv"|'uv'|uv)[[:space:]]+tool[[:space:]]+run)`
 
 # `env`, with `-u NAME` options or environment assignments, only changes the
 # command's environment, so it may prefix the runner as an assignment does.
