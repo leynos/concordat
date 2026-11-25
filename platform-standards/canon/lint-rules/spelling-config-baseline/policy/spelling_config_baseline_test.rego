@@ -544,6 +544,50 @@ test_other_shell_lookup if {
   }
 }
 
+# `env` with environment assignments only changes the environment of the runner.
+test_env_assignment_prefix if {
+  findings := policy.deny with input as data.fixtures.env_assignment_prefix
+  count(findings) == 0
+}
+
+# The prefix does not hide a missing --python from PD-014.
+test_env_assignment_prefix_old if {
+  findings := policy.deny with input as data.fixtures.env_assignment_prefix_old
+  profile(findings) == {
+    ["PD-014", "noncompliant", 5, "\"spelling\"-path recipe runs typos-config-builder without --python; the builder needs Python 3.14 or later, and a UV_PYTHON from a CI matrix can hand it an older one"],
+  }
+}
+
+# `$(if $(wildcard PATH),PATH,uv)` yields `uv` either way, so it is the runner word.
+test_uv_wildcard_lookup if {
+  findings := policy.deny with input as data.fixtures.uv_wildcard_lookup
+  count(findings) == 0
+}
+
+# A fallback other than the tool word proves nothing about the runner.
+test_wildcard_lookup_other_fallback if {
+  findings := policy.deny with input as data.fixtures.wildcard_lookup_other_fallback
+  profile(findings) == {
+    ["PD-007", "noncompliant", 0, "no recipe reachable from \"spelling\" runs typos-config-builder gate"],
+  }
+}
+
+# A branch that reads another variable proves nothing: its value could hold a command.
+test_wildcard_lookup_variable_branch if {
+  findings := policy.deny with input as data.fixtures.wildcard_lookup_variable_branch
+  profile(findings) == {
+    ["PD-007", "noncompliant", 0, "no recipe reachable from \"spelling\" runs typos-config-builder gate"],
+  }
+}
+
+# The located branch must name the same tool as the fallback.
+test_wildcard_lookup_mismatched_branch if {
+  findings := policy.deny with input as data.fixtures.wildcard_lookup_mismatched_branch
+  profile(findings) == {
+    ["PD-007", "noncompliant", 0, "no recipe reachable from \"spelling\" runs typos-config-builder gate"],
+  }
+}
+
 # A fallback that may run something else than uv proves nothing about the runner.
 test_shell_lookup_other_fallback if {
   findings := policy.deny with input as data.fixtures.shell_lookup_other_fallback

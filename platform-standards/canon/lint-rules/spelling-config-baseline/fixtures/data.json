@@ -2302,6 +2302,352 @@
       },
       "vendored": []
     },
+    "env_assignment_prefix": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "53dc0d9a349073d4f961065bcd0e461f7afb8af2e570121e33597f955bf65fba",
+          "byte_length": 275
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 196,
+              "end_byte": 213,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(BUILDER) gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 258,
+                  "end_byte": 275,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 213,
+              "end_byte": 275,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_ENV",
+            "operator": "=",
+            "raw_value": "UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 54,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "BUILDER",
+            "operator": "=",
+            "raw_value": "env $(UV_ENV) uv tool run --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 54,
+              "end_byte": 196,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "uv_wildcard_lookup": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "fe28f750248beb4fb6083bfa1f0f113e0cc96f4f505922113692ec479841bb0c",
+          "byte_length": 281
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 202,
+              "end_byte": 219,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(BUILDER) gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 264,
+                  "end_byte": 281,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 219,
+              "end_byte": 281,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV",
+            "operator": "?=",
+            "raw_value": "$(if $(wildcard $(HOME)/.local/bin/uv),$(HOME)/.local/bin/uv,uv)",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 71,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "BUILDER",
+            "operator": "=",
+            "raw_value": "$(UV) tool run --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 71,
+              "end_byte": 202,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
     "not_applicable": {
       "schema_version": 1,
       "kind": "policy-input/spelling-config-baseline",
@@ -3431,6 +3777,716 @@
               "start_line": 1,
               "start_column": 1,
               "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "env_assignment_prefix_old": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "ee33418b3c2fbf480118b7afe38e7a537774c15c868aa2b1862c3388372335da",
+          "byte_length": 261
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 182,
+              "end_byte": 199,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(BUILDER) gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 244,
+                  "end_byte": 261,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 199,
+              "end_byte": 261,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_ENV",
+            "operator": "=",
+            "raw_value": "UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 54,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "BUILDER",
+            "operator": "=",
+            "raw_value": "env $(UV_ENV) uv tool run --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 54,
+              "end_byte": 182,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "wildcard_lookup_other_fallback": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "0270ceac948e2fc12b4aec179132c064779e93033cbd55fd096336aa7f8adb5f",
+          "byte_length": 283
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 204,
+              "end_byte": 221,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(BUILDER) gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 266,
+                  "end_byte": 283,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 221,
+              "end_byte": 283,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV",
+            "operator": "?=",
+            "raw_value": "$(if $(wildcard $(HOME)/.local/bin/uv),$(HOME)/.local/bin/uv,true)",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 73,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "BUILDER",
+            "operator": "=",
+            "raw_value": "$(UV) tool run --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 73,
+              "end_byte": 204,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "wildcard_lookup_variable_branch": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "d1c0c7695ad214e178ae5233a249b121af15e5ab5f9c151b21f2b9d728186788",
+          "byte_length": 318
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 3,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 239,
+              "end_byte": 256,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(BUILDER) gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 301,
+                  "end_byte": 318,
+                  "start_line": 6,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 256,
+              "end_byte": 318,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "RUNNER_DIR",
+            "operator": "=",
+            "raw_value": "/bin/true ignored; /bin/true /tmp",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 47,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "UV",
+            "operator": "?=",
+            "raw_value": "$(if $(wildcard $(RUNNER_DIR)/uv),$(RUNNER_DIR)/uv,uv)",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 47,
+              "end_byte": 108,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "name": "BUILDER",
+            "operator": "=",
+            "raw_value": "$(UV) tool run --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 108,
+              "end_byte": 239,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "wildcard_lookup_mismatched_branch": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.2",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "271ecd7738c9939a7216eeed894d1c37dbd43b78dc6cd22ab8ad43a1ab750eb3",
+          "byte_length": 282
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 203,
+              "end_byte": 220,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(BUILDER) gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 265,
+                  "end_byte": 282,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 220,
+              "end_byte": 282,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV",
+            "operator": "?=",
+            "raw_value": "$(if $(wildcard $(HOME)/.local/bin/uv),$(HOME)/.local/bin/uvx,uv)",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 72,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "BUILDER",
+            "operator": "=",
+            "raw_value": "$(UV) tool run --python 3.14 --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 72,
+              "end_byte": 203,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
               "end_column": 1
             }
           }
