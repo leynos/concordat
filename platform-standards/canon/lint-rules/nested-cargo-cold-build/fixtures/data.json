@@ -176,6 +176,178 @@
       "builds": [{}],
       "problems": []
     },
+    "pass_matched": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": ".", "prepared_by": ["makefile-preparation"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 128, "command": "cargo nextest run --all-features",
+          "status": "warmed", "visible": 2, "reason": ""
+        }
+      ],
+      "problems": []
+    },
+    "pass_second_unmatched": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": ".", "prepared_by": ["preparation-test", "makefile-preparation"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 128, "command": "cargo nextest run --all-features",
+          "status": "warmed", "visible": 2, "reason": ""
+        },
+        {
+          "path": "Makefile", "line": 154,
+          "command": "cargo nextest run -p app --no-default-features",
+          "status": "unprepared", "visible": 2, "reason": ""
+        }
+      ],
+      "problems": []
+    },
+    "pass_in_suite_prepared": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": ".", "prepared_by": ["preparation-test", "makefile-preparation"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 128, "command": "cargo nextest run --all-features",
+          "status": "warmed", "visible": 1, "reason": ""
+        },
+        {
+          "path": "Makefile", "line": 154,
+          "command": "cargo nextest run -p app --no-default-features",
+          "status": "warmed", "visible": 2, "reason": ""
+        }
+      ],
+      "problems": []
+    },
+    "pass_in_suite_only": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": ".", "prepared_by": ["preparation-test"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 128, "command": "cargo nextest run",
+          "status": "unprepared", "visible": 0, "reason": ""
+        }
+      ],
+      "problems": []
+    },
+    "pass_compiled_trybuild": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": ".", "prepared_by": ["makefile-preparation"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 12, "command": "cargo nextest run",
+          "status": "compiled", "visible": 1, "reason": ""
+        }
+      ],
+      "problems": []
+    },
+    "pass_compiled_cargo": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/support.rs", "line": 12, "kind": "cargo", "binary": null,
+          "crate": ".", "prepared_by": ["makefile-preparation"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 12, "command": "cargo nextest run",
+          "status": "compiled", "visible": 1, "reason": ""
+        }
+      ],
+      "problems": []
+    },
+    "pass_unresolved": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": ".", "prepared_by": ["makefile-preparation"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 12, "command": "cargo nextest run $(FLAGS)",
+          "status": "indeterminate", "visible": 1,
+          "reason": "an option or Make reference the reader cannot read is in a signature"
+        }
+      ],
+      "problems": []
+    },
+    "pass_setup_script_covered": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": ".", "prepared_by": ["setup-script"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 12, "command": "cargo nextest run",
+          "status": "unprepared", "visible": 1, "reason": ""
+        }
+      ],
+      "problems": []
+    },
+    "pass_malformed": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [],
+      "passes": [{"path": "Makefile", "line": 12}],
+      "problems": []
+    },
     "malformed_build": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-cold-build",

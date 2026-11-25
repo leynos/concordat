@@ -214,3 +214,79 @@ test_an_envelope_of_another_kind_is_an_error if {
 	some f in findings(data.fixtures.wrong_kind)
 	f.severity == "error"
 }
+
+# -- NC-010 per pass ------------------------------------------------------------
+
+# A pass whose own flags a preparation ran first is compliant.
+test_a_matched_pass_is_compliant if {
+	count(findings(data.fixtures.pass_matched)) == 0
+}
+
+# The rstest-bdd shape: the first pass was prepared, the second builds other
+# features and nothing prepared them.
+test_an_unmatched_second_pass_is_noncompliant if {
+	found := findings(data.fixtures.pass_second_unmatched)
+	{[f.rule_id, f.verdict, f.path, f.line] | some f in found} == {["NC-010", "noncompliant", "Makefile", 154]}
+}
+
+test_the_unmatched_pass_message_names_the_remedy if {
+	some f in findings(data.fixtures.pass_second_unmatched)
+	contains(f.msg, "https://github.com/leynos/rstest-bdd/pull/979")
+	contains(f.msg, "https://github.com/leynos/whitaker/pull/669")
+}
+
+# An outside run of the in-suite preparation test counts for the pass whose
+# flags it carried, and for that pass only.
+test_an_in_suite_preparation_matched_to_each_pass_is_compliant if {
+	count(findings(data.fixtures.pass_in_suite_prepared)) == 0
+}
+
+# Preparation that exists only inside the suite runs under its harness timeout:
+# a warning, and it stays one when the severity parameter says error.
+test_a_preparation_only_inside_the_suite_is_a_warning if {
+	found := findings(data.fixtures.pass_in_suite_only)
+	{[f.rule_id, f.severity] | some f in found} == {["NC-010", "warning"]}
+}
+
+test_a_preparation_only_inside_the_suite_stays_a_warning_at_error_severity if {
+	fs := policy.deny with input as data.fixtures.pass_in_suite_only
+		with data.parameters as {"severity": "error", "exemptions": []}
+	{f.severity | some f in fs} == {"warning"}
+}
+
+# `--no-run` leaves trybuild and macrotest cold, so a compile alone does not
+# satisfy a repository that has either.
+test_a_compile_only_preparation_does_not_warm_trybuild if {
+	found := findings(data.fixtures.pass_compiled_trybuild)
+	{[f.rule_id, f.verdict, f.line] | some f in found} == {["NC-010", "noncompliant", 12]}
+	some f in found
+	contains(f.msg, "does not warm trybuild")
+}
+
+test_a_compile_only_preparation_is_enough_without_a_nested_family if {
+	count(findings(data.fixtures.pass_compiled_cargo)) == 0
+}
+
+test_a_signature_the_reader_cannot_read_is_indeterminate if {
+	profile(data.fixtures.pass_unresolved) == {["EN-001", "indeterminate", "Makefile"]}
+}
+
+# A nextest setup script runs before every nextest pass, so each pass is
+# prepared whatever the Makefile does.
+test_a_setup_script_covers_every_pass if {
+	count(findings(data.fixtures.pass_setup_script_covered)) == 0
+}
+
+test_a_malformed_pass_is_an_envelope_error if {
+	{[f.rule_id, f.severity] | some f in findings(data.fixtures.pass_malformed)} == {["EN-001", "error"]}
+}
+
+test_an_exemption_for_the_makefile_suppresses_a_pass_finding if {
+	makefile := [{
+		"repository": "leynos/example",
+		"path": "Makefile",
+		"rationale": "the target prepares through an external script",
+		"review_trigger": "review when the script is brought into this repository",
+	}]
+	count(findings_with(data.fixtures.pass_second_unmatched, makefile)) == 0
+}

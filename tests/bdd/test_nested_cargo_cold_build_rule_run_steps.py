@@ -26,6 +26,16 @@ SETUP_SCRIPT = (
     '[scripts.setup.prepare]\ncommand = "make prepare"\n\n'
     '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "prepare"\n'
 )
+# The first pass has its own build and filtered run ahead of it; the second builds
+# `--no-default-features`, which that run never compiled (the rstest-bdd shape).
+ONE_LEG_PREPARED_MAKEFILE = (
+    ".PHONY: test\n"
+    "test:\n"
+    "\tcargo build --all-features\n"
+    "\tcargo nextest run --all-features -E 'test(/prepare$$/)'\n"
+    "\tcargo nextest run --all-features\n"
+    "\tcargo nextest run --no-default-features\n"
+)
 TEMPORARY_TARGET = (
     "fn build() {\n    let scratch = tempfile::tempdir().unwrap();\n"
     '    std::process::Command::new("cargo")\n        .arg("build")\n'
@@ -53,6 +63,12 @@ def given_setup_script(cold_checkout: pathlib.Path) -> None:
     """Write a nextest configuration whose setup script selects every test."""
     (cold_checkout / ".config").mkdir()
     (cold_checkout / ".config/nextest.toml").write_text(SETUP_SCRIPT, encoding="utf-8")
+
+
+@given("a Makefile that prepares only the first of two test passes")
+def given_one_pass_prepared(cold_checkout: pathlib.Path) -> None:
+    """Write a Makefile whose second pass builds features nothing prepared."""
+    (cold_checkout / "Makefile").write_text(ONE_LEG_PREPARED_MAKEFILE, encoding="utf-8")
 
 
 @given("a test that builds into a temporary target directory")

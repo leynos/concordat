@@ -112,6 +112,12 @@ def test_a_checkout_with_no_makefile_preparation_is_reported(
             "test: warm tools\n\tcargo nextest run\n\n"
             "warm:\n\tcargo build\n\ntools:\n\tcargo fmt\n"
         ),
+        # A target name built from a plain variable settles to an ordinary
+        # pattern rule, which cannot be a special target.
+        (
+            "APP := tool\n\ntarget/%/$(APP):\n\tcargo build --release\n\n"
+            "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+        ),
     ],
 )
 def test_a_target_that_compiles_before_the_tests_prepares_the_builds(

@@ -42,6 +42,7 @@ envelope_ok if {
 	is_array(input.spawns)
 	is_array(input.builds)
 	is_array(input.problems)
+	is_array(object.get(input, "passes", []))
 }
 
 # An exemption is a reviewed record: it names the repository, the exact file,
@@ -184,6 +185,110 @@ deny contains finding("NC-010", severity, "noncompliant", path, line, msg) if {
 		"%s:%d compiles inside a timed test (%s) and the repository declares no preparation outside it. If nothing has filled the build's target directory first, the test body pays for a cold build and its timeout fails an assertion that is sound. Prepare the build before the timed test runs: in a nextest setup script (a `[scripts.setup.*]` table selected by a `[[profile.*.scripts]]` rule whose filter covers this test), or in a named preparation test in the same crate and serial test group that stamps its artefacts, with the timed test refusing to run when the stamp is missing, as https://github.com/leynos/rstest-bdd/pull/916 does for its trybuild, macrotest and fixture builds. Doing the shared work once, outside the tests, is the same move as https://github.com/leynos/whitaker/issues/518. Name your own gate in this rule's `preparation_gates` parameter, or name the file in its exemptions with the reason it must build cold",
 		[path, line, concat(", ", sort(_cold_kinds(path)))],
 	)
+}
+
+# -- NC-010 per pass: each test pass of `make test` prepared for itself ---------
+
+# A repository whose Makefile (or a named in-suite test or gate) is what pays
+# for its nested builds is judged pass by pass: preparing one pass's features
+# warms nothing for a second pass that builds different ones. A repository whose
+# every build a nextest setup script covers is left alone (the script runs
+# before each nextest pass), and one with no declared preparation is already
+# reported once per file above.
+_declared(build) if {
+	_well_formed_build(build)
+	count(object.get(build, "prepared_by", [])) > 0
+	not "setup-script" in build.prepared_by
+}
+
+_relies_on_declared_preparation if {
+	some build in input.builds
+	_declared(build)
+}
+
+# The families whose nested builds `cargo test --no-run` leaves cold: trybuild
+# and macrotest each build in a directory of their own under the target.
+_nested_family(build) if build.kind in {"trybuild", "macrotest"}
+
+_has_nested_family if {
+	some build in input.builds
+	_declared(build)
+	_nested_family(build)
+}
+
+# A named in-suite preparation test or gate runs under the harness's own
+# timeout, so it is advice rather than a blocker whatever the severity says.
+_has_in_suite_preparation if {
+	some build in input.builds
+	_declared(build)
+	some how in build.prepared_by
+	how in {"preparation-test", "gate-call"}
+}
+
+_passes := object.get(input, "passes", [])
+
+_pass_is_judged(pass) if {
+	envelope_ok
+	_well_formed_pass(pass)
+	_relies_on_declared_preparation
+	not is_exempt(pass.path)
+}
+
+deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, msg) if {
+	some pass in _passes
+	_pass_is_judged(pass)
+	pass.status == "unprepared"
+	pass.visible > 0
+	msg := sprintf(
+		"%s:%d runs the tests as `%s`, and no preparation that runs before it has the same package selection, features, target, profile and RUSTFLAGS, so its nested builds are cold inside the timed run (rstest-bdd's `--no-default-features` pass timed out although `--all-features` had been prepared). Prepare each pass with that pass's own flags before it runs, as https://github.com/leynos/rstest-bdd/pull/979 does with one preparation target taking the flags, or https://github.com/leynos/whitaker/pull/669 with `make warm-test-builds`",
+		[pass.path, pass.line, object.get(pass, "command", "the test runner")],
+	)
+}
+
+deny contains finding("NC-010", "warning", "noncompliant", pass.path, pass.line, msg) if {
+	some pass in _passes
+	_pass_is_judged(pass)
+	pass.status == "unprepared"
+	pass.visible == 0
+	_has_in_suite_preparation
+	msg := sprintf(
+		"%s:%d runs the tests as `%s`, and the only preparation is a named test or gate inside the suite, which runs under the harness's own timeout. A loaded host can exhaust that bound while it compiles. Run the preparation before the timed run with this pass's flags, outside any test deadline (rstest-bdd's `prepare-nested-fixtures` target)",
+		[pass.path, pass.line, object.get(pass, "command", "the test runner")],
+	)
+}
+
+deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, msg) if {
+	some pass in _passes
+	_pass_is_judged(pass)
+	pass.status == "compiled"
+	_has_nested_family
+	msg := sprintf(
+		"%s:%d runs the tests as `%s`. Only a compile of the same flags runs before it (`--no-run`, `build` or `archive`), and that does not warm trybuild or macrotest: each builds in a directory of its own under the target that the outer build never fills (a whitaker-common contract took 58 s after `--no-run` and 2 s on the next run). Run the nested-build tests for real before the timed pass, with the same flags, as https://github.com/leynos/whitaker/pull/669 does",
+		[pass.path, pass.line, object.get(pass, "command", "the test runner")],
+	)
+}
+
+deny contains finding("EN-001", severity, "indeterminate", pass.path, pass.line, msg) if {
+	some pass in _passes
+	_pass_is_judged(pass)
+	pass.status == "indeterminate"
+	msg := sprintf(
+		"%s:%d may run the tests as `%s`, and the reader cannot tell what prepares it: %s",
+		[pass.path, pass.line, object.get(pass, "command", "the test runner"), object.get(pass, "reason", "no reason recorded")],
+	)
+}
+
+deny contains finding("EN-001", "error", "indeterminate", "", 0, msg) if {
+	envelope_ok
+	some pass in _passes
+	not _well_formed_pass(pass)
+	msg := sprintf("a pass fact is missing required fields: %v", [pass])
+}
+
+_well_formed_pass(pass) if {
+	is_object(pass)
+	count(_missing_fields(pass, [["path", "string"], ["line", "number"], ["status", "string"], ["visible", "number"]])) == 0
+	pass.status in {"warmed", "compiled", "unprepared", "indeterminate"}
 }
 
 # -- evidence the reader could not establish -----------------------------------
