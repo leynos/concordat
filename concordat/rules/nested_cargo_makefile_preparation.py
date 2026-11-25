@@ -439,6 +439,9 @@ def _may_be_special(name: str, values: cabc.Mapping[str, str]) -> bool:
     return any(
         not reading.is_resolved
         or bool(UNSAFE_SPECIAL_TARGETS & set(reading.text.split()))
+        # A name that settles to a plain word is a real target the index (keyed
+        # by the raw text) would never find; only a pattern (`%`) is harmless.
+        or "%" not in reading.text
         for reading in expand_readings(name, values)
     )
 

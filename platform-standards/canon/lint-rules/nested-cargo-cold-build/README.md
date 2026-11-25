@@ -257,9 +257,12 @@ timed out. A preparation warms a pass only when both build the same thing.
 
 For every repository whose preparation is declared in the Makefile, a named
 in-suite test or a gate (a repository whose every build a nextest setup script
-covers is left to the script, which nextest runs before each nextest pass), the
-reader walks the `test` target in Make's order and judges each *pass*: an
-unfiltered `cargo nextest run`, `cargo-nextest nextest run` or `cargo test`.
+covers is left to the script, which nextest runs before each nextest pass; a
+plain `cargo test` pass never runs it, and the reader does not yet tell the two
+runners apart there, so such a repository is not judged pass by pass: a stated
+limit), the reader walks the `test` target in Make's order and judges each
+*pass*: an unfiltered `cargo nextest run`, `cargo-nextest nextest run` or
+`cargo test`.
 
 - **Signature.** A pass and a preparation are the same build when their package
   selection (`-p`, `--workspace`, `--exclude`, `--manifest-path`), features
@@ -277,12 +280,15 @@ unfiltered `cargo nextest run`, `cargo-nextest nextest run` or `cargo test`.
   conditions as the Makefile preparation above: not in a conditional, not after
   `||` or `;`, not on an ignored-error line, in a `.PHONY` target), with an
   equal signature, that is either *compile-only* (`--no-run`, `build`, `bench`,
-  `nextest archive`) or a *filtered real run* (`-E`, `--filterset`, `--test`,
-  `--lib`, `--doc` or a test name, as in rstest-bdd's
-  `-E 'test(/nested_fixture_preparation$/)'`). A filtered run is read as
-  preparation and never judged as a pass, because the reader cannot know which
-  tests its filter leaves. An outside run of an in-suite preparation test
-  counts for the pass whose flags it carried and for no other.
+  `nextest archive`) or a *filtered real run* (`-E`, `--filterset`, `--test` or
+  a test name, as in rstest-bdd's `-E 'test(/nested_fixture_preparation$/)'`).
+  A filtered run is read as preparation and never judged as a pass, because the
+  reader cannot know which tests its filter leaves. A run that selects only
+  `--lib`, `--doc`, `--bin`, `--example` or `--bench` compiles what it runs and
+  never reaches the integration tests that hold the nested builds, so it counts
+  as a compile, not as a real run. An outside run of an in-suite preparation
+  test counts for the pass whose flags it carried and for no other. A help
+  request (`--help`, `-h`) builds nothing and prepares nothing.
 - **Order.** Make orders a rule's prerequisites before its recipe and does not
   order sibling prerequisites, so a pass inside one prerequisite sees only what
   ran before the rule. `$(MAKE) goal [VAR=value]` is followed with the override
@@ -323,9 +329,14 @@ repository whose test target lives in a Netsukefile is out of scope, not clean
 `docs/rfcs/rfc-0004-netsukefile-support.md`), and a CI step that runs cargo
 directly, bypassing `make test`, is not read either (no finding yet).
 
-The limits are stated, not guessed at: the target selectors `--lib`, `--tests`
-and `--all-targets` are not compared, and neither are Makefile-level `export`s
-or target-specific variables that give two targets different `RUSTFLAGS`; a
+`--target-dir`, `--config`, `-Z`, `-C` and a `+toolchain` selector are part of
+the signature, with their values, because each changes where or how cargo
+builds. An unresolved Make reference as an option's value stays in the
+signature beside its option.
+
+The limits are stated, not guessed at: the target selectors `--tests` and
+`--all-targets` are not compared, and neither are Makefile-level `export`s or
+target-specific variables that give two targets different `RUSTFLAGS`; a
 command the reader cannot lex, or whose test run hides behind a `make -C`, is
 not a pass. The workflows' test commands are not read, only the Makefile's
 `test` target.

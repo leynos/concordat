@@ -10,11 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from concordat.rules.nested_cargo_pass_signature import (
-    Action,
-    has_unresolved_command_word,
-    read_invocation,
-)
+from concordat.rules.nested_cargo_pass_signature import Action, read_invocation
+from concordat.rules.nested_cargo_pass_words import has_unresolved_command_word
 
 
 def signature(text: str):  # noqa: ANN201 - the type is the module's own

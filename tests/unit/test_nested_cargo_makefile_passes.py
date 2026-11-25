@@ -302,3 +302,66 @@ def test_a_repository_with_a_setup_script_is_not_judged_by_pass(
         '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "prepare"\n',
     )
     assert findings(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "first",
+    [
+        "$(RUNNER) --no-run --all-features",
+        "$(MAKE) -C sub test",
+    ],
+)
+def test_an_unreadable_command_first_leaves_a_later_pass_indeterminate(
+    tmp_path: pathlib.Path, first: str
+) -> None:
+    """A command the reader cannot follow may have built what the pass needs."""
+    checkout(tmp_path, f"test:\n\t{first}\n\tcargo test --all-features\n")
+    assert [status for _line, status in statuses(tmp_path)] == [
+        "indeterminate",
+        "indeterminate",
+    ]
+
+
+def test_a_lib_run_does_not_warm_the_integration_tests_nested_builds(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`--lib` runs unit tests only; a trybuild build in `tests/` stays cold."""
+    checkout(
+        tmp_path,
+        "test:\n\tcargo test --lib --all-features\n\tcargo test --all-features\n",
+    )
+    assert statuses(tmp_path) == [(3, "compiled")]
+
+
+def test_a_test_target_run_warms_the_nested_builds_it_holds(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`--test ui` runs the integration test that holds the trybuild build."""
+    checkout(
+        tmp_path,
+        "test:\n\tcargo test --test ui --all-features\n\tcargo test --all-features\n",
+    )
+    assert statuses(tmp_path) == [(3, "warmed")]
+
+
+def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
+    """`cargo build --help` compiles nothing, so the pass is still unprepared."""
+    checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")
+    assert statuses(tmp_path) == [(3, "unprepared")]
+
+
+def test_a_preparation_skipped_by_a_short_circuit_in_a_branch_is_not_certain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`false && cargo ...` in a branch never builds, yet the branch succeeds."""
+    makefile = (
+        "test:\n"
+        "\tif command -v cargo-nextest >/dev/null 2>&1; then \\\n"
+        "\t\tfalse && cargo test --no-run --all-features; true; \\\n"
+        "\telse \\\n"
+        "\t\tcargo test --no-run --all-features; \\\n"
+        "\tfi\n"
+        "\tcargo test --all-features\n"
+    )
+    checkout(tmp_path, makefile)
+    assert statuses(tmp_path) == [(7, "unprepared")]

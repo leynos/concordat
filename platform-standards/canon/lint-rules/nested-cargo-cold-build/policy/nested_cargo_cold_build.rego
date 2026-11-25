@@ -250,9 +250,26 @@ _pass_is_judged(pass) if {
 	not is_exempt(pass.path)
 }
 
+# A pass is only judged for the declared builds it runs: one that selects other
+# packages (`-p core`) never runs another crate's nested build.
+_pass_runs_a_declared_build(pass) if {
+	some build in input.builds
+	_declared(build)
+	_pass_covers(pass, build)
+}
+
+# Evidence the reader could not establish is reported whether or not any build
+# declares a preparation, so an unreadable Makefile is never silently clean.
+_pass_is_reportable(pass) if {
+	envelope_ok
+	_well_formed_pass(pass)
+	not is_exempt(pass.path)
+}
+
 deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, msg) if {
 	some pass in _passes
 	_pass_is_judged(pass)
+	_pass_runs_a_declared_build(pass)
 	pass.status == "unprepared"
 	pass.visible > 0
 	msg := sprintf(
@@ -286,7 +303,7 @@ deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, 
 
 deny contains finding("EN-001", severity, "indeterminate", pass.path, pass.line, msg) if {
 	some pass in _passes
-	_pass_is_judged(pass)
+	_pass_is_reportable(pass)
 	pass.status == "indeterminate"
 	msg := sprintf(
 		"%s:%d may run the tests as `%s`, and the reader cannot tell what prepares it: %s",

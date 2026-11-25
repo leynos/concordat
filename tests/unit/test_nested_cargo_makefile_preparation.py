@@ -138,6 +138,12 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         "test:\n\tcargo build || cargo nextest run\n",
         # An ignored error leaves the test to run on a failed build.
         "test:\n\t-cargo build\n\tcargo nextest run\n",
+        # A name that settles to a plain word is a real target the index, keyed
+        # by the raw text, would never find, so the rule is not followed.
+        (
+            "T := prepare\n.PHONY: prepare\n$(T):\n\tcargo build\n"
+            "test: prepare\n\tcargo nextest run\n"
+        ),
         # A conditional build may not run.
         'test:\n\tif [ -n "$(X)" ]; then cargo build; fi\n\tcargo nextest run\n',
         # A prerequisite that only checks tools, formats or lints.

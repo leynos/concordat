@@ -3115,7 +3115,12 @@ it:
 - A filtered run (`-E`, `--test`, a test name) is a preparation and never a
   pass, because a text scan cannot know which tests its filter leaves; this is
   how an outside run of an in-suite preparation test counts, for exactly the
-  flags it ran with.
+  flags it ran with. A run that selects only `--lib`, `--doc`, `--bin`,
+  `--example` or `--bench` never reaches the integration tests that hold the
+  nested builds, so it counts as a compile.
+- A command the reader cannot follow (an unresolved command word, or a `make`
+  it cannot read that may run tests) is reported as indeterminate and leaves
+  every later pass indeterminate, because it may have built what the pass needs.
 - A compile-only line (`--no-run`, `build`, `archive`) prepares a pass but does
   not warm trybuild or macrotest, which build in their own directory under the
   target. The measured cost of trusting it (whitaker 58 s against 2 s,

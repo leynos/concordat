@@ -297,6 +297,26 @@ test_a_pass_scoped_to_another_package_needs_only_a_compile if {
 	count(findings(data.fixtures.pass_scoped_to_other_package)) == 0
 }
 
+# An unprepared pass that selects other packages runs none of the declared
+# builds, so it is not reported for them.
+test_an_unprepared_pass_scoped_to_another_package_is_not_reported if {
+	fixture := object.union(data.fixtures.pass_scoped_to_other_package, {"passes": [{
+		"path": "Makefile", "line": 3, "command": "cargo test -p core", "status": "unprepared",
+		"visible": 1, "reason": "", "packages": ["core"],
+	}]})
+	count(findings(fixture)) == 0
+}
+
+# A pass the reader cannot follow is reported even when no build declares a
+# preparation, so an unreadable Makefile is never silently clean.
+test_an_unreadable_pass_is_reported_without_a_declared_preparation if {
+	fixture := object.union(data.fixtures.compliant, {"passes": [{
+		"path": "Makefile", "line": 2, "command": "test", "status": "indeterminate",
+		"visible": 0, "reason": "the Makefile holds a construct the reader does not follow",
+	}]})
+	{[f.rule_id, f.verdict] | some f in findings(fixture)} == {["EN-001", "indeterminate"]}
+}
+
 test_a_pass_scoped_to_the_owning_package_still_needs_a_real_run if {
 	{[f.rule_id, f.line] | some f in findings(data.fixtures.pass_scoped_to_owning_package)} == {["NC-010", 12]}
 }

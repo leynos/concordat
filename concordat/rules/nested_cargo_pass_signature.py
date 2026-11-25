@@ -14,7 +14,8 @@ the expansion left, are kept in the signature as opaque words, in order, so two
 commands compare equal only when they carry the same opaque words, and a command
 that carries any is reported as not fully read. Nextest's own selection options
 (`-E`, `--profile`, `-j`) and the arguments after `--` change what runs, never
-what builds, so they stay out of the signature.
+what builds, so they stay out of the signature. The options that change where or
+how cargo builds (`--target-dir`, `--config`, `-Z`, a `+toolchain`) stay in it.
 """
 
 from __future__ import annotations
@@ -24,37 +25,17 @@ import enum
 import re
 import typing as typ
 
-from .interrogate_invocation import lex_segments
-from .make_commands import command_start
-from .makefile_expansion import UNRESOLVED_MARK
-
-# A Make reference the expansion left becomes this stand-in plus its number, so
-# two commands that carry the same reference text compare equal while a
-# different one does not. The lexer sees one ordinary word.
-_REFERENCE_TAG: typ.Final = "\x03"
-# Whitespace, quotes and shell operators inside a reference, made inert.
-_WORD_SAFE: typ.Final = str.maketrans({
-    " ": "\x04",
-    "\t": "\x04",
-    "\n": "\x04",
-    "'": "\x05",
-    '"': "\x05",
-    "|": "\x06",
-    ";": "\x06",
-    "&": "\x06",
-    "<": "\x06",
-    ">": "\x06",
-    "(": "\x07",
-    ")": "\x07",
-    "{": "\x07",
-    "}": "\x07",
-    "$": "\x08",
-    "\\": "\x08",
-    "#": "\x08",
-})
-_ASSIGNMENT: typ.Final = re.compile(
-    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)", re.DOTALL
+from .nested_cargo_pass_words import (
+    ASSIGNMENT,
+    Command,
+    is_opaque,
+    lexed,
+    read_command,
+    word_at,
 )
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 # Environment variables that decide which directory cargo builds into or which
 # compiler flags it builds with. Any other variable leaves the build as it was.
@@ -69,30 +50,13 @@ _BUILD_ENVIRONMENT: typ.Final = frozenset({
 })
 _BUILD_ENVIRONMENT_PREFIXES: typ.Final = ("CARGO_PROFILE_",)
 
-# Shell words that introduce a command without being one.
-_KEYWORDS: typ.Final = frozenset({
-    "if",
-    "then",
-    "else",
-    "elif",
-    "do",
-    "while",
-    "until",
-    "!",
-    "{",
-    "time",
-})
 _PACKAGE: typ.Final = frozenset({"-p", "--package"})
-_EXCLUDE: typ.Final = frozenset({"--exclude"})
 _FEATURES: typ.Final = frozenset({"--features", "-F"})
 _WHOLE_WORKSPACE: typ.Final = frozenset({"--workspace", "--all"})
-_ALL_FEATURES: typ.Final = "--all-features"
-_NO_DEFAULT_FEATURES: typ.Final = "--no-default-features"
 _RELEASE: typ.Final = frozenset({"--release", "-r"})
-_TARGET: typ.Final = "--target"
-_MANIFEST: typ.Final = "--manifest-path"
-_PROFILE: typ.Final = "--profile"
-_CARGO_PROFILE: typ.Final = "--cargo-profile"
+_FEATURE_FLAGS: typ.Final = frozenset({"--all-features", "--no-default-features"})
+_BUILD_OPTIONS: typ.Final = frozenset({"--target-dir", "--config", "-Z"})
+_HELP: typ.Final = frozenset({"--help", "-h"})
 # Options that select which test targets run, not what builds: a run that
 # carries one is a filtered run.
 _TARGET_SELECTORS: typ.Final = frozenset({
@@ -105,13 +69,22 @@ _TARGET_SELECTORS: typ.Final = frozenset({
     "-E",
     "--filterset",
 })
+# Selectors that pick unit-test or documentation targets. The nested builds a
+# trybuild or macrotest harness runs live in an integration test, which these
+# never run, so a run that selects only these leaves them cold.
+_UNIT_TARGETS: typ.Final = frozenset({
+    "--lib",
+    "--doc",
+    "--bin",
+    "--example",
+    "--bench",
+})
 # Value-taking options that change nothing the signature records. The reader
 # must still step over their values, or it would read a value as a filter.
 _IGNORED_WITH_VALUE: typ.Final = frozenset({
     "-j",
     "--jobs",
     "--build-jobs",
-    "--target-dir",
     "--color",
     "--message-format",
     "--cargo-message-format",
@@ -133,8 +106,6 @@ _IGNORED_WITH_VALUE: typ.Final = frozenset({
     "--user-config-file",
     "--lockfile-path",
     "-P",
-    "--config",
-    "-Z",
 })
 # Flags that change nothing the signature records.
 _IGNORED_FLAGS: typ.Final = frozenset({
@@ -162,27 +133,39 @@ _IGNORED_FLAGS: typ.Final = frozenset({
     "--hide-progress-bar",
     "--no-output-indent",
     "--show-progress",
-    "--no-run",
-    "--help",
-    "-h",
 })
-# Cargo's own global options, in front of the subcommand.
-_CARGO_GLOBALS: typ.Final = frozenset({
-    "--locked",
-    "--frozen",
-    "--offline",
-    "--quiet",
-    "-q",
-    "--verbose",
-    "-v",
-    "--color",
-    "-C",
-    "--config",
-    "-Z",
-})
-_VALUE_GLOBALS: typ.Final = frozenset({"--color", "-C", "--config", "-Z"})
+_TAKES_VALUE: typ.Final = (
+    _PACKAGE
+    | _FEATURES
+    | _BUILD_OPTIONS
+    | _IGNORED_WITH_VALUE
+    | (_TARGET_SELECTORS - {"--lib", "--doc"})
+    | {"--exclude", "--target", "--manifest-path", "--cargo-profile", "--profile"}
+)
+# The options that are meaningless without their value.
+_NEEDS_VALUE: typ.Final = (
+    _PACKAGE
+    | _FEATURES
+    | _BUILD_OPTIONS
+    | {"--exclude", "--target", "--manifest-path", "--cargo-profile"}
+)
 _NEXTEST_RUN: typ.Final = frozenset({"run", "r", "ntr"})
 _BUILD_SUBCOMMANDS: typ.Final = frozenset({"build", "b", "bench"})
+# libtest options whose next word is their value, not a test name.
+_LIBTEST_VALUE_OPTIONS: typ.Final = frozenset({
+    "--test-threads",
+    "--skip",
+    "--format",
+    "--color",
+    "--logfile",
+    "--shuffle-seed",
+    "--report-time",
+    "--ensure-time",
+    "-Z",
+})
+
+
+type _Handler = cabc.Callable[[str, str | None], None]
 
 
 class Action(enum.Enum):
@@ -214,6 +197,9 @@ class Signature:
     opaque:
         Words the reader could not interpret (an option it does not know, a Make
         reference the expansion left), in order.
+    options:
+        The options that change where or how cargo builds (`--target-dir`,
+        `--config`, `-Z`, `-C`, a `+toolchain`), each with its value, in order.
     """
 
     packages: tuple[str, ...] = ()
@@ -223,6 +209,7 @@ class Signature:
     manifest: str | None = None
     environment: tuple[tuple[str, str], ...] = ()
     opaque: tuple[str, ...] = ()
+    options: tuple[str, ...] = ()
 
     @property
     def is_resolved(self) -> bool:
@@ -242,150 +229,60 @@ class Invocation:
         What the command builds.
     is_filtered:
         Whether a run is restricted to named tests or a named test target.
+    warms_nested:
+        Whether a filtered run reaches the integration tests where nested builds
+        live. A run that selects only `--lib`, `--doc`, `--bin`, `--example` or
+        `--bench` compiles what it runs and leaves those builds cold.
     """
 
     action: Action
     signature: Signature
     is_filtered: bool
+    warms_nested: bool = True
 
 
-def _reference_end(text: str, start: int) -> int | None:
-    """Return the index past the Make reference opening at *start*, or None.
-
-    Make counts only its own brackets, whatever quotes sit between them, so a
-    `$(shell cut -d' ' -f1)` closes where the parentheses balance.
-
-    Returns
-    -------
-    int | None
-        The index after the closing bracket; None when it never closes.
-    """
-    opener = text[start + 1]
-    closer = ")" if opener == "(" else "}"
-    depth = 0
-    for index in range(start + 1, len(text)):
-        if text[index] == opener:
-            depth += 1
-        elif text[index] == closer:
-            depth -= 1
-            if depth == 0:
-                return index + 1
+def _build_assignment(word: str) -> tuple[str, str] | None:
+    """Return the name and value of a build-affecting `NAME=value` word."""
+    match = ASSIGNMENT.match(word)
+    if match is None:
+        return None
+    name = match["name"]
+    if name in _BUILD_ENVIRONMENT or name.startswith(_BUILD_ENVIRONMENT_PREFIXES):
+        # Compared as words in order: spacing is not a difference, order may be.
+        return name, " ".join(match["value"].split())
     return None
-
-
-def tag_references(text: str) -> str:
-    """Replace each balanced Make reference by a numbered stand-in word.
-
-    Returns
-    -------
-    str
-        The text with every `$(...)` and `${...}` reference reduced to one word
-        that carries the reference's own text, so equal references stay equal.
-    """
-    out: list[str] = []
-    index = 0
-    while index < len(text):
-        end = (
-            _reference_end(text, index)
-            if text.startswith(("$(", "${"), index)
-            else None
-        )
-        if end is None:
-            out.append(text[index])
-            index += 1
-            continue
-        # The reference text is kept so two identical references compare equal.
-        # Characters that would split or quote a word become marks no flag
-        # contains, so the reference stays one word whatever it holds.
-        body = text[index:end].translate(_WORD_SAFE)
-        out.append(_REFERENCE_TAG + body + _REFERENCE_TAG)
-        index = end
-    return "".join(out)
-
-
-def _is_opaque(word: str) -> bool:
-    """Return whether *word* still carries a reference the expansion left."""
-    return _REFERENCE_TAG in word or UNRESOLVED_MARK in word
-
-
-def _lexed(text: str) -> tuple[list[str], list[str]] | None:
-    """Return the assignment words and the command words of one command.
-
-    Returns
-    -------
-    tuple[list[str], list[str]] | None
-        The `NAME=value` words before the command word (including those an
-        `env` prefix carries), and the words from the command word on; None
-        when the text does not lex or holds no command.
-    """
-    segments = lex_segments(tag_references(text.replace("\\\n", " ")))
-    if not segments or not segments[0]:
-        return None
-    words = segments[0]
-    # A line such as `if command -v cargo-nextest; then RUSTFLAGS=.. cargo ..`
-    # leads with the keyword that introduces its command.
-    while words and words[0].lstrip("@-+") in _KEYWORDS:
-        words = words[1:]
-    start = command_start(words)
-    if start >= len(words):
-        return None
-    assignments = [word for word in words[:start] if _ASSIGNMENT.match(word)]
-    return assignments, [
-        word.lstrip("@-+") if i == 0 else word for i, word in enumerate(words[start:])
-    ]
 
 
 def _environment(assignments: list[str]) -> tuple[tuple[str, str], ...]:
     """Return the build-affecting assignments, the last write of each name."""
-    found: dict[str, str] = {}
-    for word in assignments:
-        match = _ASSIGNMENT.match(word)
-        if match is None:
-            continue
-        name = match["name"]
-        if name in _BUILD_ENVIRONMENT or name.startswith(_BUILD_ENVIRONMENT_PREFIXES):
-            # Compared as words in order: spacing is not a difference, order may be.
-            found[name] = " ".join(match["value"].split())
+    found = dict(filter(None, map(_build_assignment, assignments)))
     return tuple(sorted(found.items()))
 
 
-def _subcommand(words: list[str]) -> tuple[str, list[str], str] | None:
-    """Return the runner, its subcommand and the words after it.
-
-    Returns
-    -------
-    tuple[str, list[str], str] | None
-        `cargo` or `nextest` as the runner, the arguments after the subcommand,
-        and the subcommand; None for any other command.
-    """
-    name = words[0].rsplit("/", 1)[-1]
-    rest = words[1:]
-    if name == "cargo-nextest":
-        rest = rest[1:] if rest[:1] == ["nextest"] else rest
-        return ("nextest", rest[1:], rest[0]) if rest else None
-    if name != "cargo":
-        return None
+def _has_test_name(words: list[str]) -> bool:
+    """Return whether *words* (the harness arguments) hold a test-name filter."""
     index = 0
-    while index < len(rest) and (
-        rest[index].startswith("+") or rest[index] in _CARGO_GLOBALS
-    ):
-        index += 2 if rest[index] in _VALUE_GLOBALS else 1
-    if index >= len(rest):
-        return None
-    subcommand = rest[index]
-    if subcommand == "nextest":
-        tail = rest[index + 1 :]
-        return ("nextest", tail[1:], tail[0]) if tail else None
-    if subcommand == "ntr":
-        return ("nextest", rest[index + 1 :], "ntr")
-    return ("cargo", rest[index + 1 :], subcommand)
+    while index < len(words):
+        if words[index] in _LIBTEST_VALUE_OPTIONS:
+            index += 2
+        elif words[index].startswith("-"):
+            index += 1
+        else:
+            return True
+    return False
+
+
+def _value_after(arguments: list[str], index: int) -> str | None:
+    """Return the value the option at *index* takes from the next word, if any."""
+    following = word_at(arguments, index + 1)
+    return None if following == "--" else following
 
 
 class _Reading:
     """Accumulate the options of one command into a signature."""
 
-    def __init__(self, runner: str) -> None:
-        """Start an empty reading for a cargo or nextest command."""
+    def __init__(self, runner: str, options: list[str]) -> None:
+        """Start a reading for a cargo or nextest command with its global options."""
         self.runner = runner
         self.packages: list[str] = []
         self.features: list[str] = []
@@ -393,14 +290,18 @@ class _Reading:
         self.profile: str | None = None
         self.manifest: str | None = None
         self.opaque: list[str] = []
+        self.options = list(options)
+        self.selectors: list[str] = []
         self.has_no_run = False
+        self.is_help = False
         self.is_filtered = False
+        self.handlers = self._handlers()
 
     def signature(self, assignments: list[str]) -> Signature:
         """Return the signature the options and assignments describe."""
         environment = _environment(assignments)
         opaque = list(self.opaque)
-        opaque.extend(value for _name, value in environment if _is_opaque(value))
+        opaque.extend(value for _name, value in environment if is_opaque(value))
         return Signature(
             packages=tuple(sorted(self.packages)),
             features=tuple(sorted(self.features)),
@@ -409,26 +310,29 @@ class _Reading:
             manifest=self.manifest,
             environment=environment,
             opaque=tuple(opaque),
+            options=tuple(self.options),
         )
+
+    @property
+    def warms_nested(self) -> bool:
+        """Whether the run reaches integration tests, where nested builds live."""
+        return not (self.selectors and set(self.selectors) <= _UNIT_TARGETS)
 
     def read(self, arguments: list[str]) -> None:
         """Read every option of the command, up to a `--`."""
         index = 0
         while index < len(arguments):
-            word = arguments[index]
-            if word == "--":
+            if arguments[index] == "--":
                 # What follows is the test binary's own arguments; a name there
                 # is still a filter on which tests run.
-                self.is_filtered = self.is_filtered or any(
-                    not w.startswith("-") for w in arguments[index + 1 :]
-                )
+                self.is_filtered |= _has_test_name(arguments[index + 1 :])
                 return
             index += self._read_one(arguments, index)
 
     def _read_one(self, arguments: list[str], index: int) -> int:
         """Read the option at *index* and return how many words it used."""
         word = arguments[index]
-        if _is_opaque(word):
+        if is_opaque(word):
             self.opaque.append(word)
             return 1
         if not word.startswith("-"):
@@ -437,57 +341,129 @@ class _Reading:
             return 1
         name, has_inline, inline = word.partition("=")
         value = inline if has_inline else None
-        takes_value = self._takes_value(name)
-        if takes_value and value is None and index + 1 < len(arguments):
-            value = arguments[index + 1]
-            used = 2
-        else:
-            used = 1
+        used = 1
+        if value is None and name in _TAKES_VALUE:
+            value = _value_after(arguments, index)
+            used = 1 if value is None else 2
         self._record(name, value, word)
         return used
 
-    def _takes_value(self, name: str) -> bool:
-        """Return whether *name* consumes the word after it."""
-        return (
-            name in _PACKAGE
-            or name in _EXCLUDE
-            or name in _FEATURES
-            or name in {_TARGET, _MANIFEST, _CARGO_PROFILE}
-            or (name == _PROFILE)
-            or name in _TARGET_SELECTORS - {"--lib", "--doc"}
-            or name in _IGNORED_WITH_VALUE
-        )
-
     def _record(self, name: str, value: str | None, word: str) -> None:
         """Store one option in the field it belongs to."""
-        if value is not None and _is_opaque(value):
+        if value is not None and is_opaque(value):
+            self.opaque.append(f"{name}={value}")
+        elif value is None and name in _NEEDS_VALUE:
             self.opaque.append(word)
-        elif name in _PACKAGE and value is not None:
-            self.packages.append(value)
-        elif name in _EXCLUDE and value is not None:
-            self.packages.append(f"!{value}")
-        elif name in _WHOLE_WORKSPACE:
-            self.packages.append("--workspace")
-        elif name in _FEATURES and value is not None:
-            self.features.extend(part for part in re.split(r"[,\s]+", value) if part)
-        elif name in {_ALL_FEATURES, _NO_DEFAULT_FEATURES}:
-            self.features.append(name)
-        elif name == _TARGET and value is not None:
-            self.target = value
-        elif name == _MANIFEST and value is not None:
-            self.manifest = value
-        elif name in _RELEASE:
-            self.profile = "release"
-        elif name == _CARGO_PROFILE or (name == _PROFILE and self.runner == "cargo"):
-            self.profile = value
-        elif name in _TARGET_SELECTORS:
-            self.is_filtered = True
-        elif name == "--no-run":
-            self.has_no_run = True
-        elif name in _IGNORED_FLAGS or name in _IGNORED_WITH_VALUE or name == _PROFILE:
-            return
-        else:
+        elif name in self.handlers:
+            self.handlers[name](name, value)
+        elif name not in _IGNORED_FLAGS and name not in _IGNORED_WITH_VALUE:
             self.opaque.append(word)
+
+    def _package(self, _name: str, value: str | None) -> None:
+        """Select a package."""
+        self.packages.append(str(value))
+
+    def _exclude(self, _name: str, value: str | None) -> None:
+        """Exclude a package from the workspace."""
+        self.packages.append(f"!{value}")
+
+    def _workspace(self, _name: str, _value: str | None) -> None:
+        """Select the whole workspace."""
+        self.packages.append("--workspace")
+
+    def _feature_list(self, _name: str, value: str | None) -> None:
+        """Add the features a `--features` list names."""
+        self.features.extend(part for part in re.split(r"[,\s]+", str(value)) if part)
+
+    def _feature_flag(self, name: str, _value: str | None) -> None:
+        """Note `--all-features` or `--no-default-features`."""
+        self.features.append(name)
+
+    def _set_target(self, _name: str, value: str | None) -> None:
+        """Set the target triple."""
+        self.target = value
+
+    def _set_manifest(self, _name: str, value: str | None) -> None:
+        """Set the manifest path."""
+        self.manifest = value
+
+    def _release(self, _name: str, _value: str | None) -> None:
+        """Select the release profile."""
+        self.profile = "release"
+
+    def _cargo_profile(self, _name: str, value: str | None) -> None:
+        """Set the cargo profile."""
+        self.profile = value
+
+    def _profile(self, name: str, value: str | None) -> None:
+        """Set the profile for cargo; nextest's own `--profile` is a config name."""
+        if self.runner == "cargo":
+            self._cargo_profile(name, value)
+
+    def _selector(self, name: str, _value: str | None) -> None:
+        """Restrict the run to a test target or a filter set."""
+        self.is_filtered = True
+        self.selectors.append(name)
+
+    def _no_run(self, _name: str, _value: str | None) -> None:
+        """Note that the command compiles without running."""
+        self.has_no_run = True
+
+    def _help(self, _name: str, _value: str | None) -> None:
+        """Note that the command only prints help."""
+        self.is_help = True
+
+    def _build_option(self, name: str, value: str | None) -> None:
+        """Keep an option that changes where or how cargo builds, with its value."""
+        self.options.append(f"{name}={value}")
+
+    def _handlers(self) -> dict[str, _Handler]:
+        """Return the method that stores each option the reader knows."""
+        groups: tuple[tuple[frozenset[str], _Handler], ...] = (
+            (_PACKAGE, self._package),
+            (frozenset({"--exclude"}), self._exclude),
+            (_WHOLE_WORKSPACE, self._workspace),
+            (_FEATURES, self._feature_list),
+            (_FEATURE_FLAGS, self._feature_flag),
+            (frozenset({"--target"}), self._set_target),
+            (frozenset({"--manifest-path"}), self._set_manifest),
+            (_RELEASE, self._release),
+            (frozenset({"--cargo-profile"}), self._cargo_profile),
+            (frozenset({"--profile"}), self._profile),
+            (_TARGET_SELECTORS, self._selector),
+            (frozenset({"--no-run"}), self._no_run),
+            (_HELP, self._help),
+            (_BUILD_OPTIONS, self._build_option),
+        )
+        return {name: method for names, method in groups for name in names}
+
+
+def _action(command: Command) -> Action | None:
+    """Return whether the subcommand runs tests or compiles, None for neither.
+
+    A Make reference in the subcommand position (`cargo $(TEST_CMD) ...`, where
+    `TEST_CMD` is `nextest run` or `test` by a probe of the machine) is the
+    runner the repository picked. Either builds the same artefacts, so the
+    command is read as a test run and its options decide the signature.
+
+    Returns
+    -------
+    Action | None
+        What the command does, or None when it is neither a test nor a build.
+    """
+    subcommand = command.subcommand
+    if command.runner == "nextest":
+        return _nextest_action(subcommand)
+    if subcommand == "test" or is_opaque(subcommand):
+        return Action.RUN
+    return Action.COMPILE if subcommand in _BUILD_SUBCOMMANDS else None
+
+
+def _nextest_action(subcommand: str) -> Action | None:
+    """Return what a nextest subcommand does with the tests it builds."""
+    if subcommand in _NEXTEST_RUN:
+        return Action.RUN
+    return Action.COMPILE if subcommand == "archive" else None
 
 
 def read_invocation(text: str) -> Invocation | None:
@@ -502,64 +478,34 @@ def read_invocation(text: str) -> Invocation | None:
     -------
     Invocation | None
         What the command runs or compiles, or None when it is neither a cargo
-        test or build command nor a nextest run or archive.
+        test or build command nor a nextest run or archive (a `--help` run
+        builds nothing).
     """
-    lexed = _lexed(text)
-    if lexed is None:
-        return None
-    assignments, words = lexed
-    found = _subcommand(words)
+    found = _command_of(text)
     if found is None:
         return None
-    runner, arguments, subcommand = found
-    action = _action(runner, subcommand)
-    if action is None:
+    assignments, command, action = found
+    reading = _Reading(command.runner, command.options)
+    reading.read(command.arguments)
+    if reading.is_help:
         return None
-    reading = _Reading(runner)
-    reading.read(arguments)
     if reading.has_no_run:
         action = Action.COMPILE
     return Invocation(
         action=action,
         signature=reading.signature(assignments),
         is_filtered=reading.is_filtered and action is Action.RUN,
+        warms_nested=reading.warms_nested,
     )
 
 
-def has_unresolved_command_word(text: str) -> bool:
-    """Return whether the command word is a Make reference the expansion left.
-
-    Such a command may be a test runner, so a pass that hides behind it cannot
-    be judged and the caller reports it as indeterminate.
-
-    Returns
-    -------
-    bool
-        True when the word that names the command carries a reference.
-    """
-    lexed = _lexed(text)
-    return lexed is not None and _is_opaque(lexed[1][0])
-
-
-def _action(runner: str, subcommand: str) -> Action | None:
-    """Return whether the subcommand runs tests or compiles, None for neither.
-
-    A Make reference in the subcommand position (`cargo $(TEST_CMD) ...`, where
-    `TEST_CMD` is `nextest run` or `test` by a probe of the machine) is the
-    runner the repository picked. Either builds the same artefacts, so the
-    command is read as a test run and its options decide the signature.
-
-    Returns
-    -------
-    Action | None
-        What the command does, or None when it is neither a test nor a build.
-    """
-    if runner == "nextest":
-        if subcommand in _NEXTEST_RUN:
-            return Action.RUN
-        return Action.COMPILE if subcommand == "archive" else None
-    if subcommand == "test" or _is_opaque(subcommand):
-        return Action.RUN
-    if subcommand in _BUILD_SUBCOMMANDS:
-        return Action.COMPILE
-    return None
+def _command_of(text: str) -> tuple[list[str], Command, Action] | None:
+    """Return the assignments, runner command and action of a test or build."""
+    lines = lexed(text)
+    if lines is None:
+        return None
+    command = read_command(lines[1])
+    if command is None:
+        return None
+    action = _action(command)
+    return None if action is None else (lines[0], command, action)
