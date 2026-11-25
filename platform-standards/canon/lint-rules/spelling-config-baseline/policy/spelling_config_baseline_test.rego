@@ -588,6 +588,42 @@ test_wildcard_lookup_mismatched_branch if {
   }
 }
 
+# `$(or $(shell command -v uv ...),PATH)` is the runner word either way.
+test_uv_or_lookup if {
+  findings := policy.deny with input as data.fixtures.uv_or_lookup
+  count(findings) == 0
+}
+
+# A fallback other than a path ending in the tool proves nothing about the runner.
+test_or_lookup_other_fallback if {
+  findings := policy.deny with input as data.fixtures.or_lookup_other_fallback
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+# The fallback must end in the tool the lookup names.
+test_or_lookup_mismatched_fallback if {
+  findings := policy.deny with input as data.fixtures.or_lookup_mismatched_fallback
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "no recipe reachable from \"spelling\" provably runs typos-config-builder gate; unresolved Make variables: $(shell ...)"],
+  }
+}
+
+# A quoted runner word (`"$(UV)" tool run`) is still the runner.
+test_uv_quoted_runner if {
+  findings := policy.deny with input as data.fixtures.uv_quoted_runner
+  count(findings) == 0
+}
+
+# The quotes do not hide a missing --python from PD-014.
+test_uv_quoted_runner_old if {
+  findings := policy.deny with input as data.fixtures.uv_quoted_runner_old
+  profile(findings) == {
+    ["PD-014", "noncompliant", 5, "\"spelling\"-path recipe runs typos-config-builder without --python; the builder needs Python 3.14 or later, and a UV_PYTHON from a CI matrix can hand it an older one"],
+  }
+}
+
 # A fallback that may run something else than uv proves nothing about the runner.
 test_shell_lookup_other_fallback if {
   findings := policy.deny with input as data.fixtures.shell_lookup_other_fallback

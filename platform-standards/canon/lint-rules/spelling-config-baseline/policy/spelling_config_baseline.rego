@@ -197,9 +197,22 @@ wildcard_runner_lookup(tool) := sprintf(
 	[tool, tool, tool],
 )
 
+# `$(or $(shell command -v uv 2>/dev/null),$(HOME)/.local/bin/uv)` is the same
+# lookup with the fallback as the `or` branch: the located path or a plain path
+# ending in the same tool, so either way the runner word is `uv` or `uvx`. The
+# lookup takes no other arguments and the fallback the same plain path
+# characters as the wildcard form (`$(HOME)` the only variable).
+or_runner_lookup(tool) := sprintf(
+	`^[[:space:]]*\$\(or[[:space:]]+\$\(shell[[:space:]]+command[[:space:]]+-v[[:space:]]+%s([[:space:]]+2>/dev/null)?[[:space:]]*\)[[:space:]]*,[[:space:]]*(?:[A-Za-z0-9._/-]|\$\(HOME\))*/%s[[:space:]]*\)[[:space:]]*$`,
+	[tool, tool],
+)
+
 resolved_value(variable) := tool if {
 	some tool in shell_runner_tools
 	regex.match(shell_runner_lookup(tool), joined(variable.raw_value))
+} else := tool if {
+	some tool in shell_runner_tools
+	regex.match(or_runner_lookup(tool), joined(variable.raw_value))
 } else := tool if {
 	some tool in shell_runner_tools
 	regex.match(wildcard_runner_lookup(tool), joined(variable.raw_value))
@@ -404,7 +417,8 @@ spelling_recipes := {recipe |
 
 segment_start := `(^|[;&(]|[^|]\|)[[:space:]]*[-@+]*[[:space:]]*`
 
-runner := `(?:uvx|uv[[:space:]]+tool[[:space:]]+run)`
+# The runner word may be quoted (`"$(UV)" tool run`), as a path with spaces needs.
+runner := `(?:["']?uvx["']?|["']?uv["']?[[:space:]]+tool[[:space:]]+run)`
 
 # `env`, with `-u NAME` options or environment assignments, only changes the
 # command's environment, so it may prefix the runner as an assignment does.

@@ -14,7 +14,7 @@ description: >-
   interpreter at or above the floor, since the builder needs Python 3.14
   (PD-014). A repository with no spelling setup is out of scope.
   Audit-only: this rule declares no mutations.
-version: 0.2.2
+version: 0.2.3
 sensor:
   type: conftest
   input: policy-input/spelling-config-baseline
