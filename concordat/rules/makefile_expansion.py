@@ -71,9 +71,12 @@ _PURE_CALL_OPEN: typ.Final = re.compile(
 _FUNCTION_CALL: typ.Final = re.compile(
     r"\$\((dir|notdir|lastword|firstword|abspath|realpath|strip)\s+([^()$]*)\)"
 )
-# `$(filter-out PATTERNS,TEXT)` with plain words in both: a repository drops
-# `--all-targets` from its test flags to reuse them for one named test target.
-_FILTER_OUT_CALL: typ.Final = re.compile(r"\$\(filter-out\s+([^(),$]*),([^()$]*)\)")
+# `$(filter PATTERNS,TEXT)` and `$(filter-out PATTERNS,TEXT)` with plain words in
+# both: a repository keeps only the build-affecting words of its test flags, or
+# drops `--all-targets` from them, to reuse them for one named test target.
+_FILTER_CALL: typ.Final = re.compile(
+    r"\$\((filter-out|filter)\s+([^(),$]*),([^()$]*)\)"
+)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -205,19 +208,21 @@ def _matches_pattern(pattern: str, word: str) -> bool:
     )
 
 
-def _call_filter_out(match: re.Match[str]) -> str:
-    """Evaluate `$(filter-out PATTERNS,TEXT)` over plain words.
+def _call_filter(match: re.Match[str]) -> str:
+    """Evaluate `$(filter PATTERNS,TEXT)` and `$(filter-out PATTERNS,TEXT)`.
 
     Returns
     -------
     str
-        The words of TEXT that no pattern matches, as Make would produce them.
+        The words of TEXT that some pattern matches (`filter`) or that none
+        matches (`filter-out`), as Make would produce them.
     """
-    patterns = match.group(1).split()
+    keeps_matches = match.group(1) == "filter"
+    patterns = match.group(2).split()
     return " ".join(
         word
-        for word in match.group(2).split()
-        if not any(_matches_pattern(pattern, word) for pattern in patterns)
+        for word in match.group(3).split()
+        if any(_matches_pattern(pattern, word) for pattern in patterns) is keeps_matches
     )
 
 
@@ -396,8 +401,8 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
 
     current = text.replace("$$", SHELL_DOLLAR)
     for _ in range(EXPANSION_PASSES):
-        updated = _FILTER_OUT_CALL.sub(
-            _call_filter_out,
+        updated = _FILTER_CALL.sub(
+            _call_filter,
             _FUNCTION_CALL.sub(
                 _call_function,
                 _VARIABLE_REFERENCE.sub(

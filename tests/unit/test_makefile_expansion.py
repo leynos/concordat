@@ -128,6 +128,31 @@ def test_filter_out_drops_the_words_its_patterns_match(
     assert result.is_resolved is True
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("$(filter --all-features,--all-targets --all-features)", "--all-features"),
+        ("$(filter --a --b,--a --c --b)", "--a --b"),
+        ("$(filter --features=%,--all-features --features=x)", "--features=x"),
+        ("$(filter --x,--y)", ""),
+    ],
+)
+def test_filter_keeps_the_words_its_patterns_match(text: str, expected: str) -> None:
+    """`filter` keeps the words some pattern matches, `%` standing for any run."""
+    result = expand(text, {})
+    assert result.text == expected
+    assert result.is_resolved is True
+
+
+def test_filter_reads_a_variable_it_is_given() -> None:
+    """A recursive variable settles through `filter` and the one it names."""
+    values = {
+        "WARM": "$(filter --all-features,$(FLAGS))",
+        "FLAGS": "--all-targets --all-features",
+    }
+    assert expand("cargo test $(WARM)", values).text == "cargo test --all-features"
+
+
 def test_filter_out_reads_a_variable_it_is_given() -> None:
     """A variable in the text settles before `filter-out` reads it."""
     values = {"FLAGS": "--all-targets --all-features"}
