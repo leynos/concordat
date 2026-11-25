@@ -105,6 +105,7 @@ class PassFact(typ.TypedDict):
     status: str
     visible: int
     reason: str
+    packages: typ.NotRequired[list[str]]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -334,6 +335,7 @@ class _Walk:
         status: str,
         visible: int,
         reason: str,
+        packages: tuple[str, ...] = (),
     ) -> None:
         """Record one pass, once however many readings of its line agree."""
         fact: PassFact = {
@@ -343,6 +345,7 @@ class _Walk:
             "status": status,
             "visible": visible,
             "reason": reason,
+            "packages": list(packages),
         }
         if fact not in self.facts:
             self.facts.append(fact)
@@ -516,7 +519,7 @@ class _Walk:
             )
         else:
             status, reason = UNPREPARED, ""
-        self._fact(recipe, text, status, len(seen), reason)
+        self._fact(recipe, text, status, len(seen), reason, signature.packages)
 
 
 def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:

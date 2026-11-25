@@ -344,7 +344,8 @@ def _environment(assignments: list[str]) -> tuple[tuple[str, str], ...]:
             continue
         name = match["name"]
         if name in _BUILD_ENVIRONMENT or name.startswith(_BUILD_ENVIRONMENT_PREFIXES):
-            found[name] = match["value"]
+            # Compared as words in order: spacing is not a difference, order may be.
+            found[name] = " ".join(match["value"].split())
     return tuple(sorted(found.items()))
 
 

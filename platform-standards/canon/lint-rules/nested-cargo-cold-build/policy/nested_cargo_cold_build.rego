@@ -210,10 +210,26 @@ _relies_on_declared_preparation if {
 # and macrotest each build in a directory of their own under the target.
 _nested_family(build) if build.kind in {"trybuild", "macrotest"}
 
-_has_nested_family if {
+# A pass that selects packages (`-p NAME`) runs only the nested builds those
+# packages own; a pass that selects the workspace, or names none, runs them all.
+# A build whose package is unknown is taken as covered, never guessed away.
+_pass_packages(pass) := object.get(pass, "packages", [])
+
+_pass_selects_all(pass) if count(_pass_packages(pass)) == 0
+
+_pass_selects_all(pass) if "--workspace" in _pass_packages(pass)
+
+_pass_covers(pass, _) if _pass_selects_all(pass)
+
+_pass_covers(pass, build) if build["package"] in _pass_packages(pass)
+
+_pass_covers(_, build) if not is_string(object.get(build, "package", null))
+
+_pass_has_nested_family(pass) if {
 	some build in input.builds
 	_declared(build)
 	_nested_family(build)
+	_pass_covers(pass, build)
 }
 
 # A named in-suite preparation test or gate runs under the harness's own
@@ -261,7 +277,7 @@ deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, 
 	some pass in _passes
 	_pass_is_judged(pass)
 	pass.status == "compiled"
-	_has_nested_family
+	_pass_has_nested_family(pass)
 	msg := sprintf(
 		"%s:%d runs the tests as `%s`. Only a compile of the same flags runs before it (`--no-run`, `build` or `archive`), and that does not warm trybuild or macrotest: each builds in a directory of its own under the target that the outer build never fills (a whitaker-common contract took 58 s after `--no-run` and 2 s on the next run). Run the nested-build tests for real before the timed pass, with the same flags, as https://github.com/leynos/whitaker/pull/669 does",
 		[pass.path, pass.line, object.get(pass, "command", "the test runner")],

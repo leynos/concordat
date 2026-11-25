@@ -262,6 +262,44 @@
       ],
       "problems": []
     },
+    "pass_scoped_to_other_package": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "crates/other/tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": "crates/other", "package": "other", "prepared_by": ["makefile-preparation"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 12, "command": "cargo nextest run -p core --no-default-features",
+          "status": "compiled", "visible": 1, "reason": "", "packages": ["core"]
+        }
+      ],
+      "problems": []
+    },
+    "pass_scoped_to_owning_package": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-cold-build",
+      "repository": {"path": ".", "name": "leynos/example"},
+      "spawns": [],
+      "builds": [
+        {
+          "path": "crates/other/tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+          "crate": "crates/other", "package": "other", "prepared_by": ["makefile-preparation"]
+        }
+      ],
+      "passes": [
+        {
+          "path": "Makefile", "line": 12, "command": "cargo nextest run -p other",
+          "status": "compiled", "visible": 1, "reason": "", "packages": ["other"]
+        }
+      ],
+      "problems": []
+    },
     "pass_compiled_trybuild": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-cold-build",

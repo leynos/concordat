@@ -72,6 +72,8 @@ class BuildFact(typ.TypedDict):
         The test binary's name for a top-level `tests/<stem>.rs`, else None.
     crate:
         The directory of the crate that owns the source, `.` for the root.
+    package:
+        The package name of the owning crate, or None when it declares none.
     prepared_by:
         Which of `setup-script`, `preparation-test`, `gate-call` and
         `makefile-preparation` apply. Empty means the repository declares no
@@ -83,6 +85,7 @@ class BuildFact(typ.TypedDict):
     kind: str
     binary: str | None
     crate: str
+    package: str | None
     prepared_by: list[str]
 
 
@@ -376,6 +379,7 @@ def collect_builds(
             "kind": "cargo" if kind == MAYBE_KIND and crate in compiling else kind,
             "binary": stem,
             "crate": crate,
+            "package": crates.get(crate),
             "prepared_by": prepared,
         })
     return builds

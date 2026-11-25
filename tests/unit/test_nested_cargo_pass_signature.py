@@ -190,3 +190,16 @@ def test_a_command_word_that_is_a_reference_is_unresolved() -> None:
     assert has_unresolved_command_word("$(RUNNER) --all-features")
     assert not has_unresolved_command_word("cargo test")
     assert not has_unresolved_command_word("")
+
+
+def test_rustflags_are_compared_as_ordered_words() -> None:
+    """Spacing is not a difference, order and the variable's name are."""
+    assert signature("RUSTFLAGS='-C  a -D b' cargo test") == signature(
+        "RUSTFLAGS='-C a -D b' cargo test"
+    )
+    assert signature("RUSTFLAGS='-D b -C a' cargo test") != signature(
+        "RUSTFLAGS='-C a -D b' cargo test"
+    )
+    assert signature("CARGO_BUILD_RUSTFLAGS='-C a' cargo test") != signature(
+        "RUSTFLAGS='-C a' cargo test"
+    )

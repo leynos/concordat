@@ -314,6 +314,15 @@ Findings, all `NC-010` unless stated, reported at the pass's Makefile line:
   the expansion left, a target with several or conditional rules, or a Makefile
   the reader does not follow (`.ONESHELL`, an include).
 
+`RUSTFLAGS` is compared as its words in order, and `RUSTFLAGS` in the
+environment differs from `CARGO_BUILD_RUSTFLAGS`: they are separate signatures
+even when they resolve to the same words, because cargo reads them with
+different precedence. The check reads only the Makefile's `test` target. A
+repository whose test target lives in a Netsukefile is out of scope, not clean
+(the reader does not parse it; see
+`docs/rfcs/rfc-0004-netsukefile-support.md`), and a CI step that runs cargo
+directly, bypassing `make test`, is not read either (no finding yet).
+
 The limits are stated, not guessed at: the target selectors `--lib`, `--tests`
 and `--all-targets` are not compared, and neither are Makefile-level `export`s
 or target-specific variables that give two targets different `RUSTFLAGS`; a

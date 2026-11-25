@@ -290,3 +290,13 @@ test_an_exemption_for_the_makefile_suppresses_a_pass_finding if {
 	}]
 	count(findings_with(data.fixtures.pass_second_unmatched, makefile)) == 0
 }
+
+# A pass that selects other packages runs none of a trybuild family's tests, so a
+# compile of its flags is all it needs (whitaker's `-p whitaker_lint_core` pass).
+test_a_pass_scoped_to_another_package_needs_only_a_compile if {
+	count(findings(data.fixtures.pass_scoped_to_other_package)) == 0
+}
+
+test_a_pass_scoped_to_the_owning_package_still_needs_a_real_run if {
+	{[f.rule_id, f.line] | some f in findings(data.fixtures.pass_scoped_to_owning_package)} == {["NC-010", 12]}
+}
