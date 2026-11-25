@@ -187,9 +187,21 @@ shell_runner_lookup(tool) := sprintf(
 
 shell_runner_tools := {"uv", "uvx"}
 
+# `$(if $(wildcard PATH),PATH,uv)` picks a located binary or the bare tool word;
+# either branch runs `uv` or `uvx`, so the value is the runner word. Both
+# branches must be plain path characters (a `$(HOME)` style variable is
+# allowed) ending in the tool, with no escapes, quotes or other functions.
+wildcard_runner_lookup(tool) := sprintf(
+	`^[[:space:]]*\$\(if[[:space:]]+\$\(wildcard[[:space:]]+(?:[A-Za-z0-9._/-]|\$\([A-Za-z_]+\))*/%s\)[[:space:]]*,[[:space:]]*(?:[A-Za-z0-9._/-]|\$\([A-Za-z_]+\))*/%s[[:space:]]*,[[:space:]]*%s[[:space:]]*\)[[:space:]]*$`,
+	[tool, tool, tool],
+)
+
 resolved_value(variable) := tool if {
 	some tool in shell_runner_tools
 	regex.match(shell_runner_lookup(tool), joined(variable.raw_value))
+} else := tool if {
+	some tool in shell_runner_tools
+	regex.match(wildcard_runner_lookup(tool), joined(variable.raw_value))
 } else := joined(variable.raw_value)
 
 variable_value[name] := resolved_value(variable) if {
@@ -393,9 +405,9 @@ segment_start := `(^|[;&(]|[^|]\|)[[:space:]]*[-@+]*[[:space:]]*`
 
 runner := `(?:uvx|uv[[:space:]]+tool[[:space:]]+run)`
 
-# `env -u NAME ...` only removes variables from the command's environment, so
-# it may prefix the runner as an environment assignment does.
-env_command_prefix := `env[[:space:]]+(?:-u[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+)+`
+# `env`, with `-u NAME` options or environment assignments, only changes the
+# command's environment, so it may prefix the runner as an assignment does.
+env_command_prefix := `env[[:space:]]+(?:-u[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+)*`
 
 builder_core := sprintf(
 	`%s(?:%s)?(?:%s)*(?:(%s)((?:[[:space:]]+[^[:space:];|&]+)*?)[[:space:]]+)?(?:[^[:space:];|&()"']*/)?typos-config-builder((?:[[:space:]][^;|&]*)?)`,

@@ -116,6 +116,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "python_continued": Scenario(makefile="python-continued"),
     "env_unset_prefix": Scenario(makefile="env-unset-prefix"),
     "uv_shell_lookup": Scenario(makefile="uv-shell-lookup"),
+    "env_assignment_prefix": Scenario(makefile="env-assignment-prefix"),
+    "uv_wildcard_lookup": Scenario(makefile="uv-wildcard-lookup"),
     "not_applicable": BARE,
     # -- PD-007: the spelling gate -----------------------------------------
     "python_absent": Scenario(makefile="python-absent"),
@@ -126,6 +128,13 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "env_unset_prefix_old": Scenario(makefile="env-unset-prefix-old"),
     "uvx_shell_lookup_absent": Scenario(makefile="uvx-shell-lookup-absent"),
     "other_shell_lookup": Scenario(makefile="other-shell-lookup"),
+    "env_assignment_prefix_old": Scenario(makefile="env-assignment-prefix-old"),
+    "wildcard_lookup_other_fallback": Scenario(
+        makefile="wildcard-lookup-other-fallback"
+    ),
+    "wildcard_lookup_mismatched_branch": Scenario(
+        makefile="wildcard-lookup-mismatched-branch"
+    ),
     "shell_lookup_other_fallback": Scenario(makefile="shell-lookup-other-fallback"),
     "shell_lookup_mismatched_fallback": Scenario(
         makefile="shell-lookup-mismatched-fallback"
