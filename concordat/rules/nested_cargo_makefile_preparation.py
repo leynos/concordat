@@ -48,7 +48,6 @@ from .nested_cargo_makefile_names import (
     has_unsafe_reading,
     settled_index,
 )
-from .nested_cargo_pass_words import has_unresolved_command_word
 from .nested_cargo_scripts import TEST_TARGET, ScriptCommand, script_commands
 
 if typ.TYPE_CHECKING:
@@ -460,116 +459,6 @@ def is_fully_readable(
     """
     has_flags = any(v.get("name") == "MAKEFLAGS" for v in report["variables"])
     has_include = includes_a_file(report, text)
-    unsafe = UNSAFE_SPECIAL_TARGETS - _gated_one_shell(index, values)
-    has_special = bool(unsafe & index.keys())
+    has_special = bool(UNSAFE_SPECIAL_TARGETS & index.keys())
     has_expanded = has_unsafe_reading(index, values, report["variables"])
     return not (has_flags or has_include or has_special or has_expanded)
-
-
-_ERREXIT: typ.Final = re.compile(r"(?:^|\s)-[A-Za-z]*e[A-Za-z]*(?:\s|$)")
-# Any word that opens, closes or branches a shell construct, or changes shell
-# options. A line holding one is not read: the reader does not parse shell, and
-# `.ONESHELL` would run such a line together with the ones around it.
-_SHELL_CONTROL: typ.Final = re.compile(
-    r"\b(?:if|then|else|elif|fi|case|esac|for|while|until|do|done"
-    r"|set|shopt|exec|trap|exit|return)\b"
-)
-
-
-def _is_errexit(flags: str) -> bool:
-    """Return whether shell flags turn errexit on and no `+` option can undo it."""
-    return "+" not in flags and bool(_ERREXIT.search(flags))
-
-
-def _is_plain_line(line: str) -> bool:
-    """Return whether a recipe line holds no shell control word or open bracket.
-
-    The test is deliberately blunt: a control word used as a command argument
-    also fails it, which only leaves the Makefile indeterminate.
-
-    Returns
-    -------
-    bool
-        True when the line has no control word and its brackets balance.
-    """
-    return (
-        not _SHELL_CONTROL.search(line)
-        and line.count("{") == line.count("}")
-        and line.count("(") == line.count(")")
-    )
-
-
-def _gated_one_shell(
-    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
-) -> frozenset[str]:
-    """Return `.ONESHELL` when it still runs each line in order, else nothing.
-
-    Under `.ONESHELL` a recipe is one script, so an earlier failing line stops
-    the rest only when the shell flags carry `-e`. When they do, and no recipe
-    line opens or closes a compound command that the script would carry across
-    lines, each line behaves as it does without `.ONESHELL`.
-
-    Returns
-    -------
-    frozenset[str]
-        The special targets that are safe to read as ordinary recipes.
-    """
-    # GNU Make reads `.SHELLFLAGS`; the older `SHELLFLAGS` name is not one.
-    flags = values.get(".SHELLFLAGS", "")
-    if ".ONESHELL" not in index or not _is_errexit(flags):
-        return frozenset()
-    lines = _recipe_lines(index, values)
-    if lines is None or not all(_is_plain_line(line) for line in lines):
-        return frozenset()
-    return frozenset({".ONESHELL"})
-
-
-def _recipe_lines(
-    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
-) -> list[str] | None:
-    """Return every expanded recipe line the `test` target can run, or None.
-
-    The lines of `test` and of every target it names as a prerequisite, directly
-    or through others, each in every reading its variables allow; a recipe
-    elsewhere cannot change how `test` runs. None when a prerequisite name or a
-    recipe line does not expand to a settled text, because a control word may
-    hide behind it.
-
-    Returns
-    -------
-    list[str] | None
-        The expanded line texts of those targets, or None when some is unsettled.
-    """
-    pending, seen = [TEST_TARGET], set()
-    lines: list[str] = []
-    while pending:
-        name = pending.pop()
-        if name in seen:
-            continue
-        seen.add(name)
-        for rule in index.get(name, []):
-            recipes = [
-                reading
-                for recipe in rule["recipes"]
-                for reading in expand_readings(recipe["text"], values)
-            ]
-            names = [
-                reading
-                for item in rule["prerequisites"]
-                for reading in expand_readings(item, values)
-            ]
-            # An unsettled word in an argument cannot start a command; one that
-            # names the command, or a prerequisite, may hide a control word.
-            if not all(r.is_resolved for r in names) or any(
-                not r.is_resolved and has_unresolved_command_word(r.text)
-                for r in recipes
-            ):
-                return None
-            lines.extend(r.text for r in recipes)
-            pending.extend(
-                word
-                for item in rule["prerequisites"]
-                for reading in expand_readings(item, values)
-                for word in reading.text.split()
-            )
-    return lines
