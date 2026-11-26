@@ -767,6 +767,37 @@ class TestEighthReview:
         assert [i["resolved"] for i in found] == [True]
 
 
+class TestNinthReview:
+    """Behaviours a tenth review showed to be missing."""
+
+    def test_independent_probes_with_equal_reading_counts_are_not_paired(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The first probe's `cd nested` may pair with the second's `cargo test`."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n"
+            "\t$(if $(shell cargo nextest --version 2>/dev/null),cd .,cd nested)\n"
+            "\t$(if $(shell rustc --version 2>/dev/null),cargo test --workspace,"
+            "echo skipped)\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert [i["changes_directory"] for i in found] == [True]
+
+    def test_a_known_false_outer_branch_stays_skipped_beside_a_probe_condition(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`if false` around a probe-decided `if` runs nothing at all."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n\tif false; then\n"
+            "\t  if $(if $(shell cargo nextest --version 2>/dev/null),true,false);"
+            " then\n\t    cargo test -p app\n\t  fi\n\tfi\n"
+            "\tcargo test --workspace\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert [i["workspace_flag"] for i in found] == [True]
+        assert [i["resolved"] for i in found] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 

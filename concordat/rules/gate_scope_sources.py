@@ -297,13 +297,8 @@ def _read_rule(
     for number, text in rule.recipes:
         source = f"Makefile:{number} ({target})"
         readings = list(expand_readings(text, values))
-        starts = {
-            position: _shell_before(before, position, len(readings))
-            if is_one_shell
-            else FRESH_SHELL
-            for position in range(len(readings))
-        }
-        read, before, missed = _read_recipe_line(source, readings, starts)
+        start = _shell_before(before) if is_one_shell else FRESH_SHELL
+        read, before, missed = _read_recipe_line(source, readings, start)
         pending.append(read)
         unreadable.extend(missed)
         every_state.extend(before.values())
@@ -326,7 +321,7 @@ type _Readings = list[tuple[list[Tagged], frozenset[int]]]
 def _read_recipe_line(
     source: str,
     readings: list[Expansion],
-    starts: cabc.Mapping[int, ShellState],
+    start: ShellState,
 ) -> tuple[_Readings, dict[int, ShellState], list[str]]:
     """Read one recipe line in each of its readings.
 
@@ -342,7 +337,7 @@ def _read_recipe_line(
     for position, reading in enumerate(readings):
         shown_line = " ".join(shown(blank_references(joined(reading.text))).split())
         found, is_readable, after = _read_line(
-            reading.text, (source, shown_line), starts[position]
+            reading.text, (source, shown_line), start
         )
         reached[position] = after
         read.append((found, after.forks))
@@ -351,46 +346,62 @@ def _read_recipe_line(
     return read, reached, unreadable
 
 
-def _shell_before(
-    state_by_reading: cabc.Mapping[int, ShellState], position: int, readings: int
-) -> ShellState:
-    """Return the shell a reading's next line starts in, under `.ONESHELL`.
+def _shell_before(state_by_reading: cabc.Mapping[int, ShellState]) -> ShellState:
+    """Return the shell the next line of a `.ONESHELL` recipe starts in.
 
-    A line whose readings do not match an earlier line's (more of them, which
-    have no state of their own, or fewer, which merge several) cannot tell which
-    earlier probe branch ran, and a `cd nested` may be the one, so it starts as
-    moved if any earlier reading moved. It keeps the open `if` blocks when the
-    readings agree on them, so a skipped branch stays skipped, and makes them
-    forks when they disagree.
+    One earlier reading leaves one state. Several are alternatives of probes the
+    next line's own readings need not correspond to (the two probes may test
+    different tools), so every reading of the next line starts from all of
+    them: moved if any moved, with each open `if` block kept when the states
+    agree on it, so a branch known not to run stays skipped, and a fork when
+    they disagree.
 
     Returns
     -------
     ShellState
-        The reading's own state, or the most moved of all when the readings
-        do not line up.
+        The merged state.
     """
-    if position in state_by_reading and readings == len(state_by_reading):
-        return state_by_reading[position]
     states = list(state_by_reading.values())
-    count = max((state.count for state in states), default=0)
-    branches = states[0].branches if states else ()
-    forks = frozenset().union(*(state.forks for state in states))
-    if any(state.branches != branches for state in states):
-        # The readings disagree on which `if` blocks are open or can run, so
-        # every open block is a condition the probe decides: its commands are
-        # indeterminate, as those of a fork are.
-        branches = tuple(
-            Branch(taken=False, active=True, uid=count + depth)
-            for depth, _ in enumerate(max((s.branches for s in states), key=len))
-        )
-        forks |= {branch.uid for branch in branches}
-        count += len(branches)
+    if len(states) <= 1:
+        return states[0] if states else FRESH_SHELL
+    count = max(state.count for state in states)
+    branches, forks = _merge_branches([state.branches for state in states], count)
     return ShellState(
         moved=any(state.moved for state in states),
         branches=branches,
-        forks=forks,
-        count=count,
+        forks=frozenset().union(*(state.forks for state in states), forks),
+        count=count + len(branches),
     )
+
+
+def _merge_branches(
+    open_blocks: list[tuple[Branch, ...]], count: int
+) -> tuple[tuple[Branch, ...], frozenset[int]]:
+    """Return the `if` blocks open in every alternative, and the forks they add.
+
+    A block all alternatives agree on is kept as it is. One they disagree on, or
+    that only some have open, is a condition the probe decides, so it becomes a
+    fork whose commands are indeterminate.
+
+    Returns
+    -------
+    tuple[tuple[Branch, ...], frozenset[int]]
+        The merged blocks, and the `uid` of each new fork.
+    """
+    merged: list[Branch] = []
+    forks: set[int] = set()
+    for depth in range(max(len(blocks) for blocks in open_blocks)):
+        at_depth = {
+            blocks[depth] if depth < len(blocks) else None for blocks in open_blocks
+        }
+        only = next(iter(at_depth))
+        if len(at_depth) == 1 and only is not None:
+            merged.append(only)
+            continue
+        fork = Branch(taken=False, active=True, uid=count + depth)
+        merged.append(fork)
+        forks.add(fork.uid)
+    return tuple(merged), frozenset(forks)
 
 
 def _resolve_probes(
