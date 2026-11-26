@@ -49,6 +49,10 @@ MAKEFILE_PREPARATION: typ.Final = "makefile-preparation"
 MAYBE_KIND: typ.Final = "cargo-unknown"
 _FUNCTION: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)")
 _BINARY: typ.Final = re.compile(r"(?:^|/)tests/(?P<stem>[^/]+)\.rs$")
+# A test target by its Cargo name: `tests/<name>.rs` or `tests/<name>/main.rs`.
+_TARGET_NAME: typ.Final = re.compile(
+    r"(?:^|/)tests/(?P<name>[^/]+?)(?:\.rs|/main\.rs)$"
+)
 # `#[test]`, `#[tokio::test]`, `#[rstest]` and `#[test_case(..)]` mark a harness
 # test; a bare function of the same name does not.
 _TEST_ATTRIBUTE: typ.Final = re.compile(r"#\[\s*(?:\w+::)*(?:test|rstest|test_case)\b")
@@ -72,10 +76,17 @@ class BuildFact(typ.TypedDict):
         The test binary's name for a top-level `tests/<stem>.rs`, else None.
     crate:
         The directory of the crate that owns the source, `.` for the root.
+    package:
+        The package name of the owning crate, or None when it declares none.
     prepared_by:
         Which of `setup-script`, `preparation-test`, `gate-call` and
         `makefile-preparation` apply. Empty means the repository declares no
         preparation for this source.
+    targets:
+        The names of the test binaries (`tests/<name>.rs`) whose module tree
+        compiles the source, sorted: the file's own binary and every one that
+        imports it. Empty when only a library reaches it; None when nothing
+        was seen reaching it, so no `--test NAME` run can be said to cover it.
     """
 
     path: str
@@ -83,7 +94,9 @@ class BuildFact(typ.TypedDict):
     kind: str
     binary: str | None
     crate: str
+    package: str | None
     prepared_by: list[str]
+    targets: list[str] | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -101,12 +114,42 @@ class Preparation:
     is_makefile_prepared:
         Whether the Makefile's `test` target compiles before it tests, which
         prepares every build the checkout's tests start.
+    named_test_crates:
+        Crate directories whose manifest names its test targets (`[[test]]`
+        tables, or `autotests = false`), so a file's name no longer says which
+        `--test NAME` runs it.
     """
 
     crates: cabc.Mapping[str, str | None]
     rules: list[SetupRule]
     gates: Gates
     is_makefile_prepared: bool = False
+    named_test_crates: frozenset[str] = frozenset()
+
+
+def named_test_crates(
+    checkout: pathlib.Path, manifests: cabc.Mapping[pathlib.Path, Manifest]
+) -> frozenset[str]:
+    """Return the crate directories whose manifest names its own test targets.
+
+    Returns
+    -------
+    frozenset[str]
+        Root-relative POSIX directories whose manifest has a `[[test]]` table or
+        sets `autotests = false`.
+    """
+    return frozenset(
+        path.parent.relative_to(checkout).as_posix()
+        for path, document in manifests.items()
+        if _names_tests(document)
+    )
+
+
+def _names_tests(document: Manifest) -> bool:
+    """Return whether a manifest declares test targets by name."""
+    package = document.get("package")
+    is_manual = isinstance(package, dict) and package.get("autotests") is False
+    return is_manual or bool(document.get("test"))
 
 
 def crate_directories(
@@ -376,6 +419,36 @@ def collect_builds(
             "kind": "cargo" if kind == MAYBE_KIND and crate in compiling else kind,
             "binary": stem,
             "crate": crate,
+            "package": crates.get(crate),
             "prepared_by": prepared,
+            "targets": (
+                None
+                if crate in preparation.named_test_crates
+                else _test_targets(path, evidence.reached_by.get(path, []))
+            ),
         })
     return builds
+
+
+def _test_targets(path: str, roots: list[str]) -> list[str] | None:
+    """Return the test binaries that compile a source, or None when not all are seen.
+
+    Cargo names a `tests/<name>.rs` file and a `tests/<name>/main.rs` file's
+    directory the same target, `<name>`.
+
+    Returns
+    -------
+    list[str] | None
+        The sorted names of the file's own binary and of every test target among
+        *roots*; empty when only a library reaches it; None when nothing reaches
+        it and it is no binary itself, or an owner the resolver cannot see
+        (`unseen:`) also compiles it, so the list could not be complete.
+    """
+    if any(root.startswith(UNSEEN) for root in roots):
+        return None
+    names = {
+        found["name"] for found in map(_TARGET_NAME.search, (path, *roots)) if found
+    }
+    if not names and not roots:
+        return None
+    return sorted(names)

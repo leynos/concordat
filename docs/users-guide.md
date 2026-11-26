@@ -951,6 +951,19 @@ detecting a cold build afterwards. It reports:
   names the preparation functions and test patterns; the defaults are
   rstest-bdd's (`ensure_prepared` and `nested_fixture_preparation`), and a
   repository with other names lists them there rather than taking an exemption.
+- **NC-010 per pass**: a pass of the Makefile's `test` target (an unfiltered
+  `cargo nextest run` or `cargo test`) that no preparation of its own flags
+  precedes. A repository that prepares the first pass and runs a second with
+  other features (rstest-bdd's `--no-default-features` leg) leaves the second
+  pass to compile cold. A preparation warms a pass only when its package
+  selection, features, target, profile and `RUSTFLAGS` are equal, and it must
+  be certain to run first. A compile alone (`--no-run`, `build`) does not warm
+  `trybuild` or `macrotest`, which build in their own directory, so a
+  repository with either needs a real run of the nested-build tests before the
+  timed pass, as whitaker's `make warm-test-builds` does. A preparation that
+  exists only inside the suite, under the harness's own timeout, is a warning
+  whatever `severity` says. The package README lists the exact forms the reader
+  models.
 - **EN-001** (indeterminate): a compiling command sets its target from a value
   the reader cannot follow, such as a function in another file, or a file could
   not be decoded. The rule says it does not know rather than guessing.

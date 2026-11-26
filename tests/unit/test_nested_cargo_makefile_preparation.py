@@ -112,6 +112,23 @@ def test_a_checkout_with_no_makefile_preparation_is_reported(
             "test: warm tools\n\tcargo nextest run\n\n"
             "warm:\n\tcargo build\n\ntools:\n\tcargo fmt\n"
         ),
+        # A simple variable assigned after what it reads is still read in order.
+        (
+            ".PHONY: test prewarm\nSUFFIX := warm\nT := pre$(SUFFIX)\n"
+            "$(T):\n\tcargo build\ntest: prewarm\n\tcargo nextest run\n"
+        ),
+        # A target name that settles to a plain word is filed under that word,
+        # so `$(T)` is the `prepare` rule the test waits on.
+        (
+            "T := prepare\n.PHONY: prepare\n$(T):\n\tcargo build\n"
+            "test: prepare\n\tcargo nextest run\n"
+        ),
+        # A target name built from a plain variable settles to an ordinary
+        # pattern rule, which cannot be a special target.
+        (
+            "APP := tool\n\ntarget/%/$(APP):\n\tcargo build --release\n\n"
+            "test: prepare\n\tcargo nextest run\n\nprepare:\n\tcargo build\n"
+        ),
     ],
 )
 def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
@@ -132,6 +149,43 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         "test:\n\tcargo build || cargo nextest run\n",
         # An ignored error leaves the test to run on a failed build.
         "test:\n\t-cargo build\n\tcargo nextest run\n",
+        # Make expands a target name where it reads the rule, so a variable set
+        # further down does not name `prewarm` here.
+        (
+            ".PHONY: test prewarm\npre$(T):\n\tcargo build\nT := warm\n"
+            "test: prewarm\n\tcargo nextest run\n"
+        ),
+        # The same through a variable's value: `T` reads `SUFFIX`, set below.
+        (
+            ".PHONY: test pre prewarm\nT = $(SUFFIX)\npre$(T):\n\tcargo build\n"
+            "SUFFIX := warm\ntest: prewarm\n\tcargo nextest run\n"
+        ),
+        # A shell assignment holds a command, not the text it prints.
+        (
+            ".PHONY: test printf pre\nT != printf pre\n$(T):\n\tcargo build\n"
+            "test: printf\n\tcargo nextest run\n"
+        ),
+        # A simple variable fixes its value where it is assigned, before `SUFFIX`.
+        (
+            ".PHONY: test pre prewarm\nT := pre$(SUFFIX)\nSUFFIX := warm\n"
+            "$(T):\n\tcargo build\ntest: prewarm\n\tcargo nextest run\n"
+        ),
+        # A name that is itself built by expansion is not read.
+        (
+            ".PHONY: test prewarm\nK := T\nT := prewarm\n$($(K)):\n\tcargo build\n"
+            "test: prewarm\n\tcargo nextest run\n"
+        ),
+        # A prerequisite is expanded where the rule is read too.
+        (
+            ".PHONY: test pre prewarm\nprewarm:\n\tcargo build\n"
+            "test: pre$(SUFFIX)\n\tcargo nextest run\nSUFFIX := warm\n"
+        ),
+        # A name that settles to `test` gives it a second rule, which the reader
+        # does not combine.
+        (
+            "T := test\n.PHONY: prepare test\nprepare:\n\tcargo build\n"
+            "$(T): prepare\ntest:\n\tcargo nextest run\n"
+        ),
         # A conditional build may not run.
         'test:\n\tif [ -n "$(X)" ]; then cargo build; fi\n\tcargo nextest run\n',
         # A prerequisite that only checks tools, formats or lints.

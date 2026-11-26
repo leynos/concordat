@@ -43,6 +43,10 @@ recorded in `docs/roadmap.md` (DF12-109).
   per file, at its first compile, and names every kind of build the file starts
   (`cargo`, `trybuild`, `macrotest`, `helper`). The message says what to do and
   links two examples.
+- **NC-010 per pass** (same severity, except the in-suite warning below): a
+  test pass of the Makefile's `test` target that no preparation of its own
+  flags precedes, in a repository whose preparation is declared in the Makefile
+  or in the suite. The finding is reported at the Makefile line of the pass.
 - **EN-001** (same severity, indeterminate): a command that compiles sets its
   target directory from a value the reader cannot follow; a `cargo` command
   with an unseen subcommand has no declared preparation and no compile beside
@@ -242,6 +246,106 @@ The rule does not check that the preparation is correct, only that it exists.
 Whether the preparation test sits in the right serial group, and whether a
 timeout is long enough, are NC-004 and NC-005's business
 (`nested-cargo-nextest`).
+
+## What counts as prepared for each pass (NC-010)
+
+The checks above ask that a preparation exists. rstest-bdd showed that is not
+enough: its Makefile prepared the first `make test` pass (`--all-features`) and
+ran a second pass with `--no-default-features`, which builds a different
+feature graph, so the second pass compiled cold inside its timed tests and
+timed out. A preparation warms a pass only when both build the same thing.
+
+For every repository whose preparation is declared in the Makefile, a named
+in-suite test or a gate (a repository whose every build a nextest setup script
+covers is left to the script, which nextest runs before each nextest pass; a
+plain `cargo test` pass never runs it, so each pass records its runner and a
+`cargo test` pass that only a script prepares is reported), the reader walks the
+`test` target in Make's order and judges each *pass*: an unfiltered
+`cargo nextest run`, `cargo-nextest nextest run` or `cargo test`.
+
+- **Signature.** A pass and a preparation are the same build when their package
+  selection (`-p`, `--workspace`, `--exclude`, `--manifest-path`), features
+  (`--features`, `-F`, `--all-features`, `--no-default-features`), `--target`,
+  cargo profile (`--release`, `--profile` for `cargo test`, `--cargo-profile`
+  for nextest) and build-affecting environment (`RUSTFLAGS` and its variants,
+  `CARGO_TARGET_DIR`, `RUSTUP_TOOLCHAIN`, `CARGO_PROFILE_*`) are equal after
+  Make's variable expansion. Nextest-only options (`-E`, `--profile`, `-j`),
+  the order of features and `--locked` are not part of it. A Make reference the
+  expansion left, and an option the reader does not know, are kept as opaque
+  words: the same words on both sides leave the commands equal, and a pass
+  whose signature holds any and matches nothing is indeterminate, never
+  unprepared.
+- **Preparation.** An earlier command, certain to have run first (the same
+  conditions as the Makefile preparation above: not in a conditional, not after
+  `||` or `;`, not on an ignored-error line, in a `.PHONY` target), with an
+  equal signature, that is either *compile-only* (`--no-run`, `build`, `bench`,
+  `nextest archive`) or a *filtered real run* (`-E`, `--filterset`, `--test` or
+  a test name, as in rstest-bdd's `-E 'test(/nested_fixture_preparation$/)'`).
+  A filtered run is read as preparation and never judged as a pass, because the
+  reader cannot know which tests its filter leaves. A run that selects only
+  `--lib`, `--doc`, `--bin`, `--example` or `--bench` compiles what it runs and
+  never reaches the integration tests that hold the nested builds, so it counts
+  as a compile, not as a real run. A run limited to `--test NAME` warms only
+  the nested builds that test binary compiles: the pass records the names, each
+  build records the `tests/<name>.rs` binaries whose module tree reaches its
+  file (a support module several binaries import is covered by a run of any of
+  them), and a trybuild or macrotest build only other binaries compile is
+  reported as still cold. A build nothing was seen reaching is reported as
+  `EN-001`, neither warmed nor cold. A run limited by a filter expression or a
+  test name rules no file out. An outside run of an in-suite preparation test
+  counts for the pass whose flags it carried and for no other. A help request
+  (`--help`, `-h`) builds nothing and prepares nothing.
+- **Order.** Make orders a rule's prerequisites before its recipe and does not
+  order sibling prerequisites, so a pass inside one prerequisite sees only what
+  ran before the rule. `$(MAKE) goal [VAR=value]` is followed with the override
+  in force, which is how one parametrized preparation target prepares each pass
+  (rstest-bdd's `prepare-nested-fixtures PREPARE_FLAGS=...`). An
+  `if probe; then A; else B; fi` that picks the runner prepares when both
+  branches prepare the same signature; a preparation in one branch only does
+  not.
+- **`--no-run` alone does not warm trybuild.** `trybuild` and `macrotest` build
+  in a directory of their own under the target (`<target>/tests/trybuild`,
+  `<target>/tests/macrotest`), which a compile of the outer crate never fills:
+  a whitaker contract took 58 s after `--no-run` and 2 s on the next run, and
+  the thysalion, ddlint and peregrine-web equivalents 291 s to 1.9 s, 123 s to
+  21 s and 79 s to 5.6 s. So when the repository has a trybuild or macrotest
+  build, a pass prepared only by a compile is reported; run the nested-build
+  tests for real before the timed pass with the same flags, as whitaker's
+  `make warm-test-builds` does.
+
+Findings, all `NC-010` unless stated, reported at the pass's Makefile line:
+
+- the pass has no preparation of its own signature although other
+  preparations ran before it (the rstest-bdd shape), at the configured severity;
+- the pass has only a compile of its signature and the repository has a
+  trybuild or macrotest build, at the configured severity;
+- the pass has no preparation at all and the only declaration is a named test
+  or gate inside the suite, which runs under the harness's own timeout. This is
+  always a `warning`, whatever `severity` says;
+- `EN-001` when the reader cannot tell: an unresolved signature, a command word
+  the expansion left, a target with several or conditional rules, or a Makefile
+  the reader does not follow (`.ONESHELL`, an include).
+
+`RUSTFLAGS` is compared as its words in order, and `RUSTFLAGS` in the
+environment differs from `CARGO_BUILD_RUSTFLAGS`: they are separate signatures
+even when they resolve to the same words, because cargo reads them with
+different precedence. The check reads only the Makefile's `test` target. A
+repository whose test target lives in a Netsukefile is out of scope, not clean
+(the reader does not parse it; see
+`docs/rfcs/rfc-0004-netsukefile-support.md`), and a CI step that runs cargo
+directly, bypassing `make test`, is not read either (no finding yet).
+
+`--target-dir`, `--config`, `-Z`, `-C` and a `+toolchain` selector are part of
+the signature, with their values, because each changes where or how cargo
+builds. An unresolved Make reference as an option's value stays in the
+signature beside its option.
+
+The limits are stated, not guessed at: the target selectors `--tests` and
+`--all-targets` are not compared, and neither are Makefile-level `export`s or
+target-specific variables that give two targets different `RUSTFLAGS`; a
+command the reader cannot lex, or whose test run hides behind a `make -C`, is
+not a pass. The workflows' test commands are not read, only the Makefile's
+`test` target.
 
 ## What counts
 

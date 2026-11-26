@@ -30,6 +30,14 @@ Feature: Nested cargo cold build
     Then the nested cargo cold build exit status is 0
     And the nested cargo cold build output contains "nested-cargo-cold-build: compliant"
 
+  Scenario: A second test pass the Makefile does not prepare is reported
+    Given a test that drives trybuild
+    And a Makefile that prepares only the first of two test passes
+    When I audit the nested cargo cold build
+    Then the nested cargo cold build exit status is 0
+    And the nested cargo cold build output contains "NC-010"
+    And the nested cargo cold build output contains "Makefile:6"
+
   Scenario: Evidence the reader cannot read is indeterminate, never a pass
     Given a test source the reader cannot decode
     When I audit the nested cargo cold build
