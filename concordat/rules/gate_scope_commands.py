@@ -80,6 +80,10 @@ _WRAPPER_STEM: typ.Final = re.compile(
 _ROOT_MANIFESTS: typ.Final = frozenset({"Cargo.toml", "./Cargo.toml"})
 _UNRESOLVED_WORD: typ.Final = (UNRESOLVED_MARK, SHELL_DOLLAR, "$")
 _HIDDEN_WHY: typ.Final = "a word the audit could not resolve may select packages"
+_SEPARATOR_WHY: typ.Final = (
+    "Whitaker takes options for Cargo only after `--`; without it the command "
+    "exits with an error and checks nothing"
+)
 _INFORMATION_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 _SHELL_KEYWORDS: typ.Final = frozenset({
     "if",
@@ -312,6 +316,22 @@ def _may_supply_separator(tool: str, arguments: list[str]) -> bool:
     )
 
 
+def _fails_without_separator(tool: str, arguments: list[str]) -> bool:
+    """Return whether a Whitaker command gives Cargo options without a `--`.
+
+    `whitaker --all --workspace` exits with an error and checks nothing, so its
+    selection is not the bare command's.
+
+    Returns
+    -------
+    bool
+        Whether the command is Whitaker's with options for Cargo and no `--`.
+    """
+    return (
+        tool == "whitaker" and "--" not in arguments and bool(_whitaker_own(arguments))
+    )
+
+
 def _build(
     tool: str, arguments: list[str], where: tuple[str, str], *, moved: bool
 ) -> Invocation:
@@ -319,13 +339,14 @@ def _build(
     cargo_arguments = _cargo_half(tool, arguments)
     packages, excludes, manifest = _selection(cargo_arguments)
     hidden = _may_supply_separator(tool, arguments) or _hides_selection(cargo_arguments)
+    fails = _fails_without_separator(tool, arguments)
     source, command = where
     return {
         "tool": tool,
         "source": source,
         "command": command,
-        "resolved": not hidden,
-        "why": _HIDDEN_WHY if hidden else "",
+        "resolved": not (hidden or fails),
+        "why": _HIDDEN_WHY if hidden else _SEPARATOR_WHY if fails else "",
         "workspace_flag": any(word in _WORKSPACE_FLAGS for word in cargo_arguments),
         "packages": packages,
         "excludes": excludes,

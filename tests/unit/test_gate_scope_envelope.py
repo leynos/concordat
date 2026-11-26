@@ -909,6 +909,34 @@ class TestFourteenthReview:
         assert [i["resolved"] for i in found] == [False]
 
 
+class TestFifteenthReview:
+    """Behaviours a sixteenth review showed to be missing."""
+
+    def test_whitaker_options_for_cargo_without_a_separator_select_nothing(
+        self,
+    ) -> None:
+        """`whitaker --all --workspace` exits with an error, so it is no coverage."""
+        (found,) = _read("whitaker --all --workspace")
+        assert found["resolved"] is False
+        assert "exits with an error" in found["why"]
+
+    def test_a_bare_whitaker_all_is_still_a_command(self) -> None:
+        """`whitaker --all` has no options for Cargo, so it is the bare command."""
+        (found,) = _read("whitaker --all")
+        assert found["resolved"] is True
+
+    def test_an_elif_test_after_constant_false_is_not_a_fork_of_its_else(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The test always runs, whatever follows it."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n\tif false; then\n\t  :\n"
+            "\telif cargo test --workspace; then\n\t  :\n\telse\n\t  :\n\tfi\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert [i["resolved"] for i in found] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 

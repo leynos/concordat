@@ -235,8 +235,9 @@ test_a_cd_on_an_earlier_line_moves_the_later_lines if {
 	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.ci_cd_on_earlier_line)} == {["EN-001", "indeterminate"]}
 }
 
-test_an_unresolved_library_before_whitakers_separator_does_not_hide_the_selection if {
-	count(findings(data.fixtures.whitaker_unresolved_library)) == 0
+test_an_unresolved_library_value_before_whitakers_separator_hides_the_selection if {
+	fs := findings(data.fixtures.whitaker_unresolved_library)
+	{f.rule_id | some f in fs} == {"EN-001"}
 }
 
 test_a_step_that_never_runs_does_not_cover if {
