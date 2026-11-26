@@ -493,15 +493,21 @@ def _test_targets(
     sources = _owners(path, roots, declared)
     if is_named and not all(source in declared for source in sources):
         return None
-    names = {declared[source] for source in sources if source in declared}
-    names |= {
-        found["name"]
-        for source, found in ((s, _TARGET_NAME.search(s)) for s in sources)
-        if found and source not in declared
-    }
+    names = _target_names(sources, declared)
     if not names and not roots:
         return None
     return sorted(names)
+
+
+def _target_names(sources: list[str], declared: cabc.Mapping[str, str]) -> set[str]:
+    """Return the target names of *sources*: a table's name, else the file's."""
+    named = {declared[source] for source in sources if source in declared}
+    by_file = (
+        found["name"]
+        for source, found in ((s, _TARGET_NAME.search(s)) for s in sources)
+        if found and source not in declared
+    )
+    return named | set(by_file)
 
 
 def _owners(path: str, roots: list[str], declared: cabc.Mapping[str, str]) -> list[str]:
