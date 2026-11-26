@@ -37,6 +37,7 @@ from .gate_scope_commands import (
     invocations_in,
     read_commands,
     settle,
+    without_keywords,
 )
 from .gate_scope_shell import Branch, runnable
 from .gate_scope_workflow_model import Place, logical_lines, places, step_runs
@@ -213,6 +214,7 @@ def _hides_tool(words: list[str]) -> bool:
     bool
         Whether the command may be a gate tool.
     """
+    words = without_keywords(words)
     start = command_start(words)
     if start >= len(words):
         return False

@@ -40,6 +40,7 @@ __all__ = [
     "invocations_in",
     "read_commands",
     "settle",
+    "without_keywords",
 ]
 
 TOOLS: typ.Final = ("clippy", "nextest", "test", "test-doc", "whitaker")
@@ -379,7 +380,7 @@ def _invocation_of(
     return _wrapper(wrapped, where, moved=moved) if wrapped else None
 
 
-def _without_keywords(words: list[str]) -> list[str]:
+def without_keywords(words: list[str]) -> list[str]:
     """Return *words* without the shell keywords that open a command.
 
     `then cargo test` and `if cargo test` run `cargo test`; the keyword is not
@@ -429,7 +430,7 @@ def read_commands(
     moved = state.moved
     found: list[Tagged] = []
     for raw_words, frames in kept:
-        words = _without_keywords(raw_words)
+        words = without_keywords(raw_words)
         start = command_start(words)
         if words[start : start + 1] == ["cd"]:
             moved = moved or _moves_directory(words[start:])

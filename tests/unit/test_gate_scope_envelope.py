@@ -852,6 +852,39 @@ class TestTwelfthReview:
         assert [i["workspace_flag"] for i in envelope["invocations"]] == [True]
 
 
+class TestThirteenthReview:
+    """Behaviours a fourteenth review showed to be missing."""
+
+    @staticmethod
+    def _oneshell(body: str) -> str:
+        """Return a `.ONESHELL` Makefile whose `test` recipe is *body*."""
+        lines = "".join(f"\t{line}\n" for line in body.splitlines())
+        return f".ONESHELL:\n.PHONY: test\ntest:\n{lines}"
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            "if cargo $$RUNNER -p b; then :; fi",
+            "if false; then :; elif cargo $$RUNNER -p b; then :; fi",
+        ],
+    )
+    def test_a_variable_subcommand_in_a_reachable_if_test_is_unreadable(
+        self, tmp_path: pathlib.Path, body: str
+    ) -> None:
+        """The test of an `if` or `elif` runs, so its hidden command is reported."""
+        makefile = self._oneshell(body + "\ncargo test -p app")
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["unreadable"]
+
+    def test_an_if_test_is_not_one_of_its_alternative_branches(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`if cargo test --workspace; then :; else :; fi` always runs the test."""
+        makefile = self._oneshell("if cargo test --workspace; then\n  :\nelse\n  :\nfi")
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert [i["resolved"] for i in found] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 
