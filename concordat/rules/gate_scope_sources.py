@@ -31,7 +31,7 @@ import typing as typ
 
 from .gate_scope_commands import Invocation, invocations_in
 from .interrogate_invocation import lex_segments
-from .make_commands import blank_references
+from .make_commands import blank_references, command_start
 from .makefile_expansion import (
     UNRESOLVED_MARK,
     expand_readings,
@@ -47,6 +47,7 @@ from .markdown_envelope import (
     read_text,
     within_checkout,
 )
+from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -64,10 +65,29 @@ __all__ = [
 
 GATE_TARGETS: typ.Final = ("lint", "test")
 OPERATION_READ_EXAMPLES: typ.Final = "read-gate-scope-examples"
+# A gate tool named as a word of its own. An identifier that merely contains the
+# name (`WHITAKER_INSTALLER_VERSION`, `whitaker-installer`, `$whitaker`) is not
+# a command, so a line that only mentions one is not unreadable.
 _NAMES_TOOL: typ.Final = re.compile(
-    r"whitaker|clippy|nextest|dylint|cargo(?:\s+\+\S+)?\s+(?:test|llvm-cov)",
+    r"(?<![\w$./-])(?:whitaker|clippy|nextest|dylint)(?![\w-])", re.IGNORECASE
+)
+# The same, loosely, for a step of a job whose matrix cannot be expanded: the
+# commands are unknown there, so any mention of a tool is reason to say so.
+_MATRIX_TOOL: typ.Final = re.compile(
+    r"whitaker|clippy|nextest|dylint|cargo\s+(?:\+\S+\s+)?(?:test|llvm-cov)",
     re.IGNORECASE,
 )
+# Words that, beside a command word the expansion left unresolved, say the
+# command is one of the gate tools.
+_TOOL_ARGUMENTS: typ.Final = frozenset({
+    "clippy",
+    "nextest",
+    "dylint",
+    "test",
+    "--workspace",
+    "--all-targets",
+    "--all-features",
+})
 _MATRIX_REFERENCE: typ.Final = re.compile(r"\$\{\{\s*matrix\.([\w-]+)\s*\}\}")
 _ANY_EXPRESSION: typ.Final = re.compile(r"\$\{\{.*?\}\}")
 _FENCE: typ.Final = re.compile(r"^\s*(`{3,}|~{3,})")
@@ -110,26 +130,99 @@ def _logical_lines(text: str) -> list[tuple[int, str]]:
     return lines
 
 
+# A Make reference that stands for the Whitaker command: the estate's
+# `$(WHITAKER)`, or the call a conditional `WHITAKER` variable expands to, such
+# as `$(or $(shell command -v whitaker), whitaker)` or
+# `$(firstword $(wildcard $(BIN)/whitaker) whitaker)`. A reference that merely
+# names a variable beginning `WHITAKER_` is an argument, not the command.
+_WHITAKER_REFERENCE: typ.Final = re.compile(
+    r"^\$[({]\s*(?:WHITAKER(?:_BIN|_CMD)?\s*[)}]$"
+    r"|(?:or|firstword|wildcard|shell|if)\s.*(?<![\w-])whitaker(?![\w-]))",
+    re.DOTALL,
+)
+# A quoted string that holds a parenthesis and no shell expansion. The shared
+# lexer rewrites `)"` to close a command substitution, which unbalances such a
+# string, and nothing in it can select a package.
+_PARENTHESISED_STRING: typ.Final = re.compile(
+    r"\"[^\"$`\\]*[()][^\"$`\\]*\"|'[^'$`\\]*[()][^'$`\\]*'"
+)
+
+
+def _name_whitaker(text: str) -> str:
+    """Replace each reference that stands for the Whitaker command by its name."""
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        end = (
+            scan_balanced(text, index + 1)
+            if text.startswith(("$(", "${"), index)
+            else None
+        )
+        if end is None:
+            out.append(text[index])
+            index += 1
+        elif _WHITAKER_REFERENCE.match(text[index:end]):
+            out.append(" whitaker ")
+            index = end
+        else:
+            out.append(text[index:end])
+            index = end
+    return "".join(out)
+
+
+def _lexed(text: str) -> list[list[str]] | None:
+    """Return the simple commands of one expanded line, or ``None`` if it won't lex."""
+    muted = _PARENTHESISED_STRING.sub('"_"', joined(text))
+    return lex_segments(blank_references(_name_whitaker(muted)))
+
+
 def _read_line(text: str, where: tuple[str, str]) -> tuple[list[Invocation], bool]:
     """Return the invocations in one expanded line, and whether it was readable.
 
-    A line is unreadable when it names a gate tool, finds no invocation, and
-    either will not lex or carries a reference the expansion left.
+    A line is unreadable when it finds no invocation and either will not lex
+    while naming a gate tool, or holds a command whose command word (or Cargo
+    subcommand) the expansion left unresolved beside words that name a gate
+    tool. A line that only mentions a tool in a string or an identifier is not.
 
     Returns
     -------
     tuple[list[Invocation], bool]
         The invocations found, and whether the line could be read.
     """
-    blanked = blank_references(joined(text))
-    segments = lex_segments(blanked)
-    found = invocations_in(segments, where) if segments is not None else []
-    is_unreadable = (
-        not found
-        and _NAMES_TOOL.search(shown(text)) is not None
-        and (segments is None or UNRESOLVED_MARK in blanked)
-    )
+    segments = _lexed(text)
+    if segments is None:
+        found: list[Invocation] = []
+        is_unreadable = _NAMES_TOOL.search(shown(text)) is not None
+    else:
+        found = invocations_in(segments, where)
+        is_unreadable = not found and any(_hides_tool(words) for words in segments)
     return found, not is_unreadable
+
+
+def _hides_tool(words: list[str]) -> bool:
+    """Return whether one command might run a gate tool it does not name.
+
+    That is a command word the expansion left unresolved, or a `cargo` command
+    whose subcommand it left unresolved, with an argument only a gate tool takes.
+
+    Returns
+    -------
+    bool
+        Whether the command may be a gate tool.
+    """
+    start = command_start(words)
+    if start >= len(words):
+        return False
+    head = words[start]
+    unresolved_head = UNRESOLVED_MARK in head
+    unresolved_subcommand = (
+        head.rsplit("/", 1)[-1] == "cargo"
+        and len(words) > start + 1
+        and UNRESOLVED_MARK in words[start + 1]
+    )
+    return (unresolved_head or unresolved_subcommand) and any(
+        word in _TOOL_ARGUMENTS for word in words[start + 1 :]
+    )
 
 
 def makefile_lines(
@@ -306,7 +399,7 @@ def workflow_lines(files: cabc.Iterable[WorkflowFile]) -> GateLines:
             continue
         for label, combinations, steps in _steps(workflow["parsed"]):
             if combinations is None:
-                if _NAMES_TOOL.search(repr(steps)):
+                if _MATRIX_TOOL.search(repr(steps)):
                     unreadable.append(
                         f"{workflow['path']} ({label}): matrix is computed by an "
                         "expression, so its commands cannot be filled in"
@@ -400,7 +493,7 @@ def markdown_examples(checkout: pathlib.Path, root: pathlib.Path) -> list[Invoca
             continue
         relative = path.relative_to(checkout).as_posix()
         for number, line in _fenced_lines(read_text(path, OPERATION_READ_EXAMPLES)):
-            segments = lex_segments(blank_references(line)) or []
+            segments = _lexed(line) or []
             examples.extend(
                 invocations_in(
                     segments, (f"{relative}:{number}", " ".join(line.split()))

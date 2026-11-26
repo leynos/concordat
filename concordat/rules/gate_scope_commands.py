@@ -23,6 +23,7 @@ another directory, or a wrapper script whose contents the audit does not read.
 from __future__ import annotations
 
 import pathlib
+import re
 import typing as typ
 
 from .make_commands import command_start
@@ -55,11 +56,34 @@ _LLVM_COV_REPORTING: typ.Final = frozenset({
     "cobertura",
 })
 _WRAPPER_SUFFIXES: typ.Final = (".py", ".sh", ".bash")
-_WRAPPER_TOOLS: typ.Final = (
-    ("whitaker", "whitaker"),
-    ("clippy", "clippy"),
-    ("nextest", "nextest"),
+# A script runs a gate tool when it is named for running it: `run_whitaker`,
+# `clippy_runner`, or the tool's own name. `check_serial_nextest_matrix` checks
+# a file and `install_whitaker` installs a tool, so neither is a wrapper.
+_WRAPPER_STEM: typ.Final = re.compile(
+    r"^(?:(?:run|exec|invoke|wrap|lint)[_-])?(?P<tool>whitaker|clippy|nextest)"
+    r"(?:[_-](?:run|runner|wrapper))?$|^(?:run|exec|invoke|wrap|lint)[_-].*?"
+    r"(?P<named>whitaker|clippy|nextest)$"
 )
+# Spellings of the root manifest, which `--manifest-path` may name without
+# leaving the root workspace.
+_ROOT_MANIFESTS: typ.Final = frozenset({"Cargo.toml", "./Cargo.toml"})
+# Options that take a value which cannot name a package, so an unresolved word
+# in that place does not hide the selection.
+_BENIGN_VALUE_FLAGS: typ.Final = frozenset({
+    "--profile",
+    "-j",
+    "--jobs",
+    "--features",
+    "-F",
+    "--target",
+    "--target-dir",
+    "--message-format",
+    "--color",
+    "--config",
+    "--cargo-profile",
+    "--filter-expr",
+    "-E",
+})
 _UNRESOLVED_WORD: typ.Final = (UNRESOLVED_MARK, SHELL_DOLLAR, "$")
 _INFORMATION_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 _SHELL_KEYWORDS: typ.Final = frozenset({
@@ -135,6 +159,8 @@ def _hides_selection(arguments: list[str], *, has_workspace_flag: bool) -> bool:
         if not _is_unresolved(word):
             continue
         previous = arguments[index - 1] if index else ""
+        if previous in _BENIGN_VALUE_FLAGS:
+            continue
         if not has_workspace_flag or previous in _VALUE_FLAGS:
             return True
         if word.split("=", 1)[0] in _VALUE_FLAGS:
@@ -182,7 +208,8 @@ def _wrapper_tool(word: str) -> str | None:
     path = pathlib.PurePosixPath(word)
     if path.suffix not in _WRAPPER_SUFFIXES:
         return None
-    return next((tool for needle, tool in _WRAPPER_TOOLS if needle in path.stem), None)
+    match = _WRAPPER_STEM.match(path.stem)
+    return match and (match.group("tool") or match.group("named"))
 
 
 def _build(
@@ -214,7 +241,8 @@ def _build(
         "workspace_flag": has_flag,
         "packages": packages,
         "excludes": excludes,
-        "changes_directory": moved or manifest is not None,
+        "changes_directory": moved
+        or (manifest is not None and manifest not in _ROOT_MANIFESTS),
     }
 
 

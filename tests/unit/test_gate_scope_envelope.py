@@ -168,6 +168,10 @@ class TestCommands:
             ("cargo test --workspace --exclude $SKIP", False),
             ("cargo test -p $PACKAGE", False),
             ("cargo test --package=$PACKAGE --workspace", False),
+            ("cargo nextest run --profile $PROFILE --all-targets", True),
+            ("cargo nextest run -j $JOBS --all-features", True),
+            ("cargo test --features $FEATURES", True),
+            ("cargo test --profile $PROFILE $EXTRA", False),
         ],
     )
     def test_an_unresolved_word_matters_only_where_it_can_select(
@@ -183,6 +187,8 @@ class TestCommands:
             ("./scripts/run_whitaker.py --packages x", "whitaker"),
             ("scripts/lint_clippy.sh", "clippy"),
             ("python3 scripts/run_nextest.py", None),
+            ("./scripts/check_serial_nextest_matrix.py", None),
+            ("./scripts/install_whitaker.sh", None),
         ],
     )
     def test_a_wrapper_script_named_for_a_tool_is_unresolved(
@@ -317,14 +323,97 @@ class TestMakefile:
         envelope = _build(tmp_path, _workspace_files(makefile=makefile))
         assert envelope["makefile"]["is_resolved"] is False
 
-    def test_a_line_naming_a_tool_that_cannot_be_read_is_unreadable(
+    def test_a_command_behind_an_unset_variable_is_unreadable(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """A tool behind an unset variable is carried, not dropped."""
-        makefile = ".PHONY: lint\nlint:\n\t$(LINTER) --workspace # clippy\n"
+        """A gate tool behind an unset variable is carried, not dropped."""
+        makefile = ".PHONY: lint\nlint:\n\t$(LINTER) clippy --workspace\n"
         envelope = _build(tmp_path, _workspace_files(makefile=makefile))
         assert envelope["invocations"] == []
         assert envelope["unreadable"]
+
+    def test_a_cargo_subcommand_behind_an_unset_variable_is_unreadable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cargo $(SUBCOMMAND) --workspace` may be any gate tool."""
+        makefile = ".PHONY: test\ntest:\n\tcargo $(RUNNER) --workspace\n"
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["invocations"] == []
+        assert envelope["unreadable"]
+
+    @pytest.mark.parametrize(
+        "definition",
+        [
+            "$(or $(shell command -v whitaker 2>/dev/null),whitaker)",
+            "$(or $(wildcard $(HOME)/.local/bin/whitaker),whitaker)",
+            "$(firstword $(wildcard $(LOCAL_BIN)/whitaker) whitaker)",
+        ],
+    )
+    def test_a_conditional_whitaker_variable_is_the_whitaker_command(
+        self, tmp_path: pathlib.Path, definition: str
+    ) -> None:
+        """`$(WHITAKER)` stands for the tool even when its value is conditional."""
+        makefile = (
+            f"WHITAKER ?= {definition}\n"
+            ".PHONY: lint\nlint:\n\t$(WHITAKER) --all -- --workspace\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        (found,) = envelope["invocations"]
+        assert (found["tool"], found["workspace_flag"]) == ("whitaker", True)
+
+    def test_a_variable_that_only_begins_with_whitaker_is_an_argument(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`$(WHITAKER_PACKAGES)` is not the command."""
+        makefile = (
+            ".PHONY: lint\nlint:\n"
+            "\twhitaker --all -- $(WHITAKER_PACKAGES) --all-targets\n"
+        )
+        (found,) = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert found["tool"] == "whitaker"
+        assert not found["resolved"]
+
+    def test_a_parenthesised_string_does_not_stop_the_line_lexing(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A message such as `(CI uses the action)` is text, not a substitution."""
+        makefile = (
+            ".PHONY: lint\nlint:\n"
+            '\t@command -v whitaker >/dev/null 2>&1 || { echo "x (y)" >&2; exit 1; }\n'
+            "\twhitaker --all -- --workspace\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["unreadable"] == []
+        assert [i["tool"] for i in envelope["invocations"]] == ["whitaker"]
+
+    def test_the_root_manifest_named_explicitly_stays_in_the_root_workspace(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`--manifest-path Cargo.toml` is the root manifest, not another one."""
+        makefile = (
+            ".PHONY: lint\nlint:\n"
+            "\tcargo clippy --manifest-path Cargo.toml --workspace\n"
+        )
+        (found,) = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert found["changes_directory"] is False
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            'echo "installing whitaker $(WHITAKER_INSTALLER_VERSION)"',
+            'tool_pins="${tool_pins}-whitaker${WHITAKER_INSTALLER_VERSION}"',
+            "whitaker-installer --version",
+            "echo done # clippy",
+        ],
+    )
+    def test_a_line_that_only_mentions_a_tool_is_not_unreadable(
+        self, tmp_path: pathlib.Path, line: str
+    ) -> None:
+        """An identifier or a string that contains a tool name is not a command."""
+        makefile = f".PHONY: lint\nlint:\n\t{line}\n"
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["invocations"] == []
+        assert envelope["unreadable"] == []
 
 
 class TestWorkflows:
