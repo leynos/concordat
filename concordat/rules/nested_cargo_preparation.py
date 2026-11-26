@@ -146,14 +146,22 @@ def declared_tests(
     """
     found: dict[str, set[str]] = {}
     for path, document in manifests.items():
-        tables = document.get("test")
-        for table in tables if isinstance(tables, list) else []:
-            for name, source in _test_table(table):
-                crate = path.parent.relative_to(checkout).as_posix()
-                relative = posixpath.normpath(posixpath.join(crate, source))
-                if not relative.startswith(".."):
-                    found.setdefault(relative, set()).add(name)
+        crate = path.parent.relative_to(checkout).as_posix()
+        for name, source in _manifest_tests(document):
+            relative = posixpath.normpath(posixpath.join(crate, source))
+            if not relative.startswith(".."):
+                found.setdefault(relative, set()).add(name)
     return {key: frozenset(names) for key, names in found.items()}
+
+
+def _manifest_tests(document: Manifest) -> list[tuple[str, str]]:
+    """Return every `[[test]]` table's name with each source path it may mean."""
+    tables = document.get("test")
+    return [
+        pair
+        for table in (tables if isinstance(tables, list) else [])
+        for pair in _test_table(table)
+    ]
 
 
 def _test_table(table: object) -> list[tuple[str, str]]:
