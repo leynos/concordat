@@ -918,7 +918,7 @@ class TestFifteenthReview:
         """`whitaker --all --workspace` exits with an error, so it is no coverage."""
         (found,) = _read("whitaker --all --workspace")
         assert found["resolved"] is False
-        assert "exits with an error" in found["why"]
+        assert "no `--`" in found["why"]
 
     def test_a_bare_whitaker_all_is_still_a_command(self) -> None:
         """`whitaker --all` has no options for Cargo, so it is the bare command."""

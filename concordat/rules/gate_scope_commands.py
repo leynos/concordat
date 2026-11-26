@@ -81,8 +81,8 @@ _ROOT_MANIFESTS: typ.Final = frozenset({"Cargo.toml", "./Cargo.toml"})
 _UNRESOLVED_WORD: typ.Final = (UNRESOLVED_MARK, SHELL_DOLLAR, "$")
 _HIDDEN_WHY: typ.Final = "a word the audit could not resolve may select packages"
 _SEPARATOR_WHY: typ.Final = (
-    "Whitaker takes options for Cargo only after `--`; without it the command "
-    "exits with an error and checks nothing"
+    "Whitaker was given options for Cargo and no `--`, a form measured to check "
+    "nothing for `--workspace`, so what it selects is not judged"
 )
 _INFORMATION_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 _SHELL_KEYWORDS: typ.Final = frozenset({

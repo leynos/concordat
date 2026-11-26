@@ -1569,6 +1569,50 @@
       "examples": [],
       "unreadable": []
     },
+    "whitaker_virtual_without_separator": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "virtual",
+        "root_package": null,
+        "members": [
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "whitaker",
+          "source": "Makefile:4 (lint)",
+          "command": "whitaker --all --workspace",
+          "resolved": false,
+          "why": "Whitaker was given options for Cargo and no `--`, a form measured to check nothing for `--workspace`, so what it selects is not judged",
+          "workspace_flag": false,
+          "packages": [],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
     "whitaker_unresolved_library": {
       "schema_version": 1,
       "kind": "policy-input/gate-workspace-coverage",

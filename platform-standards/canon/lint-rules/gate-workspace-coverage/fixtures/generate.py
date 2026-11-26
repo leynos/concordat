@@ -180,6 +180,9 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "two_clippy_one_line": checkout_for(
         lint=["cargo clippy -p app -p b && cargo clippy -p c"]
     ),
+    "whitaker_virtual_without_separator": checkout_for(
+        VIRTUAL, lint=["whitaker --all --workspace"]
+    ),
     "whitaker_unresolved_library": checkout_for(
         lint=["whitaker --lib $(LIBRARY) -- --workspace"]
     ),
