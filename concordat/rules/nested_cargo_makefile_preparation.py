@@ -510,9 +510,18 @@ def _gated_one_shell(
     flags = values.get(".SHELLFLAGS", "")
     if ".ONESHELL" not in index or not _ERREXIT.search(flags):
         return frozenset()
-    lines = [
-        r["text"] for rules in index.values() for rule in rules for r in rule["recipes"]
-    ]
-    if any(_ERREXIT_OFF.search(line) or not _is_self_contained(line) for line in lines):
+    if not all(_keeps_errexit(line) for line in _recipe_lines(index)):
         return frozenset()
     return frozenset({".ONESHELL"})
+
+
+def _recipe_lines(index: dict[str, list[MakeRule]]) -> list[str]:
+    """Return the text of every recipe line in the Makefile."""
+    return [
+        r["text"] for rules in index.values() for rule in rules for r in rule["recipes"]
+    ]
+
+
+def _keeps_errexit(line: str) -> bool:
+    """Return whether a recipe line leaves errexit on and no construct open."""
+    return not _ERREXIT_OFF.search(line) and _is_self_contained(line)
