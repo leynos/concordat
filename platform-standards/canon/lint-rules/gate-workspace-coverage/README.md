@@ -111,9 +111,9 @@ place one of its commands:
   `--workspace`, because it may stand for `--exclude b`, and even after an
   option such as `--profile` or `--color`: a Make reference is substituted as
   text and an unquoted shell variable splits into words, so neither is one
-  value. The one exception is anything before Whitaker's `--`, which is
-  Whitaker's own. A Whitaker command with no `--` and an unresolved word may be
-  given the separator by it;
+  value. Whitaker's own `--all` and `--lib NAME` are no selection, but an
+  unresolved word after `--lib` is not trusted to be one name. A Whitaker
+  command with no `--` and an unresolved word may be given the separator by it;
 - a command word, or Cargo subcommand, left unresolved beside words only a gate
   tool takes, even when another command on the same line was read;
 - unreadable input anywhere in the gate: no tool is called uncovered while a

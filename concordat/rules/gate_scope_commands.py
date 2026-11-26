@@ -261,6 +261,9 @@ def _whitaker_own(arguments: list[str]) -> list[str]:
     for word in arguments:
         if after_lib:
             after_lib = False
+            if _is_unresolved(word):
+                # An unquoted value can hold more words: `LIB='suite -p app'`.
+                kept.append(word)
         elif word == "--lib":
             after_lib = True
         elif word != "--all":

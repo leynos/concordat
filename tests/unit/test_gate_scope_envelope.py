@@ -177,7 +177,7 @@ class TestCommands:
         [
             ("cargo test --workspace $EXTRA", False),
             ("cargo test $FLAGS", False),
-            ("whitaker --lib $LIBRARY -- --workspace", True),
+            ("whitaker --lib $LIBRARY -- --workspace", False),
             ("whitaker --all -- --workspace $EXTRA", False),
             ("cargo test --workspace --exclude $SKIP", False),
             ("cargo test -p $PACKAGE", False),
@@ -198,8 +198,8 @@ class TestCommands:
     ) -> None:
         """An unresolved word may supply `--exclude`, so it hides the selection.
 
-        The one exception is anything before Whitaker's `--`, which is
-        Whitaker's own.
+        Whitaker's own `--all` is no selection, and a resolved `--lib NAME` is a
+        library name.
         """
         (found,) = _read(command)
         assert found["resolved"] is is_resolved
@@ -883,6 +883,30 @@ class TestThirteenthReview:
         makefile = self._oneshell("if cargo test --workspace; then\n  :\nelse\n  :\nfi")
         found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
         assert [i["resolved"] for i in found] == [True]
+
+
+class TestFourteenthReview:
+    """Behaviours a fifteenth review showed to be missing."""
+
+    def test_an_elif_test_an_earlier_unknown_branch_can_skip_is_indeterminate(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """If `flag` exists the `elif` test never runs, so it covers nothing alone."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n\tif test -f flag; then\n"
+            "\t  :\n\telif cargo test --workspace; then\n\t  :\n\tfi\n"
+            "\tcargo test -p app\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        by_flag = {i["workspace_flag"]: i["resolved"] for i in found}
+        assert by_flag == {True: False, False: True}
+
+    def test_an_unresolved_lint_library_word_may_hide_a_package_selector(
+        self,
+    ) -> None:
+        """`--lib $LIB` with `LIB='suite -p app'` selects `app`."""
+        found = _read('whitaker --lib "$LIB" -- --all-targets')
+        assert [i["resolved"] for i in found] == [False]
 
 
 class TestThirdReview:

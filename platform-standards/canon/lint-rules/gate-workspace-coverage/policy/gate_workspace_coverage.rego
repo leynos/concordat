@@ -256,7 +256,7 @@ deny contains finding("GC-001", severity, "noncompliant", first_source(tool), ms
 	tool_known(tool)
 	count(uncovered(tool)) > 0
 	msg := sprintf(
-		"the %s commands the gate runs leave %d of %d workspace member(s) out: %s. Select the whole workspace (Cargo's --workspace or --all; for Whitaker, after the `--`), or exempt a crate by name with a rationale and a review trigger in the rule's parameters. Narrowing commands: %s%s",
+		"the %s commands the gate runs leave %d of %d workspace member(s) out: %s. Select the whole workspace (Cargo's --workspace or --all; for Whitaker, `--workspace` on either side of the `--`), or exempt a crate by name with a rationale and a review trigger in the rule's parameters. Narrowing commands: %s%s",
 		[tool, count(uncovered(tool)), count(members), concat(", ", sort(uncovered(tool))), list_sources(narrowing(tool)), examples_note(tool)],
 	)
 }

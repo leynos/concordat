@@ -158,7 +158,7 @@ def runnable(
     """Return the simple commands of a line that can run, and the shell after it.
 
     Each command comes with the `uid` of every non-constant `if` around it (an
-    `if` test is outside the branch it opens), so a
+    `if` test is outside the branch it opens, an `elif` test is not), so a
     caller can mark the commands of an `if` that turns out to have alternative
     branches (see `ShellState.forks`). *state* is the shell at the line's start.
 
@@ -179,13 +179,14 @@ def runnable(
 def _around(branches: tuple[Branch, ...], words: list[str]) -> tuple[Branch, ...]:
     """Return the branches that enclose a command, not the one it may open.
 
-    The test of an `if` or `elif` runs to choose a branch, so it sits outside the
-    branch it opens.
+    The test of an `if` always runs, so it sits outside the branch it opens. The
+    test of an `elif` runs only when no earlier branch of its `if` did, so it
+    stays inside the `if`'s own frame and is an alternative to those branches.
 
     Returns
     -------
     tuple[Branch, ...]
-        *branches*, less the innermost when *words* start an `if` or `elif`.
+        *branches*, less the innermost when *words* start an `if`.
     """
     head = words[0].lstrip("@-+") if words else ""
-    return branches[:-1] if head in {"if", "elif"} and branches else branches
+    return branches[:-1] if head == "if" and branches else branches
