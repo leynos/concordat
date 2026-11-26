@@ -46,6 +46,7 @@ from .makefile_tool_paths import read_tool_paths
 from .nested_cargo_make_calls import MakeCall, make_call, overlaid
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_names import (
+    fallback_lines,
     named_variables,
     pattern_lines,
     settled_index,
@@ -157,6 +158,7 @@ _HIDDEN_TEST_REASON: typ.Final = (
 )
 _INCLUDE_REASON: typ.Final = "an included file may define `test`"
 _PATTERN_REASON: typ.Final = "a pattern rule may supply `test`"
+_FALLBACK_REASON: typ.Final = "a `.DEFAULT` rule or a generated rule may supply `test`"
 _OVERRIDE_REASON: typ.Final = (
     "a make override may change which target an expanded name defines"
 )
@@ -700,6 +702,7 @@ def _hidden_test_facts(
     candidates = [
         (unsafe_names(index, values, report["variables"]), _HIDDEN_TEST_REASON),
         (pattern_lines(index, TEST_TARGET), _PATTERN_REASON),
+        (fallback_lines(index, text), _FALLBACK_REASON),
         (_include_lines(report, text), _INCLUDE_REASON),
     ]
     return [

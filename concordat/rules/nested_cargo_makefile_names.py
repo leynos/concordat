@@ -35,6 +35,8 @@ UNSAFE_SPECIAL_TARGETS: typ.Final = frozenset({".ONESHELL", ".IGNORE"})
 _REFERENCE: typ.Final = re.compile(r"\$\(([^()$]+)\)|\$\{([^{}$]+)\}|\$([A-Za-z_])")
 # A reference whose own name is built by expansion: `$($(K))`.
 _COMPUTED: typ.Final = re.compile(r"\$[({][^)}]*\$[({]")
+# A line that starts with an expansion that can write Makefile text.
+_GENERATED: typ.Final = re.compile(r"[ \t]*\$[({](?:eval|call|foreach|if|shell)\b")
 _SIMPLE_OPERATORS: typ.Final = frozenset({":=", "::=", ":::=", "!="})
 
 
@@ -247,6 +249,27 @@ def pattern_lines(index: dict[str, list[MakeRule]], word: str) -> list[int]:
         for name, rules in index.items()
         if _pattern_matches(name, word)
     ]
+
+
+def fallback_lines(index: dict[str, list[MakeRule]], text: str) -> list[int]:
+    """Return the lines that may supply a target no rule names.
+
+    A `.DEFAULT` rule builds any target without a rule, and a top-level
+    `$(eval ...)`, `$(call ...)`, `$(foreach ...)`, `$(if ...)` or `$(shell ...)`
+    line writes Makefile text the parser does not see as rules.
+
+    Returns
+    -------
+    list[int]
+        The first line of the `.DEFAULT` rule and of each such expansion.
+    """
+    default = [rule["location"]["start_line"] for rule in index.get(".DEFAULT", [])]
+    generated = [
+        number
+        for number, line in enumerate(text.splitlines(), start=1)
+        if _GENERATED.match(line)
+    ]
+    return default + generated
 
 
 def _pattern_matches(pattern: str, word: str) -> bool:

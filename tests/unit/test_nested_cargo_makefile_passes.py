@@ -438,6 +438,22 @@ def test_a_pattern_rule_that_matches_test_may_supply_it(
     assert [fact["status"] for fact in makefile_passes(tmp_path)] == statuses_found
 
 
+@pytest.mark.parametrize(
+    "makefile",
+    [
+        ".DEFAULT:\n\tcargo test --all-features\n",
+        "$(eval $(call rule,test))\n",
+        "$(foreach t,test,$(eval $(t):))\n",
+    ],
+)
+def test_a_fallback_or_generated_rule_may_supply_test(
+    tmp_path: pathlib.Path, makefile: str
+) -> None:
+    """`.DEFAULT` builds any target and `$(eval ...)` writes rules unseen."""
+    checkout(tmp_path, makefile)
+    assert [fact["status"] for fact in makefile_passes(tmp_path)] == ["indeterminate"]
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")
