@@ -559,6 +559,41 @@ def test_a_fallback_or_generated_rule_may_supply_test(
     assert [fact["status"] for fact in makefile_passes(tmp_path)] == ["indeterminate"]
 
 
+_ONESHELL_RECIPE = (
+    "test:\n\tcargo test --no-run --all-features\n"
+    "\tcargo test --test ui --all-features\n\tcargo test --all-features\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("header", "statuses_found"),
+    [
+        (".ONESHELL:\n.SHELLFLAGS := -eo pipefail -c\n", ["warmed"]),
+        (".ONESHELL:\n", ["indeterminate"]),
+        (".ONESHELL:\n.SHELLFLAGS := -c\n", ["indeterminate"]),
+    ],
+)
+def test_one_shell_is_read_only_when_every_line_still_stops_on_failure(
+    tmp_path: pathlib.Path, header: str, statuses_found: list[str]
+) -> None:
+    """`.ONESHELL` with `-e` runs each line in order; without it a failure passes."""
+    checkout(tmp_path, f"{header}{_ONESHELL_RECIPE}")
+    found = [fact["status"] for fact in makefile_passes(tmp_path)]
+    assert found[-1:] == statuses_found
+
+
+def test_one_shell_is_not_read_when_a_line_opens_a_compound_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A recipe line that ends in `then` carries its branch across lines."""
+    makefile = (
+        ".ONESHELL:\n.SHELLFLAGS := -eo pipefail -c\n"
+        "test:\n\tif true; then\n\t\tcargo test --all-features\n\tfi\n"
+    )
+    checkout(tmp_path, makefile)
+    assert [fact["status"] for fact in makefile_passes(tmp_path)] == ["indeterminate"]
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")

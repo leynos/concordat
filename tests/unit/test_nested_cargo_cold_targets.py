@@ -72,7 +72,7 @@ def test_a_directory_test_target_names_the_modules_it_imports(
     assert targets(tmp_path) == {"tests/ui/support.rs": ["ui"]}
 
 
-def test_a_manifest_that_names_its_test_targets_leaves_the_targets_unknown(
+def test_a_test_table_names_the_target_of_its_own_path(
     tmp_path: pathlib.Path,
 ) -> None:
     """`[[test]] name = ...` can give `tests/ui.rs` another name than its file's."""
@@ -83,6 +83,24 @@ def test_a_manifest_that_names_its_test_targets_leaves_the_targets_unknown(
                 '[package]\nname = "app"\nautotests = false\n\n'
                 '[[test]]\nname = "contract"\npath = "tests/ui.rs"\n\n'
                 '[[test]]\nname = "ui"\npath = "tests/other.rs"\n'
+            ),
+            "tests/ui.rs": TRYBUILD_TEST,
+            "tests/other.rs": "fn other() {}\n",
+        },
+    )
+    assert targets(tmp_path) == {"tests/ui.rs": ["contract"]}
+
+
+def test_a_file_no_test_table_names_stays_unknown_in_a_named_crate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A file the manifest does not name may run under any target's name."""
+    checkout(
+        tmp_path,
+        {
+            "Cargo.toml": (
+                '[package]\nname = "app"\nautotests = false\n\n'
+                '[[test]]\nname = "other"\npath = "tests/other.rs"\n'
             ),
             "tests/ui.rs": TRYBUILD_TEST,
             "tests/other.rs": "fn other() {}\n",

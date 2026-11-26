@@ -459,6 +459,41 @@ def is_fully_readable(
     """
     has_flags = any(v.get("name") == "MAKEFLAGS" for v in report["variables"])
     has_include = includes_a_file(report, text)
-    has_special = bool(UNSAFE_SPECIAL_TARGETS & index.keys())
+    unsafe = UNSAFE_SPECIAL_TARGETS - _gated_one_shell(index, values)
+    has_special = bool(unsafe & index.keys())
     has_expanded = has_unsafe_reading(index, values, report["variables"])
     return not (has_flags or has_include or has_special or has_expanded)
+
+
+_ERREXIT: typ.Final = re.compile(r"(?:^|\s)-[A-Za-z]*e[A-Za-z]*(?:\s|$)")
+# A recipe line that opens or closes a shell compound command, which `.ONESHELL`
+# would carry across lines.
+_COMPOUND_EDGE: typ.Final = re.compile(
+    r"(?:\b(?:then|do|else)\s*$)|(?:[{(]\s*$)|(?:^\s*(?:fi|done|esac|elif|[})])\b)"
+)
+
+
+def _gated_one_shell(
+    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
+) -> frozenset[str]:
+    """Return `.ONESHELL` when it still runs each line in order, else nothing.
+
+    Under `.ONESHELL` a recipe is one script, so an earlier failing line stops
+    the rest only when the shell flags carry `-e`. When they do, and no recipe
+    line opens or closes a compound command that the script would carry across
+    lines, each line behaves as it does without `.ONESHELL`.
+
+    Returns
+    -------
+    frozenset[str]
+        The special targets that are safe to read as ordinary recipes.
+    """
+    flags = values.get(".SHELLFLAGS", values.get("SHELLFLAGS", ""))
+    if ".ONESHELL" not in index or not _ERREXIT.search(flags):
+        return frozenset()
+    lines = [
+        r["text"] for rules in index.values() for rule in rules for r in rule["recipes"]
+    ]
+    if any(_COMPOUND_EDGE.search(line) for line in lines):
+        return frozenset()
+    return frozenset({".ONESHELL"})

@@ -125,6 +125,39 @@ class Preparation:
     gates: Gates
     is_makefile_prepared: bool = False
     named_test_crates: frozenset[str] = frozenset()
+    declared_tests: cabc.Mapping[str, str] = dataclasses.field(default_factory=dict)
+
+
+def declared_tests(
+    checkout: pathlib.Path, manifests: cabc.Mapping[pathlib.Path, Manifest]
+) -> dict[str, str]:
+    """Return each `[[test]]` table's source path, root-relative, and its name.
+
+    Returns
+    -------
+    dict[str, str]
+        The path (`tests/<name>.rs` when the table gives none) to the target name.
+    """
+    found: dict[str, str] = {}
+    for path, document in manifests.items():
+        tables = document.get("test")
+        for table in tables if isinstance(tables, list) else []:
+            declared = _test_table(table)
+            if declared is not None:
+                relative = (path.parent / declared[1]).relative_to(checkout)
+                found[relative.as_posix()] = declared[0]
+    return found
+
+
+def _test_table(table: object) -> tuple[str, str] | None:
+    """Return a `[[test]]` table's name and source path, or None when unnamed."""
+    if not isinstance(table, dict):
+        return None
+    name = table.get("name")
+    if not isinstance(name, str):
+        return None
+    given = table.get("path")
+    return name, given if isinstance(given, str) else f"tests/{name}.rs"
 
 
 def named_test_crates(
@@ -421,20 +454,31 @@ def collect_builds(
             "crate": crate,
             "package": crates.get(crate),
             "prepared_by": prepared,
-            "targets": (
-                None
+            "targets": _test_targets(
+                path,
+                evidence.reached_by.get(path, []),
+                preparation.declared_tests
                 if crate in preparation.named_test_crates
-                else _test_targets(path, evidence.reached_by.get(path, []))
+                else {},
+                is_named=crate in preparation.named_test_crates,
             ),
         })
     return builds
 
 
-def _test_targets(path: str, roots: list[str]) -> list[str] | None:
+def _test_targets(
+    path: str,
+    roots: list[str],
+    declared: cabc.Mapping[str, str],
+    *,
+    is_named: bool,
+) -> list[str] | None:
     """Return the test binaries that compile a source, or None when not all are seen.
 
     Cargo names a `tests/<name>.rs` file and a `tests/<name>/main.rs` file's
-    directory the same target, `<name>`.
+    directory the same target, `<name>`. A `[[test]]` table names its own path's
+    target, and a path it does not name stays unknown in a crate whose manifest
+    names its tests, because the file name no longer says which target runs it.
 
     Returns
     -------
@@ -446,8 +490,18 @@ def _test_targets(path: str, roots: list[str]) -> list[str] | None:
     """
     if any(root.startswith(UNSEEN) for root in roots):
         return None
-    names = {
-        found["name"] for found in map(_TARGET_NAME.search, (path, *roots)) if found
+    # A `[[test]]` table that gives its own path leaves `tests/<name>.rs` a root
+    # the resolver guessed from the name, not a file: it is no owner.
+    prefix = path[: path.find("tests/")] if "tests/" in path else ""
+    phantoms = {f"{prefix}tests/{name}.rs" for name in declared.values()}
+    sources = (path, *(r for r in roots if r in declared or r not in phantoms))
+    names = {declared[source] for source in sources if source in declared}
+    if is_named and not all(source in declared for source in sources):
+        return None
+    names |= {
+        found["name"]
+        for source, found in ((s, _TARGET_NAME.search(s)) for s in sources)
+        if found and source not in declared
     }
     if not names and not roots:
         return None
