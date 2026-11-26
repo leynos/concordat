@@ -698,9 +698,11 @@ class _Walk:
         """Record what, among *seen*, prepared a pass of this invocation."""
         signature = invocation.signature
         status, reason = _status(signature, seen)
-        if status == UNPREPARED and self.uncertain:
-            status, reason = INDETERMINATE, _IMPLICIT_REASON
         tests = _warmed_tests(signature, seen) if status == WARMED else ()
+        # An unread implicit recipe may have warmed what the pass would find
+        # cold: only a pass that is warmed for every test is certain.
+        if self.uncertain and (status in {UNPREPARED, COMPILED} or tests):
+            status, reason, tests = INDETERMINATE, _IMPLICIT_REASON, ()
         verdict = _Verdict(
             status,
             len(seen),

@@ -500,6 +500,28 @@ def test_an_implicit_preparation_leaves_a_later_pass_indeterminate(
     assert sorted(found) == sorted(statuses_found)
 
 
+@pytest.mark.parametrize(
+    ("phony", "first", "statuses_found"),
+    [
+        (".PHONY: test\n", "--no-run", ["indeterminate"]),
+        (".PHONY: test prepare\n", "--no-run", ["compiled"]),
+        (".PHONY: test\n", "--test other", ["indeterminate"]),
+    ],
+)
+def test_an_implicit_preparation_leaves_compiled_and_restricted_passes_open(
+    tmp_path: pathlib.Path, phony: str, first: str, statuses_found: list[str]
+) -> None:
+    """A pattern recipe may warm what a compiled or restricted pass finds cold."""
+    makefile = (
+        f"{phony}test: prepare\n\tcargo test {first} --all-features\n"
+        "\tcargo test --all-features\n"
+        "prepare:\npre%:\n\tcargo test --test ui --all-features\n"
+    )
+    checkout(tmp_path, makefile)
+    found = [fact["status"] for fact in makefile_passes(tmp_path)]
+    assert found[-1:] == statuses_found
+
+
 def test_a_recipe_less_test_target_beside_a_non_matching_pattern_is_not_flagged(
     tmp_path: pathlib.Path,
 ) -> None:
