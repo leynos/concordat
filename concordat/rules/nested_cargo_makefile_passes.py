@@ -437,9 +437,7 @@ class _Walk:
         """Hold the rule index the walk follows targets through, and its text."""
         self.index = index
         self.text = text
-        # Set once an implicit rule may have prepared something unseen: a later
-        # pass is then not known to be unprepared.
-        self.uncertain = False
+        self.uncertain = False  # an unread implicit rule may have prepared
         self.facts: list[PassFact] = []
         self.active: set[str] = set()
         self.named_variables = named_variables(index, values)
@@ -705,8 +703,6 @@ class _Walk:
         signature = invocation.signature
         status, reason = _status(signature, seen)
         tests = _warmed_tests(signature, seen) if status == WARMED else ()
-        # An unread implicit recipe may have warmed what the pass would find
-        # cold: only a pass that is warmed for every test is certain.
         if self._is_open(status, tests):
             status, reason, tests = INDETERMINATE, _IMPLICIT_REASON, ()
         verdict = _Verdict(
