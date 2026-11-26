@@ -11,6 +11,9 @@ from tests.unit.gate_scope_support import (
     build as _build,
 )
 from tests.unit.gate_scope_support import (
+    makefile_invocations as _makefile_invocations,
+)
+from tests.unit.gate_scope_support import (
     workspace_files as _workspace_files,
 )
 
@@ -29,7 +32,7 @@ class TestThirdReview:
             ".PHONY: test\ntest:\n\tcargo $(if $(shell cargo nextest --version "
             "2>/dev/null),test -p b,nextest run --workspace)\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         resolved = {i["tool"]: i["resolved"] for i in found}
         # `test -p b` covers only `b` when it runs, so the probe decides it;
         # `nextest run --workspace` covers everything whenever it runs
@@ -72,7 +75,7 @@ class TestThirdReview:
     ) -> None:
         """Only the constant false is known; the `else` branch of it runs."""
         makefile = f".PHONY: test\ntest:\n\t{line}\n"
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert [i["tool"] for i in found] == tools
 
 
@@ -138,7 +141,7 @@ class TestSecondReview:
             ".PHONY: test\ntest:\n\tcargo test $(if $(shell cargo nextest "
             "--version 2>/dev/null),-p app,-p b)\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert len(found) == 2
         assert not any(i["resolved"] for i in found)
 
@@ -150,7 +153,7 @@ class TestSecondReview:
             ".PHONY: test\ntest:\n\tcargo $(if $(shell cargo nextest --version "
             "2>/dev/null),nextest run,test) --workspace\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert {i["tool"] for i in found} == {"nextest", "test"}
         assert all(i["resolved"] for i in found)
 

@@ -14,7 +14,13 @@ from tests.unit.gate_scope_support import (
     build as _build,
 )
 from tests.unit.gate_scope_support import (
+    makefile_invocations as _makefile_invocations,
+)
+from tests.unit.gate_scope_support import (
     read as _read,
+)
+from tests.unit.gate_scope_support import (
+    step_workflow as _step_workflow,
 )
 from tests.unit.gate_scope_support import (
     workspace_files as _workspace_files,
@@ -36,7 +42,7 @@ class TestFourthReview:
             "\tcargo $(if $(shell cargo nextest --version 2>/dev/null),"
             "test -p b,nextest run -p b)\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert {i["tool"] for i in found} == {"test", "nextest"}
         assert not any(i["resolved"] for i in found)
 
@@ -81,16 +87,6 @@ class TestFourthReview:
 class TestFifthReview:
     """Behaviours a fifth review showed to be missing."""
 
-    @staticmethod
-    def _step_workflow(script: str) -> dict[str, str]:
-        """Return a workflow whose one step runs *script*."""
-        body = "".join(f"          {line}\n" for line in script.splitlines())
-        text = (
-            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
-            "    steps:\n      - run: |\n" + body
-        )
-        return {".github/workflows/ci.yml": text}
-
     def test_a_whole_workspace_probe_is_not_safe_beside_a_narrow_ci_command(
         self, tmp_path: pathlib.Path
     ) -> None:
@@ -100,7 +96,7 @@ class TestFifthReview:
             "2>/dev/null),test --workspace,nextest run --workspace)\n"
         )
         files = _workspace_files(
-            makefile=makefile, extra=self._step_workflow("cargo test -p app")
+            makefile=makefile, extra=_step_workflow("cargo test -p app")
         )
         found = _build(tmp_path, files)["invocations"]
         probe_branch = [i for i in found if i["tool"] == "test" and i["workspace_flag"]]
@@ -112,7 +108,7 @@ class TestFifthReview:
         script = (
             "if true; then\n  cargo test -p app\nelse\n  cargo test --workspace\nfi"
         )
-        files = _workspace_files(extra=self._step_workflow(script))
+        files = _workspace_files(extra=_step_workflow(script))
         found = _build(tmp_path, files)["invocations"]
         assert [i["workspace_flag"] for i in found] == [False]
 
@@ -124,7 +120,7 @@ class TestFifthReview:
             "if false; then\n  :\nelif true; then\n  cargo test --workspace\n"
             "else\n  cargo test -p app\nfi"
         )
-        files = _workspace_files(extra=self._step_workflow(script))
+        files = _workspace_files(extra=_step_workflow(script))
         found = _build(tmp_path, files)["invocations"]
         assert [i["workspace_flag"] for i in found] == [True]
 
@@ -174,22 +170,12 @@ class TestSixthReview:
             "\t$(if $(shell cargo nextest --version 2>/dev/null),cd .,cd nested)\n"
             "\tcargo test --workspace\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert [i["changes_directory"] for i in found] == [True]
 
 
 class TestSeventhReview:
     """Behaviours an eighth review showed to be missing."""
-
-    @staticmethod
-    def _script(script: str) -> dict[str, str]:
-        """Return a workflow whose one step runs *script*."""
-        body = "".join(f"          {line}\n" for line in script.splitlines())
-        text = (
-            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
-            "    steps:\n      - run: |\n" + body
-        )
-        return {".github/workflows/ci.yml": text}
 
     def test_an_unknown_elif_after_an_if_false_starts_a_fork(
         self, tmp_path: pathlib.Path
@@ -199,7 +185,7 @@ class TestSeventhReview:
             "if false; then\n  :\nelif test -f flag; then\n  cargo test -p app\n"
             "else\n  cargo test -p b\nfi"
         )
-        files = _workspace_files(extra=self._script(script))
+        files = _workspace_files(extra=_step_workflow(script))
         found = _build(tmp_path, files)["invocations"]
         assert len(found) == 2
         assert not any(i["resolved"] for i in found)
@@ -212,7 +198,7 @@ class TestSeventhReview:
             ".ONESHELL:\n.PHONY: test\ntest:\n\tif test -f flag; then\n"
             "\t  cargo test -p app\n\telse\n\t  :\n\tfi\n\tcargo test -p b\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         by_packages = {tuple(i["packages"]): i["resolved"] for i in found}
         assert by_packages == {("app",): False, ("b",): True}
 
@@ -225,7 +211,7 @@ class TestSeventhReview:
             "\t  cargo $(if $(shell cargo nextest --version 2>/dev/null),"
             "test -p app,nextest run -p app)\n\tfi\n\tcargo test --workspace\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert [i["workspace_flag"] for i in found] == [True]
 
 
@@ -241,7 +227,7 @@ class TestEighthReview:
             "\tif $(if $(shell cargo nextest --version 2>/dev/null),true,false);"
             " then\n\t  cargo test -p app\n\tfi\n\tcargo test -p b\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         by_packages = {tuple(i["packages"]): i["resolved"] for i in found}
         assert by_packages == {("app",): False, ("b",): True}
 
@@ -276,7 +262,7 @@ class TestNinthReview:
             "\t$(if $(shell rustc --version 2>/dev/null),cargo test --workspace,"
             "echo skipped)\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert [i["changes_directory"] for i in found] == [True]
 
     def test_a_known_false_outer_branch_stays_skipped_beside_a_probe_condition(
@@ -289,7 +275,7 @@ class TestNinthReview:
             " then\n\t    cargo test -p app\n\t  fi\n\tfi\n"
             "\tcargo test --workspace\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert [i["workspace_flag"] for i in found] == [True]
         assert [i["resolved"] for i in found] == [True]
 
@@ -307,7 +293,7 @@ class TestTenthReview:
             " then :; elif false; then\n\t  cargo test -p app\n\tfi\n"
             "\tcargo test --workspace\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert [i["workspace_flag"] for i in found] == [True]
         assert [i["resolved"] for i in found] == [True]
 
@@ -325,7 +311,7 @@ class TestEleventhReview:
             " then :; elif false; then\n\t  :\n\telse\n"
             "\t  cargo test --workspace\n\tfi\n\tcargo test -p app\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         by_flag = {i["workspace_flag"]: i["resolved"] for i in found}
         assert by_flag == {True: False, False: True}
 
@@ -375,7 +361,7 @@ class TestThirteenthReview:
     ) -> None:
         """`if cargo test --workspace; then :; else :; fi` always runs the test."""
         makefile = self._oneshell("if cargo test --workspace; then\n  :\nelse\n  :\nfi")
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert [i["resolved"] for i in found] == [True]
 
 
@@ -391,7 +377,7 @@ class TestFourteenthReview:
             "\t  :\n\telif cargo test --workspace; then\n\t  :\n\tfi\n"
             "\tcargo test -p app\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         by_flag = {i["workspace_flag"]: i["resolved"] for i in found}
         assert by_flag == {True: False, False: True}
 
@@ -427,5 +413,5 @@ class TestFifteenthReview:
             ".ONESHELL:\n.PHONY: test\ntest:\n\tif false; then\n\t  :\n"
             "\telif cargo test --workspace; then\n\t  :\n\telse\n\t  :\n\tfi\n"
         )
-        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        found = _makefile_invocations(tmp_path, makefile)
         assert [i["resolved"] for i in found] == [True]

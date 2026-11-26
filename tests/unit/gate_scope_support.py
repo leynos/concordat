@@ -58,3 +58,18 @@ def selection(command: str) -> tuple[str, bool, list[str], list[str]]:
     """Return `(tool, workspace_flag, packages, excludes)` of the only invocation."""
     (found,) = read(command)
     return found["tool"], found["workspace_flag"], found["packages"], found["excludes"]
+
+
+def makefile_invocations(tmp_path: pathlib.Path, makefile: str) -> list[Invocation]:
+    """Return the invocations a root-package workspace's *makefile* records."""
+    return build(tmp_path, workspace_files(makefile=makefile))["invocations"]
+
+
+def step_workflow(script: str) -> dict[str, str]:
+    """Return a workflow whose one step runs *script*."""
+    body = "".join(f"          {line}\n" for line in script.splitlines())
+    text = (
+        "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: |\n" + body
+    )
+    return {".github/workflows/ci.yml": text}
