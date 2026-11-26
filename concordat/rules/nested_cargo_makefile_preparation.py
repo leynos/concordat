@@ -48,6 +48,7 @@ from .nested_cargo_makefile_names import (
     has_unsafe_reading,
     settled_index,
 )
+from .nested_cargo_pass_words import has_unresolved_command_word
 from .nested_cargo_scripts import TEST_TARGET, ScriptCommand, script_commands
 
 if typ.TYPE_CHECKING:
@@ -517,23 +518,27 @@ def _gated_one_shell(
     flags = values.get(".SHELLFLAGS", "")
     if ".ONESHELL" not in index or not _is_errexit(flags):
         return frozenset()
-    if not all(_is_plain_line(line) for line in _recipe_lines(index)):
+    lines = _recipe_lines(index, values)
+    if lines is None or not all(_is_plain_line(line) for line in lines):
         return frozenset()
     return frozenset({".ONESHELL"})
 
 
-def _recipe_lines(index: dict[str, list[MakeRule]]) -> list[str]:
-    """Return the text of every recipe line the `test` target can run.
+def _recipe_lines(
+    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
+) -> list[str] | None:
+    """Return every expanded recipe line the `test` target can run, or None.
 
     The lines of `test` and of every target it names as a prerequisite, directly
-    or through others; a recipe elsewhere cannot change how `test` runs. A
-    prerequisite that is not a plain name is followed no further, which is safe
-    because the walk reports such a target as unreadable itself.
+    or through others, each in every reading its variables allow; a recipe
+    elsewhere cannot change how `test` runs. None when a prerequisite name or a
+    recipe line does not expand to a settled text, because a control word may
+    hide behind it.
 
     Returns
     -------
-    list[str]
-        The recipe line texts of those targets.
+    list[str] | None
+        The expanded line texts of those targets, or None when some is unsettled.
     """
     pending, seen = [TEST_TARGET], set()
     lines: list[str] = []
@@ -543,6 +548,28 @@ def _recipe_lines(index: dict[str, list[MakeRule]]) -> list[str]:
             continue
         seen.add(name)
         for rule in index.get(name, []):
-            lines.extend(r["text"] for r in rule["recipes"])
-            pending.extend(rule["prerequisites"])
+            recipes = [
+                reading
+                for recipe in rule["recipes"]
+                for reading in expand_readings(recipe["text"], values)
+            ]
+            names = [
+                reading
+                for item in rule["prerequisites"]
+                for reading in expand_readings(item, values)
+            ]
+            # An unsettled word in an argument cannot start a command; one that
+            # names the command, or a prerequisite, may hide a control word.
+            if not all(r.is_resolved for r in names) or any(
+                not r.is_resolved and has_unresolved_command_word(r.text)
+                for r in recipes
+            ):
+                return None
+            lines.extend(r.text for r in recipes)
+            pending.extend(
+                word
+                for item in rule["prerequisites"]
+                for reading in expand_readings(item, values)
+                for word in reading.text.split()
+            )
     return lines

@@ -606,6 +606,30 @@ def test_one_shell_is_not_read_when_a_line_changes_what_the_next_does(
     assert [fact["status"] for fact in makefile_passes(tmp_path)] == ["indeterminate"]
 
 
+@pytest.mark.parametrize(
+    "makefile",
+    [
+        (
+            "DISABLE := set +e\ntest:\n\t$(DISABLE)\n"
+            "\tcargo test --test ui --all-features\n\tcargo test --all-features\n"
+        ),
+        (
+            "STEPS := prepare\ntest: $(STEPS)\n\tcargo test --all-features\n"
+            "prepare:\n\tset +e\n\tcargo test --test ui --all-features\n"
+        ),
+        "test:\n\t$(UNKNOWN)\n\tcargo test --all-features\n",
+    ],
+)
+def test_one_shell_looks_through_variables_in_recipes_and_prerequisites(
+    tmp_path: pathlib.Path, makefile: str
+) -> None:
+    """A control word behind a variable, or a prerequisite one, still counts."""
+    checkout(tmp_path, f".ONESHELL:\n.SHELLFLAGS := -ec\n{makefile}")
+    found = [fact["status"] for fact in makefile_passes(tmp_path)]
+    assert found
+    assert set(found) == {"indeterminate"}
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")
