@@ -417,6 +417,15 @@ def test_a_test_target_named_before_a_late_assignment_is_indeterminate(
     assert [status for _line, status in statuses(tmp_path)] == ["indeterminate"]
 
 
+def test_an_included_file_may_define_the_test_target(tmp_path: pathlib.Path) -> None:
+    """A Makefile that only includes another has not been shown to lack `test`."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "app"\n')
+    put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
+    put(tmp_path, "Makefile", "include tests.mk\n")
+    put(tmp_path, "tests.mk", "test:\n\tcargo test\n")
+    assert [fact["status"] for fact in makefile_passes(tmp_path)] == ["indeterminate"]
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")

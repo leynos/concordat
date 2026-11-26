@@ -52,6 +52,7 @@ from .nested_cargo_makefile_names import (
 )
 from .nested_cargo_makefile_preparation import (
     MakefileReader,
+    includes_a_file,
     is_fully_readable,
     is_plain_rule,
     line_commands,
@@ -70,7 +71,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
-    from .makefile_facts import MakeRecipe, MakeRule, MakeVariable
+    from .makefile_facts import MakeRecipe, MakeRule, MakeutilReport
     from .nested_cargo_scripts import ScriptCommand
 
 MAKEFILE: typ.Final = "Makefile"
@@ -162,6 +163,7 @@ _UNFOLLOWED: typ.Final = "the command may run tests and the reader cannot follow
 _HIDDEN_TEST_REASON: typ.Final = (
     "a target name the reader cannot settle may define `test`"
 )
+_INCLUDE_REASON: typ.Final = "an included file may define `test`"
 _OVERRIDE_REASON: typ.Final = (
     "a make override may change which target an expanded name defines"
 )
@@ -745,21 +747,31 @@ def _unreadable_fact(line: int, reason: str) -> PassFact:
 def _hidden_test_facts(
     index: dict[str, list[MakeRule]],
     values: cabc.Mapping[str, str],
-    variables: cabc.Sequence[MakeVariable],
+    report: MakeutilReport,
+    text: str,
 ) -> list[PassFact]:
-    """Return an indeterminate fact when a target name built by expansion may be `test`.
+    """Return indeterminate facts for what may define `test` where it is not seen.
 
     A target built by expansion that does not settle one way, or reads a variable
-    assigned after its rule, can define `test`, so a Makefile without a literal
-    one is not known to have no test pass.
+    assigned after its rule, can define `test`, and so can an included file, so a
+    Makefile without a literal `test` target is not known to have no test pass.
 
     Returns
     -------
     list[PassFact]
-        One indeterminate fact at the first such rule, or none.
+        One indeterminate fact at the first such rule and one at the first
+        include, or none.
     """
-    lines = unsafe_names(index, values, variables)
-    return [_unreadable_fact(min(lines), _HIDDEN_TEST_REASON)] if lines else []
+    facts: list[PassFact] = []
+    lines = unsafe_names(index, values, report["variables"])
+    if lines:
+        facts.append(_unreadable_fact(min(lines), _HIDDEN_TEST_REASON))
+    if includes_a_file(report, text):
+        found = (
+            item.get("location", {}).get("start_line", 1) for item in report["includes"]
+        )
+        facts.append(_unreadable_fact(min(found, default=1), _INCLUDE_REASON))
+    return facts
 
 
 def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
@@ -780,7 +792,7 @@ def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
     values = read_tool_paths(single_assignments(report["variables"]))
     index = settled_index(rules_by_target(report), values)
     if TEST_TARGET not in index:
-        return _hidden_test_facts(index, values, report["variables"])
+        return _hidden_test_facts(index, values, report, text)
     if not is_fully_readable(report, index, text, values):
         line = index[TEST_TARGET][0]["location"]["start_line"]
         return [

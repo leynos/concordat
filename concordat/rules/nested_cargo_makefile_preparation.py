@@ -424,6 +424,20 @@ def read_makefile(checkout: pathlib.Path) -> tuple[MakeutilReport, str] | None:
     return report, path.read_text(encoding="utf-8", errors="replace")
 
 
+def includes_a_file(report: MakeutilReport, text: str) -> bool:
+    """Return whether the Makefile includes another file.
+
+    The parser does not report an include that follows a rule, so the text is
+    scanned too. An included file may hold any rule, `test` among them.
+
+    Returns
+    -------
+    bool
+        True when the report lists an include or a line starts one.
+    """
+    return bool(report["includes"]) or bool(_INCLUDE_LINE.search(text))
+
+
 def is_fully_readable(
     report: MakeutilReport,
     index: dict[str, list[MakeRule]],
@@ -444,7 +458,7 @@ def is_fully_readable(
         True when none of those appears.
     """
     has_flags = any(v.get("name") == "MAKEFLAGS" for v in report["variables"])
-    has_include = bool(report["includes"]) or bool(_INCLUDE_LINE.search(text))
+    has_include = includes_a_file(report, text)
     has_special = bool(UNSAFE_SPECIAL_TARGETS & index.keys())
     has_expanded = has_unsafe_reading(index, values, report["variables"])
     return not (has_flags or has_include or has_special or has_expanded)
