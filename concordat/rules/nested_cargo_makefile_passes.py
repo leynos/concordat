@@ -45,7 +45,11 @@ from .makefile_expansion import Assignments, shown, single_assignments
 from .makefile_tool_paths import read_tool_paths
 from .nested_cargo_make_options import PLAIN_GOAL, unreliable_make
 from .nested_cargo_makefile_lines import rules_by_target
-from .nested_cargo_makefile_names import named_variables, settled_index
+from .nested_cargo_makefile_names import (
+    may_be_special,
+    named_variables,
+    settled_index,
+)
 from .nested_cargo_makefile_preparation import (
     MakefileReader,
     is_fully_readable,
@@ -155,6 +159,9 @@ _UNRESOLVED_WORD: typ.Final = (
     "the command word is a Make reference the reader cannot resolve"
 )
 _UNFOLLOWED: typ.Final = "the command may run tests and the reader cannot follow it"
+_HIDDEN_TEST_REASON: typ.Final = (
+    "a target name the reader cannot settle may define `test`"
+)
 _OVERRIDE_REASON: typ.Final = (
     "a make override may change which target an expanded name defines"
 )
@@ -723,6 +730,38 @@ class _Walk:
         self._fact(recipe, text, verdict)
 
 
+def _unreadable_fact(line: int, reason: str) -> PassFact:
+    """Return the indeterminate fact for a `test` target the reader cannot follow."""
+    return {
+        "path": MAKEFILE,
+        "line": line,
+        "command": TEST_TARGET,
+        "status": INDETERMINATE,
+        "visible": 0,
+        "reason": reason,
+    }
+
+
+def _hidden_test_facts(
+    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
+) -> list[PassFact]:
+    """Return an indeterminate fact when an unsettled target name may be `test`.
+
+    A target built by expansion that does not settle one way can define `test`,
+    so a Makefile without a literal one is not known to have no test pass.
+
+    Returns
+    -------
+    list[PassFact]
+        One indeterminate fact at the first such rule, or none.
+    """
+    for name, rules in index.items():
+        if "$" in name and may_be_special(name, values):
+            line = rules[0]["location"]["start_line"]
+            return [_unreadable_fact(line, _HIDDEN_TEST_REASON)]
+    return []
+
+
 def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
     """Return every test pass of the Makefile's `test` target and its preparation.
 
@@ -741,17 +780,13 @@ def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
     values = read_tool_paths(single_assignments(report["variables"]))
     index = settled_index(rules_by_target(report), values)
     if TEST_TARGET not in index:
-        return []
+        return _hidden_test_facts(index, values)
     if not is_fully_readable(report, index, text, values):
+        line = index[TEST_TARGET][0]["location"]["start_line"]
         return [
-            {
-                "path": MAKEFILE,
-                "line": index[TEST_TARGET][0]["location"]["start_line"],
-                "command": TEST_TARGET,
-                "status": INDETERMINATE,
-                "visible": 0,
-                "reason": "the Makefile holds a construct the reader does not follow",
-            }
+            _unreadable_fact(
+                line, "the Makefile holds a construct the reader does not follow"
+            )
         ]
     walk = _Walk(index, values)
     walk.target(TEST_TARGET, (), MakefileReader(index, values))

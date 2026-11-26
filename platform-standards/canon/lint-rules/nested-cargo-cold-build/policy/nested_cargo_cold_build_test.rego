@@ -317,6 +317,16 @@ test_an_unreadable_pass_is_reported_without_a_declared_preparation if {
 	{[f.rule_id, f.verdict] | some f in findings(fixture)} == {["EN-001", "indeterminate"]}
 }
 
+# A repository whose builds a setup script covers still gets the unreadable
+# `test` target reported: the cold `cargo test` pass it may hide is not left out.
+test_an_unreadable_test_target_is_reported_beside_a_setup_script if {
+	fixture := object.union(data.fixtures.pass_setup_script_covered, {"passes": [{
+		"path": "Makefile", "line": 3, "command": "test", "status": "indeterminate",
+		"visible": 0, "reason": "a target name the reader cannot settle may define `test`",
+	}]})
+	{[f.rule_id, f.verdict] | some f in findings(fixture)} == {["EN-001", "indeterminate"]}
+}
+
 # A plain `cargo test` pass never runs a nextest setup script.
 test_a_cargo_pass_is_not_covered_by_a_setup_script if {
 	fixture := object.union(data.fixtures.pass_setup_script_covered, {"passes": [{

@@ -401,6 +401,14 @@ def test_an_override_of_a_variable_behind_a_target_name_is_not_followed(
     assert [status for _line, status in statuses(tmp_path)] == ["indeterminate"] * 2
 
 
+def test_an_unsettled_target_name_that_may_define_test_is_indeterminate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`T != printf test` makes `$(T)` the `test` target the reader cannot index."""
+    checkout(tmp_path, "T != printf test\n$(T):\n\tcargo test --all-features\n")
+    assert [status for _line, status in statuses(tmp_path)] == ["indeterminate"]
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")
