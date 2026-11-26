@@ -170,10 +170,28 @@ def _hides_selection(arguments: list[str]) -> bool:
         Whether the selection cannot be read.
     """
     return any(
-        _is_unresolved(word)
-        and (arguments[index - 1] if index else "") not in _BENIGN_VALUE_FLAGS
+        _is_unresolved(word) and not _is_benign_value(arguments, index)
         for index, word in enumerate(arguments)
     )
+
+
+def _is_benign_value(arguments: list[str], index: int) -> bool:
+    """Return whether the unresolved word at *index* is one benign option value.
+
+    A Make reference is textual, so one left unresolved after `--profile` is
+    taken as the profile name. A shell variable is not: unquoted, it splits
+    into words, and `COLOR='always --exclude b'` supplies an exclusion, so a
+    shell expansion is never benign.
+
+    Returns
+    -------
+    bool
+        Whether the word cannot name a package.
+    """
+    word = arguments[index]
+    follows_benign = index > 0 and arguments[index - 1] in _BENIGN_VALUE_FLAGS
+    is_shell_expansion = "$" in word or SHELL_DOLLAR in word
+    return follows_benign and not is_shell_expansion
 
 
 def _cargo_subcommand(arguments: list[str]) -> tuple[str | None, list[str]]:
@@ -185,6 +203,22 @@ def _cargo_subcommand(arguments: list[str]) -> tuple[str | None, list[str]]:
         elif not word.startswith(("-", "+")):
             return word, arguments[index + 1 :]
     return None, []
+
+
+def _cargo_changes_directory(arguments: list[str], rest: list[str]) -> bool:
+    """Return whether Cargo's global `-C` precedes the subcommand.
+
+    *rest* is what follows the subcommand, so what *arguments* holds before it
+    is the global options. `-C` there moves the whole command to another
+    directory, so the root workspace's shape does not describe it.
+
+    Returns
+    -------
+    bool
+        Whether a global `-C` is present.
+    """
+    globals_ = arguments[: len(arguments) - len(rest)]
+    return "-C" in globals_
 
 
 def _cargo_tool(
@@ -236,7 +270,15 @@ def _build(
         cargo_arguments = arguments[:boundary] if boundary is not None else arguments
     packages, excludes, manifest = _selection(cargo_arguments)
     has_flag = any(word in _WORKSPACE_FLAGS for word in cargo_arguments)
-    hidden = _hides_selection(cargo_arguments)
+    # With no `--` in sight, an unresolved word may supply the separator, and
+    # with it the whole Cargo half: `whitaker $FLAGS` can be
+    # `whitaker --all -- --workspace`.
+    may_supply_separator = (
+        tool == "whitaker"
+        and boundary is None
+        and any(_is_unresolved(word) for word in arguments)
+    )
+    hidden = may_supply_separator or _hides_selection(cargo_arguments)
     source, command = where
     return {
         "tool": tool,
@@ -292,7 +334,9 @@ def _invocation_of(
     if head == "cargo":
         subcommand, rest = _cargo_subcommand(arguments)
         tool, own = _cargo_tool(subcommand, rest)
-        return _build(tool, own, where, moved=moved) if tool else None
+        # Cargo's global `-C <dir>` runs the command in another directory.
+        in_directory = moved or _cargo_changes_directory(arguments, rest)
+        return _build(tool, own, where, moved=in_directory) if tool else None
     wrapped = _wrapper_tool(head)
     return _wrapper(wrapped, where, moved=moved) if wrapped else None
 

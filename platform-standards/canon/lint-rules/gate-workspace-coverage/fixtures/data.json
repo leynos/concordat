@@ -2618,6 +2618,418 @@
       ],
       "unreadable": []
     },
+    "ci_step_never_runs": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": "Makefile:7 (test)",
+          "command": "cargo test -p app",
+          "resolved": true,
+          "why": "",
+          "workspace_flag": false,
+          "packages": [
+            "app"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
+    "ci_computed_axis": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [],
+      "examples": [],
+      "unreadable": [
+        ".github/workflows/ci.yml (job build): matrix is computed by an expression, so its commands cannot be filled in"
+      ]
+    },
+    "shell_expansion_after_benign_option": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": "Makefile:7 (test)",
+          "command": "cargo test --workspace --color $COLOR",
+          "resolved": false,
+          "why": "a word the audit could not resolve may select packages",
+          "workspace_flag": true,
+          "packages": [],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
+    "whitaker_flags_variable": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "whitaker",
+          "source": "Makefile:4 (lint)",
+          "command": "whitaker $FLAGS",
+          "resolved": false,
+          "why": "a word the audit could not resolve may select packages",
+          "workspace_flag": false,
+          "packages": [],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
+    "known_command_beside_unreadable": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "command": "cargo clippy --workspace && $ test -p app",
+          "resolved": true,
+          "why": "",
+          "workspace_flag": true,
+          "packages": [],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": [
+        "Makefile:4 (lint): cargo clippy --workspace && $ test -p app"
+      ]
+    },
+    "unreadable_beside_narrow_gate": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": "Makefile:7 (test)",
+          "command": "cargo test -p app",
+          "resolved": true,
+          "why": "",
+          "workspace_flag": false,
+          "packages": [
+            "app"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": [
+        ".github/workflows/ci.yml (job build): matrix is computed by an expression, so its commands cannot be filled in"
+      ]
+    },
+    "oneshell_cd": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": "Makefile:5 (test)",
+          "command": "cargo test --workspace",
+          "resolved": true,
+          "why": "",
+          "workspace_flag": true,
+          "packages": [],
+          "excludes": [],
+          "changes_directory": true
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
+    "cargo_global_directory": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": "Makefile:7 (test)",
+          "command": "cargo -C nested test --workspace",
+          "resolved": true,
+          "why": "",
+          "workspace_flag": true,
+          "packages": [],
+          "excludes": [],
+          "changes_directory": true
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
+    "conditional_rule": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:3 (lint)",
+          "command": "cargo clippy",
+          "resolved": false,
+          "why": "its recipe runs only under a Make condition the audit does not evaluate",
+          "workspace_flag": false,
+          "packages": [],
+          "excludes": [],
+          "changes_directory": false
+        },
+        {
+          "tool": "clippy",
+          "source": "Makefile:6 (lint)",
+          "command": "cargo clippy --workspace",
+          "resolved": false,
+          "why": "its recipe runs only under a Make condition the audit does not evaluate",
+          "workspace_flag": true,
+          "packages": [],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
     "docs_example_different_narrowing": {
       "schema_version": 1,
       "kind": "policy-input/gate-workspace-coverage",

@@ -181,10 +181,10 @@ def _read_line(
 ) -> tuple[list[Invocation], bool, bool]:
     """Return the invocations in one expanded line, whether it read, and where.
 
-    A line is unreadable when it finds no invocation and either will not lex
-    while naming a gate tool, or holds a command whose command word (or Cargo
-    subcommand) the expansion left unresolved beside words that name a gate
-    tool. A line that only mentions a tool in a string or an identifier is not.
+    A line is unreadable when it will not lex while naming a gate tool, or when
+    any command in it has a command word (or Cargo subcommand) the expansion
+    left unresolved beside words that name a gate tool. A line that only
+    mentions a tool in a string or an identifier is not.
 
     *moved* says an earlier line of the same shell, or the step's working
     directory, already left the root; the result's last member is the same fact
@@ -202,7 +202,9 @@ def _read_line(
         is_unreadable = _NAMES_TOOL.search(shown(text)) is not None
         return found, not is_unreadable, moved
     found = invocations_in(segments, where, moved=moved)
-    is_unreadable = not found and any(_hides_tool(words) for words in segments)
+    # Each command is judged alone: a recognised `cargo clippy` beside an
+    # unresolved `$(RUNNER) test` does not make the second readable.
+    is_unreadable = any(_hides_tool(words) for words in segments)
     return found, not is_unreadable, moved or leaves_directory(segments)
 
 
@@ -246,23 +248,59 @@ def makefile_lines(
     index = rules_by_target(report)
     values = single_assignments(report["variables"])
     walk = reachable(index, values, starts)
+    # Under `.ONESHELL` a rule's recipe lines are one shell, so a `cd` on one
+    # moves the lines after it; otherwise each line is a shell of its own.
+    is_one_shell = ".ONESHELL" in index
     invocations: list[Invocation] = []
     unreadable: list[str] = []
     for target in walk.names:
         for rule in index[target]:
+            moved_by_reading: dict[int, bool] = {}
             for number, text in rule.recipes:
-                for reading in expand_readings(text, values):
+                for position, reading in enumerate(expand_readings(text, values)):
                     where = (
                         f"Makefile:{number} ({target})",
                         " ".join(shown(blank_references(joined(reading.text))).split()),
                     )
-                    found, is_readable, _moved = _read_line(reading.text, where)
-                    invocations.extend(found)
+                    found, is_readable, moved = _read_line(
+                        reading.text,
+                        where,
+                        moved=is_one_shell and moved_by_reading.get(position, False),
+                    )
+                    moved_by_reading[position] = moved
+                    invocations.extend(
+                        _conditional(found) if rule.is_conditional else found
+                    )
                     if not is_readable:
                         unreadable.append(f"{where[0]}: {where[1]}")
     return GateLines(
         _distinct(invocations), _distinct_text(unreadable), walk.names, walk.is_resolved
     )
+
+
+def _conditional(found: list[Invocation]) -> list[Invocation]:
+    """Return *found* marked as unplaced: its recipe runs only under a Make condition.
+
+    The audit does not evaluate `ifeq` and its kin, so it cannot say whether the
+    recipe runs, and counting it as covering a member, or as missing one, would
+    be a guess.
+
+    Returns
+    -------
+    list[Invocation]
+        The same invocations, unresolved, with the reason.
+    """
+    return [
+        {
+            **invocation,
+            "resolved": False,
+            "why": (
+                "its recipe runs only under a Make condition the audit does not "
+                "evaluate"
+            ),
+        }
+        for invocation in found
+    ]
 
 
 def _matrix_value(value: object) -> str:
@@ -373,6 +411,15 @@ def matrix_combinations(job: object) -> list[dict[str, object]] | None:
     includes, excludes = axes.get("include", []), axes.get("exclude", [])
     if not isinstance(includes, list) or not isinstance(excludes, list):
         return None
+    # An axis that is not a list is computed by an expression. Dropping it would
+    # leave combinations an `exclude` entry could not match, so the matrix is
+    # not expanded at all.
+    if any(
+        not isinstance(value, list)
+        for key, value in axes.items()
+        if key not in {"include", "exclude"}
+    ):
+        return None
     combinations = _with_includes(
         _without_excluded(_product(axes), typ.cast("list[object]", excludes)),
         typ.cast("list[object]", includes),
@@ -450,6 +497,25 @@ def _is_elsewhere(directory: object) -> bool:
     return isinstance(directory, str) and directory.strip() not in {"", ".", "./"}
 
 
+_NEVER: typ.Final = frozenset({"false", "${{ false }}", "${{false}}"})
+
+
+def _is_never(condition: object) -> bool:
+    """Return whether a step's `if` is the constant false, so it never runs.
+
+    Any other condition is taken to hold on some run: the rule judges the
+    commands a gate has, not the schedule they run on.
+
+    Returns
+    -------
+    bool
+        Whether the step is switched off.
+    """
+    if condition is False:
+        return True
+    return isinstance(condition, str) and condition.strip().lower() in _NEVER
+
+
 def _step_lines(
     place: _Place, combination: dict[str, object]
 ) -> list[tuple[str, list[str], bool]]:
@@ -471,6 +537,8 @@ def _step_lines(
     for position, step in enumerate(place.steps, start=1):
         run = step.get("run") if isinstance(step, dict) else None
         if not isinstance(step, dict) or not isinstance(run, str):
+            continue
+        if _is_never(step.get("if")):
             continue
         directory = step.get("working-directory", place.directory)
         lines = [line for _n, line in _logical_lines(_fill(run, combination))]

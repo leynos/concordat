@@ -156,6 +156,15 @@ class TestCommands:
         found = _read("cd sub && cargo test --workspace && cargo clippy")
         assert [i["changes_directory"] for i in found] == [True, True]
 
+    def test_cargos_global_directory_option_moves_the_command(self) -> None:
+        """`cargo -C nested test` runs in `nested`, whatever follows."""
+        (found,) = _read(
+            "cargo +nightly -C nested -Z unstable-options test --workspace"
+        )
+        assert found["changes_directory"]
+        (plain,) = _read("cargo +nightly test --workspace -C opt-level=1")
+        assert not plain["changes_directory"]
+
     def test_a_manifest_path_moves_the_command(self) -> None:
         """`--manifest-path` selects another manifest than the root one."""
         (found,) = _read("cargo test --manifest-path sub/Cargo.toml")
@@ -171,9 +180,14 @@ class TestCommands:
             ("cargo test --workspace --exclude $SKIP", False),
             ("cargo test -p $PACKAGE", False),
             ("cargo test --package=$PACKAGE --workspace", False),
-            ("cargo nextest run --profile $PROFILE --all-targets", True),
-            ("cargo nextest run -j $JOBS --all-features", True),
-            ("cargo test --features $FEATURES", True),
+            ("cargo nextest run --profile $(PROFILE) --all-targets", True),
+            ("cargo nextest run -j $(JOBS) --all-features", True),
+            ("cargo test --features $(FEATURES)", True),
+            # a shell variable splits into words when unquoted, so it may add
+            # `--exclude b`; a Make reference is one textual value
+            ("cargo nextest run --profile $PROFILE --all-targets", False),
+            ("cargo test --workspace --color $COLOR", False),
+            ("whitaker $FLAGS", False),
             ("cargo test --profile $PROFILE $EXTRA", False),
         ],
     )
@@ -516,6 +530,73 @@ class TestWorkflows:
 
 class TestReviewFindings:
     """Behaviours a review of the first version showed to be missing."""
+
+    def test_a_step_that_never_runs_is_not_a_command(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`if: false` switches the step off; any other condition is kept."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - if: ${{ false }}\n"
+            "        run: cargo test --workspace\n"
+            "      - if: github.event_name == 'push'\n        run: cargo clippy\n"
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        found = _build(tmp_path, files)["invocations"]
+        assert [i["tool"] for i in found] == ["clippy"]
+
+    def test_a_computed_matrix_axis_leaves_the_matrix_unexpanded(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An axis from an expression cannot be dropped: `exclude` may match it."""
+        matrix = (
+            "    strategy:\n      matrix:\n"
+            "        os: ${{ fromJson(needs.plan.outputs.os) }}\n"
+            "        exclude:\n          - os: mac\n"
+        )
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            f"{matrix}    steps:\n      - run: cargo test --workspace\n"
+        )
+        envelope = _build(
+            tmp_path, _workspace_files(extra={".github/workflows/ci.yml": text})
+        )
+        assert envelope["invocations"] == []
+        assert any("matrix is computed" in entry for entry in envelope["unreadable"])
+
+    def test_a_conditional_recipe_is_unplaced(self, tmp_path: pathlib.Path) -> None:
+        """A recipe under `ifeq` may or may not run, so it is not read as run."""
+        makefile = (
+            "ifeq ($(MODE),fast)\nlint:\n\tcargo clippy\n"
+            "else\nlint:\n\tcargo clippy --workspace\nendif\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["invocations"]
+        assert not any(i["resolved"] for i in envelope["invocations"])
+
+    def test_oneshell_carries_a_cd_to_the_recipe_lines_after_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Under `.ONESHELL` the recipe is one shell; without it each line is."""
+        recipe = ".PHONY: test\ntest:\n\tcd crates/b\n\tcargo test --workspace\n"
+        plain = _build(tmp_path, _workspace_files(makefile=recipe))
+        assert [i["changes_directory"] for i in plain["invocations"]] == [False]
+        one_shell = _build(
+            tmp_path / "oneshell",
+            _workspace_files(makefile=f".ONESHELL:\n{recipe}"),
+        )
+        assert [i["changes_directory"] for i in one_shell["invocations"]] == [True]
+
+    def test_a_known_command_does_not_hide_an_unreadable_one_beside_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Each command on a line is judged alone."""
+        makefile = (
+            ".PHONY: lint\nlint:\n\tcargo clippy --workspace && $(RUNNER) test -p app\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert [i["tool"] for i in envelope["invocations"]] == ["clippy"]
+        assert envelope["unreadable"]
 
     def test_two_commands_on_one_line_are_two_invocations(
         self, tmp_path: pathlib.Path

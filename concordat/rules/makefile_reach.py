@@ -34,10 +34,15 @@ __all__ = [
 
 
 class Rule(typ.NamedTuple):
-    """One Make rule: its prerequisites and its `(line, text)` recipe lines."""
+    """One Make rule: its prerequisites and its `(line, text)` recipe lines.
+
+    `is_conditional` is true when the rule sits inside an `ifeq`, `ifdef` or
+    similar block, so whether it applies depends on Make state.
+    """
 
     prerequisites: list[str]
     recipes: list[tuple[int, str]]
+    is_conditional: bool = False
 
 
 type RuleIndex = dict[str, list[Rule]]
@@ -65,8 +70,11 @@ def rules_by_target(report: MakeutilReport) -> RuleIndex:
             (recipe["location"]["start_line"], recipe["text"])
             for recipe in rule["recipes"]
         ]
+        is_conditional = bool(rule.get("conditions"))
         for target in rule["targets"]:
-            index.setdefault(target, []).append(Rule(rule["prerequisites"], recipes))
+            index.setdefault(target, []).append(
+                Rule(rule["prerequisites"], recipes, is_conditional)
+            )
     return index
 
 

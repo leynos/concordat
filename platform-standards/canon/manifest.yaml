@@ -329,7 +329,7 @@ artifacts:
       `cargo test` (and its doctests) and Whitaker, naming the narrowing
       commands and the prose examples that show them, with exemptions only by
       crate and reason and unreadable commands indeterminate.
-    sha256: 203af2517c03874910e7b72fda1896f757d08406cf6cea17b4532c12072c4ca6
+    sha256: 4bdb71ace0e0e1b1c6c48b2fa5d94cb29b03de767b419bb30b5ba610e7310a9b
   - id: lint-rule-gate-workspace-coverage-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/gate-workspace-coverage/rule.yaml

@@ -239,6 +239,49 @@ test_an_unresolved_library_before_whitakers_separator_does_not_hide_the_selectio
 	count(findings(data.fixtures.whitaker_unresolved_library)) == 0
 }
 
+test_a_step_that_never_runs_does_not_cover if {
+	some f in findings(data.fixtures.ci_step_never_runs)
+	f.rule_id == "GC-001"
+	contains(f.msg, "out: b, c")
+}
+
+test_a_computed_matrix_axis_is_unreadable_not_dropped if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.ci_computed_axis)} == {["EN-001", "indeterminate"]}
+}
+
+test_a_shell_expansion_after_a_benign_option_may_add_arguments if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.shell_expansion_after_benign_option)} == {["EN-001", "indeterminate"]}
+}
+
+test_an_unresolved_variable_may_supply_whitakers_separator if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.whitaker_flags_variable)} == {["EN-001", "indeterminate"]}
+}
+
+test_a_known_command_does_not_hide_an_unreadable_one_beside_it if {
+	fs := findings(data.fixtures.known_command_beside_unreadable)
+	{f.rule_id | some f in fs} == {"EN-001"}
+}
+
+test_unreadable_input_prevents_a_noncompliant_verdict if {
+	fs := findings(data.fixtures.unreadable_beside_narrow_gate)
+	{[f.rule_id, f.verdict] | some f in fs} == {["EN-001", "indeterminate"]}
+}
+
+test_oneshell_carries_a_cd_to_later_recipe_lines if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.oneshell_cd)} == {["EN-001", "indeterminate"]}
+}
+
+test_cargos_global_directory_option_moves_the_command if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.cargo_global_directory)} == {["EN-001", "indeterminate"]}
+}
+
+test_a_conditional_recipe_is_indeterminate if {
+	fs := findings(data.fixtures.conditional_rule)
+	{f.verdict | some f in fs} == {"indeterminate"}
+	some f in fs
+	contains(f.msg, "Make condition")
+}
+
 test_an_example_that_omits_other_members_is_not_the_same_narrowing if {
 	fs := findings(data.fixtures.docs_example_different_narrowing)
 	some f in fs

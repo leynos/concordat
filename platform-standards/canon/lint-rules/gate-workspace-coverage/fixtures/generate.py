@@ -321,6 +321,61 @@ SCENARIOS: dict[str, dict[str, str]] = {
         lint=["cargo clippy --all-targets"],
         extra={"AGENTS.md": "```sh\ncargo clippy --all-targets\n```\n"},
     ),
+    "ci_step_never_runs": checkout_for(
+        test=["cargo test -p app"],
+        extra={
+            ".github/workflows/ci.yml": (
+                "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+                "    steps:\n      - if: ${{ false }}\n"
+                "        run: cargo test --workspace\n"
+            )
+        },
+    ),
+    "ci_computed_axis": checkout_for(
+        extra={
+            ".github/workflows/ci.yml": workflow(
+                "cargo test --workspace",
+                matrix=(
+                    "    strategy:\n      matrix:\n"
+                    "        os: ${{ fromJson(needs.plan.outputs.os) }}\n"
+                    "        exclude:\n          - os: mac\n"
+                ),
+            )
+        }
+    ),
+    "shell_expansion_after_benign_option": checkout_for(
+        test=["cargo test --workspace --color $$COLOR"]
+    ),
+    "whitaker_flags_variable": checkout_for(lint=["whitaker $$FLAGS"]),
+    "known_command_beside_unreadable": checkout_for(
+        lint=["cargo clippy --workspace && $(RUNNER) test -p app"]
+    ),
+    "unreadable_beside_narrow_gate": checkout_for(
+        test=["cargo test -p app"],
+        extra={
+            ".github/workflows/ci.yml": workflow(
+                "cargo test ${{ matrix.flags }}",
+                matrix=(
+                    "    strategy:\n"
+                    "      matrix: ${{ fromJson(needs.plan.outputs.m) }}\n"
+                ),
+            )
+        },
+    ),
+    "oneshell_cd": {
+        **checkout_for(),
+        "Makefile": (
+            ".ONESHELL:\n.PHONY: test\ntest:\n\tcd crates/b\n\tcargo test --workspace\n"
+        ),
+    },
+    "cargo_global_directory": checkout_for(test=["cargo -C nested test --workspace"]),
+    "conditional_rule": {
+        **checkout_for(),
+        "Makefile": (
+            "ifeq ($(MODE),fast)\nlint:\n\tcargo clippy\n"
+            "else\nlint:\n\tcargo clippy --workspace\nendif\n"
+        ),
+    },
     "docs_example_different_narrowing": checkout_for(
         lint=["cargo clippy -p app -p b"],
         extra={"AGENTS.md": "```sh\ncargo clippy -p c\n```\n"},

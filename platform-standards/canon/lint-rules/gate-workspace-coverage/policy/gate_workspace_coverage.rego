@@ -158,7 +158,13 @@ walk_complete if input.makefile.is_resolved == true
 tool_known(tool) if {
 	count(unplaced(tool)) == 0
 	walk_complete
+	nothing_unreadable
 }
+
+# A file or line the reader could not read might hold the command that covers a
+# member, or one that narrows a tool, so no tool is called uncovered while any
+# input is unreadable. EN-001 reports each one.
+nothing_unreadable if count(input.unreadable) == 0
 
 covered(tool) := {m |
 	some i in invocations_of(tool)
