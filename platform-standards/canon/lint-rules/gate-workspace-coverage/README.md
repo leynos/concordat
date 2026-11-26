@@ -50,8 +50,11 @@ gate, in CI, also runs: it covers everything whenever it runs, and a tool that
 does not run is not required. In a shell script, the constant conditions `true`,
 `:` and `false` are known, across however many lines they span, along with
 their `elif` and `else` branches: the branches that cannot run are not
-commands. Any other condition is taken to hold on some run. Under `.ONESHELL` a
-recipe is one shell, so a `cd` on one line moves the lines after it.
+commands. Any other condition is taken to hold on some run when it has no
+`elif` or `else`; one that has is a fork, where one run takes one branch, so
+every command inside it is indeterminate. Under `.ONESHELL` a recipe is one
+shell, so a `cd` on one line moves the lines after it, and a line that cannot
+tell which earlier probe reading ran starts as moved if any did.
 
 A tool the gate does not run is not required; the rule asks that a tool, once
 run, runs over everything.

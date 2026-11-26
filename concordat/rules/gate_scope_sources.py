@@ -32,9 +32,11 @@ from .gate_scope_commands import (
     FRESH_SHELL,
     Invocation,
     ShellState,
+    Tagged,
     cargo_subcommand_word,
     invocations_in,
     read_commands,
+    settle,
 )
 from .gate_scope_workflow_model import Place, logical_lines, places, step_runs
 from .interrogate_invocation import lex_segments
@@ -161,7 +163,7 @@ def _lexed(text: str) -> list[list[str]] | None:
 
 def _read_line(
     text: str, where: tuple[str, str], state: ShellState = FRESH_SHELL
-) -> tuple[list[Invocation], bool, ShellState]:
+) -> tuple[list[Tagged], bool, ShellState]:
     """Return the invocations in one expanded line, whether it read, and the shell.
 
     A line is unreadable when it will not lex while naming a gate tool, or when
@@ -175,8 +177,8 @@ def _read_line(
 
     Returns
     -------
-    tuple[list[Invocation], bool, ShellState]
-        The invocations found, whether the line could be read, and the state
+    tuple[list[Tagged], bool, ShellState]
+        The tagged invocations found, whether the line could be read, and the state
         the next line of the shell starts from.
     """
     segments = _lexed(text)
@@ -291,22 +293,46 @@ def _read_rule(
     state_by_reading: dict[int, ShellState] = {}
     for number, text in rule.recipes:
         per_reading: list[list[Invocation]] = []
-        for position, reading in enumerate(expand_readings(text, values)):
+        readings = list(expand_readings(text, values))
+        for position, reading in enumerate(readings):
             shown_line = " ".join(shown(blank_references(joined(reading.text))).split())
             source = f"Makefile:{number} ({target})"
             before = (
-                state_by_reading.get(position, FRESH_SHELL)
+                _shell_before(state_by_reading, position, len(readings))
                 if is_one_shell
                 else FRESH_SHELL
             )
-            found, is_readable, state_by_reading[position] = _read_line(
+            found, is_readable, after = _read_line(
                 reading.text, (source, shown_line), before
             )
-            per_reading.append(found)
+            state_by_reading[position] = after
+            per_reading.append(settle(found, after.forks))
             if not is_readable:
                 unreadable.append(f"{source}: {shown_line}")
         lines.append(_Line(per_reading))
     return lines, unreadable
+
+
+def _shell_before(
+    state_by_reading: cabc.Mapping[int, ShellState], position: int, readings: int
+) -> ShellState:
+    """Return the shell a reading's next line starts in, under `.ONESHELL`.
+
+    A line whose readings do not match an earlier line's (more of them, which
+    have no state of their own, or fewer, which merge several) cannot tell which
+    earlier probe branch ran, and a `cd nested` may be the one, so it starts as
+    moved if any earlier reading moved.
+
+    Returns
+    -------
+    ShellState
+        The reading's own state, or the most moved of all when the readings
+        do not line up.
+    """
+    if position in state_by_reading and readings == len(state_by_reading):
+        return state_by_reading[position]
+    moved = any(state.moved for state in state_by_reading.values())
+    return FRESH_SHELL._replace(moved=moved)
 
 
 def _resolve_probes(
@@ -525,16 +551,16 @@ def _read_step(
         The invocations found, and the lines that could not be read, each
         prefixed with the step's source.
     """
-    invocations: list[Invocation] = []
+    tagged: list[Tagged] = []
     unreadable: list[str] = []
     state = ShellState(moved)
     for line in lines:
         shown_line = " ".join(line.split())
         found, is_readable, state = _read_line(line, (source, shown_line), state)
-        invocations.extend(found)
+        tagged.extend(found)
         if not is_readable:
             unreadable.append(f"{source}: {shown_line}")
-    return invocations, unreadable
+    return settle(tagged, state.forks), unreadable
 
 
 def _distinct(invocations: list[Invocation]) -> list[Invocation]:

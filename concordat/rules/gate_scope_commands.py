@@ -35,8 +35,10 @@ __all__ = [
     "TOOLS",
     "Invocation",
     "ShellState",
+    "Tagged",
     "invocations_in",
     "read_commands",
+    "settle",
 ]
 
 TOOLS: typ.Final = ("clippy", "nextest", "test", "test-doc", "whitaker")
@@ -366,9 +368,17 @@ def _without_keywords(words: list[str]) -> list[str]:
     return words[start:]
 
 
+type Tagged = tuple[Invocation, tuple[int, ...]]
+
+_BRANCH_REASON: typ.Final = (
+    "it is in one branch of a shell condition the audit does not evaluate, and "
+    "one run takes one branch"
+)
+
+
 def read_commands(
     segments: list[list[str]], where: tuple[str, str], state: ShellState
-) -> tuple[list[Invocation], ShellState]:
+) -> tuple[list[Tagged], ShellState]:
     """Return the gate-tool invocations in one lexed line, and the shell after it.
 
     A `cd` earlier in the line marks every later invocation as running
@@ -376,19 +386,21 @@ def read_commands(
     or the step's `working-directory` has already left the root. *where* is the
     line's source (a file and line, or a job and step) and its text, kept on
     each invocation so a finding can show what was read. The returned state
-    carries a `cd` and an open `if false` to the next line of the same shell.
+    carries a `cd`, the open `if`s and the forked ones to the next line of the
+    same shell. Each invocation is tagged with the `if`s around it; pass the
+    tagged lines to :func:`settle` once the shell's forks are known.
 
     Returns
     -------
-    tuple[list[Invocation], ShellState]
+    tuple[list[Tagged], ShellState]
         One fact per command that runs `cargo clippy`, `cargo nextest run`,
         `cargo test`, Whitaker, or a wrapper script named for one of them, and
         the state the next line starts from.
     """
-    runnable_segments, branches = runnable(segments, state.branches)
+    kept, after = runnable(segments, state)
     moved = state.moved
-    found: list[Invocation] = []
-    for raw_words in runnable_segments:
+    found: list[Tagged] = []
+    for raw_words, frames in kept:
         words = _without_keywords(raw_words)
         start = command_start(words)
         if words[start : start + 1] == ["cd"]:
@@ -396,8 +408,29 @@ def read_commands(
             continue
         invocation = _invocation_of(words, where, moved=moved)
         if invocation is not None:
-            found.append(invocation)
-    return found, ShellState(moved, branches)
+            found.append((invocation, frames))
+    return found, after._replace(moved=moved)
+
+
+def settle(found: list[Tagged], forks: frozenset[int]) -> list[Invocation]:
+    """Return the invocations, those in alternative shell branches unplaced.
+
+    `if [ ... ]; then cargo test -p a; else cargo test -p b; fi` runs one of its
+    commands, so neither covers a member on every run, and their union is not
+    coverage. Every command inside an `if` with an `elif` or `else` is
+    indeterminate.
+
+    Returns
+    -------
+    list[Invocation]
+        The invocations without their tags.
+    """
+    return [
+        {**invocation, "resolved": False, "why": _BRANCH_REASON}
+        if forks.intersection(frames)
+        else invocation
+        for invocation, frames in found
+    ]
 
 
 def invocations_in(
@@ -410,4 +443,5 @@ def invocations_in(
     list[Invocation]
         The invocations, as :func:`read_commands` finds them.
     """
-    return read_commands(segments, where, ShellState(moved))[0]
+    found, after = read_commands(segments, where, ShellState(moved))
+    return settle(found, after.forks)

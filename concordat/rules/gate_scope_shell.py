@@ -17,18 +17,21 @@ from __future__ import annotations
 
 import typing as typ
 
-__all__ = ["FRESH_SHELL", "Branch", "ShellState", "runnable"]
+__all__ = ["FRESH_SHELL", "Branch", "Kept", "ShellState", "runnable"]
 
 
 class Branch(typ.NamedTuple):
     """The `if` branch the shell is in.
 
     `taken` is true when an earlier branch of the same `if` is known to run, so
-    later ones do not. `active` is true when this branch can run.
+    later ones do not. `active` is true when this branch can run. `uid` names an
+    `if` whose condition is not constant (``-1`` for a constant one), so the
+    commands of its branches can be told apart from the commands around it.
     """
 
     taken: bool
     active: bool
+    uid: int = -1
 
 
 class ShellState(typ.NamedTuple):
@@ -36,16 +39,21 @@ class ShellState(typ.NamedTuple):
 
     `moved` is true once a `cd` has left the root, or the step's working
     directory is not the root. `branches` holds the `if` branches that enclose
-    the next command, outermost first.
+    the next command, outermost first. `forks` holds the `uid` of every
+    non-constant `if` that has an `elif` or `else`, whose branches are
+    alternatives: one run takes one. `count` numbers the non-constant `if`s.
     """
 
     moved: bool = False
     branches: tuple[Branch, ...] = ()
+    forks: frozenset[int] = frozenset()
+    count: int = 0
 
 
 FRESH_SHELL: typ.Final = ShellState()
 
-type _Advance = tuple[tuple[Branch, ...], list[str] | None]
+type Kept = tuple[list[str], tuple[int, ...]]
+type _Advance = tuple[ShellState, list[str] | None]
 
 
 def _truth(condition: list[str]) -> bool | None:
@@ -64,51 +72,60 @@ def _is_live(branches: tuple[Branch, ...]) -> bool:
     return all(branch.active for branch in branches)
 
 
-def _condition_command(
-    branches: tuple[Branch, ...], words: list[str]
-) -> list[str] | None:
-    """Return the words of a non-constant condition when it runs, else ``None``."""
-    runs = _is_live(branches) and _truth(words[1:]) is None
-    return words if runs else None
+def _frames(branches: tuple[Branch, ...]) -> tuple[int, ...]:
+    """Return the `uid` of every enclosing non-constant `if`."""
+    return tuple(branch.uid for branch in branches if branch.uid >= 0)
 
 
-def _open(branches: tuple[Branch, ...], words: list[str]) -> _Advance:
+def _open(state: ShellState, words: list[str]) -> _Advance:
     """Enter an `if`: its condition is a command unless it is constant."""
     verdict = _truth(words[1:])
-    command = _condition_command(branches, words)
-    return (*branches, Branch(verdict is True, verdict is not False)), command
+    if verdict is not None:
+        branch = Branch(verdict is True, verdict is True)
+        return state._replace(branches=(*state.branches, branch)), None
+    branch = Branch(taken=False, active=True, uid=state.count)
+    entered = state._replace(branches=(*state.branches, branch))._replace(
+        count=state.count + 1
+    )
+    return entered, words if _is_live(state.branches) else None
 
 
-def _next_test(branches: tuple[Branch, ...], words: list[str]) -> _Advance:
+def _next_test(state: ShellState, words: list[str]) -> _Advance:
     """Move to an `elif`: it is not tested when an earlier branch is known to run."""
-    if not branches:
-        return branches, None
-    *outer, current = branches
+    if not state.branches:
+        return state, None
+    *outer, current = state.branches
+    forks = state.forks | {current.uid} if current.uid >= 0 else state.forks
     if current.taken:
-        return (*outer, Branch(taken=True, active=False)), None
+        skipped = Branch(taken=True, active=False, uid=current.uid)
+        return state._replace(branches=(*outer, skipped))._replace(forks=forks), None
     verdict = _truth(words[1:])
-    moved = (*outer, Branch(verdict is True, verdict is not False))
-    return moved, _condition_command(moved, words)
+    branch = Branch(verdict is True, verdict is not False, current.uid)
+    moved = state._replace(branches=(*outer, branch))._replace(forks=forks)
+    runs = verdict is None and _is_live(moved.branches)
+    return moved, words if runs else None
 
 
-def _otherwise(branches: tuple[Branch, ...], words: list[str]) -> _Advance:
+def _otherwise(state: ShellState, words: list[str]) -> _Advance:
     """Move to an `else`: it runs unless an earlier branch is known to have."""
-    if not branches:
-        return branches, words[1:] or None
-    *outer, current = branches
-    moved = (*outer, Branch(current.taken, active=not current.taken))
-    return moved, (words[1:] or None) if _is_live(moved) else None
+    if not state.branches:
+        return state, words[1:] or None
+    *outer, current = state.branches
+    forks = state.forks | {current.uid} if current.uid >= 0 else state.forks
+    branch = Branch(current.taken, not current.taken, current.uid)
+    moved = state._replace(branches=(*outer, branch))._replace(forks=forks)
+    return moved, (words[1:] or None) if _is_live(moved.branches) else None
 
 
-def _close(branches: tuple[Branch, ...], _words: list[str]) -> _Advance:
+def _close(state: ShellState, _words: list[str]) -> _Advance:
     """Leave an `if` at its `fi`."""
-    return branches[:-1], None
+    return state._replace(branches=state.branches[:-1]), None
 
 
-def _body(branches: tuple[Branch, ...], words: list[str]) -> _Advance:
+def _body(state: ShellState, words: list[str]) -> _Advance:
     """Enter a `then` or `do` body: what follows the keyword is a command."""
     rest = words[1:]
-    return branches, rest if rest and _is_live(branches) else None
+    return state, rest if rest and _is_live(state.branches) else None
 
 
 _KEYWORDS: typ.Final = {
@@ -121,31 +138,33 @@ _KEYWORDS: typ.Final = {
 }
 
 
-def _advance(branches: tuple[Branch, ...], words: list[str]) -> _Advance:
-    """Return the branches after one simple command, and the command if it runs."""
+def _advance(state: ShellState, words: list[str]) -> _Advance:
+    """Return the state after one simple command, and the command if it runs."""
     head = words[0].lstrip("@-+") if words else ""
     handler = _KEYWORDS.get(head)
     if handler is not None:
-        return handler(branches, words)
-    return branches, words if _is_live(branches) else None
+        return handler(state, words)
+    return state, words if _is_live(state.branches) else None
 
 
 def runnable(
-    segments: list[list[str]], branches: tuple[Branch, ...]
-) -> tuple[list[list[str]], tuple[Branch, ...]]:
-    """Return the simple commands of a line that can run, and the branches after it.
+    segments: list[list[str]], state: ShellState
+) -> tuple[list[Kept], ShellState]:
+    """Return the simple commands of a line that can run, and the shell after it.
 
-    *branches* are those enclosing the line's start; the branches enclosing its
-    end are returned for the next line of the same shell.
+    Each command comes with the `uid` of every non-constant `if` around it, so a
+    caller can mark the commands of an `if` that turns out to have alternative
+    branches (see `ShellState.forks`). *state* is the shell at the line's start.
 
     Returns
     -------
-    tuple[list[list[str]], tuple[Branch, ...]]
-        The segments that can run, and the branches after them.
+    tuple[list[Kept], ShellState]
+        The commands that can run with their enclosing `if`s, and the state the
+        next line starts from.
     """
-    kept: list[list[str]] = []
+    kept: list[Kept] = []
     for words in segments:
-        branches, command = _advance(branches, words)
+        state, command = _advance(state, words)
         if command is not None:
-            kept.append(command)
-    return kept, branches
+            kept.append((command, _frames(state.branches)))
+    return kept, state

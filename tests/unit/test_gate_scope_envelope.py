@@ -633,6 +633,55 @@ class TestFifthReview:
         assert [i["workspace_flag"] for i in found] == [True]
 
 
+class TestSixthReview:
+    """Behaviours a sixth review showed to be missing."""
+
+    def test_the_branches_of_an_unknown_condition_are_alternatives(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """One run takes `-p a` or `-p b`, so neither is coverage on its own."""
+        body = (
+            '          if [ "$USE_A" = 1 ]; then\n            cargo test -p app\n'
+            "          else\n            cargo test -p b\n          fi\n"
+        )
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: |\n" + body
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        found = _build(tmp_path, files)["invocations"]
+        assert len(found) == 2
+        assert not any(i["resolved"] for i in found)
+
+    def test_an_unknown_condition_without_an_else_keeps_its_command_placed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A lone `then` is taken to hold on some run, as a step's `if` is."""
+        body = (
+            '          if [ -n "$X" ]; then\n            cargo test -p app\n'
+            "          fi\n"
+        )
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: |\n" + body
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        found = _build(tmp_path, files)["invocations"]
+        assert [i["resolved"] for i in found] == [True]
+
+    def test_a_cd_in_one_probe_reading_moves_a_later_line_with_one_reading(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Under `.ONESHELL` the probe may have run `cd nested`."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n"
+            "\t$(if $(shell cargo nextest --version 2>/dev/null),cd .,cd nested)\n"
+            "\tcargo test --workspace\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert [i["changes_directory"] for i in found] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 
