@@ -505,15 +505,34 @@ def _test_targets(
     """
     if any(root.startswith(UNSEEN) for root in roots):
         return None
-    if _is_ambiguous(path, roots, declared):
-        return None
     sources = _owners(path, roots, declared)
-    if is_named and not all(source in declared for source in sources):
+    if _is_unnameable(path, roots, declared, sources, is_named=is_named):
         return None
     names = _target_names(sources, declared)
     if not names and not roots:
         return None
     return sorted(names)
+
+
+def _is_unnameable(
+    path: str,
+    roots: list[str],
+    declared: cabc.Mapping[str, frozenset[str]],
+    sources: list[str],
+    *,
+    is_named: bool,
+) -> bool:
+    """Return whether the manifest cannot say which targets compile the file.
+
+    Returns
+    -------
+    bool
+        True when a guessed owner collides with a declared path, or the crate
+        names its tests and some owner is no declared path.
+    """
+    if _is_ambiguous(path, roots, declared):
+        return True
+    return is_named and not all(source in declared for source in sources)
 
 
 def _target_names(
