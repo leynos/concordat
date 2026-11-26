@@ -334,21 +334,62 @@ test_a_nextest_pass_is_still_covered_by_a_setup_script if {
 	count(findings(fixture)) == 0
 }
 
-# A warming run limited to `--test other` leaves the trybuild build in tests/ui.rs cold.
-test_a_warming_run_of_another_test_target_leaves_the_build_cold if {
-	fixture := object.union(data.fixtures.pass_compiled_trybuild, {"passes": [{
+# A trybuild build, with the test binaries the reader saw compiling its file.
+_restricted_fixture(targets, warmed_tests) := object.union(data.fixtures.pass_compiled_trybuild, {
+	"builds": [{
+		"path": "tests/support/mod.rs", "line": 9, "kind": "trybuild", "binary": null,
+		"crate": ".", "prepared_by": ["makefile-preparation"], "targets": targets,
+	}],
+	"passes": [{
 		"path": "Makefile", "line": 12, "command": "cargo test", "status": "warmed",
-		"visible": 1, "reason": "", "runner": "cargo", "warmed_tests": ["other"],
-	}]})
+		"visible": 1, "reason": "", "runner": "cargo", "warmed_tests": warmed_tests,
+	}],
+})
+
+# A warming run limited to `--test other` leaves a build only `ui` compiles cold.
+test_a_warming_run_of_another_test_target_leaves_the_build_cold if {
+	fixture := _restricted_fixture(["ui"], ["other"])
 	{[f.rule_id, f.line] | some f in findings(fixture)} == {["NC-010", 12]}
 }
 
-test_a_warming_run_of_the_owning_test_target_is_enough if {
-	fixture := object.union(data.fixtures.pass_compiled_trybuild, {"passes": [{
-		"path": "Makefile", "line": 12, "command": "cargo test", "status": "warmed",
-		"visible": 1, "reason": "", "runner": "cargo", "warmed_tests": ["ui"],
-	}]})
+# A support module several binaries import is covered by a run of any of them,
+# whatever the module is called.
+test_a_warming_run_of_an_importing_test_target_is_enough if {
+	fixture := _restricted_fixture(["other", "ui"], ["ui"])
 	count(findings(fixture)) == 0
+}
+
+# A build nothing was seen reaching has no known target: indeterminate.
+test_a_warming_run_cannot_be_compared_with_a_build_no_binary_compiles if {
+	fixture := _restricted_fixture(null, ["ui"])
+	{[f.rule_id, f.verdict] | some f in findings(fixture)} == {["EN-001", "indeterminate"]}
+}
+
+# A build only a library reaches is not covered by any named test target.
+test_a_warming_run_of_a_test_target_does_not_cover_a_library_only_build if {
+	fixture := _restricted_fixture([], ["ui"])
+	{[f.rule_id, f.line] | some f in findings(fixture)} == {["NC-010", 12]}
+}
+
+# One crate's in-suite preparation does not hide another crate's script-only build.
+test_a_setup_script_only_build_is_reported_beside_an_in_suite_one if {
+	fixture := object.union(data.fixtures.pass_setup_script_covered, {
+		"builds": [
+			{
+				"path": "crates/a/tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+				"crate": "crates/a", "package": "a", "prepared_by": ["preparation-test"],
+			},
+			{
+				"path": "crates/b/tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+				"crate": "crates/b", "package": "b", "prepared_by": ["setup-script"],
+			},
+		],
+		"passes": [{
+			"path": "Makefile", "line": 12, "command": "cargo test --workspace", "status": "unprepared",
+			"visible": 0, "reason": "", "runner": "cargo", "packages": ["--workspace"],
+		}],
+	})
+	count({f.msg | some f in findings(fixture); contains(f.msg, "nextest setup script")}) == 1
 }
 
 test_a_warming_run_that_named_no_target_is_enough if {

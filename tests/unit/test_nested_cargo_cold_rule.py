@@ -17,6 +17,7 @@ import pygit2
 import pytest
 
 from concordat.rules import packages, runner
+from concordat.rules.nested_cargo_cold_envelope import build_nested_cargo_cold_envelope
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -1150,6 +1151,24 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
     put(root, ".config/nextest.toml", BINARY_UI_SCRIPT)
     for relative, text in files.items():
         put(root, relative, text)
+
+
+def test_a_support_build_records_the_test_binaries_that_compile_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A warming `--test NAME` run is compared with the binaries that reach a file."""
+    support_checkout(
+        tmp_path,
+        {
+            "tests/ui.rs": "mod support;\n",
+            "tests/other.rs": "mod support;\n",
+            "tests/support/mod.rs": SUPPORT_BUILD,
+        },
+    )
+    builds = build_nested_cargo_cold_envelope(tmp_path)["builds"]
+    assert {build["path"]: build["targets"] for build in builds} == {
+        "tests/support/mod.rs": ["other", "ui"]
+    }
 
 
 @pytest.mark.parametrize(

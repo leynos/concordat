@@ -286,12 +286,15 @@ plain `cargo test` pass never runs it, so each pass records its runner and a
   `--lib`, `--doc`, `--bin`, `--example` or `--bench` compiles what it runs and
   never reaches the integration tests that hold the nested builds, so it counts
   as a compile, not as a real run. A run limited to `--test NAME` warms only
-  the nested builds in the test files of those names (`tests/NAME.rs` or
-  `tests/NAME/`): the pass records the names, and a trybuild or macrotest build
-  in another test file is reported as still cold. A run limited by a filter
-  expression or a test name rules no file out. An outside run of an in-suite
-  preparation test counts for the pass whose flags it carried and for no other.
-  A help request (`--help`, `-h`) builds nothing and prepares nothing.
+  the nested builds that test binary compiles: the pass records the names, each
+  build records the `tests/<name>.rs` binaries whose module tree reaches its
+  file (a support module several binaries import is covered by a run of any of
+  them), and a trybuild or macrotest build only other binaries compile is
+  reported as still cold. A build nothing was seen reaching is reported as
+  `EN-001`, neither warmed nor cold. A run limited by a filter expression or a
+  test name rules no file out. An outside run of an in-suite preparation test
+  counts for the pass whose flags it carried and for no other. A help request
+  (`--help`, `-h`) builds nothing and prepares nothing.
 - **Order.** Make orders a rule's prerequisites before its recipe and does not
   order sibling prerequisites, so a pass inside one prerequisite sees only what
   ran before the rule. `$(MAKE) goal [VAR=value]` is followed with the override

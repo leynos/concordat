@@ -78,6 +78,11 @@ class BuildFact(typ.TypedDict):
         Which of `setup-script`, `preparation-test`, `gate-call` and
         `makefile-preparation` apply. Empty means the repository declares no
         preparation for this source.
+    targets:
+        The names of the test binaries (`tests/<name>.rs`) whose module tree
+        compiles the source, sorted: the file's own binary and every one that
+        imports it. Empty when only a library reaches it; None when nothing
+        was seen reaching it, so no `--test NAME` run can be said to cover it.
     """
 
     path: str
@@ -87,6 +92,7 @@ class BuildFact(typ.TypedDict):
     crate: str
     package: str | None
     prepared_by: list[str]
+    targets: list[str] | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -381,5 +387,23 @@ def collect_builds(
             "crate": crate,
             "package": crates.get(crate),
             "prepared_by": prepared,
+            "targets": _test_targets(stem, evidence.reached_by.get(path, [])),
         })
     return builds
+
+
+def _test_targets(stem: str | None, roots: list[str]) -> list[str] | None:
+    """Return the test binaries that compile a source, or None when none is seen.
+
+    Returns
+    -------
+    list[str] | None
+        The sorted names of the file's own binary and of every `tests/<name>.rs`
+        among *roots*; empty when only a library reaches it; None when nothing
+        reaches it and it is no binary itself.
+    """
+    names = {stem} if stem else set()
+    names.update(found["stem"] for root in roots if (found := _BINARY.search(root)))
+    if not names and not roots:
+        return None
+    return sorted(names)

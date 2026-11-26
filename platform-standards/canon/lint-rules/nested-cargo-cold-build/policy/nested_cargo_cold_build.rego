@@ -254,21 +254,25 @@ _has_in_suite_preparation(pass) if {
 	how in {"preparation-test", "gate-call"}
 }
 
-# The test target a nested build lives in: `tests/ui.rs` and `tests/ui/main.rs`
-# are both target `ui`. A build outside `tests/` has no named target.
-_test_target(build) := name if {
-	matches := regex.find_all_string_submatch_n(`(?:^|/)tests/([^/]+?)(?:\.rs|/.*)$`, build.path, 1)
-	name := matches[0][1]
+# A warming run restricted to named test targets (`--test NAME`) warms only the
+# nested builds those targets compile. The reader records, for each build, the
+# test binaries whose module tree reaches its file (`targets`), so a support
+# module several binaries import is covered by a run of any of them. A build
+# nothing was seen reaching has no known target: it is reported as unknown,
+# neither warmed nor cold.
+_pass_is_restricted(pass) if count(object.get(pass, "warmed_tests", [])) > 0
+
+_targets_known(build) if is_array(object.get(build, "targets", null))
+
+_pass_warms(pass, build) if {
+	some name in object.get(build, "targets", [])
+	name in object.get(pass, "warmed_tests", [])
 }
 
-# A warming run restricted to named test targets (`--test NAME`) warms only the
-# nested builds those targets hold. A run that named none, or a build whose
-# target is unknown, is never guessed away.
-_pass_warms(pass, _) if count(object.get(pass, "warmed_tests", [])) == 0
-
-_pass_warms(pass, build) if not _test_target(build)
-
-_pass_warms(pass, build) if _test_target(build) in object.get(pass, "warmed_tests", [])
+_build_has_in_suite_preparation(build) if {
+	some how in build.prepared_by
+	how in {"preparation-test", "gate-call"}
+}
 
 _passes := object.get(input, "passes", [])
 
@@ -327,10 +331,10 @@ deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, 
 	_pass_runner(pass) == "cargo"
 	pass.status == "unprepared"
 	pass.visible == 0
-	not _has_in_suite_preparation(pass)
 	some build in input.builds
 	_well_formed_build(build)
 	"setup-script" in build.prepared_by
+	not _build_has_in_suite_preparation(build)
 	_pass_covers(pass, build)
 	msg := sprintf(
 		"%s:%d runs the tests as `%s`, a plain `cargo test`, and the only preparation of its nested builds is a nextest setup script, which nextest runs before its own passes and `cargo test` never does. Prepare the build before this pass in the Makefile, with this pass's flags, outside any test deadline",
@@ -344,13 +348,33 @@ deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, 
 	some pass in _passes
 	_pass_is_judged(pass)
 	pass.status == "warmed"
+	_pass_is_restricted(pass)
 	some build in input.builds
 	_declared_for(pass, build)
 	_nested_family(build)
 	_pass_covers(pass, build)
+	_targets_known(build)
 	not _pass_warms(pass, build)
 	msg := sprintf(
-		"%s:%d runs the tests as `%s`. The runs before it that warm trybuild or macrotest are limited to the test targets %v (`--test`), and the nested build at %s:%d lives in another test file, so it stays cold inside the timed run. Run that test target for real before the timed pass, with the same flags, as https://github.com/leynos/whitaker/pull/669 does",
+		"%s:%d runs the tests as `%s`. The runs before it that warm trybuild or macrotest are limited to the test targets %v (`--test`), and the nested build at %s:%d is compiled by %v, so it stays cold inside the timed run. Run that test target for real before the timed pass, with the same flags, as https://github.com/leynos/whitaker/pull/669 does",
+		[pass.path, pass.line, object.get(pass, "command", "the test runner"), object.get(pass, "warmed_tests", []), build.path, build.line, build.targets],
+	)
+}
+
+# The same warming run cannot be compared with a build no test binary was seen
+# compiling.
+deny contains finding("EN-001", severity, "indeterminate", pass.path, pass.line, msg) if {
+	some pass in _passes
+	_pass_is_judged(pass)
+	pass.status == "warmed"
+	_pass_is_restricted(pass)
+	some build in input.builds
+	_declared_for(pass, build)
+	_nested_family(build)
+	_pass_covers(pass, build)
+	not _targets_known(build)
+	msg := sprintf(
+		"%s:%d runs the tests as `%s`, and the runs before it that warm trybuild or macrotest are limited to the test targets %v (`--test`), but no test binary was seen compiling the nested build at %s:%d, so the reader cannot tell whether they warmed it",
 		[pass.path, pass.line, object.get(pass, "command", "the test runner"), object.get(pass, "warmed_tests", []), build.path, build.line],
 	)
 }
