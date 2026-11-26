@@ -96,11 +96,7 @@ def _with_includes(
     originals = [dict(combination) for combination in combinations]
     results = [dict(combination) for combination in combinations]
     extra: list[dict[str, object]] = []
-    entries = [
-        typ.cast("dict[str, object]", candidate)
-        for candidate in includes
-        if isinstance(candidate, dict)
-    ]
+    entries = _entries(includes)
     for entry in entries:
         fitting = [
             result
@@ -119,6 +115,47 @@ def _fits(original: dict[str, object], entry: dict[str, object]) -> bool:
     return all(original[key] == entry[key] for key in entry.keys() & original.keys())
 
 
+def _entries(includes: list[object]) -> list[dict[str, object]]:
+    """Return the `include` entries that are mappings."""
+    return [
+        typ.cast("dict[str, object]", candidate)
+        for candidate in includes
+        if isinstance(candidate, dict)
+    ]
+
+
+def _strategy_matrix(job: object) -> object | None:
+    """Return a job's `strategy.matrix` as written, or ``None`` when it has none."""
+    strategy = job.get("strategy") if isinstance(job, dict) else None
+    return strategy.get("matrix") if isinstance(strategy, dict) else None
+
+
+def _readable_axes(matrix: object) -> dict[str, object] | None:
+    """Return the matrix's axes when every part of it can be read, else ``None``.
+
+    An axis that is not a list is computed by an expression. Dropping it would
+    leave combinations an `exclude` entry could not match, so the matrix is not
+    expanded at all; nor is one whose `include` or `exclude` is not a list.
+
+    Returns
+    -------
+    dict[str, object] | None
+        The axes, or ``None`` when the matrix cannot be expanded here.
+    """
+    if not isinstance(matrix, dict):
+        return None
+    axes = typ.cast("dict[str, object]", matrix)
+    entries = (axes.get("include", []), axes.get("exclude", []))
+    if not all(isinstance(entry, list) for entry in entries):
+        return None
+    computed = (
+        not isinstance(value, list)
+        for key, value in axes.items()
+        if key not in {"include", "exclude"}
+    )
+    return None if any(computed) else axes
+
+
 def matrix_combinations(job: object) -> list[dict[str, object]] | None:
     """Return the combinations a job's `strategy.matrix` expands to.
 
@@ -129,25 +166,13 @@ def matrix_combinations(job: object) -> list[dict[str, object]] | None:
         matrix, or ``None`` when the matrix is computed by an expression and
         cannot be expanded here.
     """
-    strategy = job.get("strategy") if isinstance(job, dict) else None
-    matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
+    matrix = _strategy_matrix(job)
     if matrix is None:
         return [{}]
-    if not isinstance(matrix, dict):
+    axes = _readable_axes(matrix)
+    if axes is None:
         return None
-    axes = typ.cast("dict[str, object]", matrix)
     includes, excludes = axes.get("include", []), axes.get("exclude", [])
-    if not isinstance(includes, list) or not isinstance(excludes, list):
-        return None
-    # An axis that is not a list is computed by an expression. Dropping it would
-    # leave combinations an `exclude` entry could not match, so the matrix is
-    # not expanded at all.
-    if any(
-        not isinstance(value, list)
-        for key, value in axes.items()
-        if key not in {"include", "exclude"}
-    ):
-        return None
     combinations = _with_includes(
         _without_excluded(_product(axes), typ.cast("list[object]", excludes)),
         typ.cast("list[object]", includes),
