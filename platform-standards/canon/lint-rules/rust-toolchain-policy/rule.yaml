@@ -6,12 +6,13 @@ description: >-
   exactly in `rust-toolchain.toml` (RT-022), a pinned nightly no older than
   the freshness window (RT-023), a Dependabot `rust-toolchain` entry that can
   move the pin (RT-024), a `rust-version` on every publishable library crate
-  (RT-025), every declared MSRV exercised by CI (RT-026), and CI naming no
-  dated nightly other than the pin (RT-027). A recorded toolchain-policy
-  exception that names the pinned channel exempts RT-023, RT-024 and RT-025, for a
-  repository whose nightly is coupled to something it cannot move. Audit-only:
-  this rule declares no mutations.
-version: 0.1.0
+  (RT-025), every declared MSRV exercised by CI (RT-026), CI naming no
+  dated nightly other than the pin (RT-027), and no workflow or Makefile
+  restating a dated nightly literal instead of reading the pin (RT-028). A
+  recorded toolchain-policy exception that names the pinned channel exempts
+  RT-023, RT-024, RT-025 and RT-028, for a repository whose nightly is coupled
+  to something it cannot move. Audit-only: this rule declares no mutations.
+version: 0.2.0
 sensor:
   type: conftest
   input: policy-input/rust-toolchain-policy
@@ -46,6 +47,15 @@ parameters:
       exception_keyword:
         type: string
         description: The phrase an exception section's heading must contain.
+      literal_severity:
+        type: string
+        enum:
+          - warning
+          - error
+        description: >-
+          The severity of a restated dated toolchain literal (RT-028). It
+          starts at `warning` so the estate can be surveyed before the rule
+          blocks a merge.
   defaults:
     window_days: 56
     dependabot_intervals:
@@ -54,3 +64,4 @@ parameters:
     exception_documents:
       - docs/developers-guide.md
     exception_keyword: Toolchain policy
+    literal_severity: warning

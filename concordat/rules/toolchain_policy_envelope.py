@@ -1,11 +1,12 @@
 """Build the Rust toolchain facts for the toolchain-policy rule.
 
-The policy (RT-022 to RT-027) judges five things about a repository's Rust
+The policy (RT-022 to RT-028) judges several things about a repository's Rust
 toolchain, and no single file holds them all: the pin lives in
 `rust-toolchain.toml`, the minimum supported Rust version (MSRV) in the Cargo
 manifests, the means of moving the pin in `.github/dependabot.yml`, and the
-evidence that CI exercises either in the workflows. The envelope gathers each
-as a small fact so the policy stays a comparison rather than a parser.
+evidence that CI exercises either in the workflows and the root Makefile. The
+envelope gathers each as a small fact so the policy stays a comparison rather
+than a parser.
 
 Three decisions are made here rather than in the policy, because Rego has no
 good way to make them:
@@ -32,6 +33,7 @@ from .dependabot_envelope import build_dependabot_envelope
 from .envelope import DEFAULT_EXCEPTION_DOCUMENTS
 from .exception_docs import DocumentScan, find_exception_sections
 from .fs_probe import probe_file
+from .makefile_facts import MakefileInspector, inspect_makefile
 from .rust_surfaces import resolve_rust_surfaces
 from .toolchain import (
     CHANNEL_VERSION,
@@ -39,6 +41,7 @@ from .toolchain import (
     inspect_toolchain,
 )
 from .toolchain_ci_facts import CiFacts, ci_facts, minor_of
+from .toolchain_literal_facts import ToolchainLiteralFacts, toolchain_literal_facts
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -143,6 +146,9 @@ class ToolchainPolicyEnvelope(typ.TypedDict):
         The `rust-toolchain` update entries.
     ci:
         The toolchains the workflows name.
+    literals:
+        The dated nightlies the workflows and root Makefile select. RT-028
+        judges whether one of them restates the pin's date.
     exceptions:
         Recorded toolchain-policy exception sections, by document.
     """
@@ -158,6 +164,7 @@ class ToolchainPolicyEnvelope(typ.TypedDict):
     crates: list[CrateFacts]
     dependabot: DependabotFacts
     ci: CiFacts
+    literals: ToolchainLiteralFacts
     exceptions: list[DocumentScan]
 
 
@@ -292,6 +299,7 @@ def build_toolchain_policy_envelope(
     parameters: cabc.Mapping[str, object] | None = None,
     *,
     today: dt.date,
+    inspect: MakefileInspector = inspect_makefile,
 ) -> ToolchainPolicyEnvelope:
     """Assemble the toolchain-policy input for one local checkout.
 
@@ -307,6 +315,9 @@ def build_toolchain_policy_envelope(
         The date the nightly-age clause measures against. Required: the
         builder never reads a clock, so the command boundary supplies the
         current UTC date and tests pass a fixed one.
+    inspect:
+        Reads the root Makefile's facts. The default is the pure query; the
+        command boundary injects an observing one.
 
     Returns
     -------
@@ -338,6 +349,7 @@ def build_toolchain_policy_envelope(
         "crates": crates,
         "dependabot": _dependabot_facts(checkout),
         "ci": ci_facts(checkout),
+        "literals": toolchain_literal_facts(checkout, toolchain, inspect=inspect),
         "exceptions": find_exception_sections(
             checkout,
             _exception_documents(resolved),

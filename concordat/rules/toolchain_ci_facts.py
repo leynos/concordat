@@ -4,7 +4,10 @@ RT-026 and RT-027 compare the toolchain CI uses with the pin and the declared
 MSRV, so the question is "which toolchains do the steps select", not "which
 version strings appear in the files". Workflows are therefore walked as decoded
 YAML: a toolchain in a comment or in a step's display name is not CI using it,
-and a `${{ env.NAME }}` reference is followed to the literal it names.
+and a `${{ env.NAME }}` reference is followed to the value it names, which is
+recorded as declared rather than as a restated date. Binding the value to a
+name is how a repository says the pin is deliberately separate, and RT-028
+excuses the same shape.
 
 A workflow that cannot be decoded stays a fact with its reason, so the policy
 reports the clauses that depend on it as indeterminate.
@@ -64,9 +67,12 @@ class CiFacts(typ.TypedDict):
         Workflow paths that did not decode, each with its reason. The policy
         cannot judge CI from a workflow it could not read.
     dated_nightlies:
-        Every distinct dated-nightly toolchain a workflow names.
+        Every distinct dated-nightly toolchain a workflow names inline. A
+        date reached through a `${{ env.NAME }}` entry is deliberately
+        separate, as RT-028 treats it, and is not listed.
     numeric_minors:
-        Every distinct `major.minor` of a numeric release a workflow names.
+        Every distinct `major.minor` of a numeric release a workflow names,
+        whether inline or declared in `env`.
     msrv_job:
         True when a job id or name, or a step command, is about the MSRV.
     reads_manifest_msrv:
@@ -83,9 +89,23 @@ class CiFacts(typ.TypedDict):
 
 @dataclasses.dataclass(slots=True)
 class _Evidence:
-    """Accumulate the evidence found across every workflow."""
+    """Accumulate the evidence found across every workflow.
+
+    Attributes
+    ----------
+    names:
+        Toolchains a workflow names inline, in a command or an action ref.
+    declared:
+        Toolchains a workflow reaches only through an `env` entry. Binding
+        the value to a name is what makes the pin deliberately separate.
+    msrv_job:
+        True when a job or step is about the MSRV.
+    reads_manifest_msrv:
+        True when a toolchain-selecting step reads the manifest's `rust-version`.
+    """
 
     names: set[str] = dataclasses.field(default_factory=set)
+    declared: set[str] = dataclasses.field(default_factory=set)
     msrv_job: bool = False
     reads_manifest_msrv: bool = False
 
@@ -162,20 +182,29 @@ def _as_list(value: object) -> list[object]:
     return typ.cast("list[object]", value) if isinstance(value, list) else []
 
 
-def _resolve(value: object, scope: _Scope) -> list[str]:
-    """Resolve a toolchain value through one `env` or `matrix` reference."""
+def _resolve(value: object, scope: _Scope) -> list[tuple[str, bool]]:
+    """Resolve a toolchain value to its names and whether `env` supplied them.
+
+    Returns
+    -------
+    list[tuple[str, bool]]
+        One ``(name, is_from_env)`` pair per toolchain the value names. A
+        matrix reference is not `env`-declared: its legs are written inline.
+    """
     # An unquoted `toolchain: 1.85` decodes as a float, so stringify scalars.
     text = (_stringify(value) or "").strip()
     reference = _REFERENCE.match(text)
     if reference is None:
-        return [text] if text else []
+        return [(text, False)] if text else []
     name = reference.group("name")
     if reference.group("scope") == "matrix":
-        return scope.matrix.get(name, [])
-    return [scope.env[name]] if scope.env.get(name) else []
+        return [(leg, False) for leg in scope.matrix.get(name, [])]
+    return [(scope.env[name], True)] if scope.env.get(name) else []
 
 
-def _action_toolchains(step: dict[str, object], scope: _Scope) -> list[str]:
+def _action_toolchains(
+    step: dict[str, object], scope: _Scope
+) -> list[tuple[str, bool]]:
     """Return the toolchains a toolchain-installing action step selects."""
     uses = step.get("uses")
     if not isinstance(uses, str) or not uses.startswith(_TOOLCHAIN_ACTIONS):
@@ -186,7 +215,7 @@ def _action_toolchains(step: dict[str, object], scope: _Scope) -> list[str]:
     # ref, which is the action's documented way to select one.
     ref = uses.rpartition("@")[2]
     if ref and not _COMMIT_SHA.fullmatch(ref):
-        names.append(ref)
+        names.append((ref, False))
     return names
 
 
@@ -212,7 +241,9 @@ def _rustup_toolchains(run: str) -> list[str]:
     return names
 
 
-def _command_toolchains(step: dict[str, object], scope: _Scope) -> list[str]:
+def _command_toolchains(
+    step: dict[str, object], scope: _Scope
+) -> list[tuple[str, bool]]:
     """Return the toolchains a `run` command installs, selects or overrides."""
     run = step.get("run")
     if not isinstance(run, str):
@@ -272,14 +303,23 @@ def _step_text(label: str, step: dict[str, object]) -> str:
     return f"{label} {step.get('name', '')} {run if isinstance(run, str) else ''}"
 
 
+def _record(evidence: _Evidence, names: list[tuple[str, bool]]) -> None:
+    """Record each toolchain under the set its route belongs to."""
+    for name, declared in names:
+        if declared:
+            evidence.declared.add(name)
+        else:
+            evidence.names.add(name)
+
+
 def _read_workflow(document: object, evidence: _Evidence) -> None:
     """Add one decoded workflow's toolchain evidence to *evidence*."""
     env: dict[str, str] = {}
     _collect_env(document, env)
     for label, matrix, step in _walk_steps(document):
         scope = _Scope(env, matrix)
-        evidence.names.update(_action_toolchains(step, scope))
-        evidence.names.update(_command_toolchains(step, scope))
+        _record(evidence, _action_toolchains(step, scope))
+        _record(evidence, _command_toolchains(step, scope))
         text = _step_text(label, step)
         evidence.msrv_job |= bool(_MSRV_JOB.search(text))
         evidence.reads_manifest_msrv |= bool(
@@ -303,11 +343,14 @@ def ci_facts(checkout: pathlib.Path) -> CiFacts:
             _read_workflow(workflow["parsed"], evidence)
         else:
             errors.append(f"{workflow['path']}: {workflow['error']}")
+    every_name = evidence.names | evidence.declared
     return {
         "errors": errors,
+        # An `env`-declared date is deliberately separate, so RT-027 does not
+        # compare it with the pin; RT-028 excuses the same shape.
         "dated_nightlies": sorted(n for n in evidence.names if _NIGHTLY.fullmatch(n)),
         "numeric_minors": sorted({
-            m for n in evidence.names if (m := minor_of(n)) is not None
+            m for n in every_name if (m := minor_of(n)) is not None
         }),
         "msrv_job": evidence.msrv_job,
         "reads_manifest_msrv": evidence.reads_manifest_msrv,

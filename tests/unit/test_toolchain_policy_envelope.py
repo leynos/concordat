@@ -1,4 +1,4 @@
-"""Specify the toolchain facts evaluated by the RT-022 to RT-027 policy."""
+"""Specify the toolchain facts evaluated by the RT-022 to RT-028 policy."""
 
 from __future__ import annotations
 
@@ -234,17 +234,52 @@ jobs:
 
 
 def test_the_workflows_toolchains_are_read_as_data(tmp_path: pathlib.Path) -> None:
-    """Toolchains come from steps and env references, and an MSRV job is spotted."""
+    """Inline toolchains are read, an env-declared one is separately pinned."""
     _write(tmp_path, "Cargo.toml", _MANIFEST)
     _write(tmp_path, ".github/workflows/ci.yml", _WORKFLOW)
 
     ci = _build(tmp_path)["ci"]
 
     assert ci["errors"] == [], ci
-    assert ci["dated_nightlies"] == ["nightly-2026-03-26", "nightly-2026-09-20"], ci
+    assert ci["dated_nightlies"] == ["nightly-2026-03-26"], ci
     assert ci["numeric_minors"] == ["1.85", "1.93"], ci
     assert ci["msrv_job"] is True, ci
     assert ci["reads_manifest_msrv"] is False, ci
+
+
+def test_the_dated_literal_facts_carry_both_files(tmp_path: pathlib.Path) -> None:
+    """RT-028 reads the workflow literal and the Makefile literal alike."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(tmp_path, "rust-toolchain.toml", _PIN)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        "jobs:\n  b:\n    steps:\n      - run: cargo +nightly-2026-10-30 test\n",
+    )
+    _write(tmp_path, "Makefile", "test:\n\tcargo +nightly-2026-10-30 test\n")
+
+    literals = _build(tmp_path)["literals"]
+
+    assert literals["reads_pin"] is True, literals
+    assert literals["errors"] == [], literals
+    assert [(f["kind"], f["path"], f["text"]) for f in literals["literals"]] == [
+        ("workflow", ".github/workflows/ci.yml", "nightly-2026-10-30"),
+        ("makefile", "Makefile", "nightly-2026-10-30"),
+    ], literals
+
+
+def test_an_unpinned_repository_reads_no_literals(tmp_path: pathlib.Path) -> None:
+    """Without a pin the envelope says so rather than reporting literals."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        "jobs:\n  b:\n    steps:\n      - run: cargo +nightly-2026-10-30 test\n",
+    )
+
+    literals = _build(tmp_path)["literals"]
+
+    assert literals == {"reads_pin": False, "literals": [], "errors": []}, literals
 
 
 def test_a_toolchain_in_a_comment_is_not_ci_using_it(tmp_path: pathlib.Path) -> None:

@@ -15,7 +15,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import packages, runner
+from concordat.rules import packages, rule_package, runner
 from concordat.rules.runner import run_rule
 from tests.unit.conftest_batch_support import invoke_conftest_batch
 from tests.unit.rule_test_support import (
@@ -613,7 +613,7 @@ class TestRulePackagesDirIsLazy:
         """`_rule_package_dir` resolves the tree, and caches the result."""
         real_root = packages._resolve_rule_packages_dir()
         resolve = mocker.patch.object(
-            packages,
+            rule_package,
             "_resolve_rule_packages_dir",
             autospec=True,
             return_value=real_root,

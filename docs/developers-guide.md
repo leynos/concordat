@@ -583,23 +583,25 @@ reverse:
 
 ## `concordat artefact rule run`
 
-`concordat/rules/runner.py`, `concordat/rules/packages.py`, and
-`concordat/rules/envelope.py` implement the rule-run subcommand exposed as
-`concordat artefact rule run <rule-id>`.
+`concordat/rules/runner.py`, `concordat/rules/packages.py`,
+`concordat/rules/rule_package.py`, and `concordat/rules/envelope.py` implement
+the rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
 
-The split is by question asked. `packages.py` answers three about a rule
-package without evaluating one: where its policy lives, what its manifest
-declares, and which policy-input envelope it is audited over. `runner.py`
-answers the fourth, what Conftest made of that envelope, and imports the rest.
-Where a test patches depends on what it is testing, and the answer is not
-simply "where the name is defined". `runner` imports `rule_package_dir` and
-`rule_parameters` into its own bindings, so a test of how `runner` uses them
-patches `runner._rule_package_dir` or `runner._rule_parameters`; patching
-`packages` leaves `runner`'s bindings pointing at the originals. `run_rule`
-captures `default_envelope_builder` as a default argument at definition time,
-so substituting the resolver means passing `envelope_builder=` rather than
-patching either module. Patch `packages` when testing the package helpers
-themselves, including the mappings and the manifest reader.
+The split is by question asked. `rule_package.py` answers two about a rule
+package without evaluating one: where its policy lives and what its manifest
+declares. `packages.py` answers which policy-input envelope the package is
+audited over, and re-exports the locate helpers so `runner` and the tests keep
+one boundary to import. `runner.py` answers the fourth question, what Conftest
+made of that envelope. Where a test patches depends on what it is testing, and
+the answer is not simply "where the name is defined". `runner` imports
+`rule_package_dir` and `rule_parameters` into its own bindings, so a test of how
+`runner` uses them patches `runner._rule_package_dir` or
+`runner._rule_parameters`; patching `packages` leaves `runner`'s bindings
+pointing at the originals. `run_rule` captures `default_envelope_builder` as a
+default argument at definition time, so substituting the resolver means passing
+`envelope_builder=` rather than patching either module. Patch `packages` when
+testing the envelope mappings, and `rule_package` when testing the locate and
+manifest helpers themselves.
 
 ### The policy envelope
 
@@ -1197,22 +1199,38 @@ than something a repository may configure.
 a `policy-input/rust-toolchain-policy` document from the pin (read by
 `inspect_toolchain`), the governed Cargo packages (from the shared surface
 resolver), the `rust-toolchain` entries of the Dependabot configuration (read
-through `build_dependabot_envelope`), the toolchains the workflows name, and
-any recorded exception (read by `find_exception_sections`). The builder takes
-"today" as a required argument and records it as `evaluated_on`, so neither it
-nor the policy reads a clock. The command boundary injects one: the registered
-resolver in `packages.py` reads `packages.today_provider` (by default
-`utc_today`), and a test replaces that provider to fix the date. The workflow
-facts (`toolchain_ci_facts.py`) are extracted from decoded YAML, not by
-searching text: a step's `uses` ref, its `with.toolchain` input (following a
-`${{ env.NAME }}` or `${{ matrix.NAME }}` reference, matrix `include` legs
-too), and `rustup` (`install`, `run`, `default`, `override set`) or
-`cargo +toolchain` commands in its `run`. A `src/lib.rs` that cannot be
-examined (an occupied path, a dangling link, a refusal) is carried as
-`lib_read_error` and makes RT-025 indeterminate for that crate; it is never
-read as the library's absence. A workflow that does not decode is recorded with
-its reason, which makes RT-026 and RT-027 indeterminate. The window and the
-accepted Dependabot intervals reach Conftest as `data.parameters`.
+through `build_dependabot_envelope`), the toolchains the workflows name, the
+dated nightlies the workflows and root `Makefile` spell out (read by
+`toolchain_literal_facts.py`), and any recorded exception (read by
+`find_exception_sections`). The builder takes "today" as a required argument
+and records it as `evaluated_on`, so neither it nor the policy reads a clock.
+The command boundary injects one: the registered resolver in `packages.py` reads
+`packages.today_provider` (by default `utc_today`), and a test replaces that
+provider to fix the date. The workflow facts (`toolchain_ci_facts.py`) are
+extracted from decoded YAML, not by searching text: a step's `uses` ref, its
+`with.toolchain` input (following a `${{ env.NAME }}` or `${{ matrix.NAME }}`
+reference, matrix `include` legs too), and `rustup` (`install`, `run`,
+`default`, `override set`) or `cargo +toolchain` commands in its `run`. A value
+reached through `env` is recorded as declared: binding it to a name is how a
+repository says the pin is deliberately separate, so RT-027 does not compare it
+with the pin. The literal reader walks the same decoded documents and adds each
+`run` command's toolchain selections, a toolchain action's ref and
+`with.toolchain`, and `makeutil`'s report of the root `Makefile`, judging a
+variable declaration per referenced name. It splits a `run` script into shell
+commands first, through `toolchain_literal_scan.py`, and reads the selection
+routes in `toolchain_literal_shell.py`, so a date an `echo` prints or a
+here-document feeds to a command is not a selection, an
+`export RUSTUP_TOOLCHAIN=...` is, a command substitution runs its own command,
+and a `+toolchain` override is only read as a program's argument. A
+`src/lib.rs` that cannot be examined (an occupied path, a dangling link, a
+refusal) is carried as `lib_read_error` and makes RT-025 indeterminate for that
+crate; it is never read as the library's absence. A workflow that does not
+decode is recorded with its reason, which makes RT-026 and RT-027
+indeterminate, and RT-028 too because that workflow could have named a date. A
+root `Makefile` the reader refuses, one `makeutil` parses only partially, or a
+recipe reference the Makefile never supplies, reaches RT-028 alone as an
+indeterminate finding; RT-026 and RT-027 do not read the Makefile. The window
+and the accepted Dependabot intervals reach Conftest as `data.parameters`.
 
 `dependabot-update-shape` takes its own as well. `build_dependabot_envelope` (in
 `dependabot_envelope.py`) assembles a `policy-input/dependabot-update-shape`
