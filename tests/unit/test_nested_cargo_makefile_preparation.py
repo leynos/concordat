@@ -112,6 +112,11 @@ def test_a_checkout_with_no_makefile_preparation_is_reported(
             "test: warm tools\n\tcargo nextest run\n\n"
             "warm:\n\tcargo build\n\ntools:\n\tcargo fmt\n"
         ),
+        # A simple variable assigned after what it reads is still read in order.
+        (
+            ".PHONY: test prewarm\nSUFFIX := warm\nT := pre$(SUFFIX)\n"
+            "$(T):\n\tcargo build\ntest: prewarm\n\tcargo nextest run\n"
+        ),
         # A target name that settles to a plain word is filed under that word,
         # so `$(T)` is the `prepare` rule the test waits on.
         (
@@ -154,6 +159,16 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         (
             ".PHONY: test pre prewarm\nT = $(SUFFIX)\npre$(T):\n\tcargo build\n"
             "SUFFIX := warm\ntest: prewarm\n\tcargo nextest run\n"
+        ),
+        # A simple variable fixes its value where it is assigned, before `SUFFIX`.
+        (
+            ".PHONY: test pre prewarm\nT := pre$(SUFFIX)\nSUFFIX := warm\n"
+            "$(T):\n\tcargo build\ntest: prewarm\n\tcargo nextest run\n"
+        ),
+        # A name that is itself built by expansion is not read.
+        (
+            ".PHONY: test prewarm\nK := T\nT := prewarm\n$($(K)):\n\tcargo build\n"
+            "test: prewarm\n\tcargo nextest run\n"
         ),
         # A prerequisite is expanded where the rule is read too.
         (

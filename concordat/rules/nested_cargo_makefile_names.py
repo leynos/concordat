@@ -17,6 +17,7 @@ another value from them than from Make, and the Makefile is not read.
 
 from __future__ import annotations
 
+import itertools
 import re
 import typing as typ
 
@@ -32,6 +33,9 @@ if typ.TYPE_CHECKING:
 # for the targets it names), so a build before the tests no longer gates them.
 UNSAFE_SPECIAL_TARGETS: typ.Final = frozenset({".ONESHELL", ".IGNORE"})
 _REFERENCE: typ.Final = re.compile(r"\$\(([^()$]+)\)|\$\{([^{}$]+)\}|\$([A-Za-z_])")
+# A reference whose own name is built by expansion: `$($(K))`.
+_COMPUTED: typ.Final = re.compile(r"\$[({][^)}]*\$[({]")
+_SIMPLE_OPERATORS: typ.Final = frozenset({":=", "::=", ":::=", "!="})
 
 
 def _settled_words(name: str, values: cabc.Mapping[str, str]) -> list[str]:
@@ -120,24 +124,67 @@ def named_variables(
     )
 
 
-def _first_lines(variables: cabc.Sequence[MakeVariable]) -> dict[str, int]:
-    """Return the line of each variable's first assignment."""
-    first: dict[str, int] = {}
+class _Assignment(typ.NamedTuple):
+    """Hold where a variable is first assigned and whether its value is fixed then."""
+
+    line: int
+    is_simple: bool
+
+
+def _first_assignments(
+    variables: cabc.Sequence[MakeVariable],
+) -> dict[str, _Assignment]:
+    """Return each variable's first assignment."""
+    first: dict[str, _Assignment] = {}
     for variable in variables:
         name = str(variable.get("name", ""))
         line = variable.get("location", {}).get("start_line", 0)
-        first[name] = min(line, first.get(name, line))
+        current = first.get(name)
+        if current is None or line < current.line:
+            is_simple = variable.get("operator") in _SIMPLE_OPERATORS
+            first[name] = _Assignment(line, is_simple)
     return first
 
 
-def _is_read_late(
-    text: str,
-    line: int,
-    values: cabc.Mapping[str, str],
-    first: cabc.Mapping[str, int],
-) -> bool:
-    """Return whether a name reads a variable assigned on or after its rule."""
-    return any(first.get(word, 0) >= line for word in _variables_behind(text, values))
+def _has_computed_reference(text: str) -> bool:
+    """Return whether a text names a variable by expansion (`$($(K))`)."""
+    return _COMPUTED.search(text) is not None
+
+
+class _ReadOrder:
+    """Judge whether a name reads variables that Make had not yet assigned.
+
+    Make expands a recursive (`=`) value where it is used and a simple (`:=`)
+    value where it is assigned, so what a simple variable reads is judged against
+    its own assignment, and what a recursive one reads against the rule.
+    """
+
+    def __init__(
+        self, values: cabc.Mapping[str, str], variables: cabc.Sequence[MakeVariable]
+    ) -> None:
+        """Index the assignments of the Makefile."""
+        self.values = values
+        self.first = _first_assignments(variables)
+
+    def is_late(self, text: str, line: int) -> bool:
+        """Return whether *text*, read on *line*, reads a variable assigned later."""
+        return _has_computed_reference(text) or any(
+            self._is_word_late(word, line, frozenset()) for word in _references(text)
+        )
+
+    def _is_word_late(self, word: str, line: int, trail: frozenset[str]) -> bool:
+        """Return whether *word*, or a variable its value reads, is assigned late."""
+        assigned = self.first.get(word)
+        if assigned is None or word in trail:
+            return False
+        if assigned.line >= line:
+            return True
+        value = self.values.get(word, "")
+        at = assigned.line if assigned.is_simple else line
+        return _has_computed_reference(value) or any(
+            self._is_word_late(inner, at, trail | {word})
+            for inner in _references(value)
+        )
 
 
 def has_unsafe_reading(
@@ -156,10 +203,8 @@ def has_unsafe_reading(
     """
     if any(may_be_special(name, values) for name in index if "$" in name):
         return True
-    first = _first_lines(variables)
-    return any(
-        _is_read_late(text, line, values, first) for text, line in _readings(index)
-    )
+    order = _ReadOrder(values, variables)
+    return any(itertools.starmap(order.is_late, _readings(index)))
 
 
 def may_be_special(name: str, values: cabc.Mapping[str, str]) -> bool:
