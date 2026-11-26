@@ -41,9 +41,9 @@ import dataclasses
 import re
 import typing as typ
 
-from .makefile_expansion import Assignments, shown, single_assignments
+from .makefile_expansion import shown, single_assignments
 from .makefile_tool_paths import read_tool_paths
-from .nested_cargo_make_options import PLAIN_GOAL, unreliable_make
+from .nested_cargo_make_calls import MakeCall, make_call, overlaid
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_names import (
     named_variables,
@@ -65,7 +65,7 @@ from .nested_cargo_pass_signature import (
     read_invocation,
 )
 from .nested_cargo_pass_words import has_unresolved_command_word
-from .nested_cargo_scripts import TEST_TARGET, command_words
+from .nested_cargo_scripts import TEST_TARGET
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -80,7 +80,6 @@ COMPILED: typ.Final = "compiled"
 UNPREPARED: typ.Final = "unprepared"
 INDETERMINATE: typ.Final = "indeterminate"
 _SHOWN_COMMAND_LENGTH: typ.Final = 120
-_OVERRIDE: typ.Final = "="
 _RUNNER: typ.Final = re.compile(
     r"(?<![\w\"'-])cargo(?:-nextest)?\s+(?:\+\S+\s+)?(?:nextest|test|ntr|build|bench)\b"
 )
@@ -135,14 +134,6 @@ class Prepared:
     signature: Signature
     is_warmed: bool
     targets: tuple[str, ...] = ()
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class MakeCall:
-    """Hold the one target a recipe's `make` command runs, and what it overrides."""
-
-    goal: str
-    overrides: dict[str, str]
 
 
 class _Verdict(typ.NamedTuple):
@@ -234,65 +225,6 @@ def _shown(text: str) -> str:
     if len(flat) <= _SHOWN_COMMAND_LENGTH:
         return flat
     return flat[: _SHOWN_COMMAND_LENGTH - 3] + "..."
-
-
-def make_call(text: str) -> MakeCall | None:
-    """Read a `make goal [VAR=value ...]` command into the target it runs.
-
-    Only the form the walk models exactly counts: one plain goal and no option
-    that diverts, touches, asks or ignores errors. A `VAR=value` word is an
-    override for the goal's own recipes, which is how a repository hands each
-    pass's flags to one preparation target.
-
-    Returns
-    -------
-    MakeCall | None
-        The goal and its overrides, or None for any other command or shape.
-    """
-    words = command_words(text)
-    if not words or not _is_make(words[0]):
-        return None
-    arguments = words[1:]
-    if unreliable_make(arguments):
-        return None
-    goals = _goals(arguments)
-    if len(goals) != 1 or not PLAIN_GOAL.fullmatch(goals[0]):
-        return None
-    return MakeCall(goals[0], _overrides(arguments))
-
-
-def _is_make(word: str) -> bool:
-    """Return whether the command word is `make`, by any path."""
-    return word.lstrip("@-+").rsplit("/", 1)[-1] == "make"
-
-
-def _is_override(word: str) -> bool:
-    """Return whether *word* is a `VAR=value` override, not an option."""
-    return _OVERRIDE in word and not word.startswith("-")
-
-
-def _goals(arguments: list[str]) -> list[str]:
-    """Return the goals among a make command's arguments."""
-    return [
-        word
-        for word in arguments
-        if not word.startswith("-") and not _is_override(word)
-    ]
-
-
-def _overrides(arguments: list[str]) -> dict[str, str]:
-    """Return the `VAR=value` overrides among a make command's arguments."""
-    return {
-        word.partition(_OVERRIDE)[0]: word.partition(_OVERRIDE)[2]
-        for word in arguments
-        if _is_override(word)
-    }
-
-
-def _overlaid(values: cabc.Mapping[str, str], overrides: dict[str, str]) -> Assignments:
-    """Return *values* with the command-line *overrides*, which beat the Makefile."""
-    assigned = getattr(values, "assigned", frozenset())
-    return Assignments({**values, **overrides}, [*assigned, *overrides])
 
 
 _OPENS_CONDITIONAL: typ.Final = frozenset({
@@ -661,7 +593,7 @@ class _Walk:
         list[Prepared]
             What the goal certainly prepared.
         """
-        nested = MakefileReader(self.index, _overlaid(reader.values, call.overrides))
+        nested = MakefileReader(self.index, overlaid(reader.values, call.overrides))
         return self.target(call.goal, seen, nested)
 
     def _unread(
