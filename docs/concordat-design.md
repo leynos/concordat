@@ -1871,6 +1871,7 @@ the dependency-pin actionability checks.
 | NS-002       | No Python file in a test tree (`tests`, `test`, `unittests`) is selected by the scan, whatever the roots are.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Quality-Gate Integrity          | Conftest (`python-duplication-gate`)                                | error                | 2                        |
 | NS-003       | Every `[tool.nose]` scan root exists and selects at least one Python file after `exclude`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Quality-Gate Integrity          | Conftest (`python-duplication-gate`)                                | error                | 2                        |
 | NS-004       | `pyproject.toml` and `[tool.nose]` can be read and have the shape the scan needs; otherwise the scope is indeterminate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Quality-Gate Integrity          | Conftest (`python-duplication-gate`)                                | error                | 2                        |
+| GC-001       | The commands a gate runs for `cargo clippy`, `cargo nextest run`, `cargo test` (doctests apart) and Whitaker together select every workspace member, less crates exempted by repository and name with a rationale and a review trigger.                                                                                                                                                                                                                                                                                                                                                                                             | Quality-Gate Integrity          | Conftest (`gate-workspace-coverage`)                                | warning              | 2                        |
 | TE-001       | Every workspace member's effective Clippy configuration (the nearest `.clippy.toml` or `clippy.toml`, as Clippy loads it) disallows `std::env::set_var`, `std::env::remove_var` and `std::env::set_current_dir`.                                                                                                                                                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | Conftest (`rust-test-environment`)                                  | error                | 2                        |
 | TE-002       | Where a member depends on `temp_env`, `env-lock` or figment's `Jail`, its configuration also disallows that crate's environment-changing entry points.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Quality-Gate Integrity          | Conftest (`rust-test-environment`)                                  | error                | 2                        |
 | TE-003       | `clippy::disallowed_methods` is suppressed only by `#[expect(.., reason = "..")]` on the function or statement that needs it: no `allow`, no reasonless or blank reason, no crate- or module-level `expect`, no group `allow` or `expect`.                                                                                                                                                                                                                                                                                                                                                                                          | Quality-Gate Integrity          | Conftest (`rust-test-environment`)                                  | error                | 2                        |
@@ -3267,6 +3268,43 @@ No clause is waivable: the `expect` and its reason are the waiver, and they sit
 at the site. `set_current_dir` is one entry in the `required_paths` parameter,
 so dropping it is a change to that default. The audit does not check that CI
 runs Clippy over test targets; it keeps the lint on, not the gate that runs it.
+
+##### Gate workspace coverage
+
+`gate-workspace-coverage` (GC-001) holds a Rust repository's gate to selecting
+every workspace member with each package-selecting tool it runs: `cargo clippy`,
+`cargo nextest run`, `cargo test` (doctests judged apart) and Whitaker. It
+exists because the narrowing is silent. In a workspace whose root is also a
+package a bare command selects the root package alone, and `default-members` or
+a `-p` list narrow further, so a gate reads green over a fraction of the
+workspace. Whitaker skipped every non-root member of the estate's workspaces
+for months this way (DF12-120). A rollout is done when the tool's coverage is
+shown, not when the gate passes.
+
+Three design choices. First, the member set is Cargo's, not a directory
+listing: the root package, the `members` globs less `exclude`, and the crates
+inside the root that a member depends on by path, read by the same walk as
+`rust-test-environment` so the two rules agree. Second, coverage is judged per
+tool over the union of its commands: a tool is covered when its commands
+together select every member, so the Whitaker repository's two runs (the
+workspace, then the two crates whose deliberately violating fixtures it cannot
+scope in place) are compliant while a lone `--exclude` is not, unless the crate
+is exempted by repository and name with a rationale and a review trigger.
+Third, the reader never guesses. A wrapper script, an unresolved word that
+could select packages, another directory or manifest, a matrix computed by an
+expression and a Makefile walk that skipped a target are indeterminate
+(EN-001), because a confident verdict about commands the audit could not read
+is the failure a fail-closed audit exists to avoid.
+
+Cargo's `--all` is `--workspace`. Whitaker's own `--all` and `--lib NAME`
+select lint libraries, and it forwards every other option, before or after
+`--`, to Cargo, so `--workspace` counts on either side of the separator and
+`--all` does not. Matrix entries are read as commands of their own, so a gate
+that varies its cargo flags by matrix is judged on what it runs. The finding
+names the fenced examples in `AGENTS.md` and `docs/` that show the same
+narrowing, because a fix that leaves them behind is copied back into every
+contributor's shell. The rule ships at `warning` severity as a survey and is
+raised to `error` once the estate reads clean.
 
 ##### Duplication gate scope
 

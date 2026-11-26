@@ -1538,6 +1538,39 @@ object, or run a subprocess with `Command::env` and `Command::current_dir`. See
 the
 [rule reference](../platform-standards/canon/lint-rules/rust-test-environment/README.md).
 
+### Auditing gate workspace coverage (Rust)
+
+The `gate-workspace-coverage` package audits that every package-selecting
+command a Rust repository's gate runs selects every workspace member:
+
+```shell
+concordat artefact rule run gate-workspace-coverage --repo /path/to/checkout
+```
+
+It applies when the root has a `Cargo.toml` with more than one workspace
+member. Four tools narrow silently, and the rule holds each one the gate runs
+to the same standard: `cargo clippy`, `cargo nextest run`, `cargo test` (with
+`--doc` judged apart) and Whitaker. In a workspace whose root is also a
+package, a bare command selects the root package alone; `default-members` and a
+`-p` list narrow further.
+
+- **GC-001**: the commands of a tool leave members out. The finding names the
+  members, the commands that narrow them, and the fenced examples in
+  `AGENTS.md` and `docs/` that show the same narrowing. Select the workspace
+  with `--workspace` or `--all` (for Whitaker, `--workspace` on either side of
+  the `--`; its own `--all` selects lint libraries), or exempt a crate by name
+  in the rule's parameters with a rationale and a review trigger.
+- **EN-001** (indeterminate): a command the audit cannot place is not guessed.
+  That covers a wrapper script, an unresolved word that could select packages,
+  a command run after `cd` or against another manifest, a matrix computed by an
+  expression, and a Makefile walk that skipped a target.
+
+The gate is the Makefile's `lint` and `test` targets with their prerequisites
+and every workflow and composite-action `run` step, with each matrix entry read
+as a command. The rule ships at `warning` severity; the `severity` parameter
+raises it to `error`. See the
+[rule reference](../platform-standards/canon/lint-rules/gate-workspace-coverage/README.md).
+
 ### Auditing documentation presence (Python and Rust)
 
 The `documentation-presence` package audits the interrogate gate that keeps

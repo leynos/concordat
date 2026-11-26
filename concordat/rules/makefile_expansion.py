@@ -62,7 +62,7 @@ _ERROR_CALL: typ.Final = re.compile(r"\$\(error\s")
 _PURE_FUNCTIONS: typ.Final = (
     "if", "or", "and", "not", "strip", "findstring", "filter", "filter-out",
     "subst", "patsubst", "word", "words", "firstword", "lastword", "sort",
-    "dir", "notdir", "basename", "suffix", "join", "wordlist",
+    "dir", "notdir", "basename", "suffix", "join", "wordlist", "addprefix", "addsuffix",
 )  # fmt: skip
 # The opening of a call to one of those: `$(if `, `${strip ` and so on.
 _PURE_CALL_OPEN: typ.Final = re.compile(
@@ -384,6 +384,44 @@ def _drop_error_guards(
     return text
 
 
+_AFFIX_CALL: typ.Final = re.compile(r"\$\((addprefix|addsuffix)\s")
+
+
+def _is_settled_call(body: str, commas: list[int]) -> bool:
+    """Return whether an affix call has two arguments and no reference left."""
+    holds_reference = "$" in body or SHELL_DOLLAR in body
+    return len(commas) == 1 and not holds_reference
+
+
+def _evaluate_affixes(text: str) -> str:
+    """Evaluate each `$(addprefix P,words)` and `$(addsuffix S,words)` that is settled.
+
+    Make keeps the affix as written, trailing space included, so
+    `$(addprefix --exclude ,a b)` is `--exclude a --exclude b`. A call whose
+    arguments still hold a reference is left for a later pass, and ends up
+    unresolved if none settles it.
+
+    Returns
+    -------
+    str
+        *text* with the settled calls replaced by their results.
+    """
+    position = 0
+    while (match := _AFFIX_CALL.search(text, position)) is not None:
+        close = close_of(text, match.start() + 1)
+        body = text[match.end() : close] if close is not None else ""
+        commas = top_level_commas(body)
+        if close is None or not _is_settled_call(body, commas):
+            position = match.end()
+            continue
+        affix, words = body[: commas[0]], body[commas[0] + 1 :].split()
+        is_prefix = match.group(1) == "addprefix"
+        result = " ".join(f"{affix}{w}" if is_prefix else f"{w}{affix}" for w in words)
+        text = text[: match.start()] + result + text[close + 1 :]
+        position = match.start()
+    return text
+
+
 def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     """Substitute `$(NAME)` references until the text settles.
 
@@ -412,14 +450,16 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
 
     current = text.replace("$$", SHELL_DOLLAR)
     for _ in range(EXPANSION_PASSES):
-        updated = _FILTER_CALL.sub(
-            _call_filter,
-            _FUNCTION_CALL.sub(
-                _call_function,
-                _VARIABLE_REFERENCE.sub(
-                    substitute, _drop_error_guards(current, known, assigned)
+        updated = _evaluate_affixes(
+            _FILTER_CALL.sub(
+                _call_filter,
+                _FUNCTION_CALL.sub(
+                    _call_function,
+                    _VARIABLE_REFERENCE.sub(
+                        substitute, _drop_error_guards(current, known, assigned)
+                    ),
                 ),
-            ),
+            )
         )
         if updated == current:
             break

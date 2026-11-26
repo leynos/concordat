@@ -1,0 +1,84 @@
+schema_version: 1
+id: gate-workspace-coverage
+name: Gate commands select the whole workspace
+description: >-
+  Audits that every package-selecting command a Rust repository's gate runs
+  selects every workspace member (GC-001). Four tools narrow silently: `cargo
+  clippy`, `cargo nextest run`, `cargo test` (with and without `--doc`) and
+  Whitaker. In a workspace whose root is also a package a bare command selects
+  the root package alone, and `workspace.default-members` or a `-p` list narrow
+  further, so a gate can read green over a fraction of the workspace. The
+  members a tool's commands select together must be the whole workspace, less
+  crates the rule's parameters exempt by repository and name with a rationale
+  and a review trigger. Cargo spells the whole workspace `--workspace` or its
+  alias `--all`; for Whitaker only `--workspace` counts (on either side of the
+  `--`), because its own `--all` selects lint libraries. The gate is the Makefile's `lint` and
+  `test` targets, followed through their prerequisites and `make` commands, and
+  every `run` step of every workflow and composite action, with each matrix
+  entry read as a command of its own. A tool the gate does not run is not
+  required. A command the audit cannot place (a wrapper script, an unresolved
+  word that could select packages, another directory or manifest, a matrix
+  computed by an expression, a Makefile walk that skipped a target) makes the
+  tool indeterminate (EN-001), never a guess. The finding names the narrowing
+  commands and the fenced examples in `AGENTS.md` and `docs/` that show the same
+  narrowing. Only the root workspace is audited; a repository with no root
+  `Cargo.toml` is not. The rule ships at `warning` severity so the estate can be
+  surveyed before it blocks. Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/gate-workspace-coverage
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every GC-001 finding, and of the indeterminate
+          findings that report evidence the reader could not establish. An
+          envelope defect is always `error`: it says the rule could not run,
+          not that the repository is unsafe. A `warning` finding is reported
+          but does not block; promotion to `error` is the intended end state
+          once the estate survey is clean.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, crate, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            crate:
+              type: string
+            tools:
+              type: array
+              items:
+                type: string
+                enum: [clippy, nextest, test, test-doc, whitaker]
+            rationale:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Workspace members the gate may leave out, each with its repository
+          (`owner/name`, read from the `origin` remote), the crate's package
+          name, the tools it applies to (all of them when absent), the
+          rationale and the review trigger (the event after which the
+          exemption is revisited). Both text fields must be non-blank; the
+          policy ignores an entry that leaves either blank, because an
+          exemption nobody must revisit is not a record. A crate another
+          command of the same tool already covers needs no entry.
+  defaults:
+    severity: warning
+    exemptions: []
