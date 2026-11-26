@@ -475,6 +475,11 @@ _SHELL_CONTROL: typ.Final = re.compile(
 )
 
 
+def _is_errexit(flags: str) -> bool:
+    """Return whether shell flags turn errexit on and no `+` option can undo it."""
+    return "+" not in flags and bool(_ERREXIT.search(flags))
+
+
 def _is_plain_line(line: str) -> bool:
     """Return whether a recipe line holds no shell control word or open bracket.
 
@@ -510,8 +515,7 @@ def _gated_one_shell(
     """
     # GNU Make reads `.SHELLFLAGS`; the older `SHELLFLAGS` name is not one.
     flags = values.get(".SHELLFLAGS", "")
-    # A `+` option (`+e`) switches an option off, so the final state is unclear.
-    if ".ONESHELL" not in index or "+" in flags or not _ERREXIT.search(flags):
+    if ".ONESHELL" not in index or not _is_errexit(flags):
         return frozenset()
     if not all(_is_plain_line(line) for line in _recipe_lines(index)):
         return frozenset()
