@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import typing as typ
 
+import pytest
+
 from concordat.rules.nested_cargo_cold_envelope import build_nested_cargo_cold_envelope
 
 if typ.TYPE_CHECKING:
@@ -89,6 +91,37 @@ def test_a_test_table_names_the_target_of_its_own_path(
         },
     )
     assert targets(tmp_path) == {"tests/ui.rs": ["contract"]}
+
+
+@pytest.mark.parametrize(
+    ("tables", "source", "expected"),
+    [
+        (
+            (
+                'name = "a"\npath = "tests/ui.rs"\n\n'
+                '[[test]]\nname = "b"\npath = "tests/ui.rs"\n'
+            ),
+            "tests/ui.rs",
+            ["a", "b"],
+        ),
+        ('name = "a"\npath = "tests/../tests/ui.rs"\n', "tests/ui.rs", ["a"]),
+        ('name = "ui"\n', "tests/ui/main.rs", ["ui"]),
+    ],
+)
+def test_test_tables_share_normalise_and_default_their_paths(
+    tmp_path: pathlib.Path, tables: str, source: str, expected: list[str]
+) -> None:
+    """Each table is a target of its own; paths are normalised; no path is a default."""
+    checkout(
+        tmp_path,
+        {
+            "Cargo.toml": (
+                f'[package]\nname = "app"\nautotests = false\n\n[[test]]\n{tables}'
+            ),
+            source: TRYBUILD_TEST,
+        },
+    )
+    assert targets(tmp_path) == {source: expected}
 
 
 def test_a_file_no_test_table_names_stays_unknown_in_a_named_crate(

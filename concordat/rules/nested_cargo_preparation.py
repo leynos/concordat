@@ -22,6 +22,7 @@ is paid for, which is what a maintainer reading a timeout needs to find.
 from __future__ import annotations
 
 import dataclasses
+import posixpath
 import re
 import typing as typ
 
@@ -125,39 +126,45 @@ class Preparation:
     gates: Gates
     is_makefile_prepared: bool = False
     named_test_crates: frozenset[str] = frozenset()
-    declared_tests: cabc.Mapping[str, str] = dataclasses.field(default_factory=dict)
+    declared_tests: cabc.Mapping[str, frozenset[str]] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 def declared_tests(
     checkout: pathlib.Path, manifests: cabc.Mapping[pathlib.Path, Manifest]
-) -> dict[str, str]:
-    """Return each `[[test]]` table's source path, root-relative, and its name.
+) -> dict[str, frozenset[str]]:
+    """Return each `[[test]]` table's source paths, root-relative, with its names.
+
+    Several tables may name one path, each a target of its own, and a table with
+    no path is `tests/<name>.rs` or `tests/<name>/main.rs`, whichever exists.
 
     Returns
     -------
-    dict[str, str]
-        The path (`tests/<name>.rs` when the table gives none) to the target name.
+    dict[str, frozenset[str]]
+        Each normalised path to the names of the targets built from it.
     """
-    found: dict[str, str] = {}
+    found: dict[str, set[str]] = {}
     for path, document in manifests.items():
         tables = document.get("test")
         for table in tables if isinstance(tables, list) else []:
-            declared = _test_table(table)
-            if declared is not None:
-                relative = (path.parent / declared[1]).relative_to(checkout)
-                found[relative.as_posix()] = declared[0]
-    return found
+            for name, source in _test_table(table):
+                crate = path.parent.relative_to(checkout).as_posix()
+                relative = posixpath.normpath(posixpath.join(crate, source))
+                if not relative.startswith(".."):
+                    found.setdefault(relative, set()).add(name)
+    return {key: frozenset(names) for key, names in found.items()}
 
 
-def _test_table(table: object) -> tuple[str, str] | None:
-    """Return a `[[test]]` table's name and source path, or None when unnamed."""
-    if not isinstance(table, dict):
-        return None
-    name = table.get("name")
-    if not isinstance(name, str):
-        return None
+def _test_table(table: object) -> list[tuple[str, str]]:
+    """Return a `[[test]]` table's name with each source path it may mean."""
+    name = table.get("name") if isinstance(table, dict) else None
+    if not isinstance(name, str) or not isinstance(table, dict):
+        return []
     given = table.get("path")
-    return name, given if isinstance(given, str) else f"tests/{name}.rs"
+    if isinstance(given, str):
+        return [(name, given)]
+    return [(name, f"tests/{name}.rs"), (name, f"tests/{name}/main.rs")]
 
 
 def named_test_crates(
@@ -469,7 +476,7 @@ def collect_builds(
 def _test_targets(
     path: str,
     roots: list[str],
-    declared: cabc.Mapping[str, str],
+    declared: cabc.Mapping[str, frozenset[str]],
     *,
     is_named: bool,
 ) -> list[str] | None:
@@ -499,9 +506,11 @@ def _test_targets(
     return sorted(names)
 
 
-def _target_names(sources: list[str], declared: cabc.Mapping[str, str]) -> set[str]:
-    """Return the target names of *sources*: a table's name, else the file's."""
-    named = {declared[source] for source in sources if source in declared}
+def _target_names(
+    sources: list[str], declared: cabc.Mapping[str, frozenset[str]]
+) -> set[str]:
+    """Return the target names of *sources*: each table's names, else the file's."""
+    named = {name for source in sources for name in declared.get(source, ())}
     by_file = (
         found["name"]
         for source, found in ((s, _TARGET_NAME.search(s)) for s in sources)
@@ -510,7 +519,9 @@ def _target_names(sources: list[str], declared: cabc.Mapping[str, str]) -> set[s
     return named | set(by_file)
 
 
-def _owners(path: str, roots: list[str], declared: cabc.Mapping[str, str]) -> list[str]:
+def _owners(
+    path: str, roots: list[str], declared: cabc.Mapping[str, frozenset[str]]
+) -> list[str]:
     """Return the file and the roots that own it, without guessed roots.
 
     A `[[test]]` table that gives its own path leaves `tests/<name>.rs` a root
@@ -522,5 +533,7 @@ def _owners(path: str, roots: list[str], declared: cabc.Mapping[str, str]) -> li
         The file's own path, then each root that is a real owner.
     """
     prefix = path[: path.find("tests/")] if "tests/" in path else ""
-    guessed = {f"{prefix}tests/{name}.rs" for name in declared.values()}
+    guessed = {
+        f"{prefix}tests/{name}.rs" for names in declared.values() for name in names
+    }
     return [path, *(r for r in roots if r in declared or r not in guessed)]

@@ -571,6 +571,7 @@ _ONESHELL_RECIPE = (
         (".ONESHELL:\n.SHELLFLAGS := -eo pipefail -c\n", ["warmed"]),
         (".ONESHELL:\n", ["indeterminate"]),
         (".ONESHELL:\n.SHELLFLAGS := -c\n", ["indeterminate"]),
+        (".ONESHELL:\nSHELLFLAGS := -ec\n", ["indeterminate"]),
     ],
 )
 def test_one_shell_is_read_only_when_every_line_still_stops_on_failure(
@@ -582,14 +583,19 @@ def test_one_shell_is_read_only_when_every_line_still_stops_on_failure(
     assert found[-1:] == statuses_found
 
 
-def test_one_shell_is_not_read_when_a_line_opens_a_compound_command(
-    tmp_path: pathlib.Path,
+@pytest.mark.parametrize(
+    "lines",
+    [
+        "\tif true; then\n\t\tcargo test --all-features\n\tfi\n",
+        "\tif false; then :\n\tcargo test --all-features\n\t:; fi\n",
+        "\tset +e\n\tcargo test --all-features\n",
+    ],
+)
+def test_one_shell_is_not_read_when_a_line_changes_what_the_next_does(
+    tmp_path: pathlib.Path, lines: str
 ) -> None:
-    """A recipe line that ends in `then` carries its branch across lines."""
-    makefile = (
-        ".ONESHELL:\n.SHELLFLAGS := -eo pipefail -c\n"
-        "test:\n\tif true; then\n\t\tcargo test --all-features\n\tfi\n"
-    )
+    """A construct left open, or errexit switched off, carries across lines."""
+    makefile = f".ONESHELL:\n.SHELLFLAGS := -eo pipefail -c\ntest:\n{lines}"
     checkout(tmp_path, makefile)
     assert [fact["status"] for fact in makefile_passes(tmp_path)] == ["indeterminate"]
 
