@@ -38,7 +38,7 @@ from .gate_scope_commands import (
     read_commands,
     settle,
 )
-from .gate_scope_shell import Branch
+from .gate_scope_shell import Branch, runnable
 from .gate_scope_workflow_model import Place, logical_lines, places, step_runs
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
@@ -190,7 +190,9 @@ def _read_line(
     found, after = read_commands(segments, where, state)
     # Each command is judged alone: a recognised `cargo clippy` beside an
     # unresolved `$(RUNNER) test` does not make the second readable.
-    is_unreadable = any(_hides_tool(words) for words in segments)
+    # A command in a branch that cannot run hides nothing.
+    can_run = [words for words, _ in runnable(segments, state)[0]]
+    is_unreadable = any(_hides_tool(words) for words in can_run)
     return found, not is_unreadable, after
 
 

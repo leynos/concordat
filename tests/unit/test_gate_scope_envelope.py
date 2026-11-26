@@ -834,6 +834,22 @@ class TestEleventhReview:
         assert by_flag == {True: False, False: True}
 
 
+class TestTwelfthReview:
+    """Behaviours a thirteenth review showed to be missing."""
+
+    def test_a_variable_command_in_a_skipped_branch_is_not_unreadable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`if false` never runs `cargo $$RUNNER`, so it hides nothing."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n\tif false; then\n"
+            "\t  cargo $$RUNNER -p b\n\tfi\n\tcargo test --workspace\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["unreadable"] == []
+        assert [i["workspace_flag"] for i in envelope["invocations"]] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 
