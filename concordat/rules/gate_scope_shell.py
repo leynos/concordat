@@ -102,9 +102,9 @@ def _next_test(state: ShellState, words: list[str]) -> _Advance:
     verdict = _truth(words[1:])
     uid, count = current.uid, state.count
     if verdict is None and uid < 0:
-        # An unknown test that follows a constant one starts a fork of its own.
+        # An unknown test that follows a constant one is a condition of its own;
+        # it is a fork only if an `elif` or `else` follows it.
         uid, count = count, count + 1
-        forks |= {uid}
     branch = Branch(verdict is True, verdict is not False, uid)
     moved = state._replace(branches=(*outer, branch), forks=forks, count=count)
     runs = verdict is None and _is_live(moved.branches)

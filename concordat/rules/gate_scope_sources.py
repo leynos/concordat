@@ -38,6 +38,7 @@ from .gate_scope_commands import (
     read_commands,
     settle,
 )
+from .gate_scope_shell import Branch
 from .gate_scope_workflow_model import Place, logical_lines, places, step_runs
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
@@ -358,8 +359,9 @@ def _shell_before(
     A line whose readings do not match an earlier line's (more of them, which
     have no state of their own, or fewer, which merge several) cannot tell which
     earlier probe branch ran, and a `cd nested` may be the one, so it starts as
-    moved if any earlier reading moved, and keeps the open `if` blocks of the
-    first reading that has any, so a skipped branch stays skipped.
+    moved if any earlier reading moved. It keeps the open `if` blocks when the
+    readings agree on them, so a skipped branch stays skipped, and makes them
+    forks when they disagree.
 
     Returns
     -------
@@ -370,11 +372,24 @@ def _shell_before(
     if position in state_by_reading and readings == len(state_by_reading):
         return state_by_reading[position]
     states = list(state_by_reading.values())
+    count = max((state.count for state in states), default=0)
+    branches = states[0].branches if states else ()
+    forks = frozenset().union(*(state.forks for state in states))
+    if any(state.branches != branches for state in states):
+        # The readings disagree on which `if` blocks are open or can run, so
+        # every open block is a condition the probe decides: its commands are
+        # indeterminate, as those of a fork are.
+        branches = tuple(
+            Branch(taken=False, active=True, uid=count + depth)
+            for depth, _ in enumerate(max((s.branches for s in states), key=len))
+        )
+        forks |= {branch.uid for branch in branches}
+        count += len(branches)
     return ShellState(
         moved=any(state.moved for state in states),
-        branches=next((state.branches for state in states if state.branches), ()),
-        forks=frozenset().union(*(state.forks for state in states)),
-        count=max((state.count for state in states), default=0),
+        branches=branches,
+        forks=forks,
+        count=count,
     )
 
 

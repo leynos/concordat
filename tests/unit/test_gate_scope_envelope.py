@@ -733,6 +733,40 @@ class TestSeventhReview:
         assert [i["workspace_flag"] for i in found] == [True]
 
 
+class TestEighthReview:
+    """Behaviours a ninth review showed to be missing."""
+
+    def test_a_probe_in_an_if_condition_makes_its_body_indeterminate(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The probe may make the condition `false`, so `-p app` may not run."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n"
+            "\tif $(if $(shell cargo nextest --version 2>/dev/null),true,false);"
+            " then\n\t  cargo test -p app\n\tfi\n\tcargo test -p b\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        by_packages = {tuple(i["packages"]): i["resolved"] for i in found}
+        assert by_packages == {("app",): False, ("b",): True}
+
+    def test_an_unknown_elif_with_nothing_after_it_is_not_a_fork(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`if false; elif test; then X; fi` runs X on some run and has no rival."""
+        body = (
+            "          if false; then\n            :\n"
+            "          elif test -f flag; then\n            cargo test --workspace\n"
+            "          fi\n"
+        )
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: |\n" + body
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        found = _build(tmp_path, files)["invocations"]
+        assert [i["resolved"] for i in found] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 
