@@ -112,6 +112,12 @@ def test_a_checkout_with_no_makefile_preparation_is_reported(
             "test: warm tools\n\tcargo nextest run\n\n"
             "warm:\n\tcargo build\n\ntools:\n\tcargo fmt\n"
         ),
+        # A target name that settles to a plain word is filed under that word,
+        # so `$(T)` is the `prepare` rule the test waits on.
+        (
+            "T := prepare\n.PHONY: prepare\n$(T):\n\tcargo build\n"
+            "test: prepare\n\tcargo nextest run\n"
+        ),
         # A target name built from a plain variable settles to an ordinary
         # pattern rule, which cannot be a special target.
         (
@@ -138,11 +144,11 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         "test:\n\tcargo build || cargo nextest run\n",
         # An ignored error leaves the test to run on a failed build.
         "test:\n\t-cargo build\n\tcargo nextest run\n",
-        # A name that settles to a plain word is a real target the index, keyed
-        # by the raw text, would never find, so the rule is not followed.
+        # A name that settles to `test` gives it a second rule, which the reader
+        # does not combine.
         (
-            "T := prepare\n.PHONY: prepare\n$(T):\n\tcargo build\n"
-            "test: prepare\n\tcargo nextest run\n"
+            "T := test\n.PHONY: prepare test\nprepare:\n\tcargo build\n"
+            "$(T): prepare\ntest:\n\tcargo nextest run\n"
         ),
         # A conditional build may not run.
         'test:\n\tif [ -n "$(X)" ]; then cargo build; fi\n\tcargo nextest run\n',

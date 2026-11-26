@@ -49,6 +49,10 @@ MAKEFILE_PREPARATION: typ.Final = "makefile-preparation"
 MAYBE_KIND: typ.Final = "cargo-unknown"
 _FUNCTION: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)")
 _BINARY: typ.Final = re.compile(r"(?:^|/)tests/(?P<stem>[^/]+)\.rs$")
+# A test target by its Cargo name: `tests/<name>.rs` or `tests/<name>/main.rs`.
+_TARGET_NAME: typ.Final = re.compile(
+    r"(?:^|/)tests/(?P<name>[^/]+?)(?:\.rs|/main\.rs)$"
+)
 # `#[test]`, `#[tokio::test]`, `#[rstest]` and `#[test_case(..)]` mark a harness
 # test; a bare function of the same name does not.
 _TEST_ATTRIBUTE: typ.Final = re.compile(r"#\[\s*(?:\w+::)*(?:test|rstest|test_case)\b")
@@ -387,23 +391,30 @@ def collect_builds(
             "crate": crate,
             "package": crates.get(crate),
             "prepared_by": prepared,
-            "targets": _test_targets(stem, evidence.reached_by.get(path, [])),
+            "targets": _test_targets(path, evidence.reached_by.get(path, [])),
         })
     return builds
 
 
-def _test_targets(stem: str | None, roots: list[str]) -> list[str] | None:
-    """Return the test binaries that compile a source, or None when none is seen.
+def _test_targets(path: str, roots: list[str]) -> list[str] | None:
+    """Return the test binaries that compile a source, or None when not all are seen.
+
+    Cargo names a `tests/<name>.rs` file and a `tests/<name>/main.rs` file's
+    directory the same target, `<name>`.
 
     Returns
     -------
     list[str] | None
-        The sorted names of the file's own binary and of every `tests/<name>.rs`
-        among *roots*; empty when only a library reaches it; None when nothing
-        reaches it and it is no binary itself.
+        The sorted names of the file's own binary and of every test target among
+        *roots*; empty when only a library reaches it; None when nothing reaches
+        it and it is no binary itself, or an owner the resolver cannot see
+        (`unseen:`) also compiles it, so the list could not be complete.
     """
-    names = {stem} if stem else set()
-    names.update(found["stem"] for root in roots if (found := _BINARY.search(root)))
+    if any(root.startswith(UNSEEN) for root in roots):
+        return None
+    names = {
+        found["name"] for found in map(_TARGET_NAME.search, (path, *roots)) if found
+    }
     if not names and not roots:
         return None
     return sorted(names)

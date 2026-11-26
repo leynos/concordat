@@ -51,6 +51,7 @@ from .nested_cargo_makefile_preparation import (
     is_plain_rule,
     line_commands,
     read_makefile,
+    settled_index,
 )
 from .nested_cargo_pass_signature import (
     Action,
@@ -717,10 +718,10 @@ def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
     if read is None:
         return []
     report, text = read
-    index = rules_by_target(report)
+    values = read_tool_paths(single_assignments(report["variables"]))
+    index = settled_index(rules_by_target(report), values)
     if TEST_TARGET not in index:
         return []
-    values = read_tool_paths(single_assignments(report["variables"]))
     if not is_fully_readable(report, index, text, values):
         return [
             {
