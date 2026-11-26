@@ -720,6 +720,32 @@ def _include_lines(report: MakeutilReport, text: str) -> list[int]:
     return found or [1]
 
 
+def _recipe_less_test_facts(
+    index: dict[str, list[MakeRule]], reader: MakefileReader, text: str
+) -> list[PassFact]:
+    """Return a fact when a pattern or fallback rule may give `test` its recipe.
+
+    Make searches for an implicit rule for a target whose rules hold no recipe,
+    unless the target is declared `.PHONY`, so `test:` beside `te%:` runs the
+    pattern recipe when no `test` file exists.
+
+    Returns
+    -------
+    list[PassFact]
+        One indeterminate fact at the first such rule, or none.
+    """
+    rules = index[TEST_TARGET]
+    if any(rule["recipes"] for rule in rules) or TEST_TARGET in reader.phony:
+        return []
+    candidates = [
+        (pattern_lines(index, TEST_TARGET), _PATTERN_REASON),
+        (fallback_lines(index, text), _FALLBACK_REASON),
+    ]
+    return [
+        _unreadable_fact(min(lines), reason) for lines, reason in candidates if lines
+    ]
+
+
 def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
     """Return every test pass of the Makefile's `test` target and its preparation.
 
@@ -746,6 +772,9 @@ def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
                 line, "the Makefile holds a construct the reader does not follow"
             )
         ]
+    reader = MakefileReader(index, values)
+    if hidden := _recipe_less_test_facts(index, reader, text):
+        return hidden
     walk = _Walk(index, values)
-    walk.target(TEST_TARGET, (), MakefileReader(index, values))
+    walk.target(TEST_TARGET, (), reader)
     return walk.facts

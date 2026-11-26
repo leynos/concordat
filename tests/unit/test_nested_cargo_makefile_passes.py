@@ -439,6 +439,26 @@ def test_a_pattern_rule_that_matches_test_may_supply_it(
 
 
 @pytest.mark.parametrize(
+    ("phony", "statuses_found"),
+    [(".PHONY: other\n", ["indeterminate"]), (".PHONY: test\n", [])],
+)
+def test_a_recipe_less_test_target_may_take_a_matching_pattern_recipe(
+    tmp_path: pathlib.Path, phony: str, statuses_found: list[str]
+) -> None:
+    """Make searches pattern rules for a `test` with no recipe, unless `.PHONY`."""
+    checkout(tmp_path, f"{phony}test:\nte%:\n\tcargo test --all-features\n")
+    assert [fact["status"] for fact in makefile_passes(tmp_path)] == statuses_found
+
+
+def test_a_recipe_less_test_target_beside_a_non_matching_pattern_is_not_flagged(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A pattern that cannot match `test` leaves the recipe-less target alone."""
+    checkout(tmp_path, ".PHONY: other\ntest:\nfoo%:\n\tcargo test --all-features\n")
+    assert [fact["status"] for fact in makefile_passes(tmp_path)] == []
+
+
+@pytest.mark.parametrize(
     "makefile",
     [
         ".DEFAULT:\n\tcargo test --all-features\n",
