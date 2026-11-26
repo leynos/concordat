@@ -12,7 +12,12 @@ description: >-
   macrotest use, or a call to a configured harness helper that builds) in a
   repository that declares no preparation outside the timed body: no nextest
   setup script covering the test, no named preparation test in the crate and no
-  preparation gate called in the crate. Exemptions name a repository and an
+  preparation gate called in the crate. NC-010 also judges each test pass of
+  the Makefile's `test` target in a repository whose preparation is declared
+  in the Makefile or the suite: a pass needs a preparation of its own package
+  selection, features, target, profile and RUSTFLAGS ahead of it, and a
+  compile alone (`--no-run`) does not warm a trybuild or macrotest family.
+  Exemptions name a repository and an
   exact file path, suppress only NC-009 and NC-010, and must carry a rationale
   and a review trigger. The rule ships at `warning` severity so the estate can
   be surveyed before it blocks; the `severity` parameter raises it to `error`

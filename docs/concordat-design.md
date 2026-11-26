@@ -3101,6 +3101,44 @@ exemption. Preparation is matched by crate, because one crate's preparation
 test stamps several test binaries; a finer match would demand a stamp per file
 and report the common shape as a defect.
 
+A declared preparation is not yet a prepared pass. rstest-bdd passed NC-010
+while its `--no-default-features` pass timed out: the Makefile prepared the
+`--all-features` pass, and a second pass with another feature graph shares none
+of that build. So the Makefile reader also walks `test` in Make's order and
+judges each pass against the preparations ahead of it
+(`nested_cargo_makefile_passes`). The equality it asks for is a `Signature`
+(`nested_cargo_pass_signature`): package selection, features, target, profile
+and the build-affecting environment, after expansion, with anything it cannot
+read kept as opaque words that must match word for word. The decisions behind
+it:
+
+- A filtered run (`-E`, `--test`, a test name) is a preparation and never a
+  pass, because a text scan cannot know which tests its filter leaves; this is
+  how an outside run of an in-suite preparation test counts, for exactly the
+  flags it ran with. A run that selects only `--lib`, `--doc`, `--bin`,
+  `--example` or `--bench` never reaches the integration tests that hold the
+  nested builds, so it counts as a compile.
+- A command the reader cannot follow (an unresolved command word, or a `make`
+  it cannot read that may run tests) is reported as indeterminate and leaves
+  every later pass indeterminate, because it may have built what the pass needs.
+- A compile-only line (`--no-run`, `build`, `archive`) prepares a pass but does
+  not warm trybuild or macrotest, which build in their own directory under the
+  target. The measured cost of trusting it (whitaker 58 s against 2 s,
+  thysalion 291 s against 1.9 s) is why a repository with either family needs a
+  real run.
+- Make does not order sibling prerequisites, so a pass inside one prerequisite
+  sees only what ran before the rule. `$(MAKE) goal VAR=value` is followed with
+  the override in force, because that is how rstest-bdd hands each pass's flags
+  to one preparation target, and `if probe; then A; else B; fi` prepares when
+  both branches do.
+- Passes are judged only where the repository relies on a Makefile, an in-suite
+  test or a gate for its preparation. A nextest setup script runs before every
+  nextest pass, and a repository with no declared preparation is already
+  reported once per file; judging those passes too would double the count.
+- Only the in-suite-only case is a warning whatever `severity` says: it is
+  advice that the preparation runs under the harness's timeout, not a missing
+  preparation.
+
 A setup script is the exception to the per-crate match, because nextest selects
 by test binary. The module resolver records, for each file a `mod` declaration
 or `#[path]` reaches, the Cargo targets whose module tree contains it (the

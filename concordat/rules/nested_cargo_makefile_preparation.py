@@ -43,6 +43,11 @@ from .makefile_facts import MakefileRefusedError, inspect_makefile
 from .makefile_tool_paths import read_tool_paths
 from .markdown_envelope import within_checkout
 from .nested_cargo_makefile_lines import rules_by_target
+from .nested_cargo_makefile_names import (
+    UNSAFE_SPECIAL_TARGETS,
+    has_unsafe_reading,
+    settled_index,
+)
 from .nested_cargo_scripts import TEST_TARGET, ScriptCommand, script_commands
 
 if typ.TYPE_CHECKING:
@@ -52,17 +57,12 @@ if typ.TYPE_CHECKING:
     from .makefile_facts import MakeRecipe, MakeRule, MakeutilReport
 
 MAKEFILE: typ.Final = "Makefile"
-ONESHELL_TARGET: typ.Final = ".ONESHELL"
 PHONY_TARGET: typ.Final = ".PHONY"
-# Special targets that change what a failed recipe line does to the next (a
-# `.ONESHELL` recipe runs as one script; `.IGNORE` ignores errors, globally or
-# for the targets it names), so a build before the tests no longer gates them.
 _INCLUDE_LINE: typ.Final = re.compile(r"^[ ]*[-s]?include\b", re.MULTILINE)
-UNSAFE_SPECIAL_TARGETS: typ.Final = frozenset({ONESHELL_TARGET, ".IGNORE"})
 OPERATION_READ_MAKEFILE: typ.Final = "read-nested-cargo-makefile-preparation"
 
 
-def _line_commands(
+def line_commands(
     recipe: MakeRecipe, values: cabc.Mapping[str, str]
 ) -> list[list[ScriptCommand]]:
     """Return the commands of each reading of one recipe line.
@@ -88,7 +88,7 @@ def _runs_tests(command: ScriptCommand) -> bool:
     return command.meaning.test is not None and not command.meaning.is_build
 
 
-def _is_certain(commands: list[ScriptCommand], index: int, end: int) -> bool:
+def is_certain(commands: list[ScriptCommand], index: int, end: int) -> bool:
     """Return whether the command at *index* runs on every path to position *end*.
 
     It runs when it sits in no conditional construct, every command before it
@@ -109,12 +109,12 @@ def _is_certain(commands: list[ScriptCommand], index: int, end: int) -> bool:
     )
 
 
-def _is_plain_rule(rule: MakeRule) -> bool:
+def is_plain_rule(rule: MakeRule) -> bool:
     """Return whether *rule* is neither conditional nor a double-colon rule."""
     return not rule["conditions"] and not rule["double_colon"]
 
 
-class _Reader:
+class MakefileReader:
     """Follow the targets of one Makefile, remembering what each one proved."""
 
     def __init__(
@@ -192,7 +192,7 @@ class _Reader:
             for name in reading.text.split()
         ]
 
-    def _plain_prerequisites(self, rule: MakeRule) -> list[str] | None:
+    def plain_prerequisites(self, rule: MakeRule) -> list[str] | None:
         """Return the prerequisite names of *rule* when each reads one plain way.
 
         A reference that expands to alternative readings, or that the expansion
@@ -225,7 +225,7 @@ class _Reader:
         bool
             True when the target has exactly one plain rule and it prepares.
         """
-        if len(rules) != 1 or not _is_plain_rule(rules[0]):
+        if len(rules) != 1 or not is_plain_rule(rules[0]):
             return False
         return self.rule_prepares(rules[0])
 
@@ -243,7 +243,7 @@ class _Reader:
         bool
             True when nothing tests unprepared and something compiles first.
         """
-        names = self._plain_prerequisites(rule)
+        names = self.plain_prerequisites(rule)
         if names is None or self._some_test_unprepared(names):
             return False
         return any(self.target_prepares(name) for name in names) or (
@@ -253,11 +253,10 @@ class _Reader:
     def _some_test_unprepared(self, names: list[str]) -> bool:
         """Return whether any named target may test without preparing for it."""
         return any(
-            self._target_tests(name) and not self.target_prepares(name)
-            for name in names
+            self.target_tests(name) and not self.target_prepares(name) for name in names
         )
 
-    def _command_tests(self, command: ScriptCommand, seen: frozenset[str]) -> bool:
+    def command_tests(self, command: ScriptCommand, seen: frozenset[str]) -> bool:
         """Return whether a command may run tests, counting any make it cannot read."""
         meaning = command.meaning
         if _runs_tests(command) or meaning.is_unreadable:
@@ -265,10 +264,10 @@ class _Reader:
         if not meaning.is_recursive_make:
             return False
         return not meaning.make_goals or any(
-            self._target_tests(goal, seen) for goal in meaning.make_goals
+            self.target_tests(goal, seen) for goal in meaning.make_goals
         )
 
-    def _target_tests(self, name: str, seen: frozenset[str] = frozenset()) -> bool:
+    def target_tests(self, name: str, seen: frozenset[str] = frozenset()) -> bool:
         """Return whether target *name*, or one it needs, may run tests."""
         if name in seen:
             return False
@@ -276,14 +275,14 @@ class _Reader:
         for rule in self.index.get(name, []):
             if any(self._recipe_tests(recipe, seen) for recipe in rule["recipes"]):
                 return True
-            if self._has_unresolved_prerequisite(rule) or any(
-                self._target_tests(needed, seen)
+            if self.has_unresolved_prerequisite(rule) or any(
+                self.target_tests(needed, seen)
                 for needed in self._prerequisite_names(rule)
             ):
                 return True
         return False
 
-    def _has_unresolved_prerequisite(self, rule: MakeRule) -> bool:
+    def has_unresolved_prerequisite(self, rule: MakeRule) -> bool:
         """Return whether a prerequisite of *rule* is one the expansion left open.
 
         What it names is unknown, so it may be a target that runs tests.
@@ -302,8 +301,8 @@ class _Reader:
     def _recipe_tests(self, recipe: MakeRecipe, seen: frozenset[str]) -> bool:
         """Return whether a recipe line may run tests, in any reading."""
         return any(
-            self._command_tests(command, seen)
-            for commands in _line_commands(recipe, self.values)
+            self.command_tests(command, seen)
+            for commands in line_commands(recipe, self.values)
             for command in commands
         )
 
@@ -319,7 +318,7 @@ class _Reader:
             True when a line builds, or runs a preparing target, before a test.
         """
         for recipe in recipes:
-            readings = _line_commands(recipe, self.values)
+            readings = line_commands(recipe, self.values)
             if self._test_line_prepares(recipe, readings):
                 return True
             if self._recipe_tests(recipe, frozenset()):
@@ -354,7 +353,7 @@ class _Reader:
             (
                 i
                 for i, c in enumerate(commands)
-                if self._command_tests(c, frozenset())
+                if self.command_tests(c, frozenset())
                 and not any(self.target_prepares(g) for g in c.meaning.make_goals)
             ),
             len(commands),
@@ -369,7 +368,7 @@ class _Reader:
         certain = [
             command
             for index, command in enumerate(commands[:position])
-            if _is_certain(commands, index, end)
+            if is_certain(commands, index, end)
         ]
         return any(command.meaning.is_build for command in certain) or any(
             self.target_prepares(goal)
@@ -391,18 +390,18 @@ def makefile_prepares(checkout: pathlib.Path) -> bool:
         another file, names a target by expansion, or nothing in it prepares:
         the reader never guesses a preparation it cannot see.
     """
-    read = _read_makefile(checkout)
+    read = read_makefile(checkout)
     if read is None:
         return False
     report, text = read
-    index = rules_by_target(report)
-    if TEST_TARGET not in index or not _is_fully_readable(report, index, text):
-        return False
     values = read_tool_paths(single_assignments(report["variables"]))
-    return _Reader(index, values).test_prepares()
+    index = settled_index(rules_by_target(report), values)
+    if TEST_TARGET not in index or not is_fully_readable(report, index, text, values):
+        return False
+    return MakefileReader(index, values).test_prepares()
 
 
-def _read_makefile(checkout: pathlib.Path) -> tuple[MakeutilReport, str] | None:
+def read_makefile(checkout: pathlib.Path) -> tuple[MakeutilReport, str] | None:
     """Return the parsed Makefile and its text, or None when it cannot be read.
 
     Returns
@@ -425,15 +424,33 @@ def _read_makefile(checkout: pathlib.Path) -> tuple[MakeutilReport, str] | None:
     return report, path.read_text(encoding="utf-8", errors="replace")
 
 
-def _is_fully_readable(
-    report: MakeutilReport, index: dict[str, list[MakeRule]], text: str
+def includes_a_file(report: MakeutilReport, text: str) -> bool:
+    """Return whether the Makefile includes another file.
+
+    The parser does not report an include that follows a rule, so the text is
+    scanned too. An included file may hold any rule, `test` among them.
+
+    Returns
+    -------
+    bool
+        True when the report lists an include or a line starts one.
+    """
+    return bool(report["includes"]) or bool(_INCLUDE_LINE.search(text))
+
+
+def is_fully_readable(
+    report: MakeutilReport,
+    index: dict[str, list[MakeRule]],
+    text: str,
+    values: cabc.Mapping[str, str],
 ) -> bool:
     """Return whether nothing in the Makefile can change what its recipes do.
 
     Special targets and `MAKEFLAGS` change what a failed line does to the next;
-    an included file may hold either, and a target name that expands may be a
-    special one, so neither can be read from this Makefile alone. The parser
-    does not report an include that follows a rule, so the text is scanned too.
+    an included file may hold either, and a target name that expands to a
+    special one, or to something the reader cannot settle, may be one too, so
+    none of those can be read from this Makefile alone. The parser does not
+    report an include that follows a rule, so the text is scanned too.
 
     Returns
     -------
@@ -441,7 +458,7 @@ def _is_fully_readable(
         True when none of those appears.
     """
     has_flags = any(v.get("name") == "MAKEFLAGS" for v in report["variables"])
-    has_include = bool(report["includes"]) or bool(_INCLUDE_LINE.search(text))
+    has_include = includes_a_file(report, text)
     has_special = bool(UNSAFE_SPECIAL_TARGETS & index.keys())
-    has_expanded = any("$" in name for name in index)
+    has_expanded = has_unsafe_reading(index, values, report["variables"])
     return not (has_flags or has_include or has_special or has_expanded)

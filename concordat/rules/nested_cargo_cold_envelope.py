@@ -24,12 +24,14 @@ import typing as typ
 
 from .nested_cargo import load_manifests, origin_slug
 from .nested_cargo_gates import read_gates
+from .nested_cargo_makefile_passes import PassFact, makefile_passes
 from .nested_cargo_makefile_preparation import makefile_prepares
 from .nested_cargo_preparation import (
     BuildFact,
     Preparation,
     collect_builds,
     crate_directories,
+    named_test_crates,
 )
 from .nested_cargo_setup_scripts import read_setup_rules
 from .nested_cargo_source import read_sources
@@ -65,6 +67,9 @@ class NestedCargoColdEnvelope(typ.TypedDict):
     builds:
         Every test source that compiles in a timed test, with the preparation
         the repository declares for it.
+    passes:
+        Every test pass of the Makefile's `test` target, with what prepared it
+        (NC-010 per pass).
     problems:
         Every fact the builder could not establish, as sentences.
     """
@@ -74,6 +79,7 @@ class NestedCargoColdEnvelope(typ.TypedDict):
     repository: Repository
     spawns: list[SpawnFact]
     builds: list[BuildFact]
+    passes: list[PassFact]
     problems: list[str]
 
 
@@ -109,6 +115,7 @@ def build_nested_cargo_cold_envelope(
         read_setup_rules(checkout, problems),
         read_gates(parameters),
         makefile_prepares(checkout),
+        named_test_crates(checkout, manifests),
     )
     builds = collect_builds(evidence, sources, preparation)
     return {
@@ -117,5 +124,6 @@ def build_nested_cargo_cold_envelope(
         "repository": {"path": ".", "name": origin_slug(checkout)},
         "spawns": evidence.spawns,
         "builds": builds,
+        "passes": makefile_passes(checkout),
         "problems": sorted(set(problems)),
     }

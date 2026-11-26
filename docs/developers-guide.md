@@ -696,16 +696,22 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `nested_cargo_compiles.compiles_state`) and `target_state` (`inherited`,
   `shared`, `dedicated`, `private` or `unknown`, from
   `nested_cargo_target.read_target`, with names resolved inside the enclosing
-  function by `nested_cargo_bindings`). `CargoCommand.calls` records the
-  builder calls in source order so the target reader can replay them with
-  last-write-wins semantics, as the offline ledger does for `CARGO_NET_OFFLINE`.
-  `nested_cargo_preparation` joins the spawns, the trybuild and macrotest uses
-  and the configured compiling helpers into `builds`, and records for each
-  which of a nextest setup script (`nested_cargo_setup_scripts`), a preparation
-  test and a preparation gate (the names come from `nested_cargo_gates`) the
-  owning crate declares. The builder reads the `preparation_gates` and
-  `compiling_calls` parameters because they decide which facts exist;
-  exemptions and severity stay with the policy.
+  function by `nested_cargo_bindings`). It also carries `passes`, one fact per
+  test pass of the Makefile's `test` target
+  (`nested_cargo_makefile_passes.makefile_passes`): its line, command, a
+  `status` of `warmed`, `compiled`, `unprepared` or `indeterminate`, and how
+  many preparations of any signature ran before it. The policy treats a missing
+  `passes` as none, so an older envelope stays valid. `CargoCommand.calls`
+  records the builder calls in source order so the target reader can replay
+  them with last-write-wins semantics, as the offline ledger does for
+  `CARGO_NET_OFFLINE`. `nested_cargo_preparation` joins the spawns, the
+  trybuild and macrotest uses and the configured compiling helpers into
+  `builds`, and records for each which of a nextest setup script
+  (`nested_cargo_setup_scripts`), a preparation test and a preparation gate
+  (the names come from `nested_cargo_gates`) the owning crate declares. The
+  builder reads the `preparation_gates` and `compiling_calls` parameters
+  because they decide which facts exist; exemptions and severity stay with the
+  policy.
 - `policy-input/nested-cargo-offline-tests` —
   `nested_cargo_offline_envelope.build_nested_cargo_offline_envelope`. It joins
   two readers: `nested_cargo_spawns` classifies every `cargo` a test scope

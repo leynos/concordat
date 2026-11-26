@@ -71,6 +71,12 @@ _PURE_CALL_OPEN: typ.Final = re.compile(
 _FUNCTION_CALL: typ.Final = re.compile(
     r"\$\((dir|notdir|lastword|firstword|abspath|realpath|strip)\s+([^()$]*)\)"
 )
+# `$(filter PATTERNS,TEXT)` and `$(filter-out PATTERNS,TEXT)` with plain words in
+# both: a repository keeps only the build-affecting words of its test flags, or
+# drops `--all-targets` from them, to reuse them for one named test target.
+_FILTER_CALL: typ.Final = re.compile(
+    r"\$\((filter-out|filter)\s+([^(),$]*),([^()$]*)\)"
+)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -93,10 +99,21 @@ def joined(text: str) -> str:
 
 
 def _is_plain(variable: MakeVariable, count: int) -> bool:
-    """Return whether *variable* is assigned once, unconditionally, outside `define`."""
+    """Return whether *variable* is assigned once, unconditionally, outside `define`.
+
+    A `!=` assignment holds a shell command, not the text it prints, so it has no
+    value the expansion can substitute.
+
+    Returns
+    -------
+    bool
+        True when the variable has one plain value the expansion can substitute.
+    """
     conditions = variable.get("conditions", [])
     has_conditions = isinstance(conditions, list) and bool(conditions)
-    return count == 1 and not variable.get("define_block", False) and not has_conditions
+    is_shell = variable.get("operator") == "!="
+    is_plain = not variable.get("define_block", False) and not has_conditions
+    return count == 1 and is_plain and not is_shell
 
 
 class Assignments(collections.UserDict[str, str]):
@@ -188,6 +205,36 @@ def _call_function(match: re.Match[str]) -> str:
         The function's result, as Make would produce it for these arguments.
     """
     return " ".join(_FUNCTIONS[match.group(1)](match.group(2).split()))
+
+
+def _matches_pattern(pattern: str, word: str) -> bool:
+    """Return whether *word* matches a Make pattern, `%` standing for any run."""
+    prefix, percent, suffix = pattern.partition("%")
+    if not percent:
+        return word == pattern
+    return (
+        len(word) >= len(prefix) + len(suffix)
+        and word.startswith(prefix)
+        and word.endswith(suffix)
+    )
+
+
+def _call_filter(match: re.Match[str]) -> str:
+    """Evaluate `$(filter PATTERNS,TEXT)` and `$(filter-out PATTERNS,TEXT)`.
+
+    Returns
+    -------
+    str
+        The words of TEXT that some pattern matches (`filter`) or that none
+        matches (`filter-out`), as Make would produce them.
+    """
+    keeps_matches = match.group(1) == "filter"
+    patterns = match.group(2).split()
+    return " ".join(
+        word
+        for word in match.group(3).split()
+        if any(_matches_pattern(pattern, word) for pattern in patterns) is keeps_matches
+    )
 
 
 def close_of(text: str, start: int) -> int | None:
@@ -365,10 +412,13 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
 
     current = text.replace("$$", SHELL_DOLLAR)
     for _ in range(EXPANSION_PASSES):
-        updated = _FUNCTION_CALL.sub(
-            _call_function,
-            _VARIABLE_REFERENCE.sub(
-                substitute, _drop_error_guards(current, known, assigned)
+        updated = _FILTER_CALL.sub(
+            _call_filter,
+            _FUNCTION_CALL.sub(
+                _call_function,
+                _VARIABLE_REFERENCE.sub(
+                    substitute, _drop_error_guards(current, known, assigned)
+                ),
             ),
         )
         if updated == current:
