@@ -190,8 +190,8 @@ test_an_unresolved_word_beside_a_spelled_out_workspace_is_indeterminate if {
 	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.unresolved_selection_beside_workspace)} == {["EN-001", "indeterminate"]}
 }
 
-test_an_unresolved_value_of_a_non_selecting_option_is_read if {
-	count(findings(data.fixtures.unresolved_profile_beside_workspace)) == 0
+test_an_unresolved_value_of_a_non_selecting_option_may_still_add_arguments if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.unresolved_profile_beside_workspace)} == {["EN-001", "indeterminate"]}
 }
 
 test_a_glob_exclusion_removes_every_member_it_matches if {
@@ -303,6 +303,39 @@ test_a_wrapper_script_is_indeterminate if {
 test_another_directory_or_manifest_is_indeterminate if {
 	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.changes_directory)} == {["EN-001", "indeterminate"]}
 	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.other_manifest)} == {["EN-001", "indeterminate"]}
+}
+
+test_a_delegated_make_alone_is_reported_without_any_known_command if {
+	fs := findings(data.fixtures.make_delegation_alone)
+	{[f.rule_id, f.verdict] | some f in fs} == {["EN-001", "indeterminate"]}
+	some f in fs
+	contains(f.msg, "skipped a target")
+}
+
+test_a_job_that_never_runs_does_not_cover if {
+	some f in findings(data.fixtures.ci_job_never_runs)
+	f.rule_id == "GC-001"
+}
+
+test_a_matrix_conditional_step_is_unplaced if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.ci_matrix_conditional_step)} == {["EN-001", "indeterminate"]}
+}
+
+test_a_prerequisite_a_make_condition_adds_is_unplaced if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.conditional_prerequisite)} == {["EN-001", "indeterminate"]}
+}
+
+test_probe_readings_that_select_differently_are_alternatives_not_a_union if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.probe_alternatives)} == {["EN-001", "indeterminate"]}
+}
+
+test_a_make_value_after_an_option_may_add_arguments if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.make_value_after_option)} == {["EN-001", "indeterminate"]}
+}
+
+test_a_shell_variable_command_head_is_not_dropped if {
+	fs := findings(data.fixtures.shell_variable_command_head)
+	{f.rule_id | some f in fs} == {"EN-001"}
 }
 
 test_a_skipped_makefile_target_makes_a_narrow_gate_indeterminate if {

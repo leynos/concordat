@@ -54,6 +54,9 @@ class Successors:
 
     names: list[str]
     is_resolved: bool
+    # Targets every path to which crosses a rule under a Make condition, so
+    # whether they run depends on Make state. Empty for a single rule's successors.
+    conditional: frozenset[str] = frozenset()
 
 
 def rules_by_target(report: MakeutilReport) -> RuleIndex:
@@ -148,10 +151,38 @@ def reachable(
     command that names a variable the expansion cannot settle is skipped and
     clears the resolved flag.
 
+    A target reached only through a rule inside an `ifeq` or similar block is
+    reported in `conditional`: a prerequisite a condition adds does not run when
+    the condition is false, however plain the target's own rule is.
+
     Returns
     -------
     Successors
-        The reachable targets in discovery order, and whether none were skipped.
+        The reachable targets in discovery order, whether none were skipped, and
+        the targets reached only conditionally.
+    """
+    everywhere = _walk(index, values, starts, skip_conditional=False)
+    always = _walk(index, values, starts, skip_conditional=True)
+    return Successors(
+        everywhere.names,
+        everywhere.is_resolved,
+        frozenset(everywhere.names) - frozenset(always.names),
+    )
+
+
+def _walk(
+    index: RuleIndex,
+    values: cabc.Mapping[str, str],
+    starts: cabc.Sequence[str],
+    *,
+    skip_conditional: bool,
+) -> Successors:
+    """Walk from *starts*, optionally leaving the rules under Make conditions out.
+
+    Returns
+    -------
+    Successors
+        The targets reached in discovery order, and whether none were skipped.
     """
     seen: list[str] = []
     is_resolved = True
@@ -162,6 +193,8 @@ def reachable(
             continue
         seen.append(target)
         for rule in index[target]:
+            if skip_conditional and rule.is_conditional:
+                continue
             found = _rule_successors(rule, values)
             pending.extend(found.names)
             is_resolved = is_resolved and found.is_resolved

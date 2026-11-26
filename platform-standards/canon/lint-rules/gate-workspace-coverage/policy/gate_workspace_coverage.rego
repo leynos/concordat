@@ -237,14 +237,13 @@ reason(i) := "it runs in another directory or against another manifest" if {
 	i.changes_directory == true
 }
 
+# Reported on its own: a gate that is only `$(MAKE) -C nested lint` has no known
+# command at all, yet the Makefile it delegates to may narrow every tool.
 deny contains finding("EN-001", severity, "indeterminate", "Makefile", msg) if {
 	workspace_known
 	multi_member
 	not walk_complete
-	some tool in tools
-	count(invocations_of(tool)) > 0
-	count(uncovered(tool)) > 0
-	msg := sprintf("the Makefile walk from lint and test skipped a target it could not resolve, so the audit cannot say that nothing covers %s for %s", [concat(", ", sort(uncovered(tool))), tool])
+	msg := "the Makefile walk from lint and test skipped a target it could not resolve (a `make -C`, or a variable that names a target), so the audit cannot say which commands the gate runs"
 }
 
 # -- GC-001: a gate command that leaves workspace members out --------------------------

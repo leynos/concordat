@@ -189,6 +189,47 @@ SCENARIOS: dict[str, dict[str, str]] = {
         test=["cargo test --manifest-path other/Cargo.toml"]
     ),
     "make_delegation": checkout_for(lint=["$(MAKE) -C crates/b lint", "cargo clippy"]),
+    "make_delegation_alone": checkout_for(lint=["$(MAKE) -C crates/b lint"]),
+    "ci_job_never_runs": checkout_for(
+        test=["cargo test -p app"],
+        extra={
+            ".github/workflows/ci.yml": (
+                "name: ci\non: push\njobs:\n  build:\n    if: ${{ false }}\n"
+                "    runs-on: ubuntu-latest\n    steps:\n"
+                "      - run: cargo test --workspace\n"
+            )
+        },
+    ),
+    "ci_matrix_conditional_step": checkout_for(
+        extra={
+            ".github/workflows/ci.yml": (
+                "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+                "    strategy:\n      matrix:\n        package: [app, b]\n"
+                "    steps:\n      - if: matrix.package == 'app'\n"
+                "        run: cargo test -p ${{ matrix.package }}\n"
+            )
+        },
+    ),
+    "conditional_prerequisite": {
+        **checkout_for(),
+        "Makefile": (
+            ".PHONY: lint full\n\nifeq ($(FULL),1)\nlint: full\nendif\n"
+            "lint:\n\t@echo lint\n\nfull:\n\tcargo clippy --workspace\n"
+        ),
+    },
+    "probe_alternatives": {
+        **checkout_for(),
+        "Makefile": (
+            ".PHONY: test\ntest:\n\tcargo test $(if $(shell cargo nextest --version "
+            "2>/dev/null),-p app,-p b)\n"
+        ),
+    },
+    "make_value_after_option": checkout_for(
+        test=["cargo test --workspace --color $(COLOR)"]
+    ),
+    "shell_variable_command_head": checkout_for(
+        test=["cargo test -p app", "$$RUNNER test -p b"]
+    ),
     "keyword_prefix": checkout_for(
         test=["if cargo test --workspace; then echo ok; fi"]
     ),

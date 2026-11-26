@@ -180,11 +180,11 @@ class TestCommands:
             ("cargo test --workspace --exclude $SKIP", False),
             ("cargo test -p $PACKAGE", False),
             ("cargo test --package=$PACKAGE --workspace", False),
-            ("cargo nextest run --profile $(PROFILE) --all-targets", True),
-            ("cargo nextest run -j $(JOBS) --all-features", True),
-            ("cargo test --features $(FEATURES)", True),
-            # a shell variable splits into words when unquoted, so it may add
-            # `--exclude b`; a Make reference is one textual value
+            # a Make reference is substituted as text and a shell variable splits
+            # into words, so after any option either may add `--exclude b`
+            ("cargo nextest run --profile $(PROFILE) --all-targets", False),
+            ("cargo nextest run -j $(JOBS) --all-features", False),
+            ("cargo test --features $(FEATURES)", False),
             ("cargo nextest run --profile $PROFILE --all-targets", False),
             ("cargo test --workspace --color $COLOR", False),
             ("whitaker $FLAGS", False),
@@ -196,8 +196,8 @@ class TestCommands:
     ) -> None:
         """An unresolved word may supply `--exclude`, so it hides the selection.
 
-        The exceptions are the value of an option that cannot name a package,
-        and anything before Whitaker's `--`, which is Whitaker's own.
+        The one exception is anything before Whitaker's `--`, which is
+        Whitaker's own.
         """
         (found,) = _read(command)
         assert found["resolved"] is is_resolved
@@ -526,6 +526,94 @@ class TestWorkflows:
             for i in envelope["invocations"]
         }
         assert found == {("clippy", True, ()), ("test", False, ("app",))}
+
+
+class TestSecondReview:
+    """Behaviours a second review showed to be missing."""
+
+    def test_a_job_that_never_runs_is_not_a_command(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`if: false` on a job switches off every step in it."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    if: ${{ false }}\n"
+            "    runs-on: ubuntu-latest\n    steps:\n"
+            "      - run: cargo test --workspace\n"
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        assert _build(tmp_path, files)["invocations"] == []
+
+    def test_a_step_conditional_on_the_matrix_is_unplaced(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`if: matrix.package == 'app'` runs for one combination, not both."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    strategy:\n      matrix:\n        package: [app, b]\n"
+            "    steps:\n      - if: matrix.package == 'app'\n"
+            "        run: cargo test -p ${{ matrix.package }}\n"
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        found = _build(tmp_path, files)["invocations"]
+        assert found
+        assert not any(i["resolved"] for i in found)
+
+    def test_a_prerequisite_a_make_condition_adds_is_unplaced(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`lint: full` under `ifeq` leaves `full`'s commands conditional."""
+        makefile = (
+            ".PHONY: lint full\n\nifeq ($(FULL),1)\nlint: full\nendif\n"
+            "lint:\n\t@echo lint\n\nfull:\n\tcargo clippy --workspace\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert [(i["tool"], i["resolved"]) for i in envelope["invocations"]] == [
+            ("clippy", False)
+        ]
+
+    def test_a_prerequisite_also_reached_unconditionally_is_placed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A target some unconditional path reaches runs whatever the condition."""
+        makefile = (
+            ".PHONY: lint full\n\nifeq ($(FULL),1)\nlint: full\nendif\n"
+            "lint: full\n\nfull:\n\tcargo clippy --workspace\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert [i["resolved"] for i in envelope["invocations"]] == [True]
+
+    def test_probe_readings_that_select_differently_are_alternatives(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """One run takes one branch, so `-p app` and `-p b` are not a union."""
+        makefile = (
+            ".PHONY: test\ntest:\n\tcargo test $(if $(shell cargo nextest "
+            "--version 2>/dev/null),-p app,-p b)\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert len(found) == 2
+        assert not any(i["resolved"] for i in found)
+
+    def test_probe_readings_that_select_alike_stay_placed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A probe that only changes the runner leaves each tool's selection alone."""
+        makefile = (
+            ".PHONY: test\ntest:\n\tcargo $(if $(shell cargo nextest --version "
+            "2>/dev/null),nextest run,test) --workspace\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert {i["tool"] for i in found} == {"nextest", "test"}
+        assert all(i["resolved"] for i in found)
+
+    def test_a_shell_variable_command_head_is_unreadable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`$RUNNER test -p b` may be cargo, so it is reported, not dropped."""
+        makefile = ".PHONY: test\ntest:\n\tcargo test -p app\n\t$$RUNNER test -p b\n"
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert [i["tool"] for i in envelope["invocations"]] == ["test"]
+        assert envelope["unreadable"]
 
 
 class TestReviewFindings:

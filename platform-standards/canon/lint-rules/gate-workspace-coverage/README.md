@@ -32,11 +32,16 @@ GitHub's: the product of the axes, less the `exclude` entries, with each
 later `include` may overwrite what an earlier one added) or standing as a
 combination of its own when it fits none.
 
-A workflow step whose `if` is the constant false is not a command. Any other
+A workflow step or job whose `if` is the constant false is not a command. A
+condition that reads the matrix (`if: matrix.package == 'app'`) makes the step
+run for some combinations only, so its commands are indeterminate. Any other
 condition is taken to hold on some run: the rule judges the commands a gate
 has, not the schedule they run on. A Makefile recipe inside an `ifeq` or
-similar block is a different matter, because whether it applies depends on Make
-state the audit does not evaluate, so its commands are indeterminate. Under
+similar block, and the commands of a prerequisite that only such a block adds,
+are indeterminate too, because whether they apply depends on Make state the
+audit does not evaluate. A probe `if` yields two readings of one line, and when
+they select differently for one tool (`-p a` against `-p b`) each is
+indeterminate: one run takes one branch, so their union covers nothing. Under
 `.ONESHELL` a recipe is one shell, so a `cd` on one line moves the lines after
 it.
 
@@ -90,13 +95,12 @@ place one of its commands:
 - a wrapper script (a `.py`, `.sh` or `.bash` file named for a gate tool) that
   selects the packages itself;
 - an unresolved word among the Cargo arguments, even beside a spelled-out
-  `--workspace`, because it may stand for `--exclude b`. The exceptions are a
-  Make reference that is the value of an option that cannot name a package
-  (`--profile`, `-j`, `--features` and the like), which is one textual value,
-  and anything before Whitaker's `--`, which is Whitaker's own. A shell
-  variable is never an exception, because unquoted it splits into words. A
-  Whitaker command with no `--` and an unresolved word may be given the
-  separator by it;
+  `--workspace`, because it may stand for `--exclude b`, and even after an
+  option such as `--profile` or `--color`: a Make reference is substituted as
+  text and an unquoted shell variable splits into words, so neither is one
+  value. The one exception is anything before Whitaker's `--`, which is
+  Whitaker's own. A Whitaker command with no `--` and an unresolved word may be
+  given the separator by it;
 - a command word, or Cargo subcommand, left unresolved beside words only a gate
   tool takes, even when another command on the same line was read;
 - unreadable input anywhere in the gate: no tool is called uncovered while a

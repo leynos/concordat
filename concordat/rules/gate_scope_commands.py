@@ -66,23 +66,6 @@ _WRAPPER_STEM: typ.Final = re.compile(
 # Spellings of the root manifest, which `--manifest-path` may name without
 # leaving the root workspace.
 _ROOT_MANIFESTS: typ.Final = frozenset({"Cargo.toml", "./Cargo.toml"})
-# Options that take a value which cannot name a package, so an unresolved word
-# in that place does not hide the selection.
-_BENIGN_VALUE_FLAGS: typ.Final = frozenset({
-    "--profile",
-    "-j",
-    "--jobs",
-    "--features",
-    "-F",
-    "--target",
-    "--target-dir",
-    "--message-format",
-    "--color",
-    "--config",
-    "--cargo-profile",
-    "--filter-expr",
-    "-E",
-})
 _UNRESOLVED_WORD: typ.Final = (UNRESOLVED_MARK, SHELL_DOLLAR, "$")
 _INFORMATION_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 _SHELL_KEYWORDS: typ.Final = frozenset({
@@ -160,38 +143,17 @@ def _hides_selection(arguments: list[str]) -> bool:
     """Return whether an unresolved word could change which packages are chosen.
 
     A word the expansion left may stand for any arguments, `--exclude b` among
-    them, so it hides the selection even beside a spelled-out `--workspace`.
-    The one exception is the value of an option that cannot name a package
-    (`--profile`, `-j`, `--features` and the like).
+    them, so it hides the selection even beside a spelled-out `--workspace`
+    and even after an option such as `--profile` or `--color`. A Make
+    reference is substituted as text before the shell splits it, and an
+    unquoted shell variable splits into words, so neither is one value.
 
     Returns
     -------
     bool
         Whether the selection cannot be read.
     """
-    return any(
-        _is_unresolved(word) and not _is_benign_value(arguments, index)
-        for index, word in enumerate(arguments)
-    )
-
-
-def _is_benign_value(arguments: list[str], index: int) -> bool:
-    """Return whether the unresolved word at *index* is one benign option value.
-
-    A Make reference is textual, so one left unresolved after `--profile` is
-    taken as the profile name. A shell variable is not: unquoted, it splits
-    into words, and `COLOR='always --exclude b'` supplies an exclusion, so a
-    shell expansion is never benign.
-
-    Returns
-    -------
-    bool
-        Whether the word cannot name a package.
-    """
-    word = arguments[index]
-    follows_benign = index > 0 and arguments[index - 1] in _BENIGN_VALUE_FLAGS
-    is_shell_expansion = "$" in word or SHELL_DOLLAR in word
-    return follows_benign and not is_shell_expansion
+    return any(_is_unresolved(word) for word in arguments)
 
 
 def _cargo_subcommand(arguments: list[str]) -> tuple[str | None, list[str]]:

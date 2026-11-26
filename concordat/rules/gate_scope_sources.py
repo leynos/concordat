@@ -23,16 +23,17 @@ copy.
 from __future__ import annotations
 
 import dataclasses
-import itertools
 import os
 import pathlib
 import re
 import typing as typ
 
 from .gate_scope_commands import Invocation, invocations_in, leaves_directory
+from .gate_scope_workflow_model import Place, logical_lines, places, step_runs
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
 from .makefile_expansion import (
+    SHELL_DOLLAR,
     UNRESOLVED_MARK,
     expand_readings,
     joined,
@@ -88,8 +89,6 @@ _TOOL_ARGUMENTS: typ.Final = frozenset({
     "--all-targets",
     "--all-features",
 })
-_MATRIX_REFERENCE: typ.Final = re.compile(r"\$\{\{\s*matrix\.([\w-]+)\s*\}\}")
-_ANY_EXPRESSION: typ.Final = re.compile(r"\$\{\{.*?\}\}")
 _FENCE: typ.Final = re.compile(r"^\s*(`{3,}|~{3,})")
 _PROMPT: typ.Final = re.compile(r"^\s*\$\s+")
 _EXAMPLE_ROOTS: typ.Final = ("AGENTS.md", "README.md", "docs")
@@ -103,31 +102,6 @@ class GateLines:
     unreadable: list[str]
     targets: list[str]
     is_resolved: bool
-
-
-def _logical_lines(text: str) -> list[tuple[int, str]]:
-    r"""Return the lines of *text* with `\` continuations joined, and their numbers.
-
-    Returns
-    -------
-    list[tuple[int, str]]
-        Each logical line with the number of its first physical line.
-    """
-    lines: list[tuple[int, str]] = []
-    pending = ""
-    first = 0
-    for number, line in enumerate(text.splitlines(), start=1):
-        stripped = line.rstrip()
-        if not pending:
-            first = number
-        if stripped.endswith("\\"):
-            pending += stripped[:-1] + " "
-            continue
-        lines.append((first, pending + stripped))
-        pending = ""
-    if pending:
-        lines.append((first, pending))
-    return lines
 
 
 # A Make reference that stands for the Whitaker command: the estate's
@@ -208,6 +182,11 @@ def _read_line(
     return found, not is_unreadable, moved or leaves_directory(segments)
 
 
+def _holds_reference(word: str) -> bool:
+    """Return whether *word* holds a Make reference or a shell expansion."""
+    return UNRESOLVED_MARK in word or "$" in word or SHELL_DOLLAR in word
+
+
 def _hides_tool(words: list[str]) -> bool:
     """Return whether one command might run a gate tool it does not name.
 
@@ -223,11 +202,11 @@ def _hides_tool(words: list[str]) -> bool:
     if start >= len(words):
         return False
     head = words[start]
-    unresolved_head = UNRESOLVED_MARK in head
+    unresolved_head = _holds_reference(head)
     unresolved_subcommand = (
         head.rsplit("/", 1)[-1] == "cargo"
         and len(words) > start + 1
-        and UNRESOLVED_MARK in words[start + 1]
+        and _holds_reference(words[start + 1])
     )
     return (unresolved_head or unresolved_subcommand) and any(
         word in _TOOL_ARGUMENTS for word in words[start + 1 :]
@@ -256,7 +235,10 @@ def makefile_lines(
     for target in walk.names:
         for rule in index[target]:
             found, missed = _read_rule(target, rule, values, is_one_shell=is_one_shell)
-            invocations.extend(_conditional(found) if rule.is_conditional else found)
+            is_conditional = rule.is_conditional or target in walk.conditional
+            invocations.extend(
+                _unplaced(found, _MAKE_CONDITION_REASON) if is_conditional else found
+            )
             unreadable.extend(missed)
     return GateLines(
         _distinct(invocations), _distinct_text(unreadable), walk.names, walk.is_resolved
@@ -281,6 +263,7 @@ def _read_rule(
     unreadable: list[str] = []
     moved_by_reading: dict[int, bool] = {}
     for number, text in rule.recipes:
+        per_reading: list[list[Invocation]] = []
         for position, reading in enumerate(expand_readings(text, values)):
             shown_line = " ".join(shown(blank_references(joined(reading.text))).split())
             source = f"Makefile:{number} ({target})"
@@ -290,282 +273,72 @@ def _read_rule(
                 moved=is_one_shell and moved_by_reading.get(position, False),
             )
             moved_by_reading[position] = moved
-            invocations.extend(found)
+            per_reading.append(found)
             if not is_readable:
                 unreadable.append(f"{source}: {shown_line}")
+        invocations.extend(_alternatives(per_reading))
     return invocations, unreadable
 
 
-def _conditional(found: list[Invocation]) -> list[Invocation]:
-    """Return *found* marked as unplaced: its recipe runs only under a Make condition.
+def _alternatives(per_reading: list[list[Invocation]]) -> list[Invocation]:
+    """Return the invocations of one line's readings, alternatives marked unplaced.
 
-    The audit does not evaluate `ifeq` and its kin, so it cannot say whether the
-    recipe runs, and counting it as covering a member, or as missing one, would
-    be a guess.
+    The readings of a probe `if` are alternatives: one run takes one branch. A
+    tool that two readings select differently (`-p a` against `-p b`) is not
+    covered by their union, so each of its invocations is unplaced.
+
+    Returns
+    -------
+    list[Invocation]
+        Every reading's invocations, those of an ambiguous tool unresolved.
+    """
+    flat = [invocation for found in per_reading for invocation in found]
+    if len(per_reading) < _MIN_ALTERNATIVES:
+        return flat
+    signatures: dict[str, set[tuple[object, ...]]] = {}
+    for invocation in flat:
+        signatures.setdefault(invocation["tool"], set()).add((
+            invocation["workspace_flag"],
+            tuple(invocation["packages"]),
+            tuple(invocation["excludes"]),
+            invocation["resolved"],
+            invocation["changes_directory"],
+        ))
+    ambiguous = {tool for tool, seen in signatures.items() if len(seen) > 1}
+    return [
+        _unplaced([invocation], _ALTERNATIVE_REASON)[0]
+        if invocation["tool"] in ambiguous
+        else invocation
+        for invocation in flat
+    ]
+
+
+_MIN_ALTERNATIVES: typ.Final = 2
+_MAKE_CONDITION_REASON: typ.Final = (
+    "it runs only under a Make condition the audit does not evaluate"
+)
+_STEP_CONDITION_REASON: typ.Final = (
+    "its step or job runs only under a matrix condition the audit does not evaluate"
+)
+_ALTERNATIVE_REASON: typ.Final = (
+    "a probe makes it one of two readings that select differently, and one run "
+    "takes one of them"
+)
+
+
+def _unplaced(found: list[Invocation], reason: str) -> list[Invocation]:
+    """Return *found* marked as unplaced, for *reason*.
+
+    The audit does not evaluate Make conditions, matrix conditions or probes, so
+    it cannot say whether such a command runs, and counting it as covering a
+    member, or as missing one, would be a guess.
 
     Returns
     -------
     list[Invocation]
         The same invocations, unresolved, with the reason.
     """
-    return [
-        {
-            **invocation,
-            "resolved": False,
-            "why": (
-                "its recipe runs only under a Make condition the audit does not "
-                "evaluate"
-            ),
-        }
-        for invocation in found
-    ]
-
-
-def _matrix_value(value: object) -> str:
-    """Return a matrix value as GitHub Actions would substitute it."""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value)
-
-
-def _product(matrix: dict[str, object]) -> list[dict[str, object]]:
-    """Return the combinations of the matrix's list-valued axes."""
-    axes = {
-        key: value
-        for key, value in matrix.items()
-        if key not in {"include", "exclude"} and isinstance(value, list)
-    }
-    if not axes:
-        # No axes means no original combinations, so each `include` entry
-        # becomes a combination of its own.
-        return []
-    names = list(axes)
-    return [
-        dict(zip(names, choice, strict=True))
-        for choice in itertools.product(*(axes[name] for name in names))
-    ]
-
-
-def _without_excluded(
-    combinations: list[dict[str, object]], excludes: list[object]
-) -> list[dict[str, object]]:
-    """Return *combinations* less those an `exclude` entry matches.
-
-    An entry removes every combination that holds all of its key and value
-    pairs. GitHub applies `exclude` before `include`, so an included entry can
-    bring back a combination that an exclude removed.
-
-    Returns
-    -------
-    list[dict[str, object]]
-        The combinations that survive.
-    """
-    entries = [
-        typ.cast("dict[str, object]", entry)
-        for entry in excludes
-        if isinstance(entry, dict)
-    ]
-    return [
-        combination
-        for combination in combinations
-        if not any(
-            all(combination.get(key) == value for key, value in entry.items())
-            for entry in entries
-        )
-    ]
-
-
-def _with_includes(
-    combinations: list[dict[str, object]], includes: list[object]
-) -> list[dict[str, object]]:
-    """Return *combinations* with each `include` entry applied, as GitHub does.
-
-    An entry is added to every original combination whose original values it
-    does not overwrite (a value an earlier `include` added can be overwritten),
-    and stands as a combination of its own when it can be added to none. An
-    entry that created a combination is not itself matched by later entries.
-
-    Returns
-    -------
-    list[dict[str, object]]
-        The combinations after the entries are applied.
-    """
-    originals = [dict(combination) for combination in combinations]
-    results = [dict(combination) for combination in combinations]
-    extra: list[dict[str, object]] = []
-    for candidate in includes:
-        if not isinstance(candidate, dict):
-            continue
-        entry = typ.cast("dict[str, object]", candidate)
-        added = False
-        for original, result in zip(originals, results, strict=True):
-            if all(
-                original[key] == entry[key] for key in entry.keys() & original.keys()
-            ):
-                result.update(entry)
-                added = True
-        if not added:
-            extra.append(dict(entry))
-    return [*results, *extra]
-
-
-def matrix_combinations(job: object) -> list[dict[str, object]] | None:
-    """Return the combinations a job's `strategy.matrix` expands to.
-
-    Returns
-    -------
-    list[dict[str, object]] | None
-        One mapping per matrix entry, a single empty one for a job with no
-        matrix, or ``None`` when the matrix is computed by an expression and
-        cannot be expanded here.
-    """
-    strategy = job.get("strategy") if isinstance(job, dict) else None
-    matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
-    if matrix is None:
-        return [{}]
-    if not isinstance(matrix, dict):
-        return None
-    axes = typ.cast("dict[str, object]", matrix)
-    includes, excludes = axes.get("include", []), axes.get("exclude", [])
-    if not isinstance(includes, list) or not isinstance(excludes, list):
-        return None
-    # An axis that is not a list is computed by an expression. Dropping it would
-    # leave combinations an `exclude` entry could not match, so the matrix is
-    # not expanded at all.
-    if any(
-        not isinstance(value, list)
-        for key, value in axes.items()
-        if key not in {"include", "exclude"}
-    ):
-        return None
-    combinations = _with_includes(
-        _without_excluded(_product(axes), typ.cast("list[object]", excludes)),
-        typ.cast("list[object]", includes),
-    )
-    # A matrix with no axes and no entries still runs its job once.
-    return combinations or [{}]
-
-
-def _fill(text: str, combination: dict[str, object]) -> str:
-    """Return *text* with `${{ matrix.* }}` filled in and other expressions marked."""
-
-    def matrix(match: re.Match[str]) -> str:
-        """Return one matrix reference's value, or the mark when it has none."""
-        value = combination.get(match.group(1))
-        return UNRESOLVED_MARK if value is None else _matrix_value(value)
-
-    return _ANY_EXPRESSION.sub(UNRESOLVED_MARK, _MATRIX_REFERENCE.sub(matrix, text))
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class _Place:
-    """A job or composite action: its matrix, its steps, and its default directory."""
-
-    label: str
-    combinations: list[dict[str, object]] | None
-    steps: object
-    directory: str | None
-
-
-def _default_directory(*scopes: object) -> str | None:
-    """Return the innermost `defaults.run.working-directory` among *scopes*."""
-    found: str | None = None
-    for scope in scopes:
-        defaults = scope.get("defaults") if isinstance(scope, dict) else None
-        run = defaults.get("run") if isinstance(defaults, dict) else None
-        directory = run.get("working-directory") if isinstance(run, dict) else None
-        if isinstance(directory, str):
-            found = directory
-    return found
-
-
-def _steps(parsed: object) -> list[_Place]:
-    """Return each place that holds steps, with its matrix and default directory."""
-    if not isinstance(parsed, dict):
-        return []
-    places: list[_Place] = []
-    jobs = parsed.get("jobs")
-    if isinstance(jobs, dict):
-        places.extend(
-            _Place(
-                f"job {name}",
-                matrix_combinations(job),
-                job.get("steps"),
-                _default_directory(parsed, job),
-            )
-            for name, job in jobs.items()
-            if isinstance(job, dict)
-        )
-    runs = parsed.get("runs")
-    if isinstance(runs, dict):
-        places.append(_Place("action", [{}], runs.get("steps"), None))
-    return places
-
-
-def _is_elsewhere(directory: object) -> bool:
-    """Return whether a `working-directory` leaves the checkout root.
-
-    An expression is unknown, and unknown is not the root.
-
-    Returns
-    -------
-    bool
-        Whether the step runs somewhere other than the root.
-    """
-    return isinstance(directory, str) and directory.strip() not in {"", ".", "./"}
-
-
-_NEVER: typ.Final = frozenset({"false", "${{ false }}", "${{false}}"})
-
-
-def _is_never(condition: object) -> bool:
-    """Return whether a step's `if` is the constant false, so it never runs.
-
-    Any other condition is taken to hold on some run: the rule judges the
-    commands a gate has, not the schedule they run on.
-
-    Returns
-    -------
-    bool
-        Whether the step is switched off.
-    """
-    if condition is False:
-        return True
-    return isinstance(condition, str) and condition.strip().lower() in _NEVER
-
-
-def _step_lines(
-    place: _Place, combination: dict[str, object]
-) -> list[tuple[str, list[str], bool]]:
-    """Return `(source, lines, in_other_directory)` for each `run` step of *place*.
-
-    The lines are the step's logical lines in order, because one step is one
-    shell: a `cd` on an early line moves every command after it. The flag is
-    set when the step, or its job or workflow, names a `working-directory`
-    other than the root.
-
-    Returns
-    -------
-    list[tuple[str, list[str], bool]]
-        One entry per step that runs a script.
-    """
-    if not isinstance(place.steps, list):
-        return []
-    found: list[tuple[str, list[str], bool]] = []
-    for position, step in enumerate(place.steps, start=1):
-        run = step.get("run") if isinstance(step, dict) else None
-        if not isinstance(step, dict) or not isinstance(run, str):
-            continue
-        if _is_never(step.get("if")):
-            continue
-        directory = step.get("working-directory", place.directory)
-        lines = [line for _n, line in _logical_lines(_fill(run, combination))]
-        found.append((
-            f"({place.label}, step {position})",
-            lines,
-            _is_elsewhere(directory),
-        ))
-    return found
+    return [{**invocation, "resolved": False, "why": reason} for invocation in found]
 
 
 def workflow_lines(files: cabc.Iterable[WorkflowFile]) -> GateLines:
@@ -586,7 +359,7 @@ def workflow_lines(files: cabc.Iterable[WorkflowFile]) -> GateLines:
         if workflow["error"] is not None:
             unreadable.append(f"{workflow['path']}: {workflow['error']}")
             continue
-        for place in _steps(workflow["parsed"]):
+        for place in places(workflow["parsed"]):
             found, missed = _read_place(workflow["path"], place)
             invocations.extend(found)
             unreadable.extend(missed)
@@ -595,7 +368,7 @@ def workflow_lines(files: cabc.Iterable[WorkflowFile]) -> GateLines:
     )
 
 
-def _read_place(path: str, place: _Place) -> tuple[list[Invocation], list[str]]:
+def _read_place(path: str, place: Place) -> tuple[list[Invocation], list[str]]:
     """Read the steps of one job or action, once per matrix combination.
 
     A matrix computed by an expression cannot be filled in, so a job whose steps
@@ -617,9 +390,15 @@ def _read_place(path: str, place: _Place) -> tuple[list[Invocation], list[str]]:
     invocations: list[Invocation] = []
     unreadable: list[str] = []
     for combination in place.combinations:
-        for source, lines, elsewhere in _step_lines(place, combination):
-            found, missed = _read_step(f"{path} {source}", lines, moved=elsewhere)
-            invocations.extend(found)
+        for step in step_runs(place, combination):
+            found, missed = _read_step(
+                f"{path} {step.source}", step.lines, moved=step.is_elsewhere
+            )
+            invocations.extend(
+                _unplaced(found, _STEP_CONDITION_REASON)
+                if step.is_matrix_conditional
+                else found
+            )
             unreadable.extend(missed)
     return invocations, unreadable
 
@@ -731,7 +510,7 @@ def _fenced_lines(text: str) -> list[tuple[int, str]]:
             fenced.append(line if inside else "")
     return [
         (number, _PROMPT.sub("", line))
-        for number, line in _logical_lines("\n".join(fenced))
+        for number, line in logical_lines("\n".join(fenced))
     ]
 
 
