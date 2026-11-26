@@ -658,6 +658,7 @@ class _Walk:
         """
         if reason is None:
             return []
+        self.uncertain = True
         verdict = _Verdict(INDETERMINATE, len(seen), reason)
         self._fact(recipe, command.text, verdict)
         return [Prepared(Signature(opaque=(command.text,)), is_warmed=False)]

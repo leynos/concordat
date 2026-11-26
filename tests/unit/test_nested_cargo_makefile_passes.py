@@ -522,6 +522,19 @@ def test_an_implicit_preparation_leaves_compiled_and_restricted_passes_open(
     assert found[-1:] == statuses_found
 
 
+def test_an_unread_command_before_a_pass_leaves_it_indeterminate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`$(RUNNER) --test ui` may have warmed the build, so the pass is not definite."""
+    makefile = (
+        "test:\n\t$(RUNNER) --test ui --all-features\n"
+        "\tcargo test --no-run --all-features\n\tcargo test --all-features\n"
+    )
+    checkout(tmp_path, makefile)
+    found = [fact["status"] for fact in makefile_passes(tmp_path)]
+    assert found == ["indeterminate", "indeterminate"]
+
+
 def test_a_recipe_less_test_target_beside_a_non_matching_pattern_is_not_flagged(
     tmp_path: pathlib.Path,
 ) -> None:
