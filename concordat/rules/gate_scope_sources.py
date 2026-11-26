@@ -39,7 +39,7 @@ from .makefile_expansion import (
     shown,
     single_assignments,
 )
-from .makefile_reach import reachable, rules_by_target
+from .makefile_reach import Rule, reachable, rules_by_target
 from .markdown_envelope import (
     PRUNED_DIRECTORIES,
     is_symlink,
@@ -255,27 +255,45 @@ def makefile_lines(
     unreadable: list[str] = []
     for target in walk.names:
         for rule in index[target]:
-            moved_by_reading: dict[int, bool] = {}
-            for number, text in rule.recipes:
-                for position, reading in enumerate(expand_readings(text, values)):
-                    where = (
-                        f"Makefile:{number} ({target})",
-                        " ".join(shown(blank_references(joined(reading.text))).split()),
-                    )
-                    found, is_readable, moved = _read_line(
-                        reading.text,
-                        where,
-                        moved=is_one_shell and moved_by_reading.get(position, False),
-                    )
-                    moved_by_reading[position] = moved
-                    invocations.extend(
-                        _conditional(found) if rule.is_conditional else found
-                    )
-                    if not is_readable:
-                        unreadable.append(f"{where[0]}: {where[1]}")
+            found, missed = _read_rule(target, rule, values, is_one_shell=is_one_shell)
+            invocations.extend(_conditional(found) if rule.is_conditional else found)
+            unreadable.extend(missed)
     return GateLines(
         _distinct(invocations), _distinct_text(unreadable), walk.names, walk.is_resolved
     )
+
+
+def _read_rule(
+    target: str,
+    rule: Rule,
+    values: cabc.Mapping[str, str],
+    *,
+    is_one_shell: bool,
+) -> tuple[list[Invocation], list[str]]:
+    """Read every recipe line of one rule, in each reading its variables allow.
+
+    Returns
+    -------
+    tuple[list[Invocation], list[str]]
+        The invocations found, and the lines that could not be read.
+    """
+    invocations: list[Invocation] = []
+    unreadable: list[str] = []
+    moved_by_reading: dict[int, bool] = {}
+    for number, text in rule.recipes:
+        for position, reading in enumerate(expand_readings(text, values)):
+            shown_line = " ".join(shown(blank_references(joined(reading.text))).split())
+            source = f"Makefile:{number} ({target})"
+            found, is_readable, moved = _read_line(
+                reading.text,
+                (source, shown_line),
+                moved=is_one_shell and moved_by_reading.get(position, False),
+            )
+            moved_by_reading[position] = moved
+            invocations.extend(found)
+            if not is_readable:
+                unreadable.append(f"{source}: {shown_line}")
+    return invocations, unreadable
 
 
 def _conditional(found: list[Invocation]) -> list[Invocation]:
@@ -569,23 +587,41 @@ def workflow_lines(files: cabc.Iterable[WorkflowFile]) -> GateLines:
             unreadable.append(f"{workflow['path']}: {workflow['error']}")
             continue
         for place in _steps(workflow["parsed"]):
-            if place.combinations is None:
-                if _MATRIX_TOOL.search(repr(place.steps)):
-                    unreadable.append(
-                        f"{workflow['path']} ({place.label}): matrix is computed by "
-                        "an expression, so its commands cannot be filled in"
-                    )
-                continue
-            for combination in place.combinations:
-                for source, lines, elsewhere in _step_lines(place, combination):
-                    found, missed = _read_step(
-                        f"{workflow['path']} {source}", lines, moved=elsewhere
-                    )
-                    invocations.extend(found)
-                    unreadable.extend(missed)
+            found, missed = _read_place(workflow["path"], place)
+            invocations.extend(found)
+            unreadable.extend(missed)
     return GateLines(
         _distinct(invocations), _distinct_text(unreadable), [], is_resolved=True
     )
+
+
+def _read_place(path: str, place: _Place) -> tuple[list[Invocation], list[str]]:
+    """Read the steps of one job or action, once per matrix combination.
+
+    A matrix computed by an expression cannot be filled in, so a job whose steps
+    name a gate tool is unreadable rather than skipped.
+
+    Returns
+    -------
+    tuple[list[Invocation], list[str]]
+        The invocations found, and the lines or jobs that could not be read.
+    """
+    if place.combinations is None:
+        if _MATRIX_TOOL.search(repr(place.steps)):
+            reason = (
+                f"{path} ({place.label}): matrix is computed by an expression, "
+                "so its commands cannot be filled in"
+            )
+            return [], [reason]
+        return [], []
+    invocations: list[Invocation] = []
+    unreadable: list[str] = []
+    for combination in place.combinations:
+        for source, lines, elsewhere in _step_lines(place, combination):
+            found, missed = _read_step(f"{path} {source}", lines, moved=elsewhere)
+            invocations.extend(found)
+            unreadable.extend(missed)
+    return invocations, unreadable
 
 
 def _read_step(
@@ -646,22 +682,40 @@ def _distinct_text(lines: list[str]) -> list[str]:
 
 
 def _markdown_files(checkout: pathlib.Path) -> list[pathlib.Path]:
-    """Return the prose files that carry contributor-facing examples."""
+    """Return the prose files that carry contributor-facing examples.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        The root files and the Markdown files under the root directories, none
+        reached through a symbolic link.
+    """
+    candidates = [checkout / name for name in _EXAMPLE_ROOTS]
+    plain = [path for path in candidates if not path.is_symlink()]
+    files = [path for path in plain if path.is_file()]
+    for directory in (path for path in plain if path.is_dir()):
+        files.extend(_markdown_under(directory))
+    return files
+
+
+def _markdown_under(directory: pathlib.Path) -> list[pathlib.Path]:
+    """Return the Markdown files under *directory*, pruning what no envelope reads.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        The files in walk order, names sorted.
+    """
     found: list[pathlib.Path] = []
-    for name in _EXAMPLE_ROOTS:
-        path = checkout / name
-        if path.is_file() and not path.is_symlink():
-            found.append(path)
-        elif path.is_dir() and not path.is_symlink():
-            for current, directories, files in os.walk(path, onerror=raise_walk_error):
-                directories[:] = sorted(
-                    entry for entry in directories if entry not in PRUNED_DIRECTORIES
-                )
-                found.extend(
-                    pathlib.Path(current) / entry
-                    for entry in sorted(files)
-                    if entry.endswith(".md")
-                )
+    for current, directories, files in os.walk(directory, onerror=raise_walk_error):
+        directories[:] = sorted(
+            entry for entry in directories if entry not in PRUNED_DIRECTORIES
+        )
+        found.extend(
+            pathlib.Path(current) / entry
+            for entry in sorted(files)
+            if entry.endswith(".md")
+        )
     return found
 
 

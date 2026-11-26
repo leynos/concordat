@@ -254,31 +254,52 @@ def _wrapper_tool(word: str) -> str | None:
     return match and (match.group("tool") or match.group("named"))
 
 
+def _cargo_half(tool: str, arguments: list[str]) -> list[str]:
+    """Return the arguments that reach Cargo's package selection.
+
+    Whitaker takes its own options before `--` and Cargo's after it, so only the
+    half after the separator selects packages; an unresolved lint-library name
+    before it cannot. Cargo's tools stop at `--` too: what follows goes to the
+    test harness or to Clippy's lints.
+
+    Returns
+    -------
+    list[str]
+        The words to scan for `-p`, `--exclude` and the workspace flags.
+    """
+    boundary = arguments.index("--") if "--" in arguments else None
+    if tool == "whitaker":
+        return [] if boundary is None else arguments[boundary + 1 :]
+    return arguments if boundary is None else arguments[:boundary]
+
+
+def _may_supply_separator(tool: str, arguments: list[str]) -> bool:
+    """Return whether an unresolved word may be Whitaker's `--` and what follows.
+
+    With no `--` in sight an unresolved word may supply the separator, and with
+    it the whole Cargo half: `whitaker $FLAGS` can be `whitaker --all --
+    --workspace`.
+
+    Returns
+    -------
+    bool
+        Whether the Cargo half may be hidden in a word.
+    """
+    return (
+        tool == "whitaker"
+        and "--" not in arguments
+        and any(_is_unresolved(word) for word in arguments)
+    )
+
+
 def _build(
     tool: str, arguments: list[str], where: tuple[str, str], *, moved: bool
 ) -> Invocation:
     """Return the invocation a tool's selection arguments describe."""
-    # Whitaker takes its own options before `--` and Cargo's after it, so only
-    # the Cargo half selects packages. Cargo's tools stop at `--` too: what
-    # follows goes to the test harness or to Clippy's lints.
-    boundary = arguments.index("--") if "--" in arguments else None
-    # Only those Cargo arguments are scanned: an unresolved lint-library name
-    # before Whitaker's `--` cannot select a package.
-    if tool == "whitaker":
-        cargo_arguments = arguments[boundary + 1 :] if boundary is not None else []
-    else:
-        cargo_arguments = arguments[:boundary] if boundary is not None else arguments
+    cargo_arguments = _cargo_half(tool, arguments)
     packages, excludes, manifest = _selection(cargo_arguments)
     has_flag = any(word in _WORKSPACE_FLAGS for word in cargo_arguments)
-    # With no `--` in sight, an unresolved word may supply the separator, and
-    # with it the whole Cargo half: `whitaker $FLAGS` can be
-    # `whitaker --all -- --workspace`.
-    may_supply_separator = (
-        tool == "whitaker"
-        and boundary is None
-        and any(_is_unresolved(word) for word in arguments)
-    )
-    hidden = may_supply_separator or _hides_selection(cargo_arguments)
+    hidden = _may_supply_separator(tool, arguments) or _hides_selection(cargo_arguments)
     source, command = where
     return {
         "tool": tool,
