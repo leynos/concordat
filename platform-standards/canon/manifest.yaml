@@ -335,7 +335,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/gate-workspace-coverage/rule.yaml
     description: >-
       Rule package manifest for the gate-workspace-coverage audit.
-    sha256: 16f1d056125ceed5278bfaf24f873b24c2c23d980ab8d3510dd80ab8d9e42806
+    sha256: 4c2fe37d81c7a0fd8d5f7adb1408bfa5d83b109f4ae12ac5fa65acb00b6f5ac8
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

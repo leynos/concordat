@@ -3258,12 +3258,13 @@ expression and a Makefile walk that skipped a target are indeterminate
 (EN-001), because a confident verdict about commands the audit could not read
 is the failure a fail-closed audit exists to avoid.
 
-Cargo's `--all` is `--workspace`. Whitaker takes its own options before `--`
-and Cargo's after it, and its own `--all` selects lint libraries, so only a
-spelling after the `--` counts. Matrix entries are read as commands of their
-own, so a gate that varies its cargo flags by matrix is judged on what it runs.
-The finding names the fenced examples in `AGENTS.md` and `docs/` that show the
-same narrowing, because a fix that leaves them behind is copied back into every
+Cargo's `--all` is `--workspace`. Whitaker's own `--all` and `--lib NAME`
+select lint libraries, and it forwards every other option, before or after
+`--`, to Cargo, so `--workspace` counts on either side of the separator and
+`--all` does not. Matrix entries are read as commands of their own, so a gate
+that varies its cargo flags by matrix is judged on what it runs. The finding
+names the fenced examples in `AGENTS.md` and `docs/` that show the same
+narrowing, because a fix that leaves them behind is copied back into every
 contributor's shell. The rule ships at `warning` severity as a survey and is
 raised to `error` once the estate reads clean.
 

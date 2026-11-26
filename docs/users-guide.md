@@ -1544,9 +1544,9 @@ package, a bare command selects the root package alone; `default-members` and a
 - **GC-001**: the commands of a tool leave members out. The finding names the
   members, the commands that narrow them, and the fenced examples in
   `AGENTS.md` and `docs/` that show the same narrowing. Select the workspace
-  with `--workspace` or `--all` (for Whitaker, after the `--`; its own `--all`
-  selects lint libraries), or exempt a crate by name in the rule's parameters
-  with a rationale and a review trigger.
+  with `--workspace` or `--all` (for Whitaker, `--workspace` on either side of
+  the `--`; its own `--all` selects lint libraries), or exempt a crate by name
+  in the rule's parameters with a rationale and a review trigger.
 - **EN-001** (indeterminate): a command the audit cannot place is not guessed.
   That covers a wrapper script, an unresolved word that could select packages,
   a command run after `cd` or against another manifest, a matrix computed by an

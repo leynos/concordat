@@ -11,8 +11,8 @@ description: >-
   members a tool's commands select together must be the whole workspace, less
   crates the rule's parameters exempt by repository and name with a rationale
   and a review trigger. Cargo spells the whole workspace `--workspace` or its
-  alias `--all`; for Whitaker only a spelling after the `--` counts, because its
-  own `--all` selects lint libraries. The gate is the Makefile's `lint` and
+  alias `--all`; for Whitaker only `--workspace` counts (on either side of the
+  `--`), because its own `--all` selects lint libraries. The gate is the Makefile's `lint` and
   `test` targets, followed through their prerequisites and `make` commands, and
   every `run` step of every workflow and composite action, with each matrix
   entry read as a command of its own. A tool the gate does not run is not

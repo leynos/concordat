@@ -12,8 +12,9 @@ directory it runs against. The policy decides what that means for the
 workspace.
 
 Cargo spells the whole workspace `--workspace` or its alias `--all`. Whitaker
-takes its own options before `--` and Cargo's after it; its `--all` before the
-`--` selects lint libraries, not packages, so only a spelling after `--` counts.
+takes its own options (`--all`, `--lib NAME`) before `--` and forwards the rest
+of both halves to Cargo; its `--all` selects lint libraries, not packages, so
+only `--workspace` counts as the whole workspace, on either side of `--`.
 
 A command the reader cannot place is recorded unresolved, never guessed: an
 unresolved word that could be part of the package selection, a command run in
@@ -242,13 +243,38 @@ def _wrapper_tool(word: str) -> str | None:
     return match and (match.group("tool") or match.group("named"))
 
 
+def _whitaker_own(arguments: list[str]) -> list[str]:
+    """Return the words before Whitaker's `--` that are not its own options.
+
+    Whitaker's `--all` selects lint libraries, and `--lib NAME` names one, so
+    neither selects packages. Every other word before the separator is forwarded
+    to Cargo, which measurement confirms for `--workspace` and `-p`.
+
+    Returns
+    -------
+    list[str]
+        The words before `--` that may select packages.
+    """
+    kept: list[str] = []
+    after_lib = False
+    for word in arguments:
+        if after_lib:
+            after_lib = False
+        elif word == "--lib":
+            after_lib = True
+        elif word != "--all":
+            kept.append(word)
+    return kept
+
+
 def _cargo_half(tool: str, arguments: list[str]) -> list[str]:
     """Return the arguments that reach Cargo's package selection.
 
-    Whitaker takes its own options before `--` and Cargo's after it, so only the
-    half after the separator selects packages; an unresolved lint-library name
-    before it cannot. Cargo's tools stop at `--` too: what follows goes to the
-    test harness or to Clippy's lints.
+    Whitaker's own options (`--all`, `--lib NAME`) are not package selection,
+    but the words around them are Cargo's whichever side of `--` they stand on,
+    so `whitaker --all --workspace -- --all-targets` selects the workspace.
+    Cargo's tools stop at `--`: what follows goes to the test harness or to
+    Clippy's lints.
 
     Returns
     -------
@@ -257,7 +283,9 @@ def _cargo_half(tool: str, arguments: list[str]) -> list[str]:
     """
     boundary = arguments.index("--") if "--" in arguments else None
     if tool == "whitaker":
-        return [] if boundary is None else arguments[boundary + 1 :]
+        if boundary is None:
+            return []
+        return [*_whitaker_own(arguments[:boundary]), *arguments[boundary + 1 :]]
     return arguments if boundary is None else arguments[:boundary]
 
 

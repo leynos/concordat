@@ -78,10 +78,12 @@ suffix (`name@1.2.3`) is dropped.
 | Neither, with `default-members`     | The default members.                |
 | Neither, virtual or single package  | Every member.                       |
 
-For Whitaker, the options before `--` are its own and the options after it are
-Cargo's, so only a spelling after the `--` counts. Its own `--all` before the
-`--` selects lint libraries, not packages. `cargo test --doc` is a tool of its
-own (`test-doc`): doctests are judged apart from unit tests.
+For Whitaker, `--all` and `--lib NAME` are its own and select lint libraries,
+not packages. Every other option, before or after the `--`, goes to Cargo
+(measured: `whitaker --all -p app --` checks only `app`, and
+`whitaker --all --workspace --` checks every member), so `--workspace` counts
+on either side of the separator and `--all` does not. `cargo test --doc` is a
+tool of its own (`test-doc`): doctests are judged apart from unit tests.
 
 A command that narrows is not a finding while another command of the same tool
 covers the rest. The `whitaker` repository lints every crate with one command

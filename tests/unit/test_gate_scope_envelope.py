@@ -116,12 +116,14 @@ class TestCommands:
             ("whitaker --all", False),
             ("whitaker --lib whitaker_suite -- --workspace --exclude b", True),
             ("cargo dylint --all -- --workspace", True),
+            ("whitaker --all --workspace -- --all-targets", True),
+            ("whitaker --all -p app -- --all-targets", False),
         ],
     )
     def test_whitakers_own_all_selects_libraries_not_packages(
         self, command: str, *, is_workspace: bool
     ) -> None:
-        """Only a spelling after `--` reaches Cargo, so only it counts."""
+        """Whitaker's `--all` selects libraries; `--workspace` counts on either side."""
         tool, flag, _packages, _excludes = _selection(command)
         assert tool == "whitaker"
         assert flag is is_workspace
