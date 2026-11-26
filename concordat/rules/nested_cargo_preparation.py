@@ -490,14 +490,10 @@ def _test_targets(
     """
     if any(root.startswith(UNSEEN) for root in roots):
         return None
-    # A `[[test]]` table that gives its own path leaves `tests/<name>.rs` a root
-    # the resolver guessed from the name, not a file: it is no owner.
-    prefix = path[: path.find("tests/")] if "tests/" in path else ""
-    phantoms = {f"{prefix}tests/{name}.rs" for name in declared.values()}
-    sources = (path, *(r for r in roots if r in declared or r not in phantoms))
-    names = {declared[source] for source in sources if source in declared}
+    sources = _owners(path, roots, declared)
     if is_named and not all(source in declared for source in sources):
         return None
+    names = {declared[source] for source in sources if source in declared}
     names |= {
         found["name"]
         for source, found in ((s, _TARGET_NAME.search(s)) for s in sources)
@@ -506,3 +502,19 @@ def _test_targets(
     if not names and not roots:
         return None
     return sorted(names)
+
+
+def _owners(path: str, roots: list[str], declared: cabc.Mapping[str, str]) -> list[str]:
+    """Return the file and the roots that own it, without guessed roots.
+
+    A `[[test]]` table that gives its own path leaves `tests/<name>.rs` a root
+    the resolver guessed from the name, not a file: it is no owner.
+
+    Returns
+    -------
+    list[str]
+        The file's own path, then each root that is a real owner.
+    """
+    prefix = path[: path.find("tests/")] if "tests/" in path else ""
+    guessed = {f"{prefix}tests/{name}.rs" for name in declared.values()}
+    return [path, *(r for r in roots if r in declared or r not in guessed)]
