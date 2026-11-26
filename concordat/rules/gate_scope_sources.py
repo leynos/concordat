@@ -39,7 +39,7 @@ from .gate_scope_commands import (
     settle,
     without_keywords,
 )
-from .gate_scope_shell import Branch, runnable
+from .gate_scope_shell import merge_states, runnable
 from .gate_scope_workflow_model import Place, logical_lines, places, step_runs
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
@@ -353,70 +353,12 @@ def _read_recipe_line(
 def _shell_before(state_by_reading: cabc.Mapping[int, ShellState]) -> ShellState:
     """Return the shell the next line of a `.ONESHELL` recipe starts in.
 
-    One earlier reading leaves one state. Several are alternatives of probes the
-    next line's own readings need not correspond to (the two probes may test
-    different tools), so every reading of the next line starts from all of
-    them: moved if any moved, with each open `if` block kept when the states
-    agree on it, so a branch known not to run stays skipped, and a fork when
-    they disagree.
-
     Returns
     -------
     ShellState
-        The merged state.
+        The merge of every earlier reading's state.
     """
-    states = list(state_by_reading.values())
-    if len(states) <= 1:
-        return states[0] if states else FRESH_SHELL
-    count = max(state.count for state in states)
-    branches, forks = _merge_branches([state.branches for state in states], count)
-    return ShellState(
-        moved=any(state.moved for state in states),
-        branches=branches,
-        forks=frozenset().union(*(state.forks for state in states), forks),
-        count=count + len(branches),
-    )
-
-
-def _merge_branches(
-    open_blocks: list[tuple[Branch, ...]], count: int
-) -> tuple[tuple[Branch, ...], frozenset[int]]:
-    """Return the `if` blocks open in every alternative, and the forks they add.
-
-    A block all alternatives agree on is kept as it is. One they disagree on, or
-    that only some have open, is a condition the probe decides, so it becomes a
-    fork whose commands are indeterminate, unless no alternative can run it.
-
-    Returns
-    -------
-    tuple[tuple[Branch, ...], frozenset[int]]
-        The merged blocks, and the `uid` of each new fork.
-    """
-    merged: list[Branch] = []
-    forks: set[int] = set()
-    for depth in range(max(len(blocks) for blocks in open_blocks)):
-        at_depth = {
-            blocks[depth] if depth < len(blocks) else None for blocks in open_blocks
-        }
-        only = next(iter(at_depth))
-        if len(at_depth) == 1 and only is not None:
-            merged.append(only)
-            continue
-        if None not in at_depth and not any(b.active for b in at_depth if b):
-            # No reading can run this branch, whatever the probe says. Whether
-            # an earlier branch of the `if` was taken may still differ, and a
-            # later `else` then runs on some readings only: an unnamed fork the
-            # `else` will settle.
-            takens = {block.taken for block in at_depth if block}
-            if len(takens) == 1:
-                merged.append(Branch(taken=takens.pop(), active=False))
-            else:
-                merged.append(Branch(taken=False, active=False, uid=count + depth))
-            continue
-        fork = Branch(taken=False, active=True, uid=count + depth)
-        merged.append(fork)
-        forks.add(fork.uid)
-    return tuple(merged), frozenset(forks)
+    return merge_states(list(state_by_reading.values()))
 
 
 def _resolve_probes(
