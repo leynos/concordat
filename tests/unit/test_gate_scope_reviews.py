@@ -434,3 +434,21 @@ class TestNonSelectingCommands:
         files = _workspace_files(extra=_step_workflow(line))
 
         assert _build(tmp_path, files)["unreadable"] == []
+
+    def test_a_variable_cargo_subcommand_with_a_version_flag_hides_nothing(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cargo "$GATE" --version` asks Cargo for its version."""
+        files = _workspace_files(extra=_step_workflow('cargo "$GATE" --version'))
+
+        assert _build(tmp_path, files)["unreadable"] == []
+
+    def test_a_help_flag_after_the_separator_does_not_hide_a_tool(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Cargo passes a flag after `--` to the test binary, so it asks nothing."""
+        files = _workspace_files(extra=_step_workflow('cargo "$GATE" test -- --help'))
+
+        assert _build(tmp_path, files)["unreadable"], (
+            "a variable subcommand is still unreadable when --help follows `--`"
+        )

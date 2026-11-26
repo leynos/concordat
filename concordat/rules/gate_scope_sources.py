@@ -223,13 +223,28 @@ def _hides_tool(words: list[str]) -> bool:
     if start >= len(words):
         return False
     head = words[start]
-    if head.rsplit("/", 1)[-1] == "cargo":
-        subcommand = cargo_subcommand_word(words[start + 1 :])
-        return subcommand is not None and _holds_reference(subcommand)
     arguments = words[start + 1 :]
-    if any(word in _INFORMATION_FLAGS for word in arguments):
+    if _asks_for_information(arguments):
         return False
+    if head.rsplit("/", 1)[-1] == "cargo":
+        subcommand = cargo_subcommand_word(arguments)
+        return subcommand is not None and _holds_reference(subcommand)
     return _holds_reference(head) and any(word in _TOOL_ARGUMENTS for word in arguments)
+
+
+def _asks_for_information(arguments: list[str]) -> bool:
+    """Return whether the arguments before any `--` only ask the tool about itself.
+
+    What follows `--` goes to a test binary or a lint, not to the tool, so a
+    `--help` there asks nothing of it.
+
+    Returns
+    -------
+    bool
+        Whether an informational flag appears before `--`.
+    """
+    own = arguments[: arguments.index("--")] if "--" in arguments else arguments
+    return any(word in _INFORMATION_FLAGS for word in own)
 
 
 def makefile_lines(
