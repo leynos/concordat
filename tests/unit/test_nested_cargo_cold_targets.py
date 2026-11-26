@@ -124,6 +124,25 @@ def test_test_tables_share_normalise_and_default_their_paths(
     assert targets(tmp_path) == {source: expected}
 
 
+def test_a_guessed_owner_that_another_table_declares_leaves_the_targets_unknown(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Table `b` guesses `tests/b.rs`, which table `c` declares as its own source."""
+    checkout(
+        tmp_path,
+        {
+            "Cargo.toml": (
+                '[package]\nname = "app"\nautotests = false\n\n'
+                '[[test]]\nname = "b"\npath = "tests/a.rs"\n\n'
+                '[[test]]\nname = "c"\npath = "tests/b.rs"\n'
+            ),
+            "tests/a.rs": TRYBUILD_TEST,
+            "tests/b.rs": "fn other() {}\n",
+        },
+    )
+    assert targets(tmp_path) == {"tests/a.rs": None}
+
+
 def test_a_file_no_test_table_names_stays_unknown_in_a_named_crate(
     tmp_path: pathlib.Path,
 ) -> None:

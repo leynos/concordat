@@ -505,6 +505,8 @@ def _test_targets(
     """
     if any(root.startswith(UNSEEN) for root in roots):
         return None
+    if _is_ambiguous(path, roots, declared):
+        return None
     sources = _owners(path, roots, declared)
     if is_named and not all(source in declared for source in sources):
         return None
@@ -525,6 +527,34 @@ def _target_names(
         if found and source not in declared
     )
     return named | set(by_file)
+
+
+def _is_ambiguous(
+    path: str, roots: list[str], declared: cabc.Mapping[str, frozenset[str]]
+) -> bool:
+    """Return whether a root may be a guessed owner and another table's source.
+
+    A table `b` with another path leaves `tests/b.rs` as the guessed root of its
+    sources; if a different table `c` declares `tests/b.rs` as its real path,
+    the reader cannot tell which of the two the root is, so the targets are
+    unknown.
+
+    Returns
+    -------
+    bool
+        True when a root is a declared path and also another table's guess.
+    """
+    prefix = path[: path.find("tests/")] if "tests/" in path else ""
+    every = {name for names in declared.values() for name in names}
+    return any(
+        root in declared
+        and any(
+            root == f"{prefix}tests/{name}.rs" and name not in declared[root]
+            for name in every
+        )
+        for root in roots
+        if root != path
+    )
 
 
 def _owners(
