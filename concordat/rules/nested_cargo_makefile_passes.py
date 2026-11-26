@@ -45,13 +45,13 @@ from .makefile_expansion import Assignments, shown, single_assignments
 from .makefile_tool_paths import read_tool_paths
 from .nested_cargo_make_options import PLAIN_GOAL, unreliable_make
 from .nested_cargo_makefile_lines import rules_by_target
+from .nested_cargo_makefile_names import settled_index
 from .nested_cargo_makefile_preparation import (
     MakefileReader,
     is_fully_readable,
     is_plain_rule,
     line_commands,
     read_makefile,
-    settled_index,
 )
 from .nested_cargo_pass_signature import (
     Action,

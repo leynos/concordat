@@ -43,6 +43,11 @@ from .makefile_facts import MakefileRefusedError, inspect_makefile
 from .makefile_tool_paths import read_tool_paths
 from .markdown_envelope import within_checkout
 from .nested_cargo_makefile_lines import rules_by_target
+from .nested_cargo_makefile_names import (
+    UNSAFE_SPECIAL_TARGETS,
+    may_be_special,
+    settled_index,
+)
 from .nested_cargo_scripts import TEST_TARGET, ScriptCommand, script_commands
 
 if typ.TYPE_CHECKING:
@@ -52,13 +57,8 @@ if typ.TYPE_CHECKING:
     from .makefile_facts import MakeRecipe, MakeRule, MakeutilReport
 
 MAKEFILE: typ.Final = "Makefile"
-ONESHELL_TARGET: typ.Final = ".ONESHELL"
 PHONY_TARGET: typ.Final = ".PHONY"
-# Special targets that change what a failed recipe line does to the next (a
-# `.ONESHELL` recipe runs as one script; `.IGNORE` ignores errors, globally or
-# for the targets it names), so a build before the tests no longer gates them.
 _INCLUDE_LINE: typ.Final = re.compile(r"^[ ]*[-s]?include\b", re.MULTILINE)
-UNSAFE_SPECIAL_TARGETS: typ.Final = frozenset({ONESHELL_TARGET, ".IGNORE"})
 OPERATION_READ_MAKEFILE: typ.Final = "read-nested-cargo-makefile-preparation"
 
 
@@ -424,54 +424,6 @@ def read_makefile(checkout: pathlib.Path) -> tuple[MakeutilReport, str] | None:
     return report, path.read_text(encoding="utf-8", errors="replace")
 
 
-def settled_index(
-    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
-) -> dict[str, list[MakeRule]]:
-    """Return *index* with each expanded target name also keyed by what it settles to.
-
-    The index is keyed by the raw target text, such as `$(T)`, but the walkers
-    look targets up by the names prerequisites settle to. A rule whose name
-    reads one way is therefore also stored under that name, so a target built
-    by expansion is found like any other; one that already has a rule under that
-    name then has several, which the walkers report rather than guess at.
-
-    Returns
-    -------
-    dict[str, list[MakeRule]]
-        The index with the settled names added.
-    """
-    settled = {name: list(rules) for name, rules in index.items()}
-    for name, rules in index.items():
-        readings = expand_readings(name, values) if "$" in name else []
-        if len(readings) != 1 or not readings[0].is_resolved:
-            continue
-        for word in readings[0].text.split():
-            settled.setdefault(word, [])
-            settled[word].extend(rule for rule in rules if rule not in settled[word])
-    return settled
-
-
-def _may_be_special(name: str, values: cabc.Mapping[str, str]) -> bool:
-    """Return whether a target name built by expansion may be a special target.
-
-    A name that settles, in every reading, to something other than `.ONESHELL`
-    or `.IGNORE` (`target/debug/$(APP)`, `target/%/$(APP)`) cannot change what
-    the recipes do, and `settled_index` files it under its settled name; one
-    that does not settle, or settles two ways, may.
-
-    Returns
-    -------
-    bool
-        True when any reading is unresolved or names a special target.
-    """
-    readings = expand_readings(name, values)
-    return len(readings) != 1 or any(
-        not reading.is_resolved
-        or bool(UNSAFE_SPECIAL_TARGETS & set(reading.text.split()))
-        for reading in readings
-    )
-
-
 def is_fully_readable(
     report: MakeutilReport,
     index: dict[str, list[MakeRule]],
@@ -494,5 +446,5 @@ def is_fully_readable(
     has_flags = any(v.get("name") == "MAKEFLAGS" for v in report["variables"])
     has_include = bool(report["includes"]) or bool(_INCLUDE_LINE.search(text))
     has_special = bool(UNSAFE_SPECIAL_TARGETS & index.keys())
-    has_expanded = any(_may_be_special(name, values) for name in index if "$" in name)
+    has_expanded = any(may_be_special(name, values) for name in index if "$" in name)
     return not (has_flags or has_include or has_special or has_expanded)
