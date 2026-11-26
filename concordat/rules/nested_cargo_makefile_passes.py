@@ -628,34 +628,28 @@ class _Walk:
     ) -> list[Prepared]:
         """Judge one command if it is a pass, and return what it prepares."""
         call = make_call(command.text)
+        if call is not None and self.named_variables & call.overrides.keys():
+            # An override can change which target an expanded name defines, and
+            # the index was built without it, so such a call is not followed.
+            return self._unread(recipe, command, seen, _OVERRIDE_REASON)
         if call is not None:
-            return self._make(recipe, command, call, seen, reader)
+            return self._follow(call, seen, reader)
         invocation = read_invocation(command.text)
         if invocation is None:
             reason = _unreadable_reason(command, reader)
             return self._unread(recipe, command, seen, reason)
         return self._invoked(recipe, command.text, invocation, seen)
 
-    def _make(
-        self,
-        recipe: MakeRecipe,
-        command: ScriptCommand,
-        call: MakeCall,
-        seen: tuple[Prepared, ...],
-        reader: MakefileReader,
+    def _follow(
+        self, call: MakeCall, seen: tuple[Prepared, ...], reader: MakefileReader
     ) -> list[Prepared]:
         """Follow a `make goal [VAR=value]` command into the goal's recipes.
-
-        An override can change which target an expanded name defines, and the
-        index was built without it, so such a call is not followed.
 
         Returns
         -------
         list[Prepared]
-            What the goal certainly prepared, or an unread placeholder.
+            What the goal certainly prepared.
         """
-        if self.named_variables & call.overrides.keys():
-            return self._unread(recipe, command, seen, _OVERRIDE_REASON)
         nested = MakefileReader(self.index, _overlaid(reader.values, call.overrides))
         return self.target(call.goal, seen, nested)
 

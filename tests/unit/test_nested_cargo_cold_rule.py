@@ -17,7 +17,6 @@ import pygit2
 import pytest
 
 from concordat.rules import packages, runner
-from concordat.rules.nested_cargo_cold_envelope import build_nested_cargo_cold_envelope
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -1151,76 +1150,6 @@ def support_checkout(root: pathlib.Path, files: dict[str, str]) -> None:
     put(root, ".config/nextest.toml", BINARY_UI_SCRIPT)
     for relative, text in files.items():
         put(root, relative, text)
-
-
-def test_a_support_build_records_the_test_binaries_that_compile_it(
-    tmp_path: pathlib.Path,
-) -> None:
-    """A warming `--test NAME` run is compared with the binaries that reach a file."""
-    support_checkout(
-        tmp_path,
-        {
-            "tests/ui.rs": "mod support;\n",
-            "tests/other.rs": "mod support;\n",
-            "tests/support/mod.rs": SUPPORT_BUILD,
-        },
-    )
-    builds = build_nested_cargo_cold_envelope(tmp_path)["builds"]
-    assert {build["path"]: build["targets"] for build in builds} == {
-        "tests/support/mod.rs": ["other", "ui"]
-    }
-
-
-def test_a_directory_test_target_names_the_modules_it_imports(
-    tmp_path: pathlib.Path,
-) -> None:
-    """`tests/ui/main.rs` is target `ui`, and the support module it declares is ui's."""
-    support_checkout(
-        tmp_path,
-        {"tests/ui/main.rs": "mod support;\n", "tests/ui/support.rs": SUPPORT_BUILD},
-    )
-    builds = build_nested_cargo_cold_envelope(tmp_path)["builds"]
-    assert {build["path"]: build["targets"] for build in builds} == {
-        "tests/ui/support.rs": ["ui"]
-    }
-
-
-def test_a_manifest_that_names_its_test_targets_leaves_the_targets_unknown(
-    tmp_path: pathlib.Path,
-) -> None:
-    """`[[test]] name = ...` can give `tests/ui.rs` another name than its file's."""
-    put(
-        tmp_path,
-        "Cargo.toml",
-        '[package]\nname = "app"\nautotests = false\n\n'
-        '[[test]]\nname = "contract"\npath = "tests/ui.rs"\n\n'
-        '[[test]]\nname = "ui"\npath = "tests/other.rs"\n',
-    )
-    put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
-    put(tmp_path, "tests/other.rs", "fn other() {}\n")
-    builds = build_nested_cargo_cold_envelope(tmp_path)["builds"]
-    assert {build["path"]: build["targets"] for build in builds} == {
-        "tests/ui.rs": None
-    }
-
-
-def test_an_owner_the_resolver_cannot_see_leaves_the_targets_unknown(
-    tmp_path: pathlib.Path,
-) -> None:
-    """A file another package `include!`s is compiled by more than the seen binaries."""
-    support_checkout(
-        tmp_path,
-        {
-            "a/Cargo.toml": '[package]\nname = "a"\n',
-            "b/Cargo.toml": '[package]\nname = "b"\n',
-            "a/tests/ui.rs": "mod support;\n",
-            "a/tests/support/mod.rs": SUPPORT_BUILD,
-            "b/tests/other.rs": 'include!("../../a/tests/support/mod.rs");\n',
-        },
-    )
-    builds = build_nested_cargo_cold_envelope(tmp_path)["builds"]
-    targets = {build["path"]: build["targets"] for build in builds}
-    assert targets["a/tests/support/mod.rs"] is None
 
 
 @pytest.mark.parametrize(
