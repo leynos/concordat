@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import typing as typ
 
+import pygit2
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
@@ -33,7 +34,7 @@ updates:
     directory: /
     schedule:
       interval: {interval}
-    groups:
+{day}    groups:
       rstest-bdd:
         patterns: ['rstest-bdd*']
       minor-and-patch:
@@ -53,6 +54,15 @@ updates:
 _UPDATE_TYPES: typ.Final = "        update-types: [minor, patch]"
 _COVERED: typ.Final = "      - /\n      - /.github/actions/*"
 _ROOT_ONLY: typ.Final = "      - /"
+_MONDAY: typ.Final = "      day: monday\n"
+
+# The private registry the rule ships with, and a repository it does not name.
+_PRIVATE_REPOSITORY: typ.Final = "leynos/dev-env-rocky"
+_OTHER_REPOSITORY: typ.Final = "leynos/another-repository"
+_PRIVATE_WILDCARD_STEP: typ.Final = (
+    "a checkout registered as the private repository "
+    "with a weekly ungrouped-majors wildcard"
+)
 
 
 @pytest.fixture
@@ -74,11 +84,23 @@ def _write_checkout(checkout: pathlib.Path, config: str) -> None:
     (github / "dependabot.yml").write_text(config, encoding="utf-8")
 
 
-def _config(*, interval: str, update_types: str, directories: str) -> str:
+def _config(
+    *, interval: str, update_types: str, directories: str, day: str = ""
+) -> str:
     """Render the configuration with the named departures."""
     return _CONFIG.format(
-        interval=interval, update_types=update_types, directories=directories
+        interval=interval, update_types=update_types, directories=directories, day=day
     )
+
+
+def _origin(checkout: pathlib.Path, slug: str) -> None:
+    """Give the checkout a Git origin naming *slug*.
+
+    This is the nested-Cargo rule suites' helper: the private registry is
+    matched on the `owner/name` slug the DB-005 adapter reads from `origin`.
+    """
+    repository = pygit2.init_repository(str(checkout))
+    repository.remotes.create("origin", f"git@github.com:{slug}.git")
 
 
 @given("a checkout with no Dependabot configuration")
@@ -117,6 +139,51 @@ def given_uncovered_action(dependabot_checkout: pathlib.Path) -> None:
 def given_unreadable_configuration(dependabot_checkout: pathlib.Path) -> None:
     """Write a configuration the envelope cannot decode."""
     _write_checkout(dependabot_checkout, "updates: [\n")
+
+
+@given("a checkout registered as the private repository with weekly Monday entries")
+def given_registered_private_weekly(dependabot_checkout: pathlib.Path) -> None:
+    """Write the shipped exception: registered, weekly, and naming Monday."""
+    _origin(dependabot_checkout, _PRIVATE_REPOSITORY)
+    _write_checkout(
+        dependabot_checkout,
+        _config(
+            interval="weekly",
+            update_types=_UPDATE_TYPES,
+            directories=_COVERED,
+            day=_MONDAY,
+        ),
+    )
+
+
+@given("a checkout whose origin is another repository with a weekly configuration")
+def given_unregistered_weekly(dependabot_checkout: pathlib.Path) -> None:
+    """Write the same cadence under an identity the registry does not name."""
+    _origin(dependabot_checkout, _OTHER_REPOSITORY)
+    _write_checkout(
+        dependabot_checkout,
+        _config(
+            interval="weekly",
+            update_types=_UPDATE_TYPES,
+            directories=_COVERED,
+            day=_MONDAY,
+        ),
+    )
+
+
+@given(_PRIVATE_WILDCARD_STEP)
+def given_registered_private_wildcard(dependabot_checkout: pathlib.Path) -> None:
+    """Write the private cadence with a catch-all that also takes majors."""
+    _origin(dependabot_checkout, _PRIVATE_REPOSITORY)
+    _write_checkout(
+        dependabot_checkout,
+        _config(
+            interval="weekly",
+            update_types="",
+            directories=_COVERED,
+            day=_MONDAY,
+        ),
+    )
 
 
 @when("I audit the checkout for its Dependabot update shape")

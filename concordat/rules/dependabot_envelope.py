@@ -274,12 +274,19 @@ def _action_directories(checkout: pathlib.Path) -> list[str]:
     )
 
 
-def build_dependabot_envelope(checkout: pathlib.Path) -> DependabotEnvelope:
+def build_dependabot_envelope(
+    checkout: pathlib.Path, *, repository_name: str | None = None
+) -> DependabotEnvelope:
     """Assemble the Dependabot configuration and local-action evidence.
 
     An `OperationalRuleError` reaches the caller when the checkout cannot be
     read; an absent configuration or an absent `.github/actions` is not a
     failure.
+
+    The repository identity is a caller-supplied argument rather than read
+    here, so a local audit that knows only a directory still reports the
+    unchanged `None`. The DB-005 adapter supplies the checkout's `origin` slug,
+    which is the only visibility evidence the policy has.
 
     Returns
     -------
@@ -289,7 +296,7 @@ def build_dependabot_envelope(checkout: pathlib.Path) -> DependabotEnvelope:
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
-        "repository": {"path": str(checkout), "name": None},
+        "repository": {"path": str(checkout), "name": repository_name},
         "config": read_dependabot_config(checkout),
         "action_directories": _action_directories(checkout),
     }
