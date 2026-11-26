@@ -388,6 +388,19 @@ def test_a_make_override_of_a_variable_that_names_a_target_is_not_followed(
     assert [status for _line, status in statuses(tmp_path)] == ["indeterminate"] * 2
 
 
+def test_an_override_of_a_variable_behind_a_target_name_is_not_followed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`T` reads `SUFFIX`, so overriding `SUFFIX` can change which target `$(T)` is."""
+    checkout(
+        tmp_path,
+        "SUFFIX := prepare\nT = $(SUFFIX)\n"
+        "$(T):\n\tcargo test --no-run --all-features\n"
+        "test:\n\t$(MAKE) prepare SUFFIX=other\n\tcargo test --all-features\n",
+    )
+    assert [status for _line, status in statuses(tmp_path)] == ["indeterminate"] * 2
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")

@@ -150,6 +150,16 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
             ".PHONY: test prewarm\npre$(T):\n\tcargo build\nT := warm\n"
             "test: prewarm\n\tcargo nextest run\n"
         ),
+        # The same through a variable's value: `T` reads `SUFFIX`, set below.
+        (
+            ".PHONY: test pre prewarm\nT = $(SUFFIX)\npre$(T):\n\tcargo build\n"
+            "SUFFIX := warm\ntest: prewarm\n\tcargo nextest run\n"
+        ),
+        # A prerequisite is expanded where the rule is read too.
+        (
+            ".PHONY: test pre prewarm\nprewarm:\n\tcargo build\n"
+            "test: pre$(SUFFIX)\n\tcargo nextest run\nSUFFIX := warm\n"
+        ),
         # A name that settles to `test` gives it a second rule, which the reader
         # does not combine.
         (

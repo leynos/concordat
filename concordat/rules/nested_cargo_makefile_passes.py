@@ -480,12 +480,14 @@ class _Structure:
 class _Walk:
     """Walk the `test` target in Make's order, collecting the passes it finds."""
 
-    def __init__(self, index: dict[str, list[MakeRule]]) -> None:
+    def __init__(
+        self, index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
+    ) -> None:
         """Hold the rule index the walk follows targets through."""
         self.index = index
         self.facts: list[PassFact] = []
         self.active: set[str] = set()
-        self.named_variables = named_variables(index)
+        self.named_variables = named_variables(index, values)
 
     def _fact(self, recipe: MakeRecipe, command: str, verdict: _Verdict) -> None:
         """Record one pass, once however many readings of its line agree."""
@@ -751,6 +753,6 @@ def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
                 "reason": "the Makefile holds a construct the reader does not follow",
             }
         ]
-    walk = _Walk(index)
+    walk = _Walk(index, values)
     walk.target(TEST_TARGET, (), MakefileReader(index, values))
     return walk.facts

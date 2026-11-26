@@ -1,4 +1,4 @@
-"""Read the target names a Makefile builds by expansion.
+"""Read the target and prerequisite names a Makefile builds by expansion.
 
 The rule index is keyed by the raw target text, such as `$(T)`, but the walkers
 look targets up by the names prerequisites settle to. A name that reads one way
@@ -7,6 +7,12 @@ like any other, and one that already has a rule under that name then has several
 which the walkers report rather than guess at. A name that does not settle, or
 settles two ways, or names a special target, is a construct the readers do not
 follow.
+
+Make expands a target or prerequisite when it reads the rule, not after later
+assignments, and it follows references inside a variable's value. The readers
+substitute final values, so a name that reads a variable (directly, or through
+the values of the variables it names) assigned on or after the rule's line gets
+another value from them than from Make, and the Makefile is not read.
 """
 
 from __future__ import annotations
@@ -25,6 +31,7 @@ if typ.TYPE_CHECKING:
 # `.ONESHELL` recipe runs as one script; `.IGNORE` ignores errors, globally or
 # for the targets it names), so a build before the tests no longer gates them.
 UNSAFE_SPECIAL_TARGETS: typ.Final = frozenset({".ONESHELL", ".IGNORE"})
+_REFERENCE: typ.Final = re.compile(r"\$\(([^()$]+)\)|\$\{([^{}$]+)\}|\$([A-Za-z_])")
 
 
 def _settled_words(name: str, values: cabc.Mapping[str, str]) -> list[str]:
@@ -53,47 +60,63 @@ def settled_index(
     return settled
 
 
-_REFERENCE: typ.Final = re.compile(r"\$\(([^()$]+)\)|\$\{([^{}$]+)\}|\$([A-Za-z_])")
+def _references(text: str) -> set[str]:
+    """Return the variable names a text refers to."""
+    return {
+        word for match in _REFERENCE.finditer(text) for word in match.groups() if word
+    }
 
 
-def is_defined_before(
-    name: str, line: int, variables: cabc.Sequence[MakeVariable]
-) -> bool:
-    """Return whether every variable in a target name is assigned before its rule.
+def _variables_behind(text: str, values: cabc.Mapping[str, str]) -> set[str]:
+    """Return every variable a text reads, directly or through other values."""
+    found: set[str] = set()
+    pending = _references(text)
+    while pending:
+        word = pending.pop()
+        if word not in found:
+            found.add(word)
+            pending |= _references(values.get(word, ""))
+    return found
 
-    Make expands a target name when it reads the rule, not after later
-    assignments, so a variable assigned further down gives the name another
-    value than the final one the reader substitutes.
+
+def _readings(
+    index: dict[str, list[MakeRule]],
+) -> list[tuple[str, int]]:
+    """Return each expanded target name or prerequisite with the line of its rule.
+
+    A pattern stays a pattern whatever its variables hold, so a target name with
+    a `%` is left out.
 
     Returns
     -------
-    bool
-        True when each referenced variable is assigned on an earlier line, or is
-        not assigned in the Makefile at all.
+    list[tuple[str, int]]
+        The texts that contain a reference, each with its rule's first line.
     """
-    first = _first_lines(variables)
-    referenced = {m for match in _REFERENCE.finditer(name) for m in match.groups() if m}
-    return all(first.get(word, 0) < line for word in referenced)
+    found: list[tuple[str, int]] = []
+    for name, rules in index.items():
+        for rule in rules:
+            line = rule["location"]["start_line"]
+            texts = [] if "%" in name else [name]
+            texts.extend(rule["prerequisites"])
+            found.extend((text, line) for text in texts if "$" in text)
+    return found
 
 
-def named_variables(index: cabc.Iterable[str]) -> frozenset[str]:
-    """Return the variables that decide the plain target names built by expansion.
-
-    A pattern rule (`target/%/$(APP)`) stays a pattern whatever its variables
-    hold, so only names without a `%` count.
+def named_variables(
+    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
+) -> frozenset[str]:
+    """Return the variables that decide the target names and prerequisites read.
 
     Returns
     -------
     frozenset[str]
-        The variable names such target names reference.
+        Every variable such a name reads, directly or through other values; an
+        override of one of them can change which target a name denotes.
     """
     return frozenset(
         word
-        for name in index
-        if "$" in name and "%" not in name
-        for match in _REFERENCE.finditer(name)
-        for word in match.groups()
-        if word
+        for text, _line in _readings(index)
+        for word in _variables_behind(text, values)
     )
 
 
@@ -107,38 +130,36 @@ def _first_lines(variables: cabc.Sequence[MakeVariable]) -> dict[str, int]:
     return first
 
 
-def has_unsafe_expanded_name(
+def _is_read_late(
+    text: str,
+    line: int,
+    values: cabc.Mapping[str, str],
+    first: cabc.Mapping[str, int],
+) -> bool:
+    """Return whether a name reads a variable assigned on or after its rule."""
+    return any(first.get(word, 0) >= line for word in _variables_behind(text, values))
+
+
+def has_unsafe_reading(
     index: dict[str, list[MakeRule]],
     values: cabc.Mapping[str, str],
     variables: cabc.Sequence[MakeVariable],
 ) -> bool:
-    """Return whether a target name built by expansion cannot be read safely.
+    """Return whether a name built by expansion cannot be read safely.
 
     Returns
     -------
     bool
-        True when any such name may be a special target, does not settle one
-        way, or uses a variable assigned after the rule that names it.
+        True when a target name built by expansion may be a special target or
+        does not settle one way, or when a target name or prerequisite reads a
+        variable assigned on or after the rule that uses it.
     """
-    return any(
-        _is_unsafe(name, rules, values, variables)
-        for name, rules in index.items()
-        if "$" in name
-    )
-
-
-def _is_unsafe(
-    name: str,
-    rules: list[MakeRule],
-    values: cabc.Mapping[str, str],
-    variables: cabc.Sequence[MakeVariable],
-) -> bool:
-    """Return whether one expanded target name cannot be read safely."""
-    if may_be_special(name, values):
+    if any(may_be_special(name, values) for name in index if "$" in name):
         return True
-    # A pattern stays a pattern whatever its variables hold.
-    line = min(rule["location"]["start_line"] for rule in rules)
-    return "%" not in name and not is_defined_before(name, line, variables)
+    first = _first_lines(variables)
+    return any(
+        _is_read_late(text, line, values, first) for text, line in _readings(index)
+    )
 
 
 def may_be_special(name: str, values: cabc.Mapping[str, str]) -> bool:
