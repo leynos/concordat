@@ -45,7 +45,7 @@ from .markdown_envelope import within_checkout
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_names import (
     UNSAFE_SPECIAL_TARGETS,
-    may_be_special,
+    has_unsafe_expanded_name,
     settled_index,
 )
 from .nested_cargo_scripts import TEST_TARGET, ScriptCommand, script_commands
@@ -446,5 +446,5 @@ def is_fully_readable(
     has_flags = any(v.get("name") == "MAKEFLAGS" for v in report["variables"])
     has_include = bool(report["includes"]) or bool(_INCLUDE_LINE.search(text))
     has_special = bool(UNSAFE_SPECIAL_TARGETS & index.keys())
-    has_expanded = any(may_be_special(name, values) for name in index if "$" in name)
+    has_expanded = has_unsafe_expanded_name(index, values, report["variables"])
     return not (has_flags or has_include or has_special or has_expanded)

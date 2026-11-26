@@ -375,6 +375,19 @@ def test_an_unrestricted_warming_run_leaves_no_target_ruled_out(
     assert fact["warmed_tests"] == []
 
 
+def test_a_make_override_of_a_variable_that_names_a_target_is_not_followed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An override can change which target `$(T)` defines, so the call is unread."""
+    checkout(
+        tmp_path,
+        "T := prepare\n"
+        "$(T):\n\tcargo test --no-run --all-features\n"
+        "test:\n\t$(MAKE) prepare T=other\n\tcargo test --all-features\n",
+    )
+    assert [status for _line, status in statuses(tmp_path)] == ["indeterminate"] * 2
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")

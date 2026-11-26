@@ -1185,6 +1185,25 @@ def test_a_directory_test_target_names_the_modules_it_imports(
     }
 
 
+def test_a_manifest_that_names_its_test_targets_leaves_the_targets_unknown(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`[[test]] name = ...` can give `tests/ui.rs` another name than its file's."""
+    put(
+        tmp_path,
+        "Cargo.toml",
+        '[package]\nname = "app"\nautotests = false\n\n'
+        '[[test]]\nname = "contract"\npath = "tests/ui.rs"\n\n'
+        '[[test]]\nname = "ui"\npath = "tests/other.rs"\n',
+    )
+    put(tmp_path, "tests/ui.rs", TRYBUILD_TEST)
+    put(tmp_path, "tests/other.rs", "fn other() {}\n")
+    builds = build_nested_cargo_cold_envelope(tmp_path)["builds"]
+    assert {build["path"]: build["targets"] for build in builds} == {
+        "tests/ui.rs": None
+    }
+
+
 def test_an_owner_the_resolver_cannot_see_leaves_the_targets_unknown(
     tmp_path: pathlib.Path,
 ) -> None:

@@ -31,6 +31,7 @@ from .nested_cargo_preparation import (
     Preparation,
     collect_builds,
     crate_directories,
+    named_test_crates,
 )
 from .nested_cargo_setup_scripts import read_setup_rules
 from .nested_cargo_source import read_sources
@@ -114,6 +115,7 @@ def build_nested_cargo_cold_envelope(
         read_setup_rules(checkout, problems),
         read_gates(parameters),
         makefile_prepares(checkout),
+        named_test_crates(checkout, manifests),
     )
     builds = collect_builds(evidence, sources, preparation)
     return {

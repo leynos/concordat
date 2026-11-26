@@ -45,7 +45,7 @@ from .makefile_expansion import Assignments, shown, single_assignments
 from .makefile_tool_paths import read_tool_paths
 from .nested_cargo_make_options import PLAIN_GOAL, unreliable_make
 from .nested_cargo_makefile_lines import rules_by_target
-from .nested_cargo_makefile_names import settled_index
+from .nested_cargo_makefile_names import named_variables, settled_index
 from .nested_cargo_makefile_preparation import (
     MakefileReader,
     is_fully_readable,
@@ -155,6 +155,9 @@ _UNRESOLVED_WORD: typ.Final = (
     "the command word is a Make reference the reader cannot resolve"
 )
 _UNFOLLOWED: typ.Final = "the command may run tests and the reader cannot follow it"
+_OVERRIDE_REASON: typ.Final = (
+    "a make override may change which target an expanded name defines"
+)
 _UNREADABLE_SIGNATURE: typ.Final = (
     "an option or Make reference the reader cannot read is in a signature"
 )
@@ -482,6 +485,7 @@ class _Walk:
         self.index = index
         self.facts: list[PassFact] = []
         self.active: set[str] = set()
+        self.named_variables = named_variables(index)
 
     def _fact(self, recipe: MakeRecipe, command: str, verdict: _Verdict) -> None:
         """Record one pass, once however many readings of its line agree."""
@@ -625,21 +629,42 @@ class _Walk:
         """Judge one command if it is a pass, and return what it prepares."""
         call = make_call(command.text)
         if call is not None:
-            nested = MakefileReader(
-                self.index, _overlaid(reader.values, call.overrides)
-            )
-            return self.target(call.goal, seen, nested)
+            return self._make(recipe, command, call, seen, reader)
         invocation = read_invocation(command.text)
         if invocation is None:
-            return self._unread(recipe, command, seen, reader)
+            reason = _unreadable_reason(command, reader)
+            return self._unread(recipe, command, seen, reason)
         return self._invoked(recipe, command.text, invocation, seen)
+
+    def _make(
+        self,
+        recipe: MakeRecipe,
+        command: ScriptCommand,
+        call: MakeCall,
+        seen: tuple[Prepared, ...],
+        reader: MakefileReader,
+    ) -> list[Prepared]:
+        """Follow a `make goal [VAR=value]` command into the goal's recipes.
+
+        An override can change which target an expanded name defines, and the
+        index was built without it, so such a call is not followed.
+
+        Returns
+        -------
+        list[Prepared]
+            What the goal certainly prepared, or an unread placeholder.
+        """
+        if self.named_variables & call.overrides.keys():
+            return self._unread(recipe, command, seen, _OVERRIDE_REASON)
+        nested = MakefileReader(self.index, _overlaid(reader.values, call.overrides))
+        return self.target(call.goal, seen, nested)
 
     def _unread(
         self,
         recipe: MakeRecipe,
         command: ScriptCommand,
         seen: tuple[Prepared, ...],
-        reader: MakefileReader,
+        reason: str | None,
     ) -> list[Prepared]:
         """Report a command the reader cannot read when it may run or prepare tests.
 
@@ -650,7 +675,6 @@ class _Walk:
             later pass is called unprepared: the command may have built it.
             Empty for a command that cannot touch the tests.
         """
-        reason = _unreadable_reason(command, reader)
         if reason is None:
             return []
         verdict = _Verdict(INDETERMINATE, len(seen), reason)

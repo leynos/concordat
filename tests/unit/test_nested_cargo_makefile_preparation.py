@@ -144,6 +144,12 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
         "test:\n\tcargo build || cargo nextest run\n",
         # An ignored error leaves the test to run on a failed build.
         "test:\n\t-cargo build\n\tcargo nextest run\n",
+        # Make expands a target name where it reads the rule, so a variable set
+        # further down does not name `prewarm` here.
+        (
+            ".PHONY: test prewarm\npre$(T):\n\tcargo build\nT := warm\n"
+            "test: prewarm\n\tcargo nextest run\n"
+        ),
         # A name that settles to `test` gives it a second rule, which the reader
         # does not combine.
         (

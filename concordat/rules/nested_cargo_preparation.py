@@ -114,12 +114,42 @@ class Preparation:
     is_makefile_prepared:
         Whether the Makefile's `test` target compiles before it tests, which
         prepares every build the checkout's tests start.
+    named_test_crates:
+        Crate directories whose manifest names its test targets (`[[test]]`
+        tables, or `autotests = false`), so a file's name no longer says which
+        `--test NAME` runs it.
     """
 
     crates: cabc.Mapping[str, str | None]
     rules: list[SetupRule]
     gates: Gates
     is_makefile_prepared: bool = False
+    named_test_crates: frozenset[str] = frozenset()
+
+
+def named_test_crates(
+    checkout: pathlib.Path, manifests: cabc.Mapping[pathlib.Path, Manifest]
+) -> frozenset[str]:
+    """Return the crate directories whose manifest names its own test targets.
+
+    Returns
+    -------
+    frozenset[str]
+        Root-relative POSIX directories whose manifest has a `[[test]]` table or
+        sets `autotests = false`.
+    """
+    return frozenset(
+        path.parent.relative_to(checkout).as_posix()
+        for path, document in manifests.items()
+        if _names_tests(document)
+    )
+
+
+def _names_tests(document: Manifest) -> bool:
+    """Return whether a manifest declares test targets by name."""
+    package = document.get("package")
+    is_manual = isinstance(package, dict) and package.get("autotests") is False
+    return is_manual or bool(document.get("test"))
 
 
 def crate_directories(
@@ -391,7 +421,11 @@ def collect_builds(
             "crate": crate,
             "package": crates.get(crate),
             "prepared_by": prepared,
-            "targets": _test_targets(path, evidence.reached_by.get(path, [])),
+            "targets": (
+                None
+                if crate in preparation.named_test_crates
+                else _test_targets(path, evidence.reached_by.get(path, []))
+            ),
         })
     return builds
 
