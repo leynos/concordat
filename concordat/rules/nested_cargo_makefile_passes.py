@@ -426,10 +426,14 @@ class _Walk:
     """Walk the `test` target in Make's order, collecting the passes it finds."""
 
     def __init__(
-        self, index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
+        self,
+        index: dict[str, list[MakeRule]],
+        values: cabc.Mapping[str, str],
+        text: str,
     ) -> None:
-        """Hold the rule index the walk follows targets through."""
+        """Hold the rule index the walk follows targets through, and its text."""
         self.index = index
+        self.text = text
         self.facts: list[PassFact] = []
         self.active: set[str] = set()
         self.named_variables = named_variables(index, values)
@@ -466,6 +470,7 @@ class _Walk:
         rules = self.index.get(name, [])
         if name in self.active or not rules:
             return []
+        self._note_implicit_rules(name, rules, reader)
         self.active.add(name)
         try:
             produced = self._rules(name, rules, visible, reader)
@@ -473,6 +478,33 @@ class _Walk:
             self.active.discard(name)
         is_counted = name in reader.phony or name == TEST_TARGET
         return produced if is_counted else []
+
+    def _note_implicit_rules(
+        self, name: str, rules: list[MakeRule], reader: MakefileReader
+    ) -> None:
+        """Report a recipe-less target that a pattern or fallback rule may fill.
+
+        Make searches for an implicit rule for a target whose rules hold no
+        recipe, unless the target is declared `.PHONY`, so `test:` beside `te%:`
+        runs the pattern recipe when no `test` file exists, and so does a
+        prerequisite such as `integration:` beside `int%:`.
+        """
+        if any(rule["recipes"] for rule in rules) or name in reader.phony:
+            return
+        candidates = [
+            (pattern_lines(self.index, name), _PATTERN_REASON),
+            (fallback_lines(self.index, self.text), _FALLBACK_REASON),
+        ]
+        for lines, reason in candidates:
+            if lines:
+                self.facts.append({
+                    "path": MAKEFILE,
+                    "line": min(lines),
+                    "command": name,
+                    "status": INDETERMINATE,
+                    "visible": 0,
+                    "reason": reason.replace("`test`", f"`{name}`"),
+                })
 
     def _unreadable(
         self, name: str, rules: list[MakeRule], reason: str, reader: MakefileReader
@@ -720,32 +752,6 @@ def _include_lines(report: MakeutilReport, text: str) -> list[int]:
     return found or [1]
 
 
-def _recipe_less_test_facts(
-    index: dict[str, list[MakeRule]], reader: MakefileReader, text: str
-) -> list[PassFact]:
-    """Return a fact when a pattern or fallback rule may give `test` its recipe.
-
-    Make searches for an implicit rule for a target whose rules hold no recipe,
-    unless the target is declared `.PHONY`, so `test:` beside `te%:` runs the
-    pattern recipe when no `test` file exists.
-
-    Returns
-    -------
-    list[PassFact]
-        One indeterminate fact at the first such rule, or none.
-    """
-    rules = index[TEST_TARGET]
-    if any(rule["recipes"] for rule in rules) or TEST_TARGET in reader.phony:
-        return []
-    candidates = [
-        (pattern_lines(index, TEST_TARGET), _PATTERN_REASON),
-        (fallback_lines(index, text), _FALLBACK_REASON),
-    ]
-    return [
-        _unreadable_fact(min(lines), reason) for lines, reason in candidates if lines
-    ]
-
-
 def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
     """Return every test pass of the Makefile's `test` target and its preparation.
 
@@ -772,9 +778,6 @@ def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
                 line, "the Makefile holds a construct the reader does not follow"
             )
         ]
-    reader = MakefileReader(index, values)
-    if hidden := _recipe_less_test_facts(index, reader, text):
-        return hidden
-    walk = _Walk(index, values)
-    walk.target(TEST_TARGET, (), reader)
+    walk = _Walk(index, values, text)
+    walk.target(TEST_TARGET, (), MakefileReader(index, values))
     return walk.facts

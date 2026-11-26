@@ -450,6 +450,21 @@ def test_a_recipe_less_test_target_may_take_a_matching_pattern_recipe(
     assert [fact["status"] for fact in makefile_passes(tmp_path)] == statuses_found
 
 
+@pytest.mark.parametrize(
+    ("phony", "statuses_found"),
+    [
+        (".PHONY: test\n", ["indeterminate"]),
+        (".PHONY: test integration\n", []),
+    ],
+)
+def test_a_recipe_less_prerequisite_may_take_a_matching_pattern_recipe(
+    tmp_path: pathlib.Path, phony: str, statuses_found: list[str]
+) -> None:
+    """`test: integration` beside `int%:` runs the pattern recipe, unless `.PHONY`."""
+    checkout(tmp_path, f"{phony}test: integration\nintegration:\nint%:\n\tcargo test\n")
+    assert [fact["status"] for fact in makefile_passes(tmp_path)] == statuses_found
+
+
 def test_a_recipe_less_test_target_beside_a_non_matching_pattern_is_not_flagged(
     tmp_path: pathlib.Path,
 ) -> None:
