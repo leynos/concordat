@@ -506,7 +506,7 @@ def _test_targets(
     if any(root.startswith(UNSEEN) for root in roots):
         return None
     sources = _owners(path, roots, declared)
-    if _is_unnameable(path, roots, declared, sources, is_named=is_named):
+    if _is_unnameable(path, roots, declared, is_named=is_named):
         return None
     names = _target_names(sources, declared)
     if not names and not roots:
@@ -518,7 +518,6 @@ def _is_unnameable(
     path: str,
     roots: list[str],
     declared: cabc.Mapping[str, frozenset[str]],
-    sources: list[str],
     *,
     is_named: bool,
 ) -> bool:
@@ -532,6 +531,7 @@ def _is_unnameable(
     """
     if _is_ambiguous(path, roots, declared):
         return True
+    sources = _owners(path, roots, declared)
     return is_named and not all(source in declared for source in sources)
 
 
