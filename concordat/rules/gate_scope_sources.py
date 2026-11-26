@@ -399,8 +399,15 @@ def _merge_branches(
             merged.append(only)
             continue
         if None not in at_depth and not any(b.active for b in at_depth if b):
-            # No reading can run this branch, whatever the probe says.
-            merged.append(Branch(taken=True, active=False))
+            # No reading can run this branch, whatever the probe says. Whether
+            # an earlier branch of the `if` was taken may still differ, and a
+            # later `else` then runs on some readings only: an unnamed fork the
+            # `else` will settle.
+            takens = {block.taken for block in at_depth if block}
+            if len(takens) == 1:
+                merged.append(Branch(taken=takens.pop(), active=False))
+            else:
+                merged.append(Branch(taken=False, active=False, uid=count + depth))
             continue
         fork = Branch(taken=False, active=True, uid=count + depth)
         merged.append(fork)

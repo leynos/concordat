@@ -816,6 +816,24 @@ class TestTenthReview:
         assert [i["resolved"] for i in found] == [True]
 
 
+class TestEleventhReview:
+    """Behaviours a twelfth review showed to be missing."""
+
+    def test_an_else_stays_reachable_when_readings_disagree_on_taken(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """If the probe is false, the `else` runs; its command is indeterminate."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n"
+            "\tif $(if $(shell cargo nextest --version 2>/dev/null),true,false);"
+            " then :; elif false; then\n\t  :\n\telse\n"
+            "\t  cargo test --workspace\n\tfi\n\tcargo test -p app\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        by_flag = {i["workspace_flag"]: i["resolved"] for i in found}
+        assert by_flag == {True: False, False: True}
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 
