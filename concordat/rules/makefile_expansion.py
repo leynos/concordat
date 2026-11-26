@@ -99,10 +99,21 @@ def joined(text: str) -> str:
 
 
 def _is_plain(variable: MakeVariable, count: int) -> bool:
-    """Return whether *variable* is assigned once, unconditionally, outside `define`."""
+    """Return whether *variable* is assigned once, unconditionally, outside `define`.
+
+    A `!=` assignment holds a shell command, not the text it prints, so it has no
+    value the expansion can substitute.
+
+    Returns
+    -------
+    bool
+        True when the variable has one plain value the expansion can substitute.
+    """
     conditions = variable.get("conditions", [])
     has_conditions = isinstance(conditions, list) and bool(conditions)
-    return count == 1 and not variable.get("define_block", False) and not has_conditions
+    is_shell = variable.get("operator") == "!="
+    is_plain = not variable.get("define_block", False) and not has_conditions
+    return count == 1 and is_plain and not is_shell
 
 
 class Assignments(collections.UserDict[str, str]):

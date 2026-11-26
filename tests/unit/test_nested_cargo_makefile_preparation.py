@@ -160,6 +160,11 @@ def test_a_target_that_compiles_before_the_tests_prepares_the_builds(
             ".PHONY: test pre prewarm\nT = $(SUFFIX)\npre$(T):\n\tcargo build\n"
             "SUFFIX := warm\ntest: prewarm\n\tcargo nextest run\n"
         ),
+        # A shell assignment holds a command, not the text it prints.
+        (
+            ".PHONY: test printf pre\nT != printf pre\n$(T):\n\tcargo build\n"
+            "test: printf\n\tcargo nextest run\n"
+        ),
         # A simple variable fixes its value where it is assigned, before `SUFFIX`.
         (
             ".PHONY: test pre prewarm\nT := pre$(SUFFIX)\nSUFFIX := warm\n"
