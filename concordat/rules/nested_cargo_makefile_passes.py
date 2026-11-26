@@ -163,7 +163,7 @@ _OVERRIDE_REASON: typ.Final = (
     "a make override may change which target an expanded name defines"
 )
 _IMPLICIT_REASON: typ.Final = (
-    "an implicit rule that may prepare the build runs earlier and is not read"
+    "an unread command or implicit rule may have prepared the build earlier"
 )
 _UNREADABLE_SIGNATURE: typ.Final = (
     "an option or Make reference the reader cannot read is in a signature"
