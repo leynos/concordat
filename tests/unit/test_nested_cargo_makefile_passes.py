@@ -465,6 +465,41 @@ def test_a_recipe_less_prerequisite_may_take_a_matching_pattern_recipe(
     assert [fact["status"] for fact in makefile_passes(tmp_path)] == statuses_found
 
 
+@pytest.mark.parametrize(
+    ("phony", "statuses_found"),
+    [
+        (".PHONY: test\n", ["indeterminate"]),
+        (".PHONY: test integration\n", []),
+    ],
+)
+def test_a_prerequisite_with_no_rule_may_take_a_matching_pattern_recipe(
+    tmp_path: pathlib.Path, phony: str, statuses_found: list[str]
+) -> None:
+    """`test: integration` beside `int%:` runs the pattern recipe, unless `.PHONY`."""
+    checkout(tmp_path, f"{phony}test: integration\nint%:\n\tcargo test\n")
+    assert [fact["status"] for fact in makefile_passes(tmp_path)] == statuses_found
+
+
+@pytest.mark.parametrize(
+    ("phony", "statuses_found"),
+    [
+        (".PHONY: test\n", ["indeterminate", "indeterminate"]),
+        (".PHONY: test prepare\n", ["unprepared"]),
+    ],
+)
+def test_an_implicit_preparation_leaves_a_later_pass_indeterminate(
+    tmp_path: pathlib.Path, phony: str, statuses_found: list[str]
+) -> None:
+    """A pattern recipe may warm the build, so a later pass is not `unprepared`."""
+    makefile = (
+        f"{phony}test: prepare\n\tcargo test --all-features\n"
+        "prepare:\npre%:\n\tcargo test --test ui\n"
+    )
+    checkout(tmp_path, makefile)
+    found = [fact["status"] for fact in makefile_passes(tmp_path)]
+    assert sorted(found) == sorted(statuses_found)
+
+
 def test_a_recipe_less_test_target_beside_a_non_matching_pattern_is_not_flagged(
     tmp_path: pathlib.Path,
 ) -> None:

@@ -162,6 +162,9 @@ _FALLBACK_REASON: typ.Final = "a `.DEFAULT` rule or a generated rule may supply 
 _OVERRIDE_REASON: typ.Final = (
     "a make override may change which target an expanded name defines"
 )
+_IMPLICIT_REASON: typ.Final = (
+    "an implicit rule that may prepare the build runs earlier and is not read"
+)
 _UNREADABLE_SIGNATURE: typ.Final = (
     "an option or Make reference the reader cannot read is in a signature"
 )
@@ -434,6 +437,9 @@ class _Walk:
         """Hold the rule index the walk follows targets through, and its text."""
         self.index = index
         self.text = text
+        # Set once an implicit rule may have prepared something unseen: a later
+        # pass is then not known to be unprepared.
+        self.uncertain = False
         self.facts: list[PassFact] = []
         self.active: set[str] = set()
         self.named_variables = named_variables(index, values)
@@ -468,9 +474,11 @@ class _Walk:
             The preparations every run of the target performs.
         """
         rules = self.index.get(name, [])
-        if name in self.active or not rules:
+        if name in self.active:
             return []
         self._note_implicit_rules(name, rules, reader)
+        if not rules:
+            return []
         self.active.add(name)
         try:
             produced = self._rules(name, rules, visible, reader)
@@ -491,12 +499,14 @@ class _Walk:
         """
         if any(rule["recipes"] for rule in rules) or name in reader.phony:
             return
-        candidates = [
-            (pattern_lines(self.index, name), _PATTERN_REASON),
-            (fallback_lines(self.index, self.text), _FALLBACK_REASON),
-        ]
+        # A name no rule mentions is a file or a pattern target; only a pattern
+        # that matches it is worth reporting, or every source file would be.
+        candidates = [(pattern_lines(self.index, name), _PATTERN_REASON)]
+        if rules:
+            candidates.append((fallback_lines(self.index, self.text), _FALLBACK_REASON))
         for lines, reason in candidates:
             if lines:
+                self.uncertain = True
                 self.facts.append({
                     "path": MAKEFILE,
                     "line": min(lines),
@@ -688,6 +698,8 @@ class _Walk:
         """Record what, among *seen*, prepared a pass of this invocation."""
         signature = invocation.signature
         status, reason = _status(signature, seen)
+        if status == UNPREPARED and self.uncertain:
+            status, reason = INDETERMINATE, _IMPLICIT_REASON
         tests = _warmed_tests(signature, seen) if status == WARMED else ()
         verdict = _Verdict(
             status,
