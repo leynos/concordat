@@ -186,8 +186,64 @@ test_an_unresolved_selection_is_indeterminate if {
 	{[f.rule_id, f.verdict] | some f in fs} == {["EN-001", "indeterminate"]}
 }
 
-test_an_unresolved_word_beside_a_spelled_out_workspace_is_read if {
-	count(findings(data.fixtures.unresolved_selection_beside_workspace)) == 0
+test_an_unresolved_word_beside_a_spelled_out_workspace_is_indeterminate if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.unresolved_selection_beside_workspace)} == {["EN-001", "indeterminate"]}
+}
+
+test_an_unresolved_value_of_a_non_selecting_option_is_read if {
+	count(findings(data.fixtures.unresolved_profile_beside_workspace)) == 0
+}
+
+test_a_glob_exclusion_removes_every_member_it_matches if {
+	some f in findings(data.fixtures.glob_exclusion)
+	f.rule_id == "GC-001"
+	contains(f.msg, "out: b, c")
+}
+
+test_a_glob_package_selector_selects_every_member_it_matches if {
+	count(findings(data.fixtures.glob_package_all)) == 0
+}
+
+test_a_versioned_package_spec_names_its_package if {
+	count(findings(data.fixtures.versioned_packages)) == 0
+}
+
+test_two_commands_on_one_line_are_both_counted if {
+	fs := findings(data.fixtures.two_commands_one_line)
+	{f.rule_id | some f in fs} == {"GC-001"}
+	some f in fs
+	contains(f.msg, "the test commands")
+}
+
+test_two_same_tool_commands_on_one_line_cover_together if {
+	count(findings(data.fixtures.two_clippy_one_line)) == 0
+}
+
+test_a_matrix_exclude_removes_the_job_that_does_not_run if {
+	count(findings(data.fixtures.ci_matrix_exclude_removes_narrow)) == 0
+}
+
+test_a_later_include_overrides_an_earlier_one if {
+	count(findings(data.fixtures.ci_matrix_include_override)) == 0
+}
+
+test_a_working_directory_moves_the_step if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.ci_working_directory)} == {["EN-001", "indeterminate"]}
+}
+
+test_a_cd_on_an_earlier_line_moves_the_later_lines if {
+	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.ci_cd_on_earlier_line)} == {["EN-001", "indeterminate"]}
+}
+
+test_an_unresolved_library_before_whitakers_separator_does_not_hide_the_selection if {
+	count(findings(data.fixtures.whitaker_unresolved_library)) == 0
+}
+
+test_an_example_that_omits_other_members_is_not_the_same_narrowing if {
+	fs := findings(data.fixtures.docs_example_different_narrowing)
+	some f in fs
+	f.rule_id == "GC-001"
+	not contains(f.msg, "documentation shows the same narrowing")
 }
 
 test_an_unresolved_exclusion_is_indeterminate if {

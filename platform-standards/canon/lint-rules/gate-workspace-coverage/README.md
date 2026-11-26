@@ -25,9 +25,12 @@ The gate is the Makefile's `lint` and `test` targets, followed through their
 prerequisites and `make name` commands, and every `run` step of every workflow
 (`.github/workflows`) and composite action (`.github/actions`). Make variables
 are expanded; an `$(if $(shell cargo nextest --version),nextest run,test)`
-probe is read both ways. Each entry of a job's `strategy.matrix` (the product
-of its axes, with `include` entries merged) is read as a command of its own,
-with `${{ matrix.name }}` filled in.
+probe is read both ways. Each entry of a job's `strategy.matrix` is read as a
+command of its own, with `${{ matrix.name }}` filled in. The entries are
+GitHub's: the product of the axes, less the `exclude` entries, with each
+`include` entry added to every original combination it does not contradict (a
+later `include` may overwrite what an earlier one added) or standing as a
+combination of its own when it fits none.
 
 A tool the gate does not run is not required; the rule asks that a tool, once
 run, runs over everything.
@@ -39,7 +42,9 @@ the directories `workspace.members` selects minus `workspace.exclude`, and the
 crates inside the root that a member depends on by path. The commands of one
 tool select the whole workspace together when the union of what they select is
 that set, less the crates exempted by name (see below). Cargo spells it
-`--workspace` or its alias `--all`.
+`--workspace` or its alias `--all`. A `-p` or `--exclude` selector may be a
+glob pattern (`internal-*`), which names every member it matches, and a version
+suffix (`name@1.2.3`) is dropped.
 
 | Command                             | Selects                             |
 | ----------------------------------- | ----------------------------------- |
@@ -76,10 +81,14 @@ place one of its commands:
 
 - a wrapper script (a `.py`, `.sh` or `.bash` file named for a gate tool) that
   selects the packages itself;
-- an unresolved word that could be part of the package selection (an
-  unresolved word beside a spelled-out `--workspace` is read, because it cannot
-  narrow it, unless it is the value of `-p`, `--exclude` or `--manifest-path`);
-- a command run after a `cd`, or against another manifest;
+- an unresolved word among the Cargo arguments, even beside a spelled-out
+  `--workspace`, because it may stand for `--exclude b`. The exceptions are the
+  value of an option that cannot name a package (`--profile`, `-j`,
+  `--features` and the like), and anything before Whitaker's `--`, which is
+  Whitaker's own;
+- a command run after a `cd` (in the same line or an earlier line of one CI
+  step), in a step or job with a `working-directory`, or against a manifest
+  other than the root one;
 - a matrix computed by an expression, or a workflow that cannot be decoded;
 - a Makefile walk that skipped a target it could not resolve, while some member
   looks uncovered.

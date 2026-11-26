@@ -34,7 +34,6 @@ __all__ = ["TOOLS", "Invocation", "invocations_in"]
 TOOLS: typ.Final = ("clippy", "nextest", "test", "test-doc", "whitaker")
 _WORKSPACE_FLAGS: typ.Final = frozenset({"--workspace", "--all"})
 _PACKAGE_FLAGS: typ.Final = frozenset({"-p", "--package"})
-_VALUE_FLAGS: typ.Final = _PACKAGE_FLAGS | {"--exclude", "--manifest-path"}
 # `cargo` options that take the next word as a value, so it is not the subcommand.
 _CARGO_VALUE_FLAGS: typ.Final = frozenset({
     "-Z",
@@ -123,6 +122,20 @@ def _is_unresolved(word: str) -> bool:
     return any(mark in word for mark in _UNRESOLVED_WORD)
 
 
+def _spec_name(spec: str) -> str:
+    """Return the package name of a Cargo package spec such as `name@1.2.3`.
+
+    The selector may be a glob pattern; the policy matches it against the
+    member names, so only the version is dropped here.
+
+    Returns
+    -------
+    str
+        The spec without its version.
+    """
+    return spec.partition("@")[0] or spec
+
+
 def _selection(arguments: list[str]) -> tuple[list[str], list[str], str | None]:
     """Return the packages, exclusions and manifest path named in *arguments*."""
     packages: list[str] = []
@@ -135,37 +148,32 @@ def _selection(arguments: list[str]) -> tuple[list[str], list[str], str | None]:
         if value is None:
             continue
         if flag in _PACKAGE_FLAGS or word.startswith("--package="):
-            packages.append(value)
+            packages.append(_spec_name(value))
         elif flag == "--exclude":
-            excludes.append(value)
+            excludes.append(_spec_name(value))
         elif flag == "--manifest-path":
             manifest = value
     return packages, excludes, manifest
 
 
-def _hides_selection(arguments: list[str], *, has_workspace_flag: bool) -> bool:
+def _hides_selection(arguments: list[str]) -> bool:
     """Return whether an unresolved word could change which packages are chosen.
 
-    With `--workspace` spelled out, a stray unresolved word cannot narrow the
-    selection, but one that is the value of a package, exclusion or manifest
-    option still can. Without it, any unresolved word could be a `-p`.
+    A word the expansion left may stand for any arguments, `--exclude b` among
+    them, so it hides the selection even beside a spelled-out `--workspace`.
+    The one exception is the value of an option that cannot name a package
+    (`--profile`, `-j`, `--features` and the like).
 
     Returns
     -------
     bool
         Whether the selection cannot be read.
     """
-    for index, word in enumerate(arguments):
-        if not _is_unresolved(word):
-            continue
-        previous = arguments[index - 1] if index else ""
-        if previous in _BENIGN_VALUE_FLAGS:
-            continue
-        if not has_workspace_flag or previous in _VALUE_FLAGS:
-            return True
-        if word.split("=", 1)[0] in _VALUE_FLAGS:
-            return True
-    return False
+    return any(
+        _is_unresolved(word)
+        and (arguments[index - 1] if index else "") not in _BENIGN_VALUE_FLAGS
+        for index, word in enumerate(arguments)
+    )
 
 
 def _cargo_subcommand(arguments: list[str]) -> tuple[str | None, list[str]]:
@@ -220,15 +228,15 @@ def _build(
     # the Cargo half selects packages. Cargo's tools stop at `--` too: what
     # follows goes to the test harness or to Clippy's lints.
     boundary = arguments.index("--") if "--" in arguments else None
+    # Only those Cargo arguments are scanned: an unresolved lint-library name
+    # before Whitaker's `--` cannot select a package.
     if tool == "whitaker":
         cargo_arguments = arguments[boundary + 1 :] if boundary is not None else []
-        scanned = arguments
     else:
         cargo_arguments = arguments[:boundary] if boundary is not None else arguments
-        scanned = cargo_arguments
-    packages, excludes, manifest = _selection(scanned)
+    packages, excludes, manifest = _selection(cargo_arguments)
     has_flag = any(word in _WORKSPACE_FLAGS for word in cargo_arguments)
-    hidden = _hides_selection(scanned, has_workspace_flag=has_flag)
+    hidden = _hides_selection(cargo_arguments)
     source, command = where
     return {
         "tool": tool,
@@ -306,15 +314,34 @@ def _without_keywords(words: list[str]) -> list[str]:
     return words[start:]
 
 
+def leaves_directory(segments: list[list[str]]) -> bool:
+    """Return whether a lexed line holds a `cd` that leaves the root directory.
+
+    A caller that reads a script a line at a time carries this forward, so a
+    `cd nested` on one line marks every command on the lines after it.
+
+    Returns
+    -------
+    bool
+        Whether a later command runs somewhere else.
+    """
+    return any(
+        words[command_start(words) : command_start(words) + 1] == ["cd"]
+        and _moves_directory(words[command_start(words) :])
+        for words in (_without_keywords(raw) for raw in segments)
+    )
+
+
 def invocations_in(
-    segments: list[list[str]], where: tuple[str, str]
+    segments: list[list[str]], where: tuple[str, str], *, moved: bool = False
 ) -> list[Invocation]:
     """Return the gate-tool invocations in one lexed line.
 
     A `cd` earlier in the line marks every later invocation as running
-    elsewhere. *where* is the line's source (a file and line, or a job and
-    step) and its text, kept on each invocation so a finding can show what was
-    read.
+    elsewhere, as does *moved*, which a caller sets when an earlier line or the
+    step's `working-directory` has already left the root. *where* is the line's
+    source (a file and line, or a job and step) and its text, kept on each
+    invocation so a finding can show what was read.
 
     Returns
     -------
@@ -323,7 +350,6 @@ def invocations_in(
         `cargo test`, Whitaker, or a wrapper script named for one of them.
     """
     found: list[Invocation] = []
-    moved = False
     for raw_words in segments:
         words = _without_keywords(raw_words)
         start = command_start(words)

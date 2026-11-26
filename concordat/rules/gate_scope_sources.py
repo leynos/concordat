@@ -29,7 +29,7 @@ import pathlib
 import re
 import typing as typ
 
-from .gate_scope_commands import Invocation, invocations_in
+from .gate_scope_commands import Invocation, invocations_in, leaves_directory
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
 from .makefile_expansion import (
@@ -176,27 +176,34 @@ def _lexed(text: str) -> list[list[str]] | None:
     return lex_segments(blank_references(_name_whitaker(muted)))
 
 
-def _read_line(text: str, where: tuple[str, str]) -> tuple[list[Invocation], bool]:
-    """Return the invocations in one expanded line, and whether it was readable.
+def _read_line(
+    text: str, where: tuple[str, str], *, moved: bool = False
+) -> tuple[list[Invocation], bool, bool]:
+    """Return the invocations in one expanded line, whether it read, and where.
 
     A line is unreadable when it finds no invocation and either will not lex
     while naming a gate tool, or holds a command whose command word (or Cargo
     subcommand) the expansion left unresolved beside words that name a gate
     tool. A line that only mentions a tool in a string or an identifier is not.
 
+    *moved* says an earlier line of the same shell, or the step's working
+    directory, already left the root; the result's last member is the same fact
+    for the line after this one.
+
     Returns
     -------
-    tuple[list[Invocation], bool]
-        The invocations found, and whether the line could be read.
+    tuple[list[Invocation], bool, bool]
+        The invocations found, whether the line could be read, and whether the
+        shell is now outside the root directory.
     """
     segments = _lexed(text)
     if segments is None:
         found: list[Invocation] = []
         is_unreadable = _NAMES_TOOL.search(shown(text)) is not None
-    else:
-        found = invocations_in(segments, where)
-        is_unreadable = not found and any(_hides_tool(words) for words in segments)
-    return found, not is_unreadable
+        return found, not is_unreadable, moved
+    found = invocations_in(segments, where, moved=moved)
+    is_unreadable = not found and any(_hides_tool(words) for words in segments)
+    return found, not is_unreadable, moved or leaves_directory(segments)
 
 
 def _hides_tool(words: list[str]) -> bool:
@@ -249,7 +256,7 @@ def makefile_lines(
                         f"Makefile:{number} ({target})",
                         " ".join(shown(blank_references(joined(reading.text))).split()),
                     )
-                    found, is_readable = _read_line(reading.text, where)
+                    found, is_readable, _moved = _read_line(reading.text, where)
                     invocations.extend(found)
                     if not is_readable:
                         unreadable.append(f"{where[0]}: {where[1]}")
@@ -273,7 +280,9 @@ def _product(matrix: dict[str, object]) -> list[dict[str, object]]:
         if key not in {"include", "exclude"} and isinstance(value, list)
     }
     if not axes:
-        return [{}]
+        # No axes means no original combinations, so each `include` entry
+        # becomes a combination of its own.
+        return []
     names = list(axes)
     return [
         dict(zip(names, choice, strict=True))
@@ -281,34 +290,67 @@ def _product(matrix: dict[str, object]) -> list[dict[str, object]]:
     ]
 
 
+def _without_excluded(
+    combinations: list[dict[str, object]], excludes: list[object]
+) -> list[dict[str, object]]:
+    """Return *combinations* less those an `exclude` entry matches.
+
+    An entry removes every combination that holds all of its key and value
+    pairs. GitHub applies `exclude` before `include`, so an included entry can
+    bring back a combination that an exclude removed.
+
+    Returns
+    -------
+    list[dict[str, object]]
+        The combinations that survive.
+    """
+    entries = [
+        typ.cast("dict[str, object]", entry)
+        for entry in excludes
+        if isinstance(entry, dict)
+    ]
+    return [
+        combination
+        for combination in combinations
+        if not any(
+            all(combination.get(key) == value for key, value in entry.items())
+            for entry in entries
+        )
+    ]
+
+
 def _with_includes(
     combinations: list[dict[str, object]], includes: list[object]
 ) -> list[dict[str, object]]:
-    """Return *combinations* with each `include` entry applied.
+    """Return *combinations* with each `include` entry applied, as GitHub does.
 
-    An entry extends every combination it does not contradict, and stands as a
-    combination of its own when it extends none: GitHub's rule, without the
-    ordering subtleties the gate commands do not depend on.
+    An entry is added to every original combination whose original values it
+    does not overwrite (a value an earlier `include` added can be overwritten),
+    and stands as a combination of its own when it can be added to none. An
+    entry that created a combination is not itself matched by later entries.
 
     Returns
     -------
     list[dict[str, object]]
         The combinations after the entries are applied.
     """
-    result = [dict(combination) for combination in combinations]
+    originals = [dict(combination) for combination in combinations]
+    results = [dict(combination) for combination in combinations]
+    extra: list[dict[str, object]] = []
     for candidate in includes:
         if not isinstance(candidate, dict):
             continue
         entry = typ.cast("dict[str, object]", candidate)
-        extended = False
-        for combination in result:
-            shared = entry.keys() & combination.keys()
-            if all(combination[key] == entry[key] for key in shared):
-                combination.update(entry)
-                extended = True
-        if not extended:
-            result.append(dict(entry))
-    return result
+        added = False
+        for original, result in zip(originals, results, strict=True):
+            if all(
+                original[key] == entry[key] for key in entry.keys() & original.keys()
+            ):
+                result.update(entry)
+                added = True
+        if not added:
+            extra.append(dict(entry))
+    return [*results, *extra]
 
 
 def matrix_combinations(job: object) -> list[dict[str, object]] | None:
@@ -328,10 +370,15 @@ def matrix_combinations(job: object) -> list[dict[str, object]] | None:
     if not isinstance(matrix, dict):
         return None
     axes = typ.cast("dict[str, object]", matrix)
-    includes = axes.get("include", [])
-    if not isinstance(includes, list):
+    includes, excludes = axes.get("include", []), axes.get("exclude", [])
+    if not isinstance(includes, list) or not isinstance(excludes, list):
         return None
-    return _with_includes(_product(axes), typ.cast("list[object]", includes))
+    combinations = _with_includes(
+        _without_excluded(_product(axes), typ.cast("list[object]", excludes)),
+        typ.cast("list[object]", includes),
+    )
+    # A matrix with no axes and no entries still runs its job once.
+    return combinations or [{}]
 
 
 def _fill(text: str, combination: dict[str, object]) -> str:
@@ -345,37 +392,93 @@ def _fill(text: str, combination: dict[str, object]) -> str:
     return _ANY_EXPRESSION.sub(UNRESOLVED_MARK, _MATRIX_REFERENCE.sub(matrix, text))
 
 
-def _steps(parsed: object) -> list[tuple[str, list[dict[str, object]] | None, object]]:
-    """Return each place that holds steps: a label, a matrix, and the steps."""
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Place:
+    """A job or composite action: its matrix, its steps, and its default directory."""
+
+    label: str
+    combinations: list[dict[str, object]] | None
+    steps: object
+    directory: str | None
+
+
+def _default_directory(*scopes: object) -> str | None:
+    """Return the innermost `defaults.run.working-directory` among *scopes*."""
+    found: str | None = None
+    for scope in scopes:
+        defaults = scope.get("defaults") if isinstance(scope, dict) else None
+        run = defaults.get("run") if isinstance(defaults, dict) else None
+        directory = run.get("working-directory") if isinstance(run, dict) else None
+        if isinstance(directory, str):
+            found = directory
+    return found
+
+
+def _steps(parsed: object) -> list[_Place]:
+    """Return each place that holds steps, with its matrix and default directory."""
     if not isinstance(parsed, dict):
         return []
-    places: list[tuple[str, list[dict[str, object]] | None, object]] = []
+    places: list[_Place] = []
     jobs = parsed.get("jobs")
     if isinstance(jobs, dict):
         places.extend(
-            (f"job {name}", matrix_combinations(job), job.get("steps"))
+            _Place(
+                f"job {name}",
+                matrix_combinations(job),
+                job.get("steps"),
+                _default_directory(parsed, job),
+            )
             for name, job in jobs.items()
             if isinstance(job, dict)
         )
     runs = parsed.get("runs")
     if isinstance(runs, dict):
-        places.append(("action", [{}], runs.get("steps")))
+        places.append(_Place("action", [{}], runs.get("steps"), None))
     return places
 
 
-def _run_lines(
-    path: str, label: str, steps: object, combination: dict[str, object]
-) -> list[tuple[str, str]]:
-    """Return `(source, line)` pairs for each logical `run` line of the steps."""
-    if not isinstance(steps, list):
+def _is_elsewhere(directory: object) -> bool:
+    """Return whether a `working-directory` leaves the checkout root.
+
+    An expression is unknown, and unknown is not the root.
+
+    Returns
+    -------
+    bool
+        Whether the step runs somewhere other than the root.
+    """
+    return isinstance(directory, str) and directory.strip() not in {"", ".", "./"}
+
+
+def _step_lines(
+    place: _Place, combination: dict[str, object]
+) -> list[tuple[str, list[str], bool]]:
+    """Return `(source, lines, in_other_directory)` for each `run` step of *place*.
+
+    The lines are the step's logical lines in order, because one step is one
+    shell: a `cd` on an early line moves every command after it. The flag is
+    set when the step, or its job or workflow, names a `working-directory`
+    other than the root.
+
+    Returns
+    -------
+    list[tuple[str, list[str], bool]]
+        One entry per step that runs a script.
+    """
+    if not isinstance(place.steps, list):
         return []
-    found: list[tuple[str, str]] = []
-    for position, step in enumerate(steps, start=1):
+    found: list[tuple[str, list[str], bool]] = []
+    for position, step in enumerate(place.steps, start=1):
         run = step.get("run") if isinstance(step, dict) else None
-        if not isinstance(run, str):
+        if not isinstance(step, dict) or not isinstance(run, str):
             continue
-        for _number, line in _logical_lines(_fill(run, combination)):
-            found.append((f"{path} ({label}, step {position})", line))
+        directory = step.get("working-directory", place.directory)
+        lines = [line for _n, line in _logical_lines(_fill(run, combination))]
+        found.append((
+            f"({place.label}, step {position})",
+            lines,
+            _is_elsewhere(directory),
+        ))
     return found
 
 
@@ -397,35 +500,72 @@ def workflow_lines(files: cabc.Iterable[WorkflowFile]) -> GateLines:
         if workflow["error"] is not None:
             unreadable.append(f"{workflow['path']}: {workflow['error']}")
             continue
-        for label, combinations, steps in _steps(workflow["parsed"]):
-            if combinations is None:
-                if _MATRIX_TOOL.search(repr(steps)):
+        for place in _steps(workflow["parsed"]):
+            if place.combinations is None:
+                if _MATRIX_TOOL.search(repr(place.steps)):
                     unreadable.append(
-                        f"{workflow['path']} ({label}): matrix is computed by an "
-                        "expression, so its commands cannot be filled in"
+                        f"{workflow['path']} ({place.label}): matrix is computed by "
+                        "an expression, so its commands cannot be filled in"
                     )
                 continue
-            for combination in combinations:
-                for source, line in _run_lines(
-                    workflow["path"], label, steps, combination
-                ):
-                    found, is_readable = _read_line(
-                        line, (source, " ".join(line.split()))
+            for combination in place.combinations:
+                for source, lines, elsewhere in _step_lines(place, combination):
+                    found, missed = _read_step(
+                        f"{workflow['path']} {source}", lines, moved=elsewhere
                     )
                     invocations.extend(found)
-                    if not is_readable:
-                        unreadable.append(f"{source}: {' '.join(line.split())}")
+                    unreadable.extend(missed)
     return GateLines(
         _distinct(invocations), _distinct_text(unreadable), [], is_resolved=True
     )
 
 
+def _read_step(
+    source: str, lines: list[str], *, moved: bool
+) -> tuple[list[Invocation], list[str]]:
+    """Read the lines of one step as one shell, carrying a `cd` forward.
+
+    Returns
+    -------
+    tuple[list[Invocation], list[str]]
+        The invocations found, and the lines that could not be read, each
+        prefixed with the step's source.
+    """
+    invocations: list[Invocation] = []
+    unreadable: list[str] = []
+    for line in lines:
+        shown_line = " ".join(line.split())
+        found, is_readable, moved = _read_line(line, (source, shown_line), moved=moved)
+        invocations.extend(found)
+        if not is_readable:
+            unreadable.append(f"{source}: {shown_line}")
+    return invocations, unreadable
+
+
 def _distinct(invocations: list[Invocation]) -> list[Invocation]:
-    """Drop repeats of one command from one source, keeping the first."""
-    seen: set[tuple[str, str]] = set()
+    """Drop repeats of one invocation, keeping the first.
+
+    Two commands on one line are two invocations, so the key is everything that
+    says what an invocation selects, not just where it was read.
+
+    Returns
+    -------
+    list[Invocation]
+        The distinct invocations in their original order.
+    """
+    seen: set[tuple[object, ...]] = set()
     kept: list[Invocation] = []
     for invocation in invocations:
-        key = (invocation["source"], invocation["command"])
+        key = (
+            invocation["source"],
+            invocation["command"],
+            invocation["tool"],
+            invocation["workspace_flag"],
+            tuple(invocation["packages"]),
+            tuple(invocation["excludes"]),
+            invocation["resolved"],
+            invocation["changes_directory"],
+        )
         if key not in seen:
             seen.add(key)
             kept.append(invocation)

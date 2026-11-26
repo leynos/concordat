@@ -8,6 +8,7 @@ what the audit refuses to place instead of guessing.
 
 from __future__ import annotations
 
+import subprocess
 import typing as typ
 
 import pytest
@@ -163,8 +164,10 @@ class TestCommands:
     @pytest.mark.parametrize(
         ("command", "is_resolved"),
         [
-            ("cargo test --workspace $EXTRA", True),
+            ("cargo test --workspace $EXTRA", False),
             ("cargo test $FLAGS", False),
+            ("whitaker --lib $LIBRARY -- --workspace", True),
+            ("whitaker --all -- --workspace $EXTRA", False),
             ("cargo test --workspace --exclude $SKIP", False),
             ("cargo test -p $PACKAGE", False),
             ("cargo test --package=$PACKAGE --workspace", False),
@@ -177,7 +180,11 @@ class TestCommands:
     def test_an_unresolved_word_matters_only_where_it_can_select(
         self, command: str, *, is_resolved: bool
     ) -> None:
-        """A stray word cannot narrow a spelled-out workspace; a value flag can."""
+        """An unresolved word may supply `--exclude`, so it hides the selection.
+
+        The exceptions are the value of an option that cannot name a package,
+        and anything before Whitaker's `--`, which is Whitaker's own.
+        """
         (found,) = _read(command)
         assert found["resolved"] is is_resolved
 
@@ -505,6 +512,124 @@ class TestWorkflows:
             for i in envelope["invocations"]
         }
         assert found == {("clippy", True, ()), ("test", False, ("app",))}
+
+
+class TestReviewFindings:
+    """Behaviours a review of the first version showed to be missing."""
+
+    def test_two_commands_on_one_line_are_two_invocations(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`a && b` on one line records both, not only the first."""
+        makefile = (
+            ".PHONY: lint\nlint:\n\tcargo clippy --workspace && cargo test -p app\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert [i["tool"] for i in envelope["invocations"]] == ["clippy", "test"]
+
+    def test_the_repository_name_is_the_origin_slug(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An exemption names `owner/name`, so the envelope carries the origin's."""
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)  # noqa: S607
+        subprocess.run(
+            ["git", "remote", "add", "origin", "git@github.com:leynos/example.git"],  # noqa: S607
+            cwd=tmp_path,
+            check=True,
+        )
+        envelope = _build(tmp_path, _workspace_files())
+        assert envelope["repository"]["name"] == "leynos/example"
+
+    def test_a_working_directory_moves_every_command_of_the_step(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`working-directory` is another directory, so the root is not covered."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: cargo test --workspace\n"
+            "        working-directory: nested\n"
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        (found,) = _build(tmp_path, files)["invocations"]
+        assert found["changes_directory"]
+
+    def test_a_default_working_directory_moves_the_job(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`defaults.run.working-directory` applies to steps that set none."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    defaults:\n      run:\n        working-directory: nested\n"
+            "    steps:\n      - run: cargo test --workspace\n"
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        (found,) = _build(tmp_path, files)["invocations"]
+        assert found["changes_directory"]
+
+    def test_a_cd_on_an_earlier_line_moves_the_later_lines(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """One step is one shell: `cd nested` moves what follows."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: |\n          cd nested\n"
+            "          cargo test --workspace\n"
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        (found,) = _build(tmp_path, files)["invocations"]
+        assert found["changes_directory"]
+
+    @pytest.mark.parametrize(
+        ("matrix", "expected"),
+        [
+            # exclude removes a combination before include runs
+            (
+                (
+                    'flags: ["--workspace", "-p app"]\n        exclude:\n'
+                    "          - flags: -p app\n"
+                ),
+                ["--workspace"],
+            ),
+            # a later include overwrites a value an earlier one added
+            (
+                (
+                    "os: [linux]\n        include:\n          - flags: -p app\n"
+                    "          - flags: --workspace\n"
+                ),
+                ["--workspace"],
+            ),
+            # an include that contradicts an original value is its own job
+            (
+                (
+                    "os: [linux]\n        include:\n          - os: mac\n"
+                    "            flags: --workspace\n"
+                ),
+                ["", "--workspace"],
+            ),
+            # no axes: each include is a combination of its own
+            (
+                "include:\n          - flags: --workspace\n          - flags: -p app\n",
+                ["--workspace", "-p app"],
+            ),
+        ],
+    )
+    def test_matrix_exclude_and_include_follow_github(
+        self, tmp_path: pathlib.Path, matrix: str, expected: list[str]
+    ) -> None:
+        """Combinations are the product, less `exclude`, with `include` applied."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            f"    strategy:\n      matrix:\n        {matrix}"
+            "    steps:\n      - run: cargo test ${{ matrix.flags }}\n"
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        envelope = _build(tmp_path, files)
+        commands = sorted(
+            i["command"].removeprefix("cargo test").strip()
+            for i in envelope["invocations"]
+        )
+        # an unfilled `matrix.flags` is the unresolved mark, shown as nothing
+        assert sorted(c.replace("\x01", "") for c in commands) == sorted(expected)
 
 
 class TestExamples:

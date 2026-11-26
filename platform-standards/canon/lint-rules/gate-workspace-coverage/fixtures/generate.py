@@ -163,8 +163,25 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "unresolved_selection_beside_workspace": checkout_for(
         test=["cargo test --workspace $(EXTRA)"]
     ),
+    "unresolved_profile_beside_workspace": checkout_for(
+        test=["cargo nextest run --workspace --profile $(PROFILE)"]
+    ),
     "unresolved_exclusion": checkout_for(
         test=["cargo test --workspace --exclude $(SKIPPED)"]
+    ),
+    "glob_exclusion": checkout_for(test=["cargo test --workspace --exclude '[bc]'"]),
+    "glob_package_all": checkout_for(test=["cargo test -p 'a*' -p '[bc]'"]),
+    "versioned_packages": checkout_for(
+        test=["cargo test -p app@0.1.0 --package b@0.1.0 -p c"]
+    ),
+    "two_commands_one_line": checkout_for(
+        lint=["cargo clippy --workspace && cargo test -p app"]
+    ),
+    "two_clippy_one_line": checkout_for(
+        lint=["cargo clippy -p app -p b && cargo clippy -p c"]
+    ),
+    "whitaker_unresolved_library": checkout_for(
+        lint=["whitaker --lib $(LIBRARY) -- --workspace"]
     ),
     "wrapper_script": checkout_for(lint=["./scripts/run_whitaker.py --packages x"]),
     "changes_directory": checkout_for(test=["cd crates/b && cargo test"]),
@@ -218,6 +235,44 @@ SCENARIOS: dict[str, dict[str, str]] = {
             )
         }
     ),
+    "ci_matrix_exclude_removes_narrow": checkout_for(
+        extra={
+            ".github/workflows/ci.yml": workflow(
+                "cargo test ${{ matrix.flags }}",
+                matrix=(
+                    "    strategy:\n      matrix:\n"
+                    '        flags: ["--workspace", "-p app"]\n'
+                    "        exclude:\n          - flags: -p app\n"
+                ),
+            )
+        }
+    ),
+    "ci_matrix_include_override": checkout_for(
+        extra={
+            ".github/workflows/ci.yml": workflow(
+                "cargo test ${{ matrix.flags }} # ${{ matrix.os }}",
+                matrix=(
+                    "    strategy:\n      matrix:\n        os: [linux]\n"
+                    "        include:\n          - flags: -p app\n"
+                    "          - flags: --workspace\n"
+                ),
+            )
+        }
+    ),
+    "ci_working_directory": checkout_for(
+        extra={
+            ".github/workflows/ci.yml": (
+                "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+                "    steps:\n      - run: cargo test --workspace\n"
+                "        working-directory: nested\n"
+            )
+        }
+    ),
+    "ci_cd_on_earlier_line": checkout_for(
+        extra={
+            ".github/workflows/ci.yml": workflow("cd nested\ncargo test --workspace")
+        }
+    ),
     "ci_matrix_axis": checkout_for(
         extra={
             ".github/workflows/ci.yml": workflow(
@@ -265,6 +320,10 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "docs_example_for_a_narrow_gate": checkout_for(
         lint=["cargo clippy --all-targets"],
         extra={"AGENTS.md": "```sh\ncargo clippy --all-targets\n```\n"},
+    ),
+    "docs_example_different_narrowing": checkout_for(
+        lint=["cargo clippy -p app -p b"],
+        extra={"AGENTS.md": "```sh\ncargo clippy -p c\n```\n"},
     ),
     "docs_outside_fences_ignored": checkout_for(
         lint=["cargo clippy --workspace"],

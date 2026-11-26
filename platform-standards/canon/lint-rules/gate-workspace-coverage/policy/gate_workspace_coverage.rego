@@ -95,13 +95,22 @@ members := {m | some m in input.workspace.members}
 # One member, or none, cannot be narrowed.
 multi_member if count(members) > 1
 
+# The members a list of Cargo package selectors names. Cargo accepts glob
+# patterns (`*`, `?`, `[..]`) in `-p` and `--exclude`, so a selector names every
+# member it matches, not only the one it equals.
+named(selectors) := {m |
+	some m in members
+	some selector in selectors
+	glob.match(selector, [], m)
+}
+
 # What a command selects. Spelling the workspace out selects every member less
 # the exclusions; a `-p` list selects what it names; a bare command selects the
 # root package of a workspace that has one, `default-members` when the manifest
 # sets them, and every member of a virtual workspace.
-selected(invocation) := members - {x | some x in invocation.excludes} if invocation.workspace_flag == true
+selected(invocation) := members - named(invocation.excludes) if invocation.workspace_flag == true
 
-selected(invocation) := {p | some p in invocation.packages} if {
+selected(invocation) := named(invocation.packages) if {
 	invocation.workspace_flag != true
 	count(invocation.packages) > 0
 }
@@ -167,12 +176,14 @@ narrowing(tool) := [i |
 	count(members - selected(i)) > 0
 ]
 
+# An example shows the same narrowing when it leaves out some of the members the
+# gate leaves out; one that merely selects a different subset does not.
 narrowing_examples(tool) := [e |
 	some e in input.examples
 	e.tool == tool
 	e.resolved == true
 	e.changes_directory == false
-	count(members - selected(e)) > 0
+	count((members - selected(e)) & uncovered(tool)) > 0
 ]
 
 list_sources(items) := concat("; ", [sprintf("%s: %s", [i.source, i.command]) | some i in items])

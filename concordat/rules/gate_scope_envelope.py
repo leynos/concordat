@@ -46,6 +46,7 @@ from .markdown_envelope import (
     resolved_root,
     within_checkout,
 )
+from .nested_cargo import origin_slug
 from .test_environment_types import CARGO_MANIFEST, Reader
 from .uv_gate_envelope import load_actions
 
@@ -148,7 +149,7 @@ def build_gate_scope_envelope(
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
-        "repository": {"path": str(checkout), "name": None},
+        "repository": {"path": str(checkout), "name": origin_slug(checkout)},
         "applicability": {
             "cargo_manifest": has_manifest,
             "root_makefile": has_makefile,
