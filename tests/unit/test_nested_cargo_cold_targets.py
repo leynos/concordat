@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import typing as typ
 
+import pytest
+
 from concordat.rules.nested_cargo_cold_envelope import build_nested_cargo_cold_envelope
 
 if typ.TYPE_CHECKING:
@@ -72,7 +74,7 @@ def test_a_directory_test_target_names_the_modules_it_imports(
     assert targets(tmp_path) == {"tests/ui/support.rs": ["ui"]}
 
 
-def test_a_manifest_that_names_its_test_targets_leaves_the_targets_unknown(
+def test_a_test_table_names_the_target_of_its_own_path(
     tmp_path: pathlib.Path,
 ) -> None:
     """`[[test]] name = ...` can give `tests/ui.rs` another name than its file's."""
@@ -88,7 +90,69 @@ def test_a_manifest_that_names_its_test_targets_leaves_the_targets_unknown(
             "tests/other.rs": "fn other() {}\n",
         },
     )
-    assert targets(tmp_path) == {"tests/ui.rs": None}
+    assert targets(tmp_path) == {"tests/ui.rs": ["contract"]}
+
+
+@pytest.mark.parametrize(
+    ("tables", "source", "expected"),
+    [
+        (
+            (
+                'name = "a"\npath = "tests/ui.rs"\n\n'
+                '[[test]]\nname = "b"\npath = "tests/ui.rs"\n'
+            ),
+            "tests/ui.rs",
+            ["a", "b"],
+        ),
+        ('name = "a"\npath = "tests/../tests/ui.rs"\n', "tests/ui.rs", ["a"]),
+        ('name = "ui"\n', "tests/ui/main.rs", ["ui"]),
+    ],
+)
+def test_test_tables_share_normalise_and_default_their_paths(
+    tmp_path: pathlib.Path, tables: str, source: str, expected: list[str]
+) -> None:
+    """Each table is a target of its own; paths are normalised; no path is a default."""
+    checkout(
+        tmp_path,
+        {
+            "Cargo.toml": (
+                f'[package]\nname = "app"\nautotests = false\n\n[[test]]\n{tables}'
+            ),
+            source: TRYBUILD_TEST,
+        },
+    )
+    assert targets(tmp_path) == {source: expected}
+
+
+@pytest.mark.parametrize(
+    ("tables", "source"),
+    [
+        # Table `b` guesses `tests/b.rs`, which table `c` declares as its source.
+        (
+            (
+                '[[test]]\nname = "b"\npath = "tests/a.rs"\n\n'
+                '[[test]]\nname = "c"\npath = "tests/b.rs"\n'
+            ),
+            "tests/a.rs",
+        ),
+        # A file no table names may run under any target's name.
+        ('[[test]]\nname = "other"\npath = "tests/other.rs"\n', "tests/ui.rs"),
+    ],
+)
+def test_an_ambiguous_or_unnamed_test_file_leaves_the_targets_unknown(
+    tmp_path: pathlib.Path, tables: str, source: str
+) -> None:
+    """The file name no longer says which target runs it, so none is claimed."""
+    checkout(
+        tmp_path,
+        {
+            "Cargo.toml": f'[package]\nname = "app"\nautotests = false\n\n{tables}',
+            source: TRYBUILD_TEST,
+            "tests/b.rs": "fn other() {}\n",
+            "tests/other.rs": "fn other() {}\n",
+        },
+    )
+    assert targets(tmp_path) == {source: None}
 
 
 def test_an_owner_the_resolver_cannot_see_leaves_the_targets_unknown(

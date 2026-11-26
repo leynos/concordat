@@ -22,6 +22,7 @@ is paid for, which is what a maintainer reading a timeout needs to find.
 from __future__ import annotations
 
 import dataclasses
+import posixpath
 import re
 import typing as typ
 
@@ -125,6 +126,53 @@ class Preparation:
     gates: Gates
     is_makefile_prepared: bool = False
     named_test_crates: frozenset[str] = frozenset()
+    declared_tests: cabc.Mapping[str, frozenset[str]] = dataclasses.field(
+        default_factory=dict
+    )
+
+
+def declared_tests(
+    checkout: pathlib.Path, manifests: cabc.Mapping[pathlib.Path, Manifest]
+) -> dict[str, frozenset[str]]:
+    """Return each `[[test]]` table's source paths, root-relative, with its names.
+
+    Several tables may name one path, each a target of its own, and a table with
+    no path is `tests/<name>.rs` or `tests/<name>/main.rs`, whichever exists.
+
+    Returns
+    -------
+    dict[str, frozenset[str]]
+        Each normalised path to the names of the targets built from it.
+    """
+    found: dict[str, set[str]] = {}
+    for path, document in manifests.items():
+        crate = path.parent.relative_to(checkout).as_posix()
+        for name, source in _manifest_tests(document):
+            relative = posixpath.normpath(posixpath.join(crate, source))
+            if not relative.startswith(".."):
+                found.setdefault(relative, set()).add(name)
+    return {key: frozenset(names) for key, names in found.items()}
+
+
+def _manifest_tests(document: Manifest) -> list[tuple[str, str]]:
+    """Return every `[[test]]` table's name with each source path it may mean."""
+    tables = document.get("test")
+    return [
+        pair
+        for table in (tables if isinstance(tables, list) else [])
+        for pair in _test_table(table)
+    ]
+
+
+def _test_table(table: object) -> list[tuple[str, str]]:
+    """Return a `[[test]]` table's name with each source path it may mean."""
+    name = table.get("name") if isinstance(table, dict) else None
+    if not isinstance(name, str) or not isinstance(table, dict):
+        return []
+    given = table.get("path")
+    if isinstance(given, str):
+        return [(name, given)]
+    return [(name, f"tests/{name}.rs"), (name, f"tests/{name}/main.rs")]
 
 
 def named_test_crates(
@@ -421,20 +469,31 @@ def collect_builds(
             "crate": crate,
             "package": crates.get(crate),
             "prepared_by": prepared,
-            "targets": (
-                None
+            "targets": _test_targets(
+                path,
+                evidence.reached_by.get(path, []),
+                preparation.declared_tests
                 if crate in preparation.named_test_crates
-                else _test_targets(path, evidence.reached_by.get(path, []))
+                else {},
+                is_named=crate in preparation.named_test_crates,
             ),
         })
     return builds
 
 
-def _test_targets(path: str, roots: list[str]) -> list[str] | None:
+def _test_targets(
+    path: str,
+    roots: list[str],
+    declared: cabc.Mapping[str, frozenset[str]],
+    *,
+    is_named: bool,
+) -> list[str] | None:
     """Return the test binaries that compile a source, or None when not all are seen.
 
     Cargo names a `tests/<name>.rs` file and a `tests/<name>/main.rs` file's
-    directory the same target, `<name>`.
+    directory the same target, `<name>`. A `[[test]]` table names its own path's
+    target, and a path it does not name stays unknown in a crate whose manifest
+    names its tests, because the file name no longer says which target runs it.
 
     Returns
     -------
@@ -446,9 +505,92 @@ def _test_targets(path: str, roots: list[str]) -> list[str] | None:
     """
     if any(root.startswith(UNSEEN) for root in roots):
         return None
-    names = {
-        found["name"] for found in map(_TARGET_NAME.search, (path, *roots)) if found
-    }
+    sources = _owners(path, roots, declared)
+    if _is_unnameable(path, roots, declared, is_named=is_named):
+        return None
+    names = _target_names(sources, declared)
     if not names and not roots:
         return None
     return sorted(names)
+
+
+def _is_unnameable(
+    path: str,
+    roots: list[str],
+    declared: cabc.Mapping[str, frozenset[str]],
+    *,
+    is_named: bool,
+) -> bool:
+    """Return whether the manifest cannot say which targets compile the file.
+
+    Returns
+    -------
+    bool
+        True when a guessed owner collides with a declared path, or the crate
+        names its tests and some owner is no declared path.
+    """
+    if _is_ambiguous(path, roots, declared):
+        return True
+    sources = _owners(path, roots, declared)
+    return is_named and not all(source in declared for source in sources)
+
+
+def _target_names(
+    sources: list[str], declared: cabc.Mapping[str, frozenset[str]]
+) -> set[str]:
+    """Return the target names of *sources*: each table's names, else the file's."""
+    named = {name for source in sources for name in declared.get(source, ())}
+    by_file = (
+        found["name"]
+        for source, found in ((s, _TARGET_NAME.search(s)) for s in sources)
+        if found and source not in declared
+    )
+    return named | set(by_file)
+
+
+def _is_ambiguous(
+    path: str, roots: list[str], declared: cabc.Mapping[str, frozenset[str]]
+) -> bool:
+    """Return whether a root may be a guessed owner and another table's source.
+
+    A table `b` with another path leaves `tests/b.rs` as the guessed root of its
+    sources; if a different table `c` declares `tests/b.rs` as its real path,
+    the reader cannot tell which of the two the root is, so the targets are
+    unknown.
+
+    Returns
+    -------
+    bool
+        True when a root is a declared path and also another table's guess.
+    """
+    prefix = path[: path.find("tests/")] if "tests/" in path else ""
+    every = {name for names in declared.values() for name in names}
+    return any(
+        root in declared
+        and any(
+            root == f"{prefix}tests/{name}.rs" and name not in declared[root]
+            for name in every
+        )
+        for root in roots
+        if root != path
+    )
+
+
+def _owners(
+    path: str, roots: list[str], declared: cabc.Mapping[str, frozenset[str]]
+) -> list[str]:
+    """Return the file and the roots that own it, without guessed roots.
+
+    A `[[test]]` table that gives its own path leaves `tests/<name>.rs` a root
+    the resolver guessed from the name, not a file: it is no owner.
+
+    Returns
+    -------
+    list[str]
+        The file's own path, then each root that is a real owner.
+    """
+    prefix = path[: path.find("tests/")] if "tests/" in path else ""
+    guessed = {
+        f"{prefix}tests/{name}.rs" for names in declared.values() for name in names
+    }
+    return [path, *(r for r in roots if r in declared or r not in guessed)]
