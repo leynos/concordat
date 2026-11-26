@@ -44,6 +44,7 @@ from .make_commands import blank_references, command_start
 from .makefile_expansion import (
     SHELL_DOLLAR,
     UNRESOLVED_MARK,
+    Expansion,
     expand_readings,
     joined,
     shown,
@@ -288,29 +289,65 @@ def _read_rule(
     tuple[list[_Line], list[str]]
         The lines with their readings, and the lines that could not be read.
     """
-    lines: list[_Line] = []
+    pending: list[_Readings] = []
     unreadable: list[str] = []
-    state_by_reading: dict[int, ShellState] = {}
+    before: dict[int, ShellState] = {}
+    every_state: list[ShellState] = []
     for number, text in rule.recipes:
-        per_reading: list[list[Invocation]] = []
+        source = f"Makefile:{number} ({target})"
         readings = list(expand_readings(text, values))
-        for position, reading in enumerate(readings):
-            shown_line = " ".join(shown(blank_references(joined(reading.text))).split())
-            source = f"Makefile:{number} ({target})"
-            before = (
-                _shell_before(state_by_reading, position, len(readings))
-                if is_one_shell
-                else FRESH_SHELL
-            )
-            found, is_readable, after = _read_line(
-                reading.text, (source, shown_line), before
-            )
-            state_by_reading[position] = after
-            per_reading.append(settle(found, after.forks))
-            if not is_readable:
-                unreadable.append(f"{source}: {shown_line}")
-        lines.append(_Line(per_reading))
+        starts = {
+            position: _shell_before(before, position, len(readings))
+            if is_one_shell
+            else FRESH_SHELL
+            for position in range(len(readings))
+        }
+        read, before, missed = _read_recipe_line(source, readings, starts)
+        pending.append(read)
+        unreadable.extend(missed)
+        every_state.extend(before.values())
+    # Under `.ONESHELL` a later `else` can turn an earlier branch into one of
+    # two alternatives, so the forks are known only once the recipe is read.
+    every_fork = frozenset().union(*(state.forks for state in every_state))
+    lines = [
+        _Line([
+            settle(found, every_fork if is_one_shell else forks)
+            for found, forks in per_reading
+        ])
+        for per_reading in pending
+    ]
     return lines, unreadable
+
+
+type _Readings = list[tuple[list[Tagged], frozenset[int]]]
+
+
+def _read_recipe_line(
+    source: str,
+    readings: list[Expansion],
+    starts: cabc.Mapping[int, ShellState],
+) -> tuple[_Readings, dict[int, ShellState], list[str]]:
+    """Read one recipe line in each of its readings.
+
+    Returns
+    -------
+    tuple[_Readings, dict[int, ShellState], list[str]]
+        Each reading's tagged invocations with the forks it leaves, the shell
+        each reading ends in, and the readings that could not be read.
+    """
+    read: _Readings = []
+    reached: dict[int, ShellState] = {}
+    unreadable: list[str] = []
+    for position, reading in enumerate(readings):
+        shown_line = " ".join(shown(blank_references(joined(reading.text))).split())
+        found, is_readable, after = _read_line(
+            reading.text, (source, shown_line), starts[position]
+        )
+        reached[position] = after
+        read.append((found, after.forks))
+        if not is_readable:
+            unreadable.append(f"{source}: {shown_line}")
+    return read, reached, unreadable
 
 
 def _shell_before(
@@ -321,7 +358,8 @@ def _shell_before(
     A line whose readings do not match an earlier line's (more of them, which
     have no state of their own, or fewer, which merge several) cannot tell which
     earlier probe branch ran, and a `cd nested` may be the one, so it starts as
-    moved if any earlier reading moved.
+    moved if any earlier reading moved, and keeps the open `if` blocks of the
+    first reading that has any, so a skipped branch stays skipped.
 
     Returns
     -------
@@ -331,8 +369,13 @@ def _shell_before(
     """
     if position in state_by_reading and readings == len(state_by_reading):
         return state_by_reading[position]
-    moved = any(state.moved for state in state_by_reading.values())
-    return FRESH_SHELL._replace(moved=moved)
+    states = list(state_by_reading.values())
+    return ShellState(
+        moved=any(state.moved for state in states),
+        branches=next((state.branches for state in states if state.branches), ()),
+        forks=frozenset().union(*(state.forks for state in states)),
+        count=max((state.count for state in states), default=0),
+    )
 
 
 def _resolve_probes(

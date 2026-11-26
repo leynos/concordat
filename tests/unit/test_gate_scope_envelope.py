@@ -682,6 +682,57 @@ class TestSixthReview:
         assert [i["changes_directory"] for i in found] == [True]
 
 
+class TestSeventhReview:
+    """Behaviours an eighth review showed to be missing."""
+
+    @staticmethod
+    def _script(script: str) -> dict[str, str]:
+        """Return a workflow whose one step runs *script*."""
+        body = "".join(f"          {line}\n" for line in script.splitlines())
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: |\n" + body
+        )
+        return {".github/workflows/ci.yml": text}
+
+    def test_an_unknown_elif_after_an_if_false_starts_a_fork(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The `elif` and its `else` are alternatives."""
+        script = (
+            "if false; then\n  :\nelif test -f flag; then\n  cargo test -p app\n"
+            "else\n  cargo test -p b\nfi"
+        )
+        files = _workspace_files(extra=self._script(script))
+        found = _build(tmp_path, files)["invocations"]
+        assert len(found) == 2
+        assert not any(i["resolved"] for i in found)
+
+    def test_a_later_else_marks_an_earlier_oneshell_branch(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Under `.ONESHELL` the fork is known only at the `else`."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n\tif test -f flag; then\n"
+            "\t  cargo test -p app\n\telse\n\t  :\n\tfi\n\tcargo test -p b\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        by_packages = {tuple(i["packages"]): i["resolved"] for i in found}
+        assert by_packages == {("app",): False, ("b",): True}
+
+    def test_an_open_if_false_survives_a_change_in_probe_readings(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The probe's two readings sit inside a branch that does not run."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n\tif false; then\n"
+            "\t  cargo $(if $(shell cargo nextest --version 2>/dev/null),"
+            "test -p app,nextest run -p app)\n\tfi\n\tcargo test --workspace\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert [i["workspace_flag"] for i in found] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 

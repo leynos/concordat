@@ -100,8 +100,13 @@ def _next_test(state: ShellState, words: list[str]) -> _Advance:
         skipped = Branch(taken=True, active=False, uid=current.uid)
         return state._replace(branches=(*outer, skipped))._replace(forks=forks), None
     verdict = _truth(words[1:])
-    branch = Branch(verdict is True, verdict is not False, current.uid)
-    moved = state._replace(branches=(*outer, branch))._replace(forks=forks)
+    uid, count = current.uid, state.count
+    if verdict is None and uid < 0:
+        # An unknown test that follows a constant one starts a fork of its own.
+        uid, count = count, count + 1
+        forks |= {uid}
+    branch = Branch(verdict is True, verdict is not False, uid)
+    moved = state._replace(branches=(*outer, branch), forks=forks, count=count)
     runs = verdict is None and _is_live(moved.branches)
     return moved, words if runs else None
 
