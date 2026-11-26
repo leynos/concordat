@@ -201,10 +201,47 @@ def has_unsafe_reading(
         does not settle one way, or when a target name or prerequisite reads a
         variable assigned on or after the rule that uses it.
     """
-    if any(may_be_special(name, values) for name in index if "$" in name):
+    if unsafe_names(index, values, variables):
         return True
     order = _ReadOrder(values, variables)
     return any(itertools.starmap(order.is_late, _readings(index)))
+
+
+def unsafe_names(
+    index: dict[str, list[MakeRule]],
+    values: cabc.Mapping[str, str],
+    variables: cabc.Sequence[MakeVariable],
+) -> list[int]:
+    """Return the lines of target names built by expansion that cannot be read safely.
+
+    Such a name may define any target, `test` included: it is unresolved, settles
+    two ways, names a special target, or reads a variable assigned on or after
+    its rule.
+
+    Returns
+    -------
+    list[int]
+        The first line of each such rule.
+    """
+    order = _ReadOrder(values, variables)
+    return [
+        rules[0]["location"]["start_line"]
+        for name, rules in index.items()
+        if "$" in name and _is_unsafe_name(name, rules, values, order)
+    ]
+
+
+def _is_unsafe_name(
+    name: str,
+    rules: list[MakeRule],
+    values: cabc.Mapping[str, str],
+    order: _ReadOrder,
+) -> bool:
+    """Return whether one expanded target name cannot be read safely."""
+    if may_be_special(name, values):
+        return True
+    # A pattern stays a pattern whatever its variables hold.
+    return "%" not in name and order.is_late(name, rules[0]["location"]["start_line"])
 
 
 def may_be_special(name: str, values: cabc.Mapping[str, str]) -> bool:

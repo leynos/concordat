@@ -409,6 +409,14 @@ def test_an_unsettled_target_name_that_may_define_test_is_indeterminate(
     assert [status for _line, status in statuses(tmp_path)] == ["indeterminate"]
 
 
+def test_a_test_target_named_before_a_late_assignment_is_indeterminate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Make defines `test` where it reads `test$(SUFFIX)`, before `SUFFIX` is set."""
+    checkout(tmp_path, "test$(SUFFIX):\n\tcargo test --all-features\nSUFFIX := other\n")
+    assert [status for _line, status in statuses(tmp_path)] == ["indeterminate"]
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")

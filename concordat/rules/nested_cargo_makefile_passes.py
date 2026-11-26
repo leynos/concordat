@@ -46,9 +46,9 @@ from .makefile_tool_paths import read_tool_paths
 from .nested_cargo_make_options import PLAIN_GOAL, unreliable_make
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_names import (
-    may_be_special,
     named_variables,
     settled_index,
+    unsafe_names,
 )
 from .nested_cargo_makefile_preparation import (
     MakefileReader,
@@ -70,7 +70,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
-    from .makefile_facts import MakeRecipe, MakeRule
+    from .makefile_facts import MakeRecipe, MakeRule, MakeVariable
     from .nested_cargo_scripts import ScriptCommand
 
 MAKEFILE: typ.Final = "Makefile"
@@ -743,23 +743,23 @@ def _unreadable_fact(line: int, reason: str) -> PassFact:
 
 
 def _hidden_test_facts(
-    index: dict[str, list[MakeRule]], values: cabc.Mapping[str, str]
+    index: dict[str, list[MakeRule]],
+    values: cabc.Mapping[str, str],
+    variables: cabc.Sequence[MakeVariable],
 ) -> list[PassFact]:
-    """Return an indeterminate fact when an unsettled target name may be `test`.
+    """Return an indeterminate fact when a target name built by expansion may be `test`.
 
-    A target built by expansion that does not settle one way can define `test`,
-    so a Makefile without a literal one is not known to have no test pass.
+    A target built by expansion that does not settle one way, or reads a variable
+    assigned after its rule, can define `test`, so a Makefile without a literal
+    one is not known to have no test pass.
 
     Returns
     -------
     list[PassFact]
         One indeterminate fact at the first such rule, or none.
     """
-    for name, rules in index.items():
-        if "$" in name and may_be_special(name, values):
-            line = rules[0]["location"]["start_line"]
-            return [_unreadable_fact(line, _HIDDEN_TEST_REASON)]
-    return []
+    lines = unsafe_names(index, values, variables)
+    return [_unreadable_fact(min(lines), _HIDDEN_TEST_REASON)] if lines else []
 
 
 def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
@@ -780,7 +780,7 @@ def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
     values = read_tool_paths(single_assignments(report["variables"]))
     index = settled_index(rules_by_target(report), values)
     if TEST_TARGET not in index:
-        return _hidden_test_facts(index, values)
+        return _hidden_test_facts(index, values, report["variables"])
     if not is_fully_readable(report, index, text, values):
         line = index[TEST_TARGET][0]["location"]["start_line"]
         return [
