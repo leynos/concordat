@@ -109,6 +109,37 @@ def test_the_file_name_functions_are_evaluated(text: str, expected: str) -> None
     assert expand(text, {}).text == expected
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("$(addprefix --exclude ,a b)", "--exclude a --exclude b"),
+        ("$(addprefix -p ,a)", "-p a"),
+        ("$(addsuffix .rs,a b)", "a.rs b.rs"),
+        (
+            "--workspace $(addprefix --exclude ,a b)",
+            "--workspace --exclude a --exclude b",
+        ),
+    ],
+)
+def test_the_affix_functions_are_evaluated(text: str, expected: str) -> None:
+    """`addprefix` and `addsuffix` keep the affix as written, spaces included."""
+    assert expand(text, {}).text == expected
+
+
+def test_an_affix_over_a_variable_settles_once_the_variable_does() -> None:
+    """The words an affix call decorates may come from a variable."""
+    result = expand("$(addprefix -p ,$(CRATES))", {"CRATES": "a b"})
+
+    assert (result.text, result.is_resolved) == ("-p a -p b", True)
+
+
+def test_an_affix_over_an_unknown_variable_stays_unresolved() -> None:
+    """An unset variable inside the call leaves the whole call unresolved."""
+    result = expand("$(addprefix -p ,$(UNSET))", {})
+
+    assert result.is_resolved is False
+
+
 def test_an_error_only_guard_expands_to_nothing() -> None:
     """`$(if COND,$(error ...))` either aborts Make or adds no text."""
     guard = (

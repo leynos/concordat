@@ -777,6 +777,17 @@ the Section 2.1.2 format.
   audit reads a guarded workspace with sanctioned sites as compliant, and a
   missing entry, an `allow`, a crate-level `expect` and a lints-table `allow`
   as noncompliant.
+- [x] Ship the gate workspace coverage rule (GC-001): the
+  `gate-workspace-coverage` package holds the commands a Rust gate runs for
+  `cargo clippy`, `cargo nextest run`, `cargo test` (and its doctests) and
+  Whitaker to selecting every workspace member, naming the narrowing commands
+  and the prose examples that show them, exempting a crate only by name with a
+  rationale and a review trigger, and reporting commands it cannot place as
+  indeterminate. It ships at `warning` severity. Acceptance: the audit reads a
+  gate that spells out `--workspace` for each tool as compliant, and a bare
+  command in a root-package workspace, a `-p` list that misses a member,
+  `default-members` narrowing, Whitaker's own `--all` and a CI matrix whose
+  every entry narrows as noncompliant.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and

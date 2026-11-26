@@ -899,6 +899,22 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   reports `allow`, reasonless `expect` and wide-scope `expect` attributes.
   `test_environment_config` reads the lints tables and Cargo flags. Fixtures
   are regenerated with `fixtures/generate.py` in the package.
+- `policy-input/gate-workspace-coverage` —
+  `gate_scope_envelope.build_gate_scope_envelope`. It reads the root workspace
+  (`gate_scope_workspace`, sharing
+  `test_environment_members.member_directories` so the two rules agree on what
+  a workspace contains), then every gate-tool command: the Makefile's `lint` and
+  `test` targets followed through prerequisites and `make name` commands
+  (`makefile_reach`, shared with the documentation envelope), and every
+  workflow and composite-action `run` step with each `strategy.matrix` entry
+  read as a command (`gate_scope_sources`). `gate_scope_commands` reads one
+  lexed command and records what it selects (`--workspace` or `--all`, `-p`,
+  `--exclude`, a changed directory or manifest); a wrapper script or an
+  unresolved selection is carried with `resolved: false`. Fenced prose examples
+  are recorded as the same facts, so the policy can name them. Fixtures are
+  regenerated with `fixtures/generate.py` in the package. `makefile_expansion`
+  evaluates `addprefix` and `addsuffix`, because the estate builds `--exclude`
+  lists with them.
 - `policy-input/python-duplication-gate` —
   `duplication_gate_envelope.build_duplication_gate_envelope`. It reads
   `pyproject.toml` with `tomllib` (through the shared containment guard), lifts

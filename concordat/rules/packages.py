@@ -29,17 +29,11 @@ from concordat.errors import OperationalRuleError
 from .codescene_coverage_envelope import (
     ENVELOPE_KIND as COVERAGE_ENVELOPE_KIND,
 )
-from .codescene_coverage_envelope import (
-    CoverageEnvelope,
-    build_codescene_coverage_envelope,
-)
+from .codescene_coverage_envelope import CoverageEnvelope
 from .dependabot_envelope import ENVELOPE_KIND as DEPENDABOT_ENVELOPE_KIND
-from .dependabot_envelope import DependabotEnvelope, build_dependabot_envelope
+from .dependabot_envelope import DependabotEnvelope
 from .dependency_family_envelope import ENVELOPE_KIND as FAMILY_ENVELOPE_KIND
-from .dependency_family_envelope import (
-    DependencyFamilyEnvelope,
-    build_dependency_family_envelope,
-)
+from .dependency_family_envelope import DependencyFamilyEnvelope
 from .dev_build_envelope import ENVELOPE_KIND as DEV_BUILD_ENVELOPE_KIND
 from .dev_build_envelope import DevBuildEnvelope, build_dev_build_envelope
 from .documentation_envelope import (
@@ -66,6 +60,8 @@ from .envelope import (
     log_undecodable_workflow,
 )
 from .fs_probe import probe_file
+from .gate_scope_envelope import ENVELOPE_KIND as GATE_SCOPE_ENVELOPE_KIND
+from .gate_scope_envelope import build_gate_scope_envelope
 from .makefile_observed import inspect_makefile_observed
 from .markdown_envelope import (
     DEFAULT_MARKDOWNLINT_ACTION,
@@ -77,6 +73,11 @@ from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
 from .nested_cargo_registry import BY_KIND as NESTED_CARGO_BY_KIND
 from .nested_cargo_registry import BY_PACKAGE as NESTED_CARGO_BY_PACKAGE
 from .nested_cargo_registry import NestedCargoEnvelope
+from .parameter_blind_envelopes import (
+    coverage_envelope,
+    dependabot_envelope,
+    dependency_family_envelope,
+)
 from .pr_run_cancellation_envelope import (
     ENVELOPE_KIND as PR_RUN_CANCELLATION_ENVELOPE_KIND,
 )
@@ -131,6 +132,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from .action_pins import PinResolver
+    from .gate_scope_envelope import GateScopeEnvelope
     from .pr_run_cancellation_envelope import PrRunCancellationEnvelope
 
 type RuleEnvelope = (
@@ -151,6 +153,7 @@ type RuleEnvelope = (
     | YamlLintEnvelope
     | ProverToolingEnvelope
     | PrRunCancellationEnvelope
+    | GateScopeEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -434,59 +437,6 @@ def _markdown_envelope(
     return build_markdown_envelope(checkout, inspect=inspect_makefile_observed)
 
 
-def _coverage_envelope(
-    checkout: pathlib.Path,
-    _parameters: cabc.Mapping[str, object] | None = None,
-) -> CoverageEnvelope:
-    """Build the CV-005 workflow envelope, ignoring the manifest parameters.
-
-    CV-005 declares no tunables: every clause it states is a property of the
-    estate's topology rather than something a repository may configure, so
-    there is nothing for the second argument to change.
-
-    Returns
-    -------
-    CoverageEnvelope
-        The `policy-input/main-owned-codescene-coverage` document for
-        *checkout*.
-    """
-    return build_codescene_coverage_envelope(checkout)
-
-
-def _dependabot_envelope(
-    checkout: pathlib.Path,
-    _parameters: cabc.Mapping[str, object] | None = None,
-) -> DependabotEnvelope:
-    """Build the DB-005 Dependabot envelope, ignoring the manifest parameters.
-
-    DB-005 declares no tunables: the update shape is estate policy rather
-    than something a repository may configure.
-
-    Returns
-    -------
-    DependabotEnvelope
-        The `policy-input/dependabot-update-shape` document for *checkout*.
-    """
-    return build_dependabot_envelope(checkout)
-
-
-def _dependency_family_envelope(
-    checkout: pathlib.Path,
-    _parameters: cabc.Mapping[str, object] | None = None,
-) -> DependencyFamilyEnvelope:
-    """Build the dependency-family envelope, ignoring the manifest parameters.
-
-    The relationships come from the estate's versioned data and the exceptions
-    from the repository's `.concordat`, so the rule has no tunables.
-
-    Returns
-    -------
-    DependencyFamilyEnvelope
-        The `policy-input/dependency-family-contracts` document for *checkout*.
-    """
-    return build_dependency_family_envelope(checkout)
-
-
 def utc_today() -> dt.date:
     """Return the current UTC date: the audit's only clock read.
 
@@ -616,6 +566,7 @@ _uv_gate_envelope = _observed(build_uv_gate_envelope)
 _documentation_envelope = _observed(build_documentation_envelope)
 _yaml_lint_envelope = _observed(build_yaml_lint_envelope)
 _prover_tooling_envelope = _observed(build_prover_tooling_envelope)
+_gate_scope_envelope = _observed(build_gate_scope_envelope)
 
 
 # The mapping is the complete list rather than the exceptions to a default: a
@@ -631,10 +582,10 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-build-defaults": _build_defaults_envelope,
     "rust-dev-build-footprint": _dev_build_envelope,
     **NESTED_CARGO_BY_PACKAGE,
-    "main-owned-codescene-coverage": _coverage_envelope,
+    "main-owned-codescene-coverage": coverage_envelope,
     "pr-run-cancellation": _pr_run_cancellation_envelope,
-    "dependabot-update-shape": _dependabot_envelope,
-    "dependency-family-contracts": _dependency_family_envelope,
+    "dependabot-update-shape": dependabot_envelope,
+    "dependency-family-contracts": dependency_family_envelope,
     "rust-toolchain-policy": _toolchain_policy_envelope,
     "spelling-config-baseline": _spelling_envelope,
     "uv-gate-baseline": _uv_gate_envelope,
@@ -644,6 +595,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-prover-tooling": _prover_tooling_envelope,
     "python-duplication-gate": build_duplication_gate_envelope,
     "rust-test-environment": build_test_environment_envelope,
+    "gate-workspace-coverage": _gate_scope_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -655,10 +607,10 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     DEV_BUILD_ENVELOPE_KIND: _dev_build_envelope,
     **NESTED_CARGO_BY_KIND,
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
-    COVERAGE_ENVELOPE_KIND: _coverage_envelope,
+    COVERAGE_ENVELOPE_KIND: coverage_envelope,
     PR_RUN_CANCELLATION_ENVELOPE_KIND: _pr_run_cancellation_envelope,
-    DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
-    FAMILY_ENVELOPE_KIND: _dependency_family_envelope,
+    DEPENDABOT_ENVELOPE_KIND: dependabot_envelope,
+    FAMILY_ENVELOPE_KIND: dependency_family_envelope,
     TOOLCHAIN_POLICY_ENVELOPE_KIND: _toolchain_policy_envelope,
     SPELLING_ENVELOPE_KIND: _spelling_envelope,
     UV_GATE_ENVELOPE_KIND: _uv_gate_envelope,
@@ -668,6 +620,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     PROVER_TOOLING_ENVELOPE_KIND: _prover_tooling_envelope,
     DUPLICATION_GATE_ENVELOPE_KIND: build_duplication_gate_envelope,
     TEST_ENVIRONMENT_ENVELOPE_KIND: build_test_environment_envelope,
+    GATE_SCOPE_ENVELOPE_KIND: _gate_scope_envelope,
 })
 
 

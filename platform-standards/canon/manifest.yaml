@@ -320,6 +320,22 @@ artifacts:
     description: >-
       Rule package manifest for the rust-test-environment audit.
     sha256: 046ed7f21de628e45c4f1d75517ee066006d10a3dc4b9aa131b5b390d531245b
+  - id: lint-rule-gate-workspace-coverage
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/gate-workspace-coverage/policy/gate_workspace_coverage.rego
+    description: >-
+      Audit-only GC-001 policy holding a Rust repository's gate to selecting
+      every workspace member with `cargo clippy`, `cargo nextest run`,
+      `cargo test` (and its doctests) and Whitaker, naming the narrowing
+      commands and the prose examples that show them, with exemptions only by
+      crate and reason and unreadable commands indeterminate.
+    sha256: dffed179469e63c79f64f02f1e7310afeb36b3d5f29e05ae8b757954e66bd0bf
+  - id: lint-rule-gate-workspace-coverage-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/gate-workspace-coverage/rule.yaml
+    description: >-
+      Rule package manifest for the gate-workspace-coverage audit.
+    sha256: 16f1d056125ceed5278bfaf24f873b24c2c23d980ab8d3510dd80ab8d9e42806
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-
