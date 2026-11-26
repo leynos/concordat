@@ -124,41 +124,35 @@ def test_test_tables_share_normalise_and_default_their_paths(
     assert targets(tmp_path) == {source: expected}
 
 
-def test_a_guessed_owner_that_another_table_declares_leaves_the_targets_unknown(
-    tmp_path: pathlib.Path,
-) -> None:
-    """Table `b` guesses `tests/b.rs`, which table `c` declares as its own source."""
-    checkout(
-        tmp_path,
-        {
-            "Cargo.toml": (
-                '[package]\nname = "app"\nautotests = false\n\n'
+@pytest.mark.parametrize(
+    ("tables", "source"),
+    [
+        # Table `b` guesses `tests/b.rs`, which table `c` declares as its source.
+        (
+            (
                 '[[test]]\nname = "b"\npath = "tests/a.rs"\n\n'
                 '[[test]]\nname = "c"\npath = "tests/b.rs"\n'
             ),
-            "tests/a.rs": TRYBUILD_TEST,
-            "tests/b.rs": "fn other() {}\n",
-        },
-    )
-    assert targets(tmp_path) == {"tests/a.rs": None}
-
-
-def test_a_file_no_test_table_names_stays_unknown_in_a_named_crate(
-    tmp_path: pathlib.Path,
+            "tests/a.rs",
+        ),
+        # A file no table names may run under any target's name.
+        ('[[test]]\nname = "other"\npath = "tests/other.rs"\n', "tests/ui.rs"),
+    ],
+)
+def test_an_ambiguous_or_unnamed_test_file_leaves_the_targets_unknown(
+    tmp_path: pathlib.Path, tables: str, source: str
 ) -> None:
-    """A file the manifest does not name may run under any target's name."""
+    """The file name no longer says which target runs it, so none is claimed."""
     checkout(
         tmp_path,
         {
-            "Cargo.toml": (
-                '[package]\nname = "app"\nautotests = false\n\n'
-                '[[test]]\nname = "other"\npath = "tests/other.rs"\n'
-            ),
-            "tests/ui.rs": TRYBUILD_TEST,
+            "Cargo.toml": f'[package]\nname = "app"\nautotests = false\n\n{tables}',
+            source: TRYBUILD_TEST,
+            "tests/b.rs": "fn other() {}\n",
             "tests/other.rs": "fn other() {}\n",
         },
     )
-    assert targets(tmp_path) == {"tests/ui.rs": None}
+    assert targets(tmp_path) == {source: None}
 
 
 def test_an_owner_the_resolver_cannot_see_leaves_the_targets_unknown(
