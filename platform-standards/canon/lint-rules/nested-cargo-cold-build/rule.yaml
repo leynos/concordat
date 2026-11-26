@@ -128,3 +128,14 @@ parameters:
           configuration serialises it and bounds it.
         review_trigger: >-
           review when the generated fixture gains a registry dependency
+      - repository: leynos/polean
+        path: tests/admission/compile_fail/mod.rs
+        rationale: >-
+          The guard deliberately compiles three variants of a scratch copy of
+          the repository, one of which must fail to compile, so no preparation
+          outside the test can be reused: each phase's source differs from the
+          last, and a failing compile is never cached. The dependencies are
+          shared with the surrounding build. It takes 36 s cold against a 600 s
+          allowance in its own nextest test group.
+        review_trigger: >-
+          review when its cold time exceeds 120 s

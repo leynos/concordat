@@ -233,7 +233,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/nested-cargo-cold-build/rule.yaml
     description: >-
       Rule package manifest for the nested cargo cold build audit.
-    sha256: d43c4e184cb279d2a1ed2734d90281289aa17503657c52dc12505963a5004804
+    sha256: 88801ba3fb504bb6919313f84a87769e8f9ac8d749182babd2852f50f7c98385
   - id: lint-rule-nested-cargo-fixture-manifests
     type: opa-policy
     path: platform-standards/canon/lint-rules/nested-cargo-fixture-manifests/policy/nested_cargo_fixture_manifests.rego
