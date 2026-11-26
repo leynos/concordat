@@ -466,26 +466,28 @@ def is_fully_readable(
 
 
 _ERREXIT: typ.Final = re.compile(r"(?:^|\s)-[A-Za-z]*e[A-Za-z]*(?:\s|$)")
-# A line that turns errexit off (`set +e`, `set +o errexit`) undoes the flag.
-_ERREXIT_OFF: typ.Final = re.compile(r"\bset\s+\+")
-_OPENERS: typ.Final = re.compile(r"\b(?:if|case|for|while|until)\b")
-_CLOSERS: typ.Final = re.compile(r"\b(?:fi|esac|done)\b")
+# Any word that opens, closes or branches a shell construct, or changes shell
+# options. A line holding one is not read: the reader does not parse shell, and
+# `.ONESHELL` would run such a line together with the ones around it.
+_SHELL_CONTROL: typ.Final = re.compile(
+    r"\b(?:if|then|else|elif|fi|case|esac|for|while|until|do|done"
+    r"|set|shopt|exec|trap|exit|return)\b"
+)
 
 
-def _is_self_contained(line: str) -> bool:
-    """Return whether a recipe line opens no shell construct it leaves open.
+def _is_plain_line(line: str) -> bool:
+    """Return whether a recipe line holds no shell control word or open bracket.
 
-    The count is deliberately blunt: a keyword inside a word of a command also
-    counts, and a line that does not balance is read as one that may carry a
-    construct across lines, which `.ONESHELL` would run as one script.
+    The test is deliberately blunt: a control word used as a command argument
+    also fails it, which only leaves the Makefile indeterminate.
 
     Returns
     -------
     bool
-        True when the line's keywords and brackets balance.
+        True when the line has no control word and its brackets balance.
     """
     return (
-        len(_OPENERS.findall(line)) == len(_CLOSERS.findall(line))
+        not _SHELL_CONTROL.search(line)
         and line.count("{") == line.count("}")
         and line.count("(") == line.count(")")
     )
@@ -508,20 +510,35 @@ def _gated_one_shell(
     """
     # GNU Make reads `.SHELLFLAGS`; the older `SHELLFLAGS` name is not one.
     flags = values.get(".SHELLFLAGS", "")
-    if ".ONESHELL" not in index or not _ERREXIT.search(flags):
+    # A `+` option (`+e`) switches an option off, so the final state is unclear.
+    if ".ONESHELL" not in index or "+" in flags or not _ERREXIT.search(flags):
         return frozenset()
-    if not all(_keeps_errexit(line) for line in _recipe_lines(index)):
+    if not all(_is_plain_line(line) for line in _recipe_lines(index)):
         return frozenset()
     return frozenset({".ONESHELL"})
 
 
 def _recipe_lines(index: dict[str, list[MakeRule]]) -> list[str]:
-    """Return the text of every recipe line in the Makefile."""
-    return [
-        r["text"] for rules in index.values() for rule in rules for r in rule["recipes"]
-    ]
+    """Return the text of every recipe line the `test` target can run.
 
+    The lines of `test` and of every target it names as a prerequisite, directly
+    or through others; a recipe elsewhere cannot change how `test` runs. A
+    prerequisite that is not a plain name is followed no further, which is safe
+    because the walk reports such a target as unreadable itself.
 
-def _keeps_errexit(line: str) -> bool:
-    """Return whether a recipe line leaves errexit on and no construct open."""
-    return not _ERREXIT_OFF.search(line) and _is_self_contained(line)
+    Returns
+    -------
+    list[str]
+        The recipe line texts of those targets.
+    """
+    pending, seen = [TEST_TARGET], set()
+    lines: list[str] = []
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        for rule in index.get(name, []):
+            lines.extend(r["text"] for r in rule["recipes"])
+            pending.extend(rule["prerequisites"])
+    return lines

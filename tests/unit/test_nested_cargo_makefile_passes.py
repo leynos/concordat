@@ -572,6 +572,7 @@ _ONESHELL_RECIPE = (
         (".ONESHELL:\n", ["indeterminate"]),
         (".ONESHELL:\n.SHELLFLAGS := -c\n", ["indeterminate"]),
         (".ONESHELL:\nSHELLFLAGS := -ec\n", ["indeterminate"]),
+        (".ONESHELL:\n.SHELLFLAGS := -e +e -c\n", ["indeterminate"]),
     ],
 )
 def test_one_shell_is_read_only_when_every_line_still_stops_on_failure(
@@ -589,6 +590,11 @@ def test_one_shell_is_read_only_when_every_line_still_stops_on_failure(
         "\tif true; then\n\t\tcargo test --all-features\n\tfi\n",
         "\tif false; then :\n\tcargo test --all-features\n\t:; fi\n",
         "\tset +e\n\tcargo test --all-features\n",
+        "\tset -u +e\n\tcargo test --all-features\n",
+        (
+            "\tif false; then echo fi\n\tcargo test --test ui --all-features\n"
+            "\t:; fi; echo if\n\tcargo test --all-features\n"
+        ),
     ],
 )
 def test_one_shell_is_not_read_when_a_line_changes_what_the_next_does(
