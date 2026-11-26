@@ -231,6 +231,36 @@ def unsafe_names(
     ]
 
 
+def pattern_lines(index: dict[str, list[MakeRule]], word: str) -> list[int]:
+    """Return the lines of pattern rules whose target pattern could supply *word*.
+
+    Make builds a target no explicit rule names by a matching pattern rule, so
+    `te%:` can define `test`.
+
+    Returns
+    -------
+    list[int]
+        The first line of each such rule.
+    """
+    return [
+        rules[0]["location"]["start_line"]
+        for name, rules in index.items()
+        if _pattern_matches(name, word)
+    ]
+
+
+def _pattern_matches(pattern: str, word: str) -> bool:
+    """Return whether a target pattern with one `%` matches *word*."""
+    prefix, percent, suffix = pattern.partition("%")
+    if not percent:
+        return False
+    return (
+        len(word) >= len(prefix) + len(suffix)
+        and word.startswith(prefix)
+        and word.endswith(suffix)
+    )
+
+
 def _is_unsafe_name(
     name: str,
     rules: list[MakeRule],

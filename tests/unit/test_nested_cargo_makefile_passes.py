@@ -426,6 +426,18 @@ def test_an_included_file_may_define_the_test_target(tmp_path: pathlib.Path) -> 
     assert [fact["status"] for fact in makefile_passes(tmp_path)] == ["indeterminate"]
 
 
+@pytest.mark.parametrize(
+    ("pattern", "statuses_found"),
+    [("te%", ["indeterminate"]), ("%st", ["indeterminate"]), ("foo%", [])],
+)
+def test_a_pattern_rule_that_matches_test_may_supply_it(
+    tmp_path: pathlib.Path, pattern: str, statuses_found: list[str]
+) -> None:
+    """`te%:` builds `make test`; a pattern that cannot match leaves no test pass."""
+    checkout(tmp_path, f"{pattern}:\n\tcargo test --all-features\n")
+    assert [fact["status"] for fact in makefile_passes(tmp_path)] == statuses_found
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")

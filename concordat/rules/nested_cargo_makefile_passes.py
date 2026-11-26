@@ -47,6 +47,7 @@ from .nested_cargo_make_calls import MakeCall, make_call, overlaid
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_names import (
     named_variables,
+    pattern_lines,
     settled_index,
     unsafe_names,
 )
@@ -155,6 +156,7 @@ _HIDDEN_TEST_REASON: typ.Final = (
     "a target name the reader cannot settle may define `test`"
 )
 _INCLUDE_REASON: typ.Final = "an included file may define `test`"
+_PATTERN_REASON: typ.Final = "a pattern rule may supply `test`"
 _OVERRIDE_REASON: typ.Final = (
     "a make override may change which target an expanded name defines"
 )
@@ -685,25 +687,34 @@ def _hidden_test_facts(
     """Return indeterminate facts for what may define `test` where it is not seen.
 
     A target built by expansion that does not settle one way, or reads a variable
-    assigned after its rule, can define `test`, and so can an included file, so a
-    Makefile without a literal `test` target is not known to have no test pass.
+    assigned after its rule, can define `test`, and so can a pattern rule that
+    matches it and an included file, so a Makefile without a literal `test`
+    target is not known to have no test pass.
 
     Returns
     -------
     list[PassFact]
-        One indeterminate fact at the first such rule and one at the first
-        include, or none.
+        One indeterminate fact for each of those that is present, at its first
+        line, or none.
     """
-    facts: list[PassFact] = []
-    lines = unsafe_names(index, values, report["variables"])
-    if lines:
-        facts.append(_unreadable_fact(min(lines), _HIDDEN_TEST_REASON))
-    if includes_a_file(report, text):
-        found = (
-            item.get("location", {}).get("start_line", 1) for item in report["includes"]
-        )
-        facts.append(_unreadable_fact(min(found, default=1), _INCLUDE_REASON))
-    return facts
+    candidates = [
+        (unsafe_names(index, values, report["variables"]), _HIDDEN_TEST_REASON),
+        (pattern_lines(index, TEST_TARGET), _PATTERN_REASON),
+        (_include_lines(report, text), _INCLUDE_REASON),
+    ]
+    return [
+        _unreadable_fact(min(lines), reason) for lines, reason in candidates if lines
+    ]
+
+
+def _include_lines(report: MakeutilReport, text: str) -> list[int]:
+    """Return the lines of the includes, or line 1 when only the text shows one."""
+    if not includes_a_file(report, text):
+        return []
+    found = [
+        item.get("location", {}).get("start_line", 1) for item in report["includes"]
+    ]
+    return found or [1]
 
 
 def makefile_passes(checkout: pathlib.Path) -> list[PassFact]:
