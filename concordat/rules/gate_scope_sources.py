@@ -381,7 +381,7 @@ def _merge_branches(
 
     A block all alternatives agree on is kept as it is. One they disagree on, or
     that only some have open, is a condition the probe decides, so it becomes a
-    fork whose commands are indeterminate.
+    fork whose commands are indeterminate, unless no alternative can run it.
 
     Returns
     -------
@@ -397,6 +397,10 @@ def _merge_branches(
         only = next(iter(at_depth))
         if len(at_depth) == 1 and only is not None:
             merged.append(only)
+            continue
+        if None not in at_depth and not any(b.active for b in at_depth if b):
+            # No reading can run this branch, whatever the probe says.
+            merged.append(Branch(taken=True, active=False))
             continue
         fork = Branch(taken=False, active=True, uid=count + depth)
         merged.append(fork)

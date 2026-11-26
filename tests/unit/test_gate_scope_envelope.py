@@ -798,6 +798,24 @@ class TestNinthReview:
         assert [i["resolved"] for i in found] == [True]
 
 
+class TestTenthReview:
+    """Behaviours an eleventh review showed to be missing."""
+
+    def test_a_branch_no_probe_reading_can_run_stays_skipped(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Both readings leave the `elif false` body inactive."""
+        makefile = (
+            ".ONESHELL:\n.PHONY: test\ntest:\n"
+            "\tif $(if $(shell cargo nextest --version 2>/dev/null),true,false);"
+            " then :; elif false; then\n\t  cargo test -p app\n\tfi\n"
+            "\tcargo test --workspace\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert [i["workspace_flag"] for i in found] == [True]
+        assert [i["resolved"] for i in found] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 
