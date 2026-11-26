@@ -45,10 +45,12 @@ runs differently in them (`-p a` against `-p b`, or `test -p b` against
 `nextest run -p b`), is left to the probe: every invocation of it in the
 Makefile is indeterminate. The exception is a tool whose every invocation is a
 probe's and selects the whole workspace (a probe that only picks the runner,
-`nextest run` or `test`, with `--workspace`): it covers everything whenever it
-runs, and a tool that does not run is not required. In a shell script, the
-branch of an `if false` is not run, however many lines it spans, and its `else`
-is; any other condition is taken to hold on some run. Under `.ONESHELL` a
+`nextest run` or `test`, with `--workspace`) and that no other command of the
+gate, in CI, also runs: it covers everything whenever it runs, and a tool that
+does not run is not required. In a shell script, the constant conditions `true`,
+`:` and `false` are known, across however many lines they span, along with
+their `elif` and `else` branches: the branches that cannot run are not
+commands. Any other condition is taken to hold on some run. Under `.ONESHELL` a
 recipe is one shell, so a `cd` on one line moves the lines after it.
 
 A tool the gate does not run is not required; the rule asks that a tool, once

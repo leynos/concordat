@@ -582,6 +582,57 @@ class TestFourthReview:
         assert any("matrix is computed" in entry for entry in envelope["unreadable"])
 
 
+class TestFifthReview:
+    """Behaviours a fifth review showed to be missing."""
+
+    @staticmethod
+    def _step_workflow(script: str) -> dict[str, str]:
+        """Return a workflow whose one step runs *script*."""
+        body = "".join(f"          {line}\n" for line in script.splitlines())
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: |\n" + body
+        )
+        return {".github/workflows/ci.yml": text}
+
+    def test_a_whole_workspace_probe_is_not_safe_beside_a_narrow_ci_command(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """CI's narrow `cargo test` may be all that runs if the probe picks nextest."""
+        makefile = (
+            ".PHONY: test\ntest:\n\tcargo $(if $(shell cargo nextest --version "
+            "2>/dev/null),test --workspace,nextest run --workspace)\n"
+        )
+        files = _workspace_files(
+            makefile=makefile, extra=self._step_workflow("cargo test -p app")
+        )
+        found = _build(tmp_path, files)["invocations"]
+        probe_branch = [i for i in found if i["tool"] == "test" and i["workspace_flag"]]
+        assert probe_branch
+        assert not any(i["resolved"] for i in probe_branch)
+
+    def test_the_else_of_an_if_true_does_not_run(self, tmp_path: pathlib.Path) -> None:
+        """Only the `then` of a constant-true condition runs."""
+        script = (
+            "if true; then\n  cargo test -p app\nelse\n  cargo test --workspace\nfi"
+        )
+        files = _workspace_files(extra=self._step_workflow(script))
+        found = _build(tmp_path, files)["invocations"]
+        assert [i["workspace_flag"] for i in found] == [False]
+
+    def test_an_elif_after_an_if_false_is_judged_on_its_own_condition(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`elif true` runs, so the `else` after it does not."""
+        script = (
+            "if false; then\n  :\nelif true; then\n  cargo test --workspace\n"
+            "else\n  cargo test -p app\nfi"
+        )
+        files = _workspace_files(extra=self._step_workflow(script))
+        found = _build(tmp_path, files)["invocations"]
+        assert [i["workspace_flag"] for i in found] == [True]
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 

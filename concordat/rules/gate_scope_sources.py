@@ -220,9 +220,15 @@ def _hides_tool(words: list[str]) -> bool:
 
 
 def makefile_lines(
-    report: MakeutilReport, *, starts: cabc.Sequence[str] = GATE_TARGETS
+    report: MakeutilReport,
+    *,
+    starts: cabc.Sequence[str] = GATE_TARGETS,
+    elsewhere: cabc.Collection[str] = (),
 ) -> GateLines:
     """Return the gate-tool commands in the recipes the *starts* targets reach.
+
+    *elsewhere* names the tools the gate also runs outside the Makefile (in CI):
+    a probe cannot make such a tool safe, because the other command may narrow.
 
     Returns
     -------
@@ -253,7 +259,7 @@ def makefile_lines(
             lines.extend(read)
             unreadable.extend(missed)
     return GateLines(
-        _distinct(_resolve_probes(lines)),
+        _distinct(_resolve_probes(lines, elsewhere)),
         _distinct_text(unreadable),
         walk.names,
         walk.is_resolved,
@@ -303,7 +309,9 @@ def _read_rule(
     return lines, unreadable
 
 
-def _resolve_probes(lines: list[_Line]) -> list[Invocation]:
+def _resolve_probes(
+    lines: list[_Line], elsewhere: cabc.Collection[str]
+) -> list[Invocation]:
     """Return every invocation, with the tools a probe leaves ambiguous unplaced.
 
     The readings of a probe `if` are alternatives, and one run takes one. A tool
@@ -320,7 +328,7 @@ def _resolve_probes(lines: list[_Line]) -> list[Invocation]:
         The invocations of every reading, in order.
     """
     flat = [i for line in lines for reading in line.readings for i in reading]
-    ambiguous = _ambiguous_tools(lines)
+    ambiguous = _ambiguous_tools(lines, elsewhere)
     return [
         _unplaced([i], _ALTERNATIVE_REASON)[0] if i["tool"] in ambiguous else i
         for i in flat
@@ -349,12 +357,13 @@ def _is_whole_workspace(invocation: Invocation) -> bool:
     )
 
 
-def _ambiguous_tools(lines: list[_Line]) -> set[str]:
+def _ambiguous_tools(lines: list[_Line], elsewhere: cabc.Collection[str]) -> set[str]:
     """Return the tools whose coverage a probe line decides.
 
     A line whose readings all run the same commands is no probe. Of the tools
     the others run, those whose every invocation is a probe's and selects the
     whole workspace are safe: whichever reading runs, the tool covers everything.
+    A tool the gate also runs *elsewhere* is never safe on that ground.
 
     Returns
     -------
@@ -363,7 +372,11 @@ def _ambiguous_tools(lines: list[_Line]) -> set[str]:
     """
     probes = [line for line in lines if _is_probe(line)]
     tools = {i["tool"] for line in probes for reading in line.readings for i in reading}
-    return {tool for tool in tools if not _only_whole_workspace_probes(tool, lines)}
+    return {
+        tool
+        for tool in tools
+        if tool in elsewhere or not _only_whole_workspace_probes(tool, lines)
+    }
 
 
 def _is_probe(line: _Line) -> bool:

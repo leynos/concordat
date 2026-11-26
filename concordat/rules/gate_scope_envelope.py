@@ -106,12 +106,20 @@ def _has_file(
 
 
 def _makefile_lines(
-    checkout: pathlib.Path, inspect: MakefileInspector, *, has_makefile: bool
+    checkout: pathlib.Path,
+    inspect: MakefileInspector,
+    *,
+    has_makefile: bool,
+    elsewhere: set[str],
 ) -> GateLines:
     """Return the gate commands in the Makefile, or none without one."""
     if not has_makefile:
         return GateLines([], [], [], is_resolved=True)
-    return makefile_lines(inspect(checkout / "Makefile").report, starts=GATE_TARGETS)
+    return makefile_lines(
+        inspect(checkout / "Makefile").report,
+        starts=GATE_TARGETS,
+        elsewhere=elsewhere,
+    )
 
 
 def build_gate_scope_envelope(
@@ -141,11 +149,16 @@ def build_gate_scope_envelope(
     has_manifest = _has_file(checkout, root, CARGO_MANIFEST, OPERATION_PROBE_MANIFEST)
     reader = Reader(checkout, root)
     workspace = workspace_fact(reader) if has_manifest else None
-    from_make = _makefile_lines(checkout, inspect, has_makefile=has_makefile)
     from_ci = workflow_lines([
         *load_workflows(checkout, root),
         *load_actions(checkout, root),
     ])
+    from_make = _makefile_lines(
+        checkout,
+        inspect,
+        has_makefile=has_makefile,
+        elsewhere={i["tool"] for i in from_ci.invocations},
+    )
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,

@@ -26,10 +26,18 @@ import pathlib
 import re
 import typing as typ
 
+from .gate_scope_shell import FRESH_SHELL, ShellState, runnable
 from .make_commands import command_start
 from .makefile_expansion import SHELL_DOLLAR, UNRESOLVED_MARK
 
-__all__ = ["TOOLS", "Invocation", "invocations_in"]
+__all__ = [
+    "FRESH_SHELL",
+    "TOOLS",
+    "Invocation",
+    "ShellState",
+    "invocations_in",
+    "read_commands",
+]
 
 TOOLS: typ.Final = ("clippy", "nextest", "test", "test-doc", "whitaker")
 _WORKSPACE_FLAGS: typ.Final = frozenset({"--workspace", "--all"})
@@ -358,57 +366,6 @@ def _without_keywords(words: list[str]) -> list[str]:
     return words[start:]
 
 
-_FALSE_CONDITIONS: typ.Final = frozenset({("false",), ("!", "true"), ("[", "!", "]")})
-
-
-class ShellState(typ.NamedTuple):
-    """What an earlier line of one shell leaves for the lines after it.
-
-    `moved` is true once a `cd` has left the root, or the step's working
-    directory is not the root. `skipping` counts the enclosing `if false`
-    blocks, so a script whose condition spans several lines is read as one.
-    """
-
-    moved: bool = False
-    skipping: int = 0
-
-
-FRESH_SHELL: typ.Final = ShellState()
-
-
-def _runnable(segments: list[list[str]], skipping: int) -> tuple[list[list[str]], int]:
-    """Return the simple commands of a line that can run, and the new depth.
-
-    `if false; then cargo test --workspace; fi` runs nothing, so its commands
-    are not coverage. Only a condition that is the constant `false` is known;
-    any other condition is taken to hold on some run, as a step's `if` is, and
-    its `else` branch runs when the `if` is false. *skipping* is how many `if
-    false` blocks enclose the line's start, and the depth after the line is
-    returned for the next one.
-
-    Returns
-    -------
-    tuple[list[list[str]], int]
-        The segments outside every `if false` branch, and the depth after them.
-    """
-    kept: list[list[str]] = []
-    depth = skipping  # how many `if` blocks that cannot run enclose the segment
-    for words in segments:
-        head = words[0].lstrip("@-+") if words else ""
-        if head == "if" and (depth or tuple(words[1:]) in _FALSE_CONDITIONS):
-            depth += 1
-        elif head == "fi":
-            depth = max(0, depth - 1)
-        elif head == "else" and depth == 1:
-            # The `else` of an `if false` is the branch that runs, and the
-            # command that follows the keyword on the same segment is in it.
-            depth = 0
-            kept.append(words[1:])
-        elif not depth:
-            kept.append(words)
-    return kept, depth
-
-
 def read_commands(
     segments: list[list[str]], where: tuple[str, str], state: ShellState
 ) -> tuple[list[Invocation], ShellState]:
@@ -428,10 +385,10 @@ def read_commands(
         `cargo test`, Whitaker, or a wrapper script named for one of them, and
         the state the next line starts from.
     """
-    runnable, skipping = _runnable(segments, state.skipping)
+    runnable_segments, branches = runnable(segments, state.branches)
     moved = state.moved
     found: list[Invocation] = []
-    for raw_words in runnable:
+    for raw_words in runnable_segments:
         words = _without_keywords(raw_words)
         start = command_start(words)
         if words[start : start + 1] == ["cd"]:
@@ -440,7 +397,7 @@ def read_commands(
         invocation = _invocation_of(words, where, moved=moved)
         if invocation is not None:
             found.append(invocation)
-    return found, ShellState(moved, skipping)
+    return found, ShellState(moved, branches)
 
 
 def invocations_in(
