@@ -40,13 +40,16 @@ has, not the schedule they run on. A Makefile recipe inside an `ifeq` or
 similar block, and the commands of a prerequisite that only such a block adds,
 are indeterminate too, because whether they apply depends on Make state the
 audit does not evaluate. A probe `if` yields two readings of one line, and one
-run takes one of them, so a line's commands count only when every reading
-selects alike (a probe that only picks the runner, `nextest run` or `test`,
-with the same flags). When the readings select differently for one tool (`-p a`
-against `-p b`), or one reading lacks the tool, each command is indeterminate.
-In a shell script, the branch of an `if false` is not run and its `else` is;
-any other condition is taken to hold on some run. Under `.ONESHELL` a recipe is
-one shell, so a `cd` on one line moves the lines after it.
+run takes one of them. A tool a probe runs in some readings but not all, or
+runs differently in them (`-p a` against `-p b`, or `test -p b` against
+`nextest run -p b`), is left to the probe: every invocation of it in the
+Makefile is indeterminate. The exception is a tool whose every invocation is a
+probe's and selects the whole workspace (a probe that only picks the runner,
+`nextest run` or `test`, with `--workspace`): it covers everything whenever it
+runs, and a tool that does not run is not required. In a shell script, the
+branch of an `if false` is not run, however many lines it spans, and its `else`
+is; any other condition is taken to hold on some run. Under `.ONESHELL` a
+recipe is one shell, so a `cd` on one line moves the lines after it.
 
 A tool the gate does not run is not required; the rule asks that a tool, once
 run, runs over everything.

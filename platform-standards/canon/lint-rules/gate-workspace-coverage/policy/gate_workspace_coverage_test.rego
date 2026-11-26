@@ -310,6 +310,27 @@ test_a_probe_branch_that_one_reading_lacks_leaves_coverage_to_the_probe if {
 	{[f.rule_id, f.verdict] | some f in fs} == {["EN-001", "indeterminate"]}
 }
 
+test_mutually_exclusive_probe_tools_are_not_counted_together if {
+	fs := findings(data.fixtures.probe_exclusive_tools)
+	{[f.rule_id, f.verdict] | some f in fs} == {["EN-001", "indeterminate"]}
+}
+
+test_a_multiline_if_false_in_one_step_skips_its_body if {
+	some f in findings(data.fixtures.shell_if_false_multiline)
+	f.rule_id == "GC-001"
+	contains(f.msg, "out: b")
+}
+
+test_a_variable_subcommand_after_cargos_global_options_is_unreadable if {
+	fs := findings(data.fixtures.cargo_global_option_then_variable)
+	{f.rule_id | some f in fs} == {"EN-001"}
+}
+
+test_a_computed_matrix_with_a_variable_command_head_is_unreadable if {
+	fs := findings(data.fixtures.ci_computed_matrix_variable_head)
+	{f.rule_id | some f in fs} == {"EN-001"}
+}
+
 test_a_probe_that_only_picks_the_runner_keeps_both_readings_placed if {
 	count(findings(data.fixtures.probe_runner_only)) == 0
 }

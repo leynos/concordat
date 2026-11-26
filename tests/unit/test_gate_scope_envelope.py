@@ -528,6 +528,60 @@ class TestWorkflows:
         assert found == {("clippy", True, ()), ("test", False, ("app",))}
 
 
+class TestFourthReview:
+    """Behaviours a fourth review showed to be missing."""
+
+    def test_probe_tools_that_exclude_each_other_are_left_to_the_probe(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """One run takes `test -p b` or `nextest run -p b`, never both."""
+        makefile = (
+            ".PHONY: test\ntest:\n\tcargo test -p app\n\tcargo nextest run -p app\n"
+            "\tcargo $(if $(shell cargo nextest --version 2>/dev/null),"
+            "test -p b,nextest run -p b)\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert {i["tool"] for i in found} == {"test", "nextest"}
+        assert not any(i["resolved"] for i in found)
+
+    def test_a_multiline_if_false_in_one_step_skips_its_body(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The state of an open `if false` carries across the step's lines."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - run: |\n          cargo test -p app\n"
+            "          if false; then\n            cargo test --workspace\n"
+            "          fi\n"
+        )
+        files = _workspace_files(extra={".github/workflows/ci.yml": text})
+        found = _build(tmp_path, files)["invocations"]
+        assert [i["workspace_flag"] for i in found] == [False]
+
+    def test_a_subcommand_variable_after_cargos_global_options_is_unreadable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cargo +nightly "$RUNNER" -p b` hides its subcommand past `+nightly`."""
+        makefile = '.PHONY: test\ntest:\n\tcargo +nightly "$$RUNNER" -p b\n'
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["invocations"] == []
+        assert envelope["unreadable"]
+
+    def test_a_computed_matrix_with_a_variable_command_head_is_unreadable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`${{ matrix.runner }} test -p b` may be `cargo test -p b`."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    strategy:\n      matrix: ${{ fromJson(needs.plan.outputs.m) }}\n"
+            "    steps:\n      - run: ${{ matrix.runner }} test -p b\n"
+        )
+        envelope = _build(
+            tmp_path, _workspace_files(extra={".github/workflows/ci.yml": text})
+        )
+        assert any("matrix is computed" in entry for entry in envelope["unreadable"])
+
+
 class TestThirdReview:
     """Behaviours a third review showed to be missing."""
 
@@ -540,8 +594,10 @@ class TestThirdReview:
             "2>/dev/null),test -p b,nextest run --workspace)\n"
         )
         found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
-        assert {i["tool"] for i in found} == {"test", "nextest"}
-        assert not any(i["resolved"] for i in found)
+        resolved = {i["tool"]: i["resolved"] for i in found}
+        # `test -p b` covers only `b` when it runs, so the probe decides it;
+        # `nextest run --workspace` covers everything whenever it runs
+        assert resolved == {"test": False, "nextest": True}
 
     def test_a_cargo_subcommand_from_a_shell_variable_is_unreadable(
         self, tmp_path: pathlib.Path

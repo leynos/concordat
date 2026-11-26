@@ -168,6 +168,21 @@ def _cargo_subcommand(arguments: list[str]) -> tuple[str | None, list[str]]:
     return None, []
 
 
+def cargo_subcommand_word(arguments: list[str]) -> str | None:
+    """Return the word `cargo` takes as its subcommand, past its global options.
+
+    `cargo +nightly -C dir "$RUNNER" -p b` has `"$RUNNER"` there, so a caller
+    that must say whether the subcommand is known reads it from here and not
+    from the word after `cargo`.
+
+    Returns
+    -------
+    str | None
+        The subcommand word, or ``None`` when only options were given.
+    """
+    return _cargo_subcommand(arguments)[0]
+
+
 def _cargo_changes_directory(arguments: list[str], rest: list[str]) -> bool:
     """Return whether Cargo's global `-C` precedes the subcommand.
 
@@ -346,21 +361,38 @@ def _without_keywords(words: list[str]) -> list[str]:
 _FALSE_CONDITIONS: typ.Final = frozenset({("false",), ("!", "true"), ("[", "!", "]")})
 
 
-def _runnable(segments: list[list[str]]) -> list[list[str]]:
-    """Return the simple commands of a line that can run.
+class ShellState(typ.NamedTuple):
+    """What an earlier line of one shell leaves for the lines after it.
+
+    `moved` is true once a `cd` has left the root, or the step's working
+    directory is not the root. `skipping` counts the enclosing `if false`
+    blocks, so a script whose condition spans several lines is read as one.
+    """
+
+    moved: bool = False
+    skipping: int = 0
+
+
+FRESH_SHELL: typ.Final = ShellState()
+
+
+def _runnable(segments: list[list[str]], skipping: int) -> tuple[list[list[str]], int]:
+    """Return the simple commands of a line that can run, and the new depth.
 
     `if false; then cargo test --workspace; fi` runs nothing, so its commands
     are not coverage. Only a condition that is the constant `false` is known;
     any other condition is taken to hold on some run, as a step's `if` is, and
-    its `else` branch runs when the `if` is false.
+    its `else` branch runs when the `if` is false. *skipping* is how many `if
+    false` blocks enclose the line's start, and the depth after the line is
+    returned for the next one.
 
     Returns
     -------
-    list[list[str]]
-        The segments outside every `if false` branch.
+    tuple[list[list[str]], int]
+        The segments outside every `if false` branch, and the depth after them.
     """
     kept: list[list[str]] = []
-    depth = 0  # how many `if` blocks that cannot run enclose the segment
+    depth = skipping  # how many `if` blocks that cannot run enclose the segment
     for words in segments:
         head = words[0].lstrip("@-+") if words else ""
         if head == "if" and (depth or tuple(words[1:]) in _FALSE_CONDITIONS):
@@ -374,46 +406,32 @@ def _runnable(segments: list[list[str]]) -> list[list[str]]:
             kept.append(words[1:])
         elif not depth:
             kept.append(words)
-    return kept
+    return kept, depth
 
 
-def leaves_directory(segments: list[list[str]]) -> bool:
-    """Return whether a lexed line holds a `cd` that leaves the root directory.
-
-    A caller that reads a script a line at a time carries this forward, so a
-    `cd nested` on one line marks every command on the lines after it.
-
-    Returns
-    -------
-    bool
-        Whether a later command runs somewhere else.
-    """
-    return any(
-        words[command_start(words) : command_start(words) + 1] == ["cd"]
-        and _moves_directory(words[command_start(words) :])
-        for words in (_without_keywords(raw) for raw in segments)
-    )
-
-
-def invocations_in(
-    segments: list[list[str]], where: tuple[str, str], *, moved: bool = False
-) -> list[Invocation]:
-    """Return the gate-tool invocations in one lexed line.
+def read_commands(
+    segments: list[list[str]], where: tuple[str, str], state: ShellState
+) -> tuple[list[Invocation], ShellState]:
+    """Return the gate-tool invocations in one lexed line, and the shell after it.
 
     A `cd` earlier in the line marks every later invocation as running
-    elsewhere, as does *moved*, which a caller sets when an earlier line or the
-    step's `working-directory` has already left the root. *where* is the line's
-    source (a file and line, or a job and step) and its text, kept on each
-    invocation so a finding can show what was read.
+    elsewhere, as does `state.moved`, which a caller sets when an earlier line
+    or the step's `working-directory` has already left the root. *where* is the
+    line's source (a file and line, or a job and step) and its text, kept on
+    each invocation so a finding can show what was read. The returned state
+    carries a `cd` and an open `if false` to the next line of the same shell.
 
     Returns
     -------
-    list[Invocation]
+    tuple[list[Invocation], ShellState]
         One fact per command that runs `cargo clippy`, `cargo nextest run`,
-        `cargo test`, Whitaker, or a wrapper script named for one of them.
+        `cargo test`, Whitaker, or a wrapper script named for one of them, and
+        the state the next line starts from.
     """
+    runnable, skipping = _runnable(segments, state.skipping)
+    moved = state.moved
     found: list[Invocation] = []
-    for raw_words in _runnable(segments):
+    for raw_words in runnable:
         words = _without_keywords(raw_words)
         start = command_start(words)
         if words[start : start + 1] == ["cd"]:
@@ -422,4 +440,17 @@ def invocations_in(
         invocation = _invocation_of(words, where, moved=moved)
         if invocation is not None:
             found.append(invocation)
-    return found
+    return found, ShellState(moved, skipping)
+
+
+def invocations_in(
+    segments: list[list[str]], where: tuple[str, str], *, moved: bool = False
+) -> list[Invocation]:
+    """Return the gate-tool invocations in one lexed line read on its own.
+
+    Returns
+    -------
+    list[Invocation]
+        The invocations, as :func:`read_commands` finds them.
+    """
+    return read_commands(segments, where, ShellState(moved))[0]

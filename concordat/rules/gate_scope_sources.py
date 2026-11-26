@@ -28,7 +28,14 @@ import pathlib
 import re
 import typing as typ
 
-from .gate_scope_commands import Invocation, invocations_in, leaves_directory
+from .gate_scope_commands import (
+    FRESH_SHELL,
+    Invocation,
+    ShellState,
+    cargo_subcommand_word,
+    invocations_in,
+    read_commands,
+)
 from .gate_scope_workflow_model import Place, logical_lines, places, step_runs
 from .interrogate_invocation import lex_segments
 from .make_commands import blank_references, command_start
@@ -75,7 +82,10 @@ _NAMES_TOOL: typ.Final = re.compile(
 # The same, loosely, for a step of a job whose matrix cannot be expanded: the
 # commands are unknown there, so any mention of a tool is reason to say so.
 _MATRIX_TOOL: typ.Final = re.compile(
-    r"whitaker|clippy|nextest|dylint|cargo", re.IGNORECASE
+    r"whitaker|clippy|nextest|dylint|cargo"
+    # an expression standing where the command word goes, before a gate subcommand
+    r"|\$\{\{[^}]*\}\}\s+(?:\+\S+\s+)?(?:test|nextest|clippy|dylint)\b",
+    re.IGNORECASE,
 )
 # Words that, beside a command word the expansion left unresolved, say the
 # command is one of the gate tools.
@@ -150,35 +160,34 @@ def _lexed(text: str) -> list[list[str]] | None:
 
 
 def _read_line(
-    text: str, where: tuple[str, str], *, moved: bool = False
-) -> tuple[list[Invocation], bool, bool]:
-    """Return the invocations in one expanded line, whether it read, and where.
+    text: str, where: tuple[str, str], state: ShellState = FRESH_SHELL
+) -> tuple[list[Invocation], bool, ShellState]:
+    """Return the invocations in one expanded line, whether it read, and the shell.
 
     A line is unreadable when it will not lex while naming a gate tool, or when
     any command in it has a command word (or Cargo subcommand) the expansion
     left unresolved beside words that name a gate tool. A line that only
     mentions a tool in a string or an identifier is not.
 
-    *moved* says an earlier line of the same shell, or the step's working
-    directory, already left the root; the result's last member is the same fact
-    for the line after this one.
+    *state* says what an earlier line of the same shell left: a `cd` that left
+    the root, or an open `if false`. The state after this line is returned for
+    the next.
 
     Returns
     -------
-    tuple[list[Invocation], bool, bool]
-        The invocations found, whether the line could be read, and whether the
-        shell is now outside the root directory.
+    tuple[list[Invocation], bool, ShellState]
+        The invocations found, whether the line could be read, and the state
+        the next line of the shell starts from.
     """
     segments = _lexed(text)
     if segments is None:
-        found: list[Invocation] = []
         is_unreadable = _NAMES_TOOL.search(shown(text)) is not None
-        return found, not is_unreadable, moved
-    found = invocations_in(segments, where, moved=moved)
+        return [], not is_unreadable, state
+    found, after = read_commands(segments, where, state)
     # Each command is judged alone: a recognised `cargo clippy` beside an
     # unresolved `$(RUNNER) test` does not make the second readable.
     is_unreadable = any(_hides_tool(words) for words in segments)
-    return found, not is_unreadable, moved or leaves_directory(segments)
+    return found, not is_unreadable, after
 
 
 def _holds_reference(word: str) -> bool:
@@ -203,7 +212,8 @@ def _hides_tool(words: list[str]) -> bool:
         return False
     head = words[start]
     if head.rsplit("/", 1)[-1] == "cargo":
-        return len(words) > start + 1 and _holds_reference(words[start + 1])
+        subcommand = cargo_subcommand_word(words[start + 1 :])
+        return subcommand is not None and _holds_reference(subcommand)
     return _holds_reference(head) and any(
         word in _TOOL_ARGUMENTS for word in words[start + 1 :]
     )
@@ -226,19 +236,34 @@ def makefile_lines(
     # Under `.ONESHELL` a rule's recipe lines are one shell, so a `cd` on one
     # moves the lines after it; otherwise each line is a shell of its own.
     is_one_shell = ".ONESHELL" in index
-    invocations: list[Invocation] = []
+    lines: list[_Line] = []
     unreadable: list[str] = []
     for target in walk.names:
+        is_conditional_target = target in walk.conditional
         for rule in index[target]:
-            found, missed = _read_rule(target, rule, values, is_one_shell=is_one_shell)
-            is_conditional = rule.is_conditional or target in walk.conditional
-            invocations.extend(
-                _unplaced(found, _MAKE_CONDITION_REASON) if is_conditional else found
-            )
+            read, missed = _read_rule(target, rule, values, is_one_shell=is_one_shell)
+            if rule.is_conditional or is_conditional_target:
+                read = [
+                    _Line([
+                        _unplaced(found, _MAKE_CONDITION_REASON)
+                        for found in line.readings
+                    ])
+                    for line in read
+                ]
+            lines.extend(read)
             unreadable.extend(missed)
     return GateLines(
-        _distinct(invocations), _distinct_text(unreadable), walk.names, walk.is_resolved
+        _distinct(_resolve_probes(lines)),
+        _distinct_text(unreadable),
+        walk.names,
+        walk.is_resolved,
     )
+
+
+class _Line(typ.NamedTuple):
+    """One recipe line: the invocations of each reading its variables allow."""
+
+    readings: list[list[Invocation]]
 
 
 def _read_rule(
@@ -247,58 +272,65 @@ def _read_rule(
     values: cabc.Mapping[str, str],
     *,
     is_one_shell: bool,
-) -> tuple[list[Invocation], list[str]]:
+) -> tuple[list[_Line], list[str]]:
     """Read every recipe line of one rule, in each reading its variables allow.
 
     Returns
     -------
-    tuple[list[Invocation], list[str]]
-        The invocations found, and the lines that could not be read.
+    tuple[list[_Line], list[str]]
+        The lines with their readings, and the lines that could not be read.
     """
-    invocations: list[Invocation] = []
+    lines: list[_Line] = []
     unreadable: list[str] = []
-    moved_by_reading: dict[int, bool] = {}
+    state_by_reading: dict[int, ShellState] = {}
     for number, text in rule.recipes:
         per_reading: list[list[Invocation]] = []
         for position, reading in enumerate(expand_readings(text, values)):
             shown_line = " ".join(shown(blank_references(joined(reading.text))).split())
             source = f"Makefile:{number} ({target})"
-            found, is_readable, moved = _read_line(
-                reading.text,
-                (source, shown_line),
-                moved=is_one_shell and moved_by_reading.get(position, False),
+            before = (
+                state_by_reading.get(position, FRESH_SHELL)
+                if is_one_shell
+                else FRESH_SHELL
             )
-            moved_by_reading[position] = moved
+            found, is_readable, state_by_reading[position] = _read_line(
+                reading.text, (source, shown_line), before
+            )
             per_reading.append(found)
             if not is_readable:
                 unreadable.append(f"{source}: {shown_line}")
-        invocations.extend(_alternatives(per_reading))
-    return invocations, unreadable
+        lines.append(_Line(per_reading))
+    return lines, unreadable
 
 
-def _alternatives(per_reading: list[list[Invocation]]) -> list[Invocation]:
-    """Return the invocations of one line's readings, alternatives marked unplaced.
+def _resolve_probes(lines: list[_Line]) -> list[Invocation]:
+    """Return every invocation, with the tools a probe leaves ambiguous unplaced.
 
-    The readings of a probe `if` are alternatives: one run takes one branch. A
-    tool that two readings select differently (`-p a` against `-p b`) is not
-    covered by their union, so each of its invocations is unplaced.
+    The readings of a probe `if` are alternatives, and one run takes one. A tool
+    a probe line runs in some readings but not in all, or runs differently in
+    them, covers a member only on the runs that take the right reading, so every
+    invocation of that tool in the Makefile is unplaced. The exception is a tool
+    whose every invocation is a probe's and selects the whole workspace: it
+    covers everything whenever it runs, and a tool that does not run in a given
+    run is not required.
 
     Returns
     -------
     list[Invocation]
-        Every reading's invocations, those of an ambiguous tool unresolved.
+        The invocations of every reading, in order.
     """
-    flat = [invocation for found in per_reading for invocation in found]
-    if len(per_reading) < _MIN_ALTERNATIVES or not flat:
-        return flat
-    if _alternatives_agree(per_reading):
-        return flat
-    return _unplaced(flat, _ALTERNATIVE_REASON)
+    flat = [i for line in lines for reading in line.readings for i in reading]
+    ambiguous = _ambiguous_tools(lines)
+    return [
+        _unplaced([i], _ALTERNATIVE_REASON)[0] if i["tool"] in ambiguous else i
+        for i in flat
+    ]
 
 
 def _selection_signature(invocation: Invocation) -> tuple[object, ...]:
     """Return what an invocation selects, as a comparable value."""
     return (
+        invocation["tool"],
         invocation["workspace_flag"],
         tuple(invocation["packages"]),
         tuple(invocation["excludes"]),
@@ -307,23 +339,52 @@ def _selection_signature(invocation: Invocation) -> tuple[object, ...]:
     )
 
 
-def _alternatives_agree(per_reading: list[list[Invocation]]) -> bool:
-    """Return whether every reading of a line selects the same members.
+def _is_whole_workspace(invocation: Invocation) -> bool:
+    """Return whether an invocation selects every member, whenever it runs."""
+    return (
+        invocation["workspace_flag"]
+        and not invocation["excludes"]
+        and invocation["resolved"]
+        and not invocation["changes_directory"]
+    )
 
-    One run takes one reading, so a tool covers a member only if every reading
-    does. The readings agree when each runs one command and all select alike,
-    as when a probe only picks the runner (`nextest run` or `test`) and the
-    selection is the same either way. A tool that one reading lacks, or two
-    select differently, leaves the line's coverage to the probe.
+
+def _ambiguous_tools(lines: list[_Line]) -> set[str]:
+    """Return the tools whose coverage a probe line decides.
+
+    A line whose readings all run the same commands is no probe. Of the tools
+    the others run, those whose every invocation is a probe's and selects the
+    whole workspace are safe: whichever reading runs, the tool covers everything.
 
     Returns
     -------
-    bool
-        Whether the line's coverage does not depend on the probe.
+    set[str]
+        The tools to leave unplaced.
     """
-    if any(len(found) != 1 for found in per_reading):
+    probes = [line for line in lines if _is_probe(line)]
+    tools = {i["tool"] for line in probes for reading in line.readings for i in reading}
+    return {tool for tool in tools if not _only_whole_workspace_probes(tool, lines)}
+
+
+def _is_probe(line: _Line) -> bool:
+    """Return whether a line's readings run different commands."""
+    if len(line.readings) < _MIN_ALTERNATIVES:
         return False
-    return len({_selection_signature(found[0]) for found in per_reading}) == 1
+    signatures = {
+        tuple(sorted(map(_selection_signature, reading))) for reading in line.readings
+    }
+    return len(signatures) > 1
+
+
+def _only_whole_workspace_probes(tool: str, lines: list[_Line]) -> bool:
+    """Return whether every invocation of *tool* is a whole-workspace probe's."""
+    return all(
+        _is_probe(line) and _is_whole_workspace(invocation)
+        for line in lines
+        for reading in line.readings
+        for invocation in reading
+        if invocation["tool"] == tool
+    )
 
 
 _MIN_ALTERNATIVES: typ.Final = 2
@@ -453,9 +514,10 @@ def _read_step(
     """
     invocations: list[Invocation] = []
     unreadable: list[str] = []
+    state = ShellState(moved)
     for line in lines:
         shown_line = " ".join(line.split())
-        found, is_readable, moved = _read_line(line, (source, shown_line), moved=moved)
+        found, is_readable, state = _read_line(line, (source, shown_line), state)
         invocations.extend(found)
         if not is_readable:
             unreadable.append(f"{source}: {shown_line}")

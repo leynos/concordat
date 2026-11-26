@@ -232,6 +232,37 @@ SCENARIOS: dict[str, dict[str, str]] = {
             "test -p b,nextest run --workspace)\n"
         ),
     },
+    "probe_exclusive_tools": {
+        **checkout_for(),
+        "Makefile": (
+            ".PHONY: test\ntest:\n\tcargo test -p app -p c\n"
+            "\tcargo nextest run -p app -p c\n"
+            "\tcargo $(if $(shell cargo nextest --version 2>/dev/null),"
+            "test -p b,nextest run -p b)\n"
+        ),
+    },
+    "shell_if_false_multiline": checkout_for(
+        extra={
+            ".github/workflows/ci.yml": workflow(
+                "cargo test -p app -p c\nif false; then\n  cargo test --workspace\nfi"
+            )
+        }
+    ),
+    "cargo_global_option_then_variable": checkout_for(
+        test=["cargo test -p app -p c", 'cargo +nightly "$$RUNNER" -p b']
+    ),
+    "ci_computed_matrix_variable_head": checkout_for(
+        test=["cargo test -p app -p c"],
+        extra={
+            ".github/workflows/ci.yml": workflow(
+                "${{ matrix.runner }} test -p b",
+                matrix=(
+                    "    strategy:\n"
+                    "      matrix: ${{ fromJson(needs.plan.outputs.m) }}\n"
+                ),
+            )
+        },
+    ),
     "probe_runner_only": {
         **checkout_for(),
         "Makefile": (

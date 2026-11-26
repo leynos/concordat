@@ -2071,8 +2071,8 @@
           "tool": "test",
           "source": "Makefile:3 (test)",
           "command": "cargo test -p app -p c",
-          "resolved": true,
-          "why": "",
+          "resolved": false,
+          "why": "a probe makes it one of two readings that select differently, and one run takes one of them",
           "workspace_flag": false,
           "packages": [
             "app",
@@ -2098,8 +2098,8 @@
           "tool": "nextest",
           "source": "Makefile:4 (test)",
           "command": "cargo nextest run --workspace",
-          "resolved": false,
-          "why": "a probe makes it one of two readings that select differently, and one run takes one of them",
+          "resolved": true,
+          "why": "",
           "workspace_flag": true,
           "packages": [],
           "excludes": [],
@@ -2108,6 +2108,241 @@
       ],
       "examples": [],
       "unreadable": []
+    },
+    "probe_exclusive_tools": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": "Makefile:3 (test)",
+          "command": "cargo test -p app -p c",
+          "resolved": false,
+          "why": "a probe makes it one of two readings that select differently, and one run takes one of them",
+          "workspace_flag": false,
+          "packages": [
+            "app",
+            "c"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        },
+        {
+          "tool": "nextest",
+          "source": "Makefile:4 (test)",
+          "command": "cargo nextest run -p app -p c",
+          "resolved": false,
+          "why": "a probe makes it one of two readings that select differently, and one run takes one of them",
+          "workspace_flag": false,
+          "packages": [
+            "app",
+            "c"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        },
+        {
+          "tool": "test",
+          "source": "Makefile:5 (test)",
+          "command": "cargo test -p b",
+          "resolved": false,
+          "why": "a probe makes it one of two readings that select differently, and one run takes one of them",
+          "workspace_flag": false,
+          "packages": [
+            "b"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        },
+        {
+          "tool": "nextest",
+          "source": "Makefile:5 (test)",
+          "command": "cargo nextest run -p b",
+          "resolved": false,
+          "why": "a probe makes it one of two readings that select differently, and one run takes one of them",
+          "workspace_flag": false,
+          "packages": [
+            "b"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
+    "shell_if_false_multiline": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": ".github/workflows/ci.yml (job build, step 1)",
+          "command": "cargo test -p app -p c",
+          "resolved": true,
+          "why": "",
+          "workspace_flag": false,
+          "packages": [
+            "app",
+            "c"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": []
+    },
+    "cargo_global_option_then_variable": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": "Makefile:7 (test)",
+          "command": "cargo test -p app -p c",
+          "resolved": true,
+          "why": "",
+          "workspace_flag": false,
+          "packages": [
+            "app",
+            "c"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": [
+        "Makefile:8 (test): cargo +nightly \"$RUNNER\" -p b"
+      ]
+    },
+    "ci_computed_matrix_variable_head": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-workspace-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "cargo_manifest": true,
+        "root_makefile": true
+      },
+      "workspace": {
+        "manifest": "Cargo.toml",
+        "kind": "root-package",
+        "root_package": "app",
+        "members": [
+          "app",
+          "b",
+          "c"
+        ],
+        "default_members": null
+      },
+      "makefile": {
+        "targets": [
+          "lint",
+          "test"
+        ],
+        "is_resolved": true
+      },
+      "invocations": [
+        {
+          "tool": "test",
+          "source": "Makefile:7 (test)",
+          "command": "cargo test -p app -p c",
+          "resolved": true,
+          "why": "",
+          "workspace_flag": false,
+          "packages": [
+            "app",
+            "c"
+          ],
+          "excludes": [],
+          "changes_directory": false
+        }
+      ],
+      "examples": [],
+      "unreadable": [
+        ".github/workflows/ci.yml (job build): matrix is computed by an expression, so its commands cannot be filled in"
+      ]
     },
     "probe_runner_only": {
       "schema_version": 1,
