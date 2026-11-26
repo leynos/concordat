@@ -415,3 +415,22 @@ class TestFifteenthReview:
         )
         found = _makefile_invocations(tmp_path, makefile)
         assert [i["resolved"] for i in found] == [True]
+
+
+class TestNonSelectingCommands:
+    """Commands that name a gate tool without selecting packages."""
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            '"$cargo_dylint" dylint --version',
+            "report=\"$(cargo nextest show-config test-groups | sed 's/\\x1b\\[//')\"",
+        ],
+    )
+    def test_a_query_of_the_tool_hides_nothing(
+        self, tmp_path: pathlib.Path, line: str
+    ) -> None:
+        """Asking a tool its version or configuration is not a gate command."""
+        files = _workspace_files(extra=_step_workflow(line))
+
+        assert _build(tmp_path, files)["unreadable"] == []
