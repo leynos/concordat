@@ -192,10 +192,26 @@ def _walk(
         if target in seen or target not in index:
             continue
         seen.append(target)
-        for rule in index[target]:
-            if skip_conditional and rule.is_conditional:
-                continue
-            found = _rule_successors(rule, values)
+        for found in _followed(
+            index[target], values, skip_conditional=skip_conditional
+        ):
             pending.extend(found.names)
             is_resolved = is_resolved and found.is_resolved
     return Successors(seen, is_resolved)
+
+
+def _followed(
+    rules: list[Rule], values: cabc.Mapping[str, str], *, skip_conditional: bool
+) -> list[Successors]:
+    """Return where each rule leads, leaving out the conditional ones if asked.
+
+    Returns
+    -------
+    list[Successors]
+        One entry per rule that is followed.
+    """
+    return [
+        _rule_successors(rule, values)
+        for rule in rules
+        if not (skip_conditional and rule.is_conditional)
+    ]

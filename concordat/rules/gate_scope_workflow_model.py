@@ -133,20 +133,27 @@ def _with_includes(
     originals = [dict(combination) for combination in combinations]
     results = [dict(combination) for combination in combinations]
     extra: list[dict[str, object]] = []
-    for candidate in includes:
-        if not isinstance(candidate, dict):
-            continue
-        entry = typ.cast("dict[str, object]", candidate)
-        added = False
-        for original, result in zip(originals, results, strict=True):
-            if all(
-                original[key] == entry[key] for key in entry.keys() & original.keys()
-            ):
-                result.update(entry)
-                added = True
-        if not added:
+    entries = [
+        typ.cast("dict[str, object]", candidate)
+        for candidate in includes
+        if isinstance(candidate, dict)
+    ]
+    for entry in entries:
+        fitting = [
+            result
+            for original, result in zip(originals, results, strict=True)
+            if _fits(original, entry)
+        ]
+        for result in fitting:
+            result.update(entry)
+        if not fitting:
             extra.append(dict(entry))
     return [*results, *extra]
+
+
+def _fits(original: dict[str, object], entry: dict[str, object]) -> bool:
+    """Return whether *entry* overwrites none of *original*'s values."""
+    return all(original[key] == entry[key] for key in entry.keys() & original.keys())
 
 
 def matrix_combinations(job: object) -> list[dict[str, object]] | None:

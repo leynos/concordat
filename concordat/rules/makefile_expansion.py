@@ -340,6 +340,12 @@ def _drop_error_guards(
 _AFFIX_CALL: typ.Final = re.compile(r"\$\((addprefix|addsuffix)\s")
 
 
+def _is_settled_call(body: str, commas: list[int]) -> bool:
+    """Return whether an affix call has two arguments and no reference left."""
+    holds_reference = "$" in body or SHELL_DOLLAR in body
+    return len(commas) == 1 and not holds_reference
+
+
 def _evaluate_affixes(text: str) -> str:
     """Evaluate each `$(addprefix P,words)` and `$(addsuffix S,words)` that is settled.
 
@@ -358,7 +364,7 @@ def _evaluate_affixes(text: str) -> str:
         close = close_of(text, match.start() + 1)
         body = text[match.end() : close] if close is not None else ""
         commas = top_level_commas(body)
-        if close is None or len(commas) != 1 or "$" in body or SHELL_DOLLAR in body:
+        if close is None or not _is_settled_call(body, commas):
             position = match.end()
             continue
         affix, words = body[: commas[0]], body[commas[0] + 1 :].split()

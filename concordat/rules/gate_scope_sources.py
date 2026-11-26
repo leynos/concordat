@@ -75,8 +75,7 @@ _NAMES_TOOL: typ.Final = re.compile(
 # The same, loosely, for a step of a job whose matrix cannot be expanded: the
 # commands are unknown there, so any mention of a tool is reason to say so.
 _MATRIX_TOOL: typ.Final = re.compile(
-    r"whitaker|clippy|nextest|dylint|cargo\s+(?:\+\S+\s+)?(?:test|llvm-cov)",
-    re.IGNORECASE,
+    r"whitaker|clippy|nextest|dylint|cargo", re.IGNORECASE
 )
 # Words that, beside a command word the expansion left unresolved, say the
 # command is one of the gate tools.
@@ -190,8 +189,9 @@ def _holds_reference(word: str) -> bool:
 def _hides_tool(words: list[str]) -> bool:
     """Return whether one command might run a gate tool it does not name.
 
-    That is a command word the expansion left unresolved, or a `cargo` command
-    whose subcommand it left unresolved, with an argument only a gate tool takes.
+    That is a `cargo` command whose subcommand the expansion left unresolved,
+    whatever its arguments, or a command word it left unresolved beside an
+    argument only a gate tool takes.
 
     Returns
     -------
@@ -202,13 +202,9 @@ def _hides_tool(words: list[str]) -> bool:
     if start >= len(words):
         return False
     head = words[start]
-    unresolved_head = _holds_reference(head)
-    unresolved_subcommand = (
-        head.rsplit("/", 1)[-1] == "cargo"
-        and len(words) > start + 1
-        and _holds_reference(words[start + 1])
-    )
-    return (unresolved_head or unresolved_subcommand) and any(
+    if head.rsplit("/", 1)[-1] == "cargo":
+        return len(words) > start + 1 and _holds_reference(words[start + 1])
+    return _holds_reference(head) and any(
         word in _TOOL_ARGUMENTS for word in words[start + 1 :]
     )
 
@@ -293,24 +289,41 @@ def _alternatives(per_reading: list[list[Invocation]]) -> list[Invocation]:
         Every reading's invocations, those of an ambiguous tool unresolved.
     """
     flat = [invocation for found in per_reading for invocation in found]
-    if len(per_reading) < _MIN_ALTERNATIVES:
+    if len(per_reading) < _MIN_ALTERNATIVES or not flat:
         return flat
-    signatures: dict[str, set[tuple[object, ...]]] = {}
-    for invocation in flat:
-        signatures.setdefault(invocation["tool"], set()).add((
-            invocation["workspace_flag"],
-            tuple(invocation["packages"]),
-            tuple(invocation["excludes"]),
-            invocation["resolved"],
-            invocation["changes_directory"],
-        ))
-    ambiguous = {tool for tool, seen in signatures.items() if len(seen) > 1}
-    return [
-        _unplaced([invocation], _ALTERNATIVE_REASON)[0]
-        if invocation["tool"] in ambiguous
-        else invocation
-        for invocation in flat
-    ]
+    if _alternatives_agree(per_reading):
+        return flat
+    return _unplaced(flat, _ALTERNATIVE_REASON)
+
+
+def _selection_signature(invocation: Invocation) -> tuple[object, ...]:
+    """Return what an invocation selects, as a comparable value."""
+    return (
+        invocation["workspace_flag"],
+        tuple(invocation["packages"]),
+        tuple(invocation["excludes"]),
+        invocation["resolved"],
+        invocation["changes_directory"],
+    )
+
+
+def _alternatives_agree(per_reading: list[list[Invocation]]) -> bool:
+    """Return whether every reading of a line selects the same members.
+
+    One run takes one reading, so a tool covers a member only if every reading
+    does. The readings agree when each runs one command and all select alike,
+    as when a probe only picks the runner (`nextest run` or `test`) and the
+    selection is the same either way. A tool that one reading lacks, or two
+    select differently, leaves the line's coverage to the probe.
+
+    Returns
+    -------
+    bool
+        Whether the line's coverage does not depend on the probe.
+    """
+    if any(len(found) != 1 for found in per_reading):
+        return False
+    return len({_selection_signature(found[0]) for found in per_reading}) == 1
 
 
 _MIN_ALTERNATIVES: typ.Final = 2
@@ -353,26 +366,39 @@ def workflow_lines(files: cabc.Iterable[WorkflowFile]) -> GateLines:
     GateLines
         The invocations, the unreadable lines or files, and no Makefile targets.
     """
+    readings = [_read_workflow(workflow) for workflow in files]
+    return GateLines(
+        _distinct([i for found, _missed in readings for i in found]),
+        _distinct_text([line for _found, missed in readings for line in missed]),
+        [],
+        is_resolved=True,
+    )
+
+
+def _read_workflow(workflow: WorkflowFile) -> tuple[list[Invocation], list[str]]:
+    """Read every job and action step of one workflow or composite action.
+
+    Returns
+    -------
+    tuple[list[Invocation], list[str]]
+        The invocations found, and the lines, jobs or file that could not be read.
+    """
+    if workflow["error"] is not None:
+        return [], [f"{workflow['path']}: {workflow['error']}"]
     invocations: list[Invocation] = []
     unreadable: list[str] = []
-    for workflow in files:
-        if workflow["error"] is not None:
-            unreadable.append(f"{workflow['path']}: {workflow['error']}")
-            continue
-        for place in places(workflow["parsed"]):
-            found, missed = _read_place(workflow["path"], place)
-            invocations.extend(found)
-            unreadable.extend(missed)
-    return GateLines(
-        _distinct(invocations), _distinct_text(unreadable), [], is_resolved=True
-    )
+    for place in places(workflow["parsed"]):
+        found, missed = _read_place(workflow["path"], place)
+        invocations.extend(found)
+        unreadable.extend(missed)
+    return invocations, unreadable
 
 
 def _read_place(path: str, place: Place) -> tuple[list[Invocation], list[str]]:
     """Read the steps of one job or action, once per matrix combination.
 
     A matrix computed by an expression cannot be filled in, so a job whose steps
-    name a gate tool is unreadable rather than skipped.
+    run Cargo or a gate tool is unreadable rather than skipped.
 
     Returns
     -------
@@ -380,13 +406,7 @@ def _read_place(path: str, place: Place) -> tuple[list[Invocation], list[str]]:
         The invocations found, and the lines or jobs that could not be read.
     """
     if place.combinations is None:
-        if _MATRIX_TOOL.search(repr(place.steps)):
-            reason = (
-                f"{path} ({place.label}): matrix is computed by an expression, "
-                "so its commands cannot be filled in"
-            )
-            return [], [reason]
-        return [], []
+        return [], _unexpandable(path, place)
     invocations: list[Invocation] = []
     unreadable: list[str] = []
     for combination in place.combinations:
@@ -401,6 +421,23 @@ def _read_place(path: str, place: Place) -> tuple[list[Invocation], list[str]]:
             )
             unreadable.extend(missed)
     return invocations, unreadable
+
+
+def _unexpandable(path: str, place: Place) -> list[str]:
+    """Return the unreadable entry for a job whose matrix is an expression, if any.
+
+    Returns
+    -------
+    list[str]
+        One entry when a step might run a gate tool, otherwise none.
+    """
+    if _MATRIX_TOOL.search(repr(place.steps)) is None:
+        return []
+    reason = (
+        f"{path} ({place.label}): matrix is computed by an expression, so its "
+        "commands cannot be filled in"
+    )
+    return [reason]
 
 
 def _read_step(

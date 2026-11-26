@@ -224,6 +224,39 @@ SCENARIOS: dict[str, dict[str, str]] = {
             "2>/dev/null),-p app,-p b)\n"
         ),
     },
+    "probe_branch_absent_in_one_reading": {
+        **checkout_for(),
+        "Makefile": (
+            ".PHONY: test\ntest:\n\tcargo test -p app -p c\n"
+            "\tcargo $(if $(shell cargo nextest --version 2>/dev/null),"
+            "test -p b,nextest run --workspace)\n"
+        ),
+    },
+    "probe_runner_only": {
+        **checkout_for(),
+        "Makefile": (
+            ".PHONY: test\ntest:\n\tcargo $(if $(shell cargo nextest --version "
+            "2>/dev/null),nextest run,test) --workspace\n"
+        ),
+    },
+    "cargo_subcommand_variable": checkout_for(
+        test=["cargo test -p app -p c", "cargo $$RUNNER -p b"]
+    ),
+    "ci_computed_matrix_command": checkout_for(
+        test=["cargo test -p app -p c"],
+        extra={
+            ".github/workflows/ci.yml": workflow(
+                "cargo ${{ matrix.subcommand }} -p b",
+                matrix=(
+                    "    strategy:\n"
+                    "      matrix: ${{ fromJson(needs.plan.outputs.m) }}\n"
+                ),
+            )
+        },
+    ),
+    "shell_if_false": checkout_for(
+        test=["cargo test -p app", "if false; then cargo test --workspace; fi"]
+    ),
     "make_value_after_option": checkout_for(
         test=["cargo test --workspace --color $(COLOR)"]
     ),

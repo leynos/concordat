@@ -39,11 +39,14 @@ condition is taken to hold on some run: the rule judges the commands a gate
 has, not the schedule they run on. A Makefile recipe inside an `ifeq` or
 similar block, and the commands of a prerequisite that only such a block adds,
 are indeterminate too, because whether they apply depends on Make state the
-audit does not evaluate. A probe `if` yields two readings of one line, and when
-they select differently for one tool (`-p a` against `-p b`) each is
-indeterminate: one run takes one branch, so their union covers nothing. Under
-`.ONESHELL` a recipe is one shell, so a `cd` on one line moves the lines after
-it.
+audit does not evaluate. A probe `if` yields two readings of one line, and one
+run takes one of them, so a line's commands count only when every reading
+selects alike (a probe that only picks the runner, `nextest run` or `test`,
+with the same flags). When the readings select differently for one tool (`-p a`
+against `-p b`), or one reading lacks the tool, each command is indeterminate.
+In a shell script, the branch of an `if false` is not run and its `else` is;
+any other condition is taken to hold on some run. Under `.ONESHELL` a recipe is
+one shell, so a `cd` on one line moves the lines after it.
 
 A tool the gate does not run is not required; the rule asks that a tool, once
 run, runs over everything.

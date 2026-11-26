@@ -528,6 +528,62 @@ class TestWorkflows:
         assert found == {("clippy", True, ()), ("test", False, ("app",))}
 
 
+class TestThirdReview:
+    """Behaviours a third review showed to be missing."""
+
+    def test_a_probe_branch_that_one_reading_lacks_is_unplaced(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`test -p b` against `nextest run --workspace` is decided by the probe."""
+        makefile = (
+            ".PHONY: test\ntest:\n\tcargo $(if $(shell cargo nextest --version "
+            "2>/dev/null),test -p b,nextest run --workspace)\n"
+        )
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert {i["tool"] for i in found} == {"test", "nextest"}
+        assert not any(i["resolved"] for i in found)
+
+    def test_a_cargo_subcommand_from_a_shell_variable_is_unreadable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cargo "$RUNNER" -p b` may be `cargo test -p b`."""
+        makefile = ".PHONY: test\ntest:\n\tcargo $$RUNNER -p b\n"
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["invocations"] == []
+        assert envelope["unreadable"]
+
+    def test_a_computed_matrix_running_cargo_is_unreadable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cargo ${{ matrix.subcommand }}` in a computed matrix may be a gate tool."""
+        text = (
+            "name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+            "    strategy:\n      matrix: ${{ fromJson(needs.plan.outputs.m) }}\n"
+            "    steps:\n      - run: cargo ${{ matrix.subcommand }} -p b\n"
+        )
+        envelope = _build(
+            tmp_path, _workspace_files(extra={".github/workflows/ci.yml": text})
+        )
+        assert any("matrix is computed" in entry for entry in envelope["unreadable"])
+
+    @pytest.mark.parametrize(
+        ("line", "tools"),
+        [
+            ("if false; then cargo test --workspace; fi", []),
+            ("if false; then cargo test; else cargo clippy; fi", ["clippy"]),
+            ("if true; then cargo test --workspace; fi", ["test"]),
+            ("if cargo test --workspace; then echo ok; fi", ["test"]),
+        ],
+    )
+    def test_a_known_false_shell_condition_skips_its_branch(
+        self, tmp_path: pathlib.Path, line: str, tools: list[str]
+    ) -> None:
+        """Only the constant false is known; the `else` branch of it runs."""
+        makefile = f".PHONY: test\ntest:\n\t{line}\n"
+        found = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert [i["tool"] for i in found] == tools
+
+
 class TestSecondReview:
     """Behaviours a second review showed to be missing."""
 

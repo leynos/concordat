@@ -67,6 +67,7 @@ _WRAPPER_STEM: typ.Final = re.compile(
 # leaving the root workspace.
 _ROOT_MANIFESTS: typ.Final = frozenset({"Cargo.toml", "./Cargo.toml"})
 _UNRESOLVED_WORD: typ.Final = (UNRESOLVED_MARK, SHELL_DOLLAR, "$")
+_HIDDEN_WHY: typ.Final = "a word the audit could not resolve may select packages"
 _INFORMATION_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 _SHELL_KEYWORDS: typ.Final = frozenset({
     "if",
@@ -260,7 +261,6 @@ def _build(
     """Return the invocation a tool's selection arguments describe."""
     cargo_arguments = _cargo_half(tool, arguments)
     packages, excludes, manifest = _selection(cargo_arguments)
-    has_flag = any(word in _WORKSPACE_FLAGS for word in cargo_arguments)
     hidden = _may_supply_separator(tool, arguments) or _hides_selection(cargo_arguments)
     source, command = where
     return {
@@ -268,15 +268,17 @@ def _build(
         "source": source,
         "command": command,
         "resolved": not hidden,
-        "why": "a word the audit could not resolve may select packages"
-        if hidden
-        else "",
-        "workspace_flag": has_flag,
+        "why": _HIDDEN_WHY if hidden else "",
+        "workspace_flag": any(word in _WORKSPACE_FLAGS for word in cargo_arguments),
         "packages": packages,
         "excludes": excludes,
-        "changes_directory": moved
-        or (manifest is not None and manifest not in _ROOT_MANIFESTS),
+        "changes_directory": moved or _names_another_manifest(manifest),
     }
+
+
+def _names_another_manifest(manifest: str | None) -> bool:
+    """Return whether a `--manifest-path` names a manifest other than the root one."""
+    return manifest is not None and manifest not in _ROOT_MANIFESTS
 
 
 def _wrapper(tool: str, where: tuple[str, str], *, moved: bool) -> Invocation:
@@ -341,6 +343,40 @@ def _without_keywords(words: list[str]) -> list[str]:
     return words[start:]
 
 
+_FALSE_CONDITIONS: typ.Final = frozenset({("false",), ("!", "true"), ("[", "!", "]")})
+
+
+def _runnable(segments: list[list[str]]) -> list[list[str]]:
+    """Return the simple commands of a line that can run.
+
+    `if false; then cargo test --workspace; fi` runs nothing, so its commands
+    are not coverage. Only a condition that is the constant `false` is known;
+    any other condition is taken to hold on some run, as a step's `if` is, and
+    its `else` branch runs when the `if` is false.
+
+    Returns
+    -------
+    list[list[str]]
+        The segments outside every `if false` branch.
+    """
+    kept: list[list[str]] = []
+    depth = 0  # how many `if` blocks that cannot run enclose the segment
+    for words in segments:
+        head = words[0].lstrip("@-+") if words else ""
+        if head == "if" and (depth or tuple(words[1:]) in _FALSE_CONDITIONS):
+            depth += 1
+        elif head == "fi":
+            depth = max(0, depth - 1)
+        elif head == "else" and depth == 1:
+            # The `else` of an `if false` is the branch that runs, and the
+            # command that follows the keyword on the same segment is in it.
+            depth = 0
+            kept.append(words[1:])
+        elif not depth:
+            kept.append(words)
+    return kept
+
+
 def leaves_directory(segments: list[list[str]]) -> bool:
     """Return whether a lexed line holds a `cd` that leaves the root directory.
 
@@ -377,7 +413,7 @@ def invocations_in(
         `cargo test`, Whitaker, or a wrapper script named for one of them.
     """
     found: list[Invocation] = []
-    for raw_words in segments:
+    for raw_words in _runnable(segments):
         words = _without_keywords(raw_words)
         start = command_start(words)
         if words[start : start + 1] == ["cd"]:

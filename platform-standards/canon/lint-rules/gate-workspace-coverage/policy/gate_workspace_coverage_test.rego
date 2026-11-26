@@ -305,6 +305,31 @@ test_another_directory_or_manifest_is_indeterminate if {
 	{[f.rule_id, f.verdict] | some f in findings(data.fixtures.other_manifest)} == {["EN-001", "indeterminate"]}
 }
 
+test_a_probe_branch_that_one_reading_lacks_leaves_coverage_to_the_probe if {
+	fs := findings(data.fixtures.probe_branch_absent_in_one_reading)
+	{[f.rule_id, f.verdict] | some f in fs} == {["EN-001", "indeterminate"]}
+}
+
+test_a_probe_that_only_picks_the_runner_keeps_both_readings_placed if {
+	count(findings(data.fixtures.probe_runner_only)) == 0
+}
+
+test_a_cargo_subcommand_from_a_variable_is_unreadable_whatever_follows if {
+	fs := findings(data.fixtures.cargo_subcommand_variable)
+	{f.rule_id | some f in fs} == {"EN-001"}
+}
+
+test_a_computed_matrix_that_runs_cargo_is_unreadable if {
+	fs := findings(data.fixtures.ci_computed_matrix_command)
+	{f.rule_id | some f in fs} == {"EN-001"}
+}
+
+test_a_command_under_a_false_shell_condition_does_not_cover if {
+	some f in findings(data.fixtures.shell_if_false)
+	f.rule_id == "GC-001"
+	contains(f.msg, "out: b, c")
+}
+
 test_a_delegated_make_alone_is_reported_without_any_known_command if {
 	fs := findings(data.fixtures.make_delegation_alone)
 	{[f.rule_id, f.verdict] | some f in fs} == {["EN-001", "indeterminate"]}
