@@ -55,6 +55,22 @@ def test_an_unresolved_option_value_keeps_the_reference_in_the_signature(
     assert not _signature(left).is_resolved
 
 
+def test_an_unresolved_global_option_value_is_not_resolved() -> None:
+    """`cargo --config $(CFG) test` may differ from any other, so it is unresolved."""
+    assert not _signature("cargo --config $(CFG) test").is_resolved
+    assert not _signature("cargo +$(TOOLCHAIN) test").is_resolved
+
+
+def test_the_runner_and_the_named_test_targets_are_read() -> None:
+    """A pass records its runner and a run records the `--test` names it limits to."""
+    invocation = read_invocation("cargo test --test ui --test=other -p app")
+    assert invocation is not None
+    assert (invocation.runner, invocation.test_targets) == ("cargo", ("other", "ui"))
+    nextest = read_invocation("cargo nextest run -E 'test(x)'")
+    assert nextest is not None
+    assert (nextest.runner, nextest.test_targets) == ("nextest", ())
+
+
 @pytest.mark.parametrize(
     ("command", "is_filtered"),
     [

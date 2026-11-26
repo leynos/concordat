@@ -258,11 +258,10 @@ timed out. A preparation warms a pass only when both build the same thing.
 For every repository whose preparation is declared in the Makefile, a named
 in-suite test or a gate (a repository whose every build a nextest setup script
 covers is left to the script, which nextest runs before each nextest pass; a
-plain `cargo test` pass never runs it, and the reader does not yet tell the two
-runners apart there, so such a repository is not judged pass by pass: a stated
-limit), the reader walks the `test` target in Make's order and judges each
-*pass*: an unfiltered `cargo nextest run`, `cargo-nextest nextest run` or
-`cargo test`.
+plain `cargo test` pass never runs it, so each pass records its runner and a
+`cargo test` pass that only a script prepares is reported), the reader walks the
+`test` target in Make's order and judges each *pass*: an unfiltered
+`cargo nextest run`, `cargo-nextest nextest run` or `cargo test`.
 
 - **Signature.** A pass and a preparation are the same build when their package
   selection (`-p`, `--workspace`, `--exclude`, `--manifest-path`), features
@@ -286,9 +285,13 @@ limit), the reader walks the `test` target in Make's order and judges each
   reader cannot know which tests its filter leaves. A run that selects only
   `--lib`, `--doc`, `--bin`, `--example` or `--bench` compiles what it runs and
   never reaches the integration tests that hold the nested builds, so it counts
-  as a compile, not as a real run. An outside run of an in-suite preparation
-  test counts for the pass whose flags it carried and for no other. A help
-  request (`--help`, `-h`) builds nothing and prepares nothing.
+  as a compile, not as a real run. A run limited to `--test NAME` warms only
+  the nested builds in the test files of those names (`tests/NAME.rs` or
+  `tests/NAME/`): the pass records the names, and a trybuild or macrotest build
+  in another test file is reported as still cold. A run limited by a filter
+  expression or a test name rules no file out. An outside run of an in-suite
+  preparation test counts for the pass whose flags it carried and for no other.
+  A help request (`--help`, `-h`) builds nothing and prepares nothing.
 - **Order.** Make orders a rule's prerequisites before its recipe and does not
   order sibling prerequisites, so a pass inside one prerequisite sees only what
   ran before the rule. `$(MAKE) goal [VAR=value]` is followed with the override

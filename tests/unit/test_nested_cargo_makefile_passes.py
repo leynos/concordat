@@ -344,6 +344,37 @@ def test_a_test_target_run_warms_the_nested_builds_it_holds(
     assert statuses(tmp_path) == [(3, "warmed")]
 
 
+def test_a_pass_records_the_test_targets_its_warming_runs_were_limited_to(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`--test other` warms `other` only; the policy compares it with the build."""
+    checkout(
+        tmp_path,
+        "test:\n"
+        "\tcargo test --test other --all-features\n"
+        "\tcargo test --all-features\n",
+    )
+    [fact] = makefile_passes(tmp_path)
+    assert (fact["status"], fact["runner"], fact["warmed_tests"]) == (
+        "warmed",
+        "cargo",
+        ["other"],
+    )
+
+
+def test_an_unrestricted_warming_run_leaves_no_target_ruled_out(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A run limited by a name filter, not a target, may have run any test."""
+    checkout(
+        tmp_path,
+        "test:\n\tcargo test --test other --all-features\n"
+        "\tcargo test --all-features prepare\n\tcargo test --all-features\n",
+    )
+    [fact] = makefile_passes(tmp_path)
+    assert fact["warmed_tests"] == []
+
+
 def test_a_help_request_prepares_nothing(tmp_path: pathlib.Path) -> None:
     """`cargo build --help` compiles nothing, so the pass is still unprepared."""
     checkout(tmp_path, "test:\n\tcargo build --help\n\tcargo test --all-features\n")

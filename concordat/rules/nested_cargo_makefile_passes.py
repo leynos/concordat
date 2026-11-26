@@ -100,6 +100,15 @@ class PassFact(typ.TypedDict):
         How many preparations of any signature ran before the pass.
     reason:
         For `indeterminate`, why; otherwise empty.
+    packages:
+        The `-p` selections of the pass.
+    runner:
+        `cargo` or `nextest`: a nextest setup script runs before a nextest pass
+        and never before a plain `cargo test`.
+    warmed_tests:
+        For `warmed`, the integration-test targets (`--test NAME`) the warming
+        runs were restricted to; empty when a warming run was not restricted to
+        named targets.
     """
 
     path: str
@@ -109,6 +118,8 @@ class PassFact(typ.TypedDict):
     visible: int
     reason: str
     packages: typ.NotRequired[list[str]]
+    runner: typ.NotRequired[str]
+    warmed_tests: typ.NotRequired[list[str]]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -117,6 +128,7 @@ class Prepared:
 
     signature: Signature
     is_warmed: bool
+    targets: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -134,6 +146,8 @@ class _Verdict(typ.NamedTuple):
     visible: int
     reason: str = ""
     packages: tuple[str, ...] = ()
+    runner: str = "nextest"
+    warmed_tests: tuple[str, ...] = ()
 
 
 _UNRESOLVED_WORD: typ.Final = (
@@ -164,6 +178,23 @@ def _status(signature: Signature, seen: tuple[Prepared, ...]) -> tuple[str, str]
     if _is_unsure(signature, seen):
         return INDETERMINATE, _UNREADABLE_SIGNATURE
     return UNPREPARED, ""
+
+
+def _warmed_tests(signature: Signature, seen: tuple[Prepared, ...]) -> tuple[str, ...]:
+    """Return the test targets the warming runs of *signature* were limited to.
+
+    Empty when any warming run was not restricted to named targets: it may have
+    run every test, so no target is ruled out.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The sorted target names, or none when no target is ruled out.
+    """
+    runs = [i.targets for i in seen if i.signature == signature and i.is_warmed]
+    if not all(runs):
+        return ()
+    return tuple(sorted({name for targets in runs for name in targets}))
 
 
 def _is_unsure(signature: Signature, seen: tuple[Prepared, ...]) -> bool:
@@ -461,6 +492,8 @@ class _Walk:
             "visible": verdict.visible,
             "reason": verdict.reason,
             "packages": list(verdict.packages),
+            "runner": verdict.runner,
+            "warmed_tests": list(verdict.warmed_tests),
         }
         if fact not in self.facts:
             self.facts.append(fact)
@@ -637,20 +670,35 @@ class _Walk:
             # A filtered run warms the nested builds only when it reaches the
             # integration tests that hold them; `--lib` or `--doc` compile
             # what they run and leave those builds cold.
-            return [Prepared(invocation.signature, invocation.warms_nested)]
-        self._judge(recipe, text, invocation.signature, seen)
+            return [
+                Prepared(
+                    invocation.signature,
+                    invocation.warms_nested,
+                    invocation.test_targets,
+                )
+            ]
+        self._judge(recipe, text, invocation, seen)
         return []
 
     def _judge(
         self,
         recipe: MakeRecipe,
         text: str,
-        signature: Signature,
+        invocation: Invocation,
         seen: tuple[Prepared, ...],
     ) -> None:
-        """Record what, among *seen*, prepared a pass of this signature."""
+        """Record what, among *seen*, prepared a pass of this invocation."""
+        signature = invocation.signature
         status, reason = _status(signature, seen)
-        verdict = _Verdict(status, len(seen), reason, signature.packages)
+        tests = _warmed_tests(signature, seen) if status == WARMED else ()
+        verdict = _Verdict(
+            status,
+            len(seen),
+            reason,
+            signature.packages,
+            invocation.runner,
+            tests,
+        )
         self._fact(recipe, text, verdict)
 
 

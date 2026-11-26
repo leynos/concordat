@@ -233,12 +233,20 @@ class Invocation:
         Whether a filtered run reaches the integration tests where nested builds
         live. A run that selects only `--lib`, `--doc`, `--bin`, `--example` or
         `--bench` compiles what it runs and leaves those builds cold.
+    runner:
+        `cargo` or `nextest`: a nextest setup script runs before a nextest pass
+        and never before a plain `cargo test`.
+    test_targets:
+        The integration-test targets a `--test` selection names, sorted; empty
+        when the run is not restricted to named targets.
     """
 
     action: Action
     signature: Signature
     is_filtered: bool
     warms_nested: bool = True
+    runner: str = "nextest"
+    test_targets: tuple[str, ...] = ()
 
 
 def _build_assignment(word: str) -> tuple[str, str] | None:
@@ -292,6 +300,7 @@ class _Reading:
         self.opaque: list[str] = []
         self.options = list(options)
         self.selectors: list[str] = []
+        self.tests: list[str] = []
         self.has_no_run = False
         self.is_help = False
         self.is_filtered = False
@@ -302,6 +311,7 @@ class _Reading:
         environment = _environment(assignments)
         opaque = list(self.opaque)
         opaque.extend(value for _name, value in environment if is_opaque(value))
+        opaque.extend(option for option in self.options if is_opaque(option))
         return Signature(
             packages=tuple(sorted(self.packages)),
             features=tuple(sorted(self.features)),
@@ -317,6 +327,11 @@ class _Reading:
     def warms_nested(self) -> bool:
         """Whether the run reaches integration tests, where nested builds live."""
         return not (self.selectors and set(self.selectors) <= _UNIT_TARGETS)
+
+    @property
+    def test_targets(self) -> tuple[str, ...]:
+        """The integration-test targets named by `--test`, sorted."""
+        return tuple(sorted(set(self.tests)))
 
     def read(self, arguments: list[str]) -> None:
         """Read every option of the command, up to a `--`."""
@@ -400,10 +415,12 @@ class _Reading:
         if self.runner == "cargo":
             self._cargo_profile(name, value)
 
-    def _selector(self, name: str, _value: str | None) -> None:
+    def _selector(self, name: str, value: str | None) -> None:
         """Restrict the run to a test target or a filter set."""
         self.is_filtered = True
         self.selectors.append(name)
+        if name == "--test" and value is not None:
+            self.tests.append(value)
 
     def _no_run(self, _name: str, _value: str | None) -> None:
         """Note that the command compiles without running."""
@@ -496,6 +513,8 @@ def read_invocation(text: str) -> Invocation | None:
         signature=reading.signature(assignments),
         is_filtered=reading.is_filtered and action is Action.RUN,
         warms_nested=reading.warms_nested,
+        runner=command.runner,
+        test_targets=reading.test_targets,
     )
 
 

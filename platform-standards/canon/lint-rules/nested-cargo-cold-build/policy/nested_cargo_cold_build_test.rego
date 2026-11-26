@@ -317,6 +317,64 @@ test_an_unreadable_pass_is_reported_without_a_declared_preparation if {
 	{[f.rule_id, f.verdict] | some f in findings(fixture)} == {["EN-001", "indeterminate"]}
 }
 
+# A plain `cargo test` pass never runs a nextest setup script.
+test_a_cargo_pass_is_not_covered_by_a_setup_script if {
+	fixture := object.union(data.fixtures.pass_setup_script_covered, {"passes": [{
+		"path": "Makefile", "line": 12, "command": "cargo test", "status": "unprepared",
+		"visible": 0, "reason": "", "runner": "cargo",
+	}]})
+	{[f.rule_id, f.line] | some f in findings(fixture)} == {["NC-010", 12]}
+}
+
+test_a_nextest_pass_is_still_covered_by_a_setup_script if {
+	fixture := object.union(data.fixtures.pass_setup_script_covered, {"passes": [{
+		"path": "Makefile", "line": 12, "command": "cargo nextest run", "status": "unprepared",
+		"visible": 0, "reason": "", "runner": "nextest",
+	}]})
+	count(findings(fixture)) == 0
+}
+
+# A warming run limited to `--test other` leaves the trybuild build in tests/ui.rs cold.
+test_a_warming_run_of_another_test_target_leaves_the_build_cold if {
+	fixture := object.union(data.fixtures.pass_compiled_trybuild, {"passes": [{
+		"path": "Makefile", "line": 12, "command": "cargo test", "status": "warmed",
+		"visible": 1, "reason": "", "runner": "cargo", "warmed_tests": ["other"],
+	}]})
+	{[f.rule_id, f.line] | some f in findings(fixture)} == {["NC-010", 12]}
+}
+
+test_a_warming_run_of_the_owning_test_target_is_enough if {
+	fixture := object.union(data.fixtures.pass_compiled_trybuild, {"passes": [{
+		"path": "Makefile", "line": 12, "command": "cargo test", "status": "warmed",
+		"visible": 1, "reason": "", "runner": "cargo", "warmed_tests": ["ui"],
+	}]})
+	count(findings(fixture)) == 0
+}
+
+test_a_warming_run_that_named_no_target_is_enough if {
+	fixture := object.union(data.fixtures.pass_compiled_trybuild, {"passes": [{
+		"path": "Makefile", "line": 12, "command": "cargo test", "status": "warmed",
+		"visible": 1, "reason": "", "warmed_tests": [],
+	}]})
+	count(findings(fixture)) == 0
+}
+
+# The in-suite-only advice is given only for a pass that runs the build the
+# preparation covers.
+test_the_in_suite_only_advice_is_scoped_to_the_pass_packages if {
+	fixture := object.union(data.fixtures.pass_in_suite_only, {
+		"builds": [{
+			"path": "crates/other/tests/ui.rs", "line": 9, "kind": "trybuild", "binary": "ui",
+			"crate": "crates/other", "package": "other", "prepared_by": ["preparation-test"],
+		}],
+		"passes": [{
+			"path": "Makefile", "line": 3, "command": "cargo test -p core", "status": "unprepared",
+			"visible": 0, "reason": "", "packages": ["core"],
+		}],
+	})
+	count(findings(fixture)) == 0
+}
+
 test_a_pass_scoped_to_the_owning_package_still_needs_a_real_run if {
 	{[f.rule_id, f.line] | some f in findings(data.fixtures.pass_scoped_to_owning_package)} == {["NC-010", 12]}
 }

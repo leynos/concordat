@@ -195,15 +195,26 @@ deny contains finding("NC-010", severity, "noncompliant", path, line, msg) if {
 # every build a nextest setup script covers is left alone (the script runs
 # before each nextest pass), and one with no declared preparation is already
 # reported once per file above.
-_declared(build) if {
+_pass_runner(pass) := object.get(pass, "runner", "nextest")
+
+# A nextest setup script runs before a nextest pass and never before a plain
+# `cargo test`, so a build only a script prepares is declared for a nextest pass
+# and left to the script, but for a cargo pass it is not prepared at all.
+_declared_for(pass, build) if {
 	_well_formed_build(build)
 	count(object.get(build, "prepared_by", [])) > 0
 	not "setup-script" in build.prepared_by
 }
 
-_relies_on_declared_preparation if {
+_declared_for(pass, build) if {
+	_well_formed_build(build)
+	count(object.get(build, "prepared_by", [])) > 0
+	_pass_runner(pass) == "cargo"
+}
+
+_relies_on_declared_preparation(pass) if {
 	some build in input.builds
-	_declared(build)
+	_declared_for(pass, build)
 }
 
 # The families whose nested builds `cargo test --no-run` leaves cold: trybuild
@@ -227,26 +238,44 @@ _pass_covers(_, build) if not is_string(object.get(build, "package", null))
 
 _pass_has_nested_family(pass) if {
 	some build in input.builds
-	_declared(build)
+	_declared_for(pass, build)
 	_nested_family(build)
 	_pass_covers(pass, build)
 }
 
 # A named in-suite preparation test or gate runs under the harness's own
-# timeout, so it is advice rather than a blocker whatever the severity says.
-_has_in_suite_preparation if {
+# timeout, so it is advice rather than a blocker whatever the severity says. The
+# pass must run a build that preparation covers.
+_has_in_suite_preparation(pass) if {
 	some build in input.builds
-	_declared(build)
+	_declared_for(pass, build)
+	_pass_covers(pass, build)
 	some how in build.prepared_by
 	how in {"preparation-test", "gate-call"}
 }
+
+# The test target a nested build lives in: `tests/ui.rs` and `tests/ui/main.rs`
+# are both target `ui`. A build outside `tests/` has no named target.
+_test_target(build) := name if {
+	matches := regex.find_all_string_submatch_n(`(?:^|/)tests/([^/]+?)(?:\.rs|/.*)$`, build.path, 1)
+	name := matches[0][1]
+}
+
+# A warming run restricted to named test targets (`--test NAME`) warms only the
+# nested builds those targets hold. A run that named none, or a build whose
+# target is unknown, is never guessed away.
+_pass_warms(pass, _) if count(object.get(pass, "warmed_tests", [])) == 0
+
+_pass_warms(pass, build) if not _test_target(build)
+
+_pass_warms(pass, build) if _test_target(build) in object.get(pass, "warmed_tests", [])
 
 _passes := object.get(input, "passes", [])
 
 _pass_is_judged(pass) if {
 	envelope_ok
 	_well_formed_pass(pass)
-	_relies_on_declared_preparation
+	_relies_on_declared_preparation(pass)
 	not is_exempt(pass.path)
 }
 
@@ -254,7 +283,7 @@ _pass_is_judged(pass) if {
 # packages (`-p core`) never runs another crate's nested build.
 _pass_runs_a_declared_build(pass) if {
 	some build in input.builds
-	_declared(build)
+	_declared_for(pass, build)
 	_pass_covers(pass, build)
 }
 
@@ -283,10 +312,46 @@ deny contains finding("NC-010", "warning", "noncompliant", pass.path, pass.line,
 	_pass_is_judged(pass)
 	pass.status == "unprepared"
 	pass.visible == 0
-	_has_in_suite_preparation
+	_has_in_suite_preparation(pass)
 	msg := sprintf(
 		"%s:%d runs the tests as `%s`, and the only preparation is a named test or gate inside the suite, which runs under the harness's own timeout. A loaded host can exhaust that bound while it compiles. Run the preparation before the timed run with this pass's flags, outside any test deadline (rstest-bdd's `prepare-nested-fixtures` target)",
 		[pass.path, pass.line, object.get(pass, "command", "the test runner")],
+	)
+}
+
+# A plain `cargo test` pass never runs a nextest setup script, so a build only a
+# script prepares is cold inside it.
+deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, msg) if {
+	some pass in _passes
+	_pass_is_judged(pass)
+	_pass_runner(pass) == "cargo"
+	pass.status == "unprepared"
+	pass.visible == 0
+	not _has_in_suite_preparation(pass)
+	some build in input.builds
+	_well_formed_build(build)
+	"setup-script" in build.prepared_by
+	_pass_covers(pass, build)
+	msg := sprintf(
+		"%s:%d runs the tests as `%s`, a plain `cargo test`, and the only preparation of its nested builds is a nextest setup script, which nextest runs before its own passes and `cargo test` never does. Prepare the build before this pass in the Makefile, with this pass's flags, outside any test deadline",
+		[pass.path, pass.line, object.get(pass, "command", "the test runner")],
+	)
+}
+
+# A warming run limited to named test targets (`--test NAME`) leaves the nested
+# builds of every other test file cold.
+deny contains finding("NC-010", severity, "noncompliant", pass.path, pass.line, msg) if {
+	some pass in _passes
+	_pass_is_judged(pass)
+	pass.status == "warmed"
+	some build in input.builds
+	_declared_for(pass, build)
+	_nested_family(build)
+	_pass_covers(pass, build)
+	not _pass_warms(pass, build)
+	msg := sprintf(
+		"%s:%d runs the tests as `%s`. The runs before it that warm trybuild or macrotest are limited to the test targets %v (`--test`), and the nested build at %s:%d lives in another test file, so it stays cold inside the timed run. Run that test target for real before the timed pass, with the same flags, as https://github.com/leynos/whitaker/pull/669 does",
+		[pass.path, pass.line, object.get(pass, "command", "the test runner"), object.get(pass, "warmed_tests", []), build.path, build.line],
 	)
 }
 
