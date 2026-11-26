@@ -688,6 +688,12 @@ class _Walk:
         self._judge(recipe, text, invocation, seen)
         return []
 
+    def _is_open(self, status: str, tests: tuple[str, ...]) -> bool:
+        """Return whether an unread implicit recipe may change this verdict."""
+        if not self.uncertain:
+            return False
+        return status in {UNPREPARED, COMPILED} or bool(tests)
+
     def _judge(
         self,
         recipe: MakeRecipe,
@@ -701,7 +707,7 @@ class _Walk:
         tests = _warmed_tests(signature, seen) if status == WARMED else ()
         # An unread implicit recipe may have warmed what the pass would find
         # cold: only a pass that is warmed for every test is certain.
-        if self.uncertain and (status in {UNPREPARED, COMPILED} or tests):
+        if self._is_open(status, tests):
             status, reason, tests = INDETERMINATE, _IMPLICIT_REASON, ()
         verdict = _Verdict(
             status,
