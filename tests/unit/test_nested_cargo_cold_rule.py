@@ -321,6 +321,36 @@ def test_rstest_bdd_at_916_has_no_cold_build_finding(tmp_path: pathlib.Path) -> 
     assert result.exit_code == 0
 
 
+def test_a_repository_without_a_cargo_manifest_has_nothing_to_judge(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A Python or uv-only repository owns no Rust, so the rule reads nothing.
+
+    Its Makefile's `test` recipe is a Python gate whose shape the reader cannot
+    place, which used to read as indeterminate for every such repository.
+    """
+    origin(tmp_path, "https://github.com/leynos/example-python.git")
+    put(
+        tmp_path,
+        "Makefile",
+        ".ONESHELL:\ntest:\n\tuv run pytest\n",
+    )
+    put(tmp_path, "tests/test_example.py", "def test_it():\n    assert True\n")
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert result.findings == ()
+    assert result.exit_code == 0
+
+
+def test_a_manifest_that_cannot_be_read_does_not_make_a_repository_non_rust(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An unreadable Cargo.toml is a fact the reader could not establish."""
+    origin(tmp_path, "https://github.com/leynos/example-rust.git")
+    put(tmp_path, "Cargo.toml", "[package\nname = ")
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert {f.rule_id for f in result.findings} == {"EN-001"}
+
+
 def test_an_ordinary_function_named_like_a_preparation_test_prepares_nothing(
     tmp_path: pathlib.Path,
 ) -> None:

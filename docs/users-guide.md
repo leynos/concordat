@@ -1567,8 +1567,8 @@ package, a bare command selects the root package alone; `default-members` and a
 
 The gate is the Makefile's `lint` and `test` targets with their prerequisites
 and every workflow and composite-action `run` step, with each matrix entry read
-as a command. The rule ships at `warning` severity; the `severity` parameter
-raises it to `error`. See the
+as a command. GC-001 ships at `error` severity (the `severity` parameter) and
+EN-001 at `warning` (the `indeterminate_severity` parameter). See the
 [rule reference](../platform-standards/canon/lint-rules/gate-workspace-coverage/README.md).
 
 ### Auditing Whitaker exclusions

@@ -41,6 +41,7 @@ from .nested_cargo_spawns import (
     collect_rust_evidence,
     fixture_directories,
 )
+from .rust_sources import has_rust_sources
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -84,6 +85,47 @@ class NestedCargoColdEnvelope(typ.TypedDict):
     problems: list[str]
 
 
+def _owns_no_rust(
+    checkout: pathlib.Path,
+    manifests: typ.Mapping[pathlib.Path, object],
+    problems: list[str],
+) -> bool:
+    """Return whether the checkout has no Cargo manifest and no Rust source.
+
+    A manifest that exists but cannot be read leaves a problem, so an unreadable
+    tree never turns into a repository without Rust.
+
+    Returns
+    -------
+    bool
+        True when there is no manifest, no problem and no `.rs` file.
+    """
+    if manifests or problems:
+        return False
+    return not has_rust_sources(checkout)
+
+
+def _empty_envelope(checkout: pathlib.Path) -> NestedCargoColdEnvelope:
+    """Return the envelope of a repository with no Rust: no fact, so no finding.
+
+    Its Makefile's `test` recipe (a Python or uv gate) is not this rule's business.
+
+    Returns
+    -------
+    NestedCargoColdEnvelope
+        The envelope with no spawn, build, pass or problem fact.
+    """
+    return {
+        "schema_version": ENVELOPE_SCHEMA_VERSION,
+        "kind": ENVELOPE_KIND,
+        "repository": {"path": ".", "name": origin_slug(checkout)},
+        "spawns": [],
+        "builds": [],
+        "passes": [],
+        "problems": [],
+    }
+
+
 def build_nested_cargo_cold_envelope(
     checkout: pathlib.Path, parameters: typ.Mapping[str, object] | None = None
 ) -> NestedCargoColdEnvelope:
@@ -105,6 +147,8 @@ def build_nested_cargo_cold_envelope(
     """
     problems: list[str] = []
     manifests = load_manifests(checkout, problems)
+    if _owns_no_rust(checkout, manifests, problems):
+        return _empty_envelope(checkout)
     evidence = collect_rust_evidence(checkout, manifests, problems, cold_build=True)
     fixtures = fixture_directories(checkout, manifests)
     # The sources are read a second time rather than shared with the spawn
