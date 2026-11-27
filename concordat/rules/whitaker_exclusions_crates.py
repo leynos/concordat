@@ -82,41 +82,55 @@ def _is_fixture(relative: str) -> bool:
     return any(part in RUST_PRUNED_DIRECTORIES for part in parts)
 
 
+def _target_name(entry: pathlib.Path) -> str | None:
+    """Return the crate name Cargo gives a file or directory in a target folder."""
+    if entry.is_file() and entry.suffix == ".rs":
+        return entry.stem
+    if entry.is_dir() and (entry / "main.rs").is_file():
+        return entry.name
+    return None
+
+
 def _discovered_targets(directory: pathlib.Path) -> set[str]:
     """Return the crate names Cargo auto-discovers under a package directory."""
-    names: set[str] = set()
-    for sub in _TARGET_DIRECTORIES:
-        folder = directory / sub
-        if not folder.is_dir():
-            continue
-        for entry in folder.iterdir():
-            if entry.is_file() and entry.suffix == ".rs":
-                names.add(entry.stem)
-            elif entry.is_dir() and (entry / "main.rs").is_file():
-                names.add(entry.name)
-    return names
+    folders = [directory / sub for sub in _TARGET_DIRECTORIES]
+    found = (
+        _target_name(entry)
+        for folder in folders
+        if folder.is_dir()
+        for entry in folder.iterdir()
+    )
+    return {name for name in found if name is not None}
+
+
+def _strings_named(values: object) -> set[str]:
+    """Return the `name` strings of a table, or of each table in a list."""
+    tables = values if isinstance(values, list) else [values]
+    return {n for item in tables if isinstance(n := table(item).get("name"), str)}
+
+
+def _alias_names(manifest: dict[str, object]) -> set[str]:
+    """Return the path-dependency aliases of a manifest.
+
+    Only a path dependency is a crate of this repository; a registry crate is
+    not compiled under the workspace's lints.
+    """
+    return {
+        alias
+        for name in _DEPENDENCY_TABLES
+        for alias, spec in table(manifest.get(name)).items()
+        if "path" in table(spec)
+    }
 
 
 def _declared_names(manifest: dict[str, object]) -> set[str]:
     """Return the names a manifest declares: package, lib, targets, local aliases."""
-    names: set[str] = set()
-    for section in ("package", "lib"):
-        declared = table(manifest.get(section)).get("name")
-        if isinstance(declared, str):
-            names.add(declared)
+    names = _strings_named(manifest.get("package")) | _strings_named(
+        manifest.get("lib")
+    )
     for kind in _TARGET_TABLES:
-        targets = manifest.get(kind)
-        for target in targets if isinstance(targets, list) else []:
-            declared = table(target).get("name")
-            if isinstance(declared, str):
-                names.add(declared)
-    for dependencies in (table(manifest.get(n)) for n in _DEPENDENCY_TABLES):
-        # Only a path dependency is a crate of this repository; a registry
-        # crate is not compiled under the workspace's lints.
-        names.update(
-            alias for alias, spec in dependencies.items() if "path" in table(spec)
-        )
-    return names
+        names |= _strings_named(manifest.get(kind))
+    return names | _alias_names(manifest)
 
 
 def crate_kinds(reader: Reader) -> dict[str, str]:

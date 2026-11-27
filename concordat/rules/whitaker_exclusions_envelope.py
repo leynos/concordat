@@ -52,6 +52,7 @@ DYLINT_CONFIG: typ.Final = "dylint.toml"
 OPERATION_READ_DYLINT: typ.Final = "read-dylint-config"
 OPERATION_SCAN_DYLINT: typ.Final = "scan-dylint-configs"
 UNRESOLVED: typ.Final = "unknown"
+EXCLUSION_PREFIX: typ.Final = "excluded_"
 WHOLE_CRATE_KEY: typ.Final = "excluded_crates"
 PATH_KEY: typ.Final = "excluded_paths"
 
@@ -127,14 +128,18 @@ def _decode(
 
 def _exclusion_keys(
     parsed: dict[str, object], prefix: str = ""
-) -> typ.Iterator[tuple[str, str, object]]:
-    """Yield `(table, key, value)` for every `excluded_*` key in a document."""
+) -> list[tuple[str, str, object]]:
+    """Return `(table, key, value)` for every `excluded_*` key in a document."""
+    found = [
+        (prefix, key, value)
+        for key, value in parsed.items()
+        if key.startswith(EXCLUSION_PREFIX)
+    ]
     for key, value in parsed.items():
-        if key.startswith("excluded_"):
-            yield prefix, key, value
-        elif isinstance(value, dict):
+        if isinstance(value, dict) and not key.startswith(EXCLUSION_PREFIX):
             nested = f"{prefix}.{key}" if prefix else key
-            yield from _exclusion_keys(typ.cast("dict[str, object]", value), nested)
+            found.extend(_exclusion_keys(typ.cast("dict[str, object]", value), nested))
+    return found
 
 
 def _kind(key: str) -> str:
@@ -142,40 +147,80 @@ def _kind(key: str) -> str:
     return {WHOLE_CRATE_KEY: "crates", PATH_KEY: "paths"}.get(key, "other")
 
 
+class _Key(typ.NamedTuple):
+    """An `excluded_*` key as the parser found it, and the file it is in."""
+
+    file: str
+    table: str
+    key: str
+    value: object
+
+
+def _entries(key: _Key, kinds: dict[str, str]) -> list[Entry]:
+    """Return the names an exclusion lists, each with what it resolves to.
+
+    Only a whole-crate exclusion names crates, so other kinds stay unresolved.
+    """
+    is_whole_crate = _kind(key.key) == "crates"
+    return [
+        {
+            "name": name,
+            "resolved": (
+                kinds.get(normalised(name), UNRESOLVED)
+                if is_whole_crate
+                else UNRESOLVED
+            ),
+        }
+        for name in strings(key.value)
+    ]
+
+
 def _exclusion(
-    relative: str,
-    found: tuple[str, str, object],
-    located: dict[tuple[str, str], Located],
+    key: _Key,
+    place: Located | None,
     kinds: dict[str, str],
     unreadable: list[str],
 ) -> Exclusion:
     """Return the facts of one exclusion key."""
-    table_name, key, value = found
-    place = located.get((table_name, key))
-    names = strings(value)
-    if not isinstance(value, list) or len(names) != len(value):
+    names = strings(key.value)
+    if not isinstance(key.value, list) or len(names) != len(key.value):
         unreadable.append(
-            f"{relative}: [{table_name}] {key} is not a list of strings, so its "
-            "entries cannot be read"
+            f"{key.file}: [{key.table}] {key.key} is not a list of strings, so "
+            "its entries cannot be read"
         )
-    is_whole_crate = _kind(key) == "crates"
     return {
-        "file": relative,
-        "table": table_name,
-        "key": key,
-        "kind": _kind(key),
+        "file": key.file,
+        "table": key.table,
+        "key": key.key,
+        "kind": _kind(key.key),
         "line": place.line if place else None,
         "has_reason": bool(place and place.has_reason),
-        "entries": [
-            {
-                "name": name,
-                "resolved": kinds.get(normalised(name), UNRESOLVED)
-                if is_whole_crate
-                else UNRESOLVED,
-            }
-            for name in names
-        ],
+        "entries": _entries(key, kinds),
     }
+
+
+class _Config(typ.NamedTuple):
+    """A decoded `dylint.toml`: its path, its text and its exclusion keys."""
+
+    file: str
+    text: str
+    keys: list[_Key]
+
+
+def _configs(
+    checkout: pathlib.Path, root: pathlib.Path, unreadable: list[str]
+) -> list[_Config]:
+    """Return every readable `dylint.toml` that holds an exclusion key."""
+    found: list[_Config] = []
+    for relative in _dylint_files(checkout):
+        decoded = _decode(checkout, root, relative, unreadable)
+        if decoded is None:
+            continue
+        text, parsed = decoded
+        keys = [_Key(relative, *item) for item in _exclusion_keys(parsed)]
+        if keys:
+            found.append(_Config(relative, text, keys))
+    return found
 
 
 def build_whitaker_exclusions_envelope(
@@ -204,27 +249,17 @@ def build_whitaker_exclusions_envelope(
     root = resolved_root(checkout)
     reader = Reader(checkout, root)
     unreadable: list[str] = []
-    decoded = {
-        relative: _decode(checkout, root, relative, unreadable)
-        for relative in _dylint_files(checkout)
-    }
-    has_exclusions = any(
-        parsed is not None and any(True for _ in _exclusion_keys(parsed[1]))
-        for parsed in decoded.values()
-    )
-    kinds = crate_kinds(reader) if has_exclusions else {}
-    exclusions = [
-        _exclusion(
-            relative,
-            found,
-            {(item.table, item.key): item for item in locate_exclusions(parsed[0])},
-            kinds,
-            unreadable,
+    configs = _configs(checkout, root, unreadable)
+    kinds = crate_kinds(reader) if configs else {}
+    exclusions: list[Exclusion] = []
+    for config in configs:
+        places = {
+            (item.table, item.key): item for item in locate_exclusions(config.text)
+        }
+        exclusions.extend(
+            _exclusion(key, places.get((key.table, key.key)), kinds, unreadable)
+            for key in config.keys
         )
-        for relative, parsed in decoded.items()
-        if parsed is not None
-        for found in _exclusion_keys(parsed[1])
-    ]
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
