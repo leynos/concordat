@@ -2,96 +2,38 @@
 
 A text scan for headers, keys and comments must not read string content as
 structure: a multi-line string can quote a `[table]`, an `excluded_paths` key or
-a `# comment`, and none of them is the document's own. This scanner walks the
-text once, tracking comments, one-line strings (basic and literal) and
-multi-line strings (basic and literal, with escapes in the basic kind), and
-reports the 0-based index of every line that begins inside a multi-line string.
-It decides nothing else; the TOML parser stays the authority on values.
+a `# comment`, and none of them is the document's own. This module reports the
+0-based index of every line that begins inside a multi-line string. It decides
+nothing else; the TOML parser stays the authority on values.
+
+It reads the text as tokens: a comment, a one-line string (basic or literal) or
+the opening quotes of a multi-line one, and skips each token whole, so a quote
+inside a comment or a `#` inside a string is never mistaken for structure. From
+an opening of a multi-line string it jumps to the closing quotes, taking the
+escapes of a basic string (an escaped quote, and a backslash at a line end)
+into account.
 """
 
 from __future__ import annotations
 
-import dataclasses
+import re
+import typing as typ
 
 __all__ = ["string_interior_lines"]
 
-_MULTILINE = ('"""', "'''")
+_BASIC: typ.Final = '"""'
+_LITERAL: typ.Final = "'''"
+# Longest opener first: `"""` must win over an empty one-line string.
+_TOKEN: typ.Final = re.compile(r"\"\"\"|'''|#[^\n]*|\"(?:\\.|[^\"\\\n])*\"?|'[^'\n]*'?")
+_BASIC_END: typ.Final = re.compile(r"(?:\\.|[^\\])*?\"\"\"", re.DOTALL)
+_LITERAL_END: typ.Final = re.compile(r"[\s\S]*?'''")
 
 
-@dataclasses.dataclass(slots=True)
-class _Scan:
-    """The position and state of the string scanner."""
-
-    text: str
-    index: int = 0
-    line: int = 0
-    state: str | None = None
-    inside: set[int] = dataclasses.field(default_factory=set)
-
-    def newline(self) -> None:
-        """Count a line break, noting a line that starts inside a string."""
-        self.line += 1
-        if self.state in _MULTILINE:
-            self.inside.add(self.line)
-
-    def step_outside(self) -> None:
-        """Advance one step with no string open."""
-        char = self.text[self.index]
-        opener = next(
-            (o for o in _MULTILINE if self.text.startswith(o, self.index)), None
-        )
-        if char == "#":
-            end = self.text.find("\n", self.index)
-            self.index = len(self.text) if end < 0 else end
-            return
-        if opener is not None:
-            self.state, self.index = opener, self.index + 3
-            return
-        if char in "\"'":
-            self.state = char
-        elif char == "\n":
-            self.newline()
-        self.index += 1
-
-    def escape(self) -> None:
-        """Skip a backslash and the character it takes, which may be a line break."""
-        if self.text[self.index + 1 : self.index + 2] == "\n":
-            self.newline()
-        self.index += 2
-
-    def step_multiline(self) -> None:
-        """Advance one step inside a multi-line string."""
-        char = self.text[self.index]
-        if self.state is not None and self.text.startswith(self.state, self.index):
-            self.state, self.index = None, self.index + 3
-        elif char == "\\" and self.state == '"""':
-            self.escape()
-        else:
-            if char == "\n":
-                self.newline()
-            self.index += 1
-
-    def step_single_line(self) -> None:
-        """Advance one step inside a one-line string, which a line break ends."""
-        char = self.text[self.index]
-        if char == self.state:
-            self.state, self.index = None, self.index + 1
-        elif char == "\\" and self.state == '"':
-            self.escape()
-        elif char == "\n":
-            self.newline()
-            self.state, self.index = None, self.index + 1
-        else:
-            self.index += 1
-
-    def step(self) -> None:
-        """Advance one step, whatever string is or is not open."""
-        if self.state is None:
-            self.step_outside()
-        elif self.state in _MULTILINE:
-            self.step_multiline()
-        else:
-            self.step_single_line()
+def _end_of_string(text: str, opener: str, start: int) -> int:
+    """Return where a multi-line string opened at *start* ends, or the text's end."""
+    pattern = _BASIC_END if opener == _BASIC else _LITERAL_END
+    closed = pattern.match(text, start)
+    return closed.end() if closed else len(text)
 
 
 def string_interior_lines(text: str) -> set[int]:
@@ -107,7 +49,14 @@ def string_interior_lines(text: str) -> set[int]:
     set[int]
         The indexes of lines whose first character is string content.
     """
-    scan = _Scan(text)
-    while scan.index < len(text):
-        scan.step()
-    return scan.inside
+    inside: set[int] = set()
+    position = 0
+    while (token := _TOKEN.search(text, position)) is not None:
+        position = token.end()
+        if token.group() not in (_BASIC, _LITERAL):
+            continue
+        stop = _end_of_string(text, token.group(), position)
+        first = text.count("\n", 0, position)
+        inside.update(range(first + 1, first + text.count("\n", position, stop) + 1))
+        position = stop
+    return inside
