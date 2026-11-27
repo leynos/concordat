@@ -94,6 +94,11 @@ def _owns_no_rust(
 
     A manifest that exists but cannot be read leaves a problem, so an unreadable
     tree never turns into a repository without Rust.
+
+    Returns
+    -------
+    bool
+        True when there is no manifest, no problem and no `.rs` file.
     """
     if manifests or problems:
         return False
@@ -104,6 +109,11 @@ def _empty_envelope(checkout: pathlib.Path) -> NestedCargoColdEnvelope:
     """Return the envelope of a repository with no Rust: no fact, so no finding.
 
     Its Makefile's `test` recipe (a Python or uv gate) is not this rule's business.
+
+    Returns
+    -------
+    NestedCargoColdEnvelope
+        The envelope with no spawn, build, pass or problem fact.
     """
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
