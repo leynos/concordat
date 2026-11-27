@@ -11,6 +11,8 @@ import typing as typ
 
 import pytest
 
+from concordat.errors import OperationalRuleError
+from concordat.rules import whitaker_exclusions_envelope
 from concordat.rules.whitaker_exclusions_envelope import (
     ENVELOPE_KIND,
     build_whitaker_exclusions_envelope,
@@ -77,8 +79,99 @@ class TestReasons:
         assert locate_exclusions('a.excluded_crates = ["x"]\n') == []
 
 
+class TestMultilineStrings:
+    """A line inside a multi-line string is content, not structure."""
+
+    def test_a_quoted_key_and_comment_do_not_become_a_real_keys_reason(self) -> None:
+        """CodeRabbit's example: the string holds both a comment and a key."""
+        text = (
+            '[t]\nexcluded_paths = ["loader"]\nnote = """\n'
+            '# not a reason\nexcluded_paths = ["bogus"]\n"""\n'
+        )
+        found = locate_exclusions(text)
+        assert [(f.key, f.line, f.has_reason) for f in found] == [
+            ("excluded_paths", 2, False)
+        ]
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "[t]\nnote = '''\n[fake]\nexcluded_paths = [\"x\"]\n'''\n",
+            '[t]\nnote = """\n[fake]\nexcluded_paths = ["x"]\n"""\n',
+            '[t]\nnote = """a \\\nexcluded_paths = ["x"]\nb"""\n',
+        ],
+    )
+    def test_a_header_or_key_inside_a_string_is_not_found(self, text: str) -> None:
+        """Whichever quote opens the string, and across an escaped line break."""
+        assert locate_exclusions(text) == []
+
+    def test_a_key_after_the_string_ends_is_found(self) -> None:
+        """The scan leaves the string at its closing quotes."""
+        text = '[t]\nnote = """\nx\n"""\n# why\nexcluded_paths = ["a"]\n'
+        [found] = locate_exclusions(text)
+        assert (found.line, found.has_reason) == (6, True)
+
+    def test_a_comment_line_inside_a_string_is_not_a_reason(self) -> None:
+        """The block above the key stops at string content."""
+        text = '[t]\nnote = """\n# inside\n"""\nexcluded_paths = ["a"]\n'
+        [found] = locate_exclusions(text)
+        assert found.has_reason is False
+
+    def test_quotes_and_hashes_in_single_line_strings_are_not_structure(self) -> None:
+        """A `#` in a string is not a comment, and a lone quote ends at the line."""
+        text = 'a = "x # y"\nb = \'it\'\n[t]\n# why\nexcluded_paths = ["a"]\n'
+        [found] = locate_exclusions(text)
+        assert (found.table, found.line, found.has_reason) == ("t", 5, True)
+
+
 class TestEnvelope:
     """What the builder records for a checkout."""
+
+    def test_a_repeated_table_header_leaves_its_key_not_located(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Two `[[rule]]` tables each with the key: the line is ambiguous."""
+        found = _exclusions(
+            tmp_path,
+            {
+                "dylint.toml": (
+                    '[[rule]]\n# why\nexcluded_paths = ["a"]\n\n'
+                    '[[rule]]\nexcluded_paths = ["b"]\n'
+                )
+            },
+        )
+        assert [(x["table"], x["line"]) for x in found] == [
+            ("rule", None),
+            ("rule", None),
+        ]
+
+    def test_a_symlinked_dylint_config_is_recorded_not_followed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Its exclusions are unknown, which is not the same as none."""
+        _write(tmp_path, {"real.toml": '[l]\n# why\nexcluded_paths = ["a"]\n'})
+        (tmp_path / "dylint.toml").symlink_to("real.toml")
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert envelope["exclusions"] == []
+        [note] = envelope["unreadable"]
+        assert note.startswith("dylint.toml: is a symbolic link")
+
+    def test_a_dylint_config_that_cannot_be_opened_is_recorded(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A read failure inside the checkout is EN-001, not a failed audit."""
+        _write(tmp_path, {"dylint.toml": '[l]\nexcluded_paths = ["a"]\n'})
+
+        def refuse(_path: pathlib.Path, operation: str) -> str:
+            """Fail the way a file that cannot be opened does."""
+            message = "permission denied"
+            raise OperationalRuleError(message, operation=operation)
+
+        monkeypatch.setattr(whitaker_exclusions_envelope, "read_text", refuse)
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert envelope["exclusions"] == []
+        assert envelope["unreadable"][0].startswith("dylint.toml: ")
+        assert "permission denied" in envelope["unreadable"][0]
 
     def test_a_checkout_without_a_dylint_config_has_no_exclusions(
         self, tmp_path: pathlib.Path
@@ -181,6 +274,140 @@ class TestCrateNames:
             },
         )
         assert resolved == {"_femto": "governed", "serde": "unknown"}
+
+    def test_target_specific_and_workspace_inherited_path_aliases_count(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A path dependency is local wherever it is declared."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": (
+                    MANIFEST.format(
+                        name="app",
+                        extra=(
+                            "\n[target.'cfg(unix)'.dev-dependencies]\n"
+                            '_app = { path = ".", package = "app" }\n'
+                            "[dependencies]\nshared_alias = { workspace = true }\n"
+                            "registry = { workspace = true }\n\n[workspace]\n"
+                            "[workspace.dependencies]\n"
+                            'shared_alias = { path = "shared", package = "shared" }\n'
+                            'registry = "1"\n'
+                        ),
+                    )
+                ),
+                "shared/Cargo.toml": MANIFEST.format(name="shared", extra=""),
+                "dylint.toml": (
+                    '[l]\n# r\nexcluded_crates = ["_app", "shared_alias", "registry"]\n'
+                ),
+            },
+        )
+        assert resolved == {
+            "_app": "governed",
+            "shared_alias": "governed",
+            "registry": "unknown",
+        }
+
+    @pytest.mark.parametrize(
+        ("switch", "folder"),
+        [
+            ("autotests", "tests"),
+            ("autobenches", "benches"),
+            ("autoexamples", "examples"),
+            ("autobins", "src/bin"),
+        ],
+    )
+    def test_a_switched_off_discovery_leaves_only_declared_targets(
+        self, tmp_path: pathlib.Path, switch: str, folder: str
+    ) -> None:
+        """`autotests = false` and its siblings turn that folder's discovery off."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=f"{switch} = false\n"),
+                f"{folder}/old.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["old"]\n',
+            },
+        )
+        assert resolved == {"old": "unknown"}
+
+    def test_a_declared_target_counts_even_when_discovery_is_off(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Only auto-discovery is switched off."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        "autotests = false\n[[test]]\n"
+                        'name = "kept"\npath = "tests/k.rs"\n'
+                    ),
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["kept"]\n',
+            },
+        )
+        assert resolved == {"kept": "governed"}
+
+    def test_a_target_folder_that_escapes_the_checkout_is_not_read(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Host filenames must not decide a verdict, or reveal what exists."""
+        outside = tmp_path / "host"
+        outside.mkdir()
+        (outside / "secret_tests.rs").write_text("", encoding="utf-8")
+        checkout = tmp_path / "checkout"
+        _write(
+            checkout,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["secret_tests"]\n',
+            },
+        )
+        (checkout / "tests").symlink_to(outside)
+        envelope = build_whitaker_exclusions_envelope(checkout)
+        [exclusion] = envelope["exclusions"]
+        assert exclusion["entries"] == [{"name": "secret_tests", "resolved": "unknown"}]
+        assert any("tests: is a symbolic link" in n for n in envelope["unreadable"])
+
+    def test_a_symlinked_entry_in_a_target_folder_is_not_followed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """One linked file hides one name; the others still count."""
+        checkout = tmp_path / "checkout"
+        _write(
+            checkout,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "tests/real.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["real", "linked"]\n',
+            },
+        )
+        (checkout / "tests" / "linked.rs").symlink_to("real.rs")
+        envelope = build_whitaker_exclusions_envelope(checkout)
+        [exclusion] = envelope["exclusions"]
+        assert {e["name"]: e["resolved"] for e in exclusion["entries"]} == {
+            "real": "governed",
+            "linked": "unknown",
+        }
+        assert any("linked.rs" in n for n in envelope["unreadable"])
+
+    def test_a_symlinked_manifest_is_recorded(self, tmp_path: pathlib.Path) -> None:
+        """A manifest that is a link would hide its crate names."""
+        _write(
+            tmp_path,
+            {
+                "real/Cargo.toml": MANIFEST.format(name="real", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["real"]\n',
+            },
+        )
+        (tmp_path / "Cargo.toml").symlink_to("real/Cargo.toml")
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any(
+            n.startswith("Cargo.toml: is a symbolic link")
+            for n in envelope["unreadable"]
+        )
 
     def test_an_explicit_target_name_counts(self, tmp_path: pathlib.Path) -> None:
         """`[[test]] name` need not match a file."""

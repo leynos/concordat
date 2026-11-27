@@ -20,6 +20,7 @@ Run from the repository root::
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import tempfile
 import typing as typ
@@ -40,6 +41,21 @@ MANIFEST_PATH = FIXTURES_DIR.parent / "rule.yaml"
 RECORDED_REPOSITORY_PATH: typ.Final = "."
 
 UNREADABLE = "[package\nname = \n"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Link:
+    """A scenario entry that is a symbolic link, not a file.
+
+    `target` is where the link points, relative to the link's own directory.
+    """
+
+    target: str
+
+
+type Files = dict[str, str | Link]
+
+
 WORKSPACE = '[workspace]\nmembers = ["crates/*"]\nresolver = "3"\n'
 PYPROJECT = '[project]\nname = "demo"\nversion = "0.1.0"\n'
 
@@ -49,7 +65,7 @@ def package(name: str, extra: str = "") -> str:
     return f'[package]\nname = "{name}"\nversion = "0.1.0"\n{extra}'
 
 
-def designed(dylint: str, *, extra: dict[str, str] | None = None) -> dict[str, str]:
+def designed(dylint: str, *, extra: Files | None = None) -> Files:
     """Return a virtual workspace with members `a` and `b` and this `dylint.toml`."""
     return {
         "Cargo.toml": WORKSPACE,
@@ -60,7 +76,7 @@ def designed(dylint: str, *, extra: dict[str, str] | None = None) -> dict[str, s
     }
 
 
-def grown(dylint: str) -> dict[str, str]:
+def grown(dylint: str) -> Files:
     """Return a root package that gained a member, with this `dylint.toml`."""
     return {
         "Cargo.toml": package("app", "\n") + WORKSPACE,
@@ -69,7 +85,7 @@ def grown(dylint: str) -> dict[str, str]:
     }
 
 
-def extension(dylint: str, *, extra: dict[str, str] | None = None) -> dict[str, str]:
+def extension(dylint: str, *, extra: Files | None = None) -> Files:
     """Return femtologging's shape: a standalone crate in `rust_extension/`."""
     return {
         "pyproject.toml": PYPROJECT,
@@ -113,7 +129,7 @@ FEMTO_DYLINT = (
     '    "heavy",\n]\n'
 )
 
-SCENARIOS: dict[str, dict[str, str]] = {
+SCENARIOS: dict[str, Files] = {
     "no_dylint_config": {"Cargo.toml": WORKSPACE, "crates/a/Cargo.toml": package("a")},
     "config_without_exclusions": designed(
         "[whitaker]\nexperimental = []\n\n[bumpy_road_function]\nmin_bump_lines = 15\n"
@@ -201,10 +217,66 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "exclusion_that_is_not_a_list": designed(
         '[no_std_fs_operations]\n# Reason.\nexcluded_crates = "a"\n'
     ),
+    "dylint_config_is_a_symlink": {
+        "Cargo.toml": WORKSPACE,
+        "crates/a/Cargo.toml": package("a"),
+        "real_dylint.toml": '[l]\n# Reason.\nexcluded_crates = ["a"]\n',
+        "dylint.toml": Link("real_dylint.toml"),
+    },
+    "tests_folder_is_a_symlink": designed(
+        '[l]\n# Reason.\nexcluded_crates = ["old_tests"]\n',
+        extra={
+            "shared_tests/old_tests.rs": "",
+            "crates/a/tests": Link("../../shared_tests"),
+        },
+    ),
+    # -- reading the text and the manifests the way Cargo and TOML do -------------
+    "multiline_string_lends_nothing": designed(
+        '[no_std_fs_operations]\nexcluded_paths = ["loader"]\nnote = """\n'
+        '# not a reason for the real key\nexcluded_paths = ["bogus"]\n"""\n'
+    ),
+    "repeated_table_header_is_ambiguous": designed(
+        '[[rule]]\n# Reason.\nexcluded_paths = ["a"]\n\n'
+        '[[rule]]\nexcluded_paths = ["b"]\n'
+    ),
+    "target_specific_path_alias": designed(
+        '[no_std_fs_operations]\n# Ambient.\nexcluded_crates = ["_a"]\n',
+        extra={
+            "crates/a/Cargo.toml": package(
+                "a",
+                "\n[target.'cfg(unix)'.dev-dependencies]\n"
+                '_a = { path = ".", package = "a" }\n',
+            )
+        },
+    ),
+    "workspace_inherited_path_alias": designed(
+        '[no_std_fs_operations]\n# Ambient.\nexcluded_crates = ["shared_alias"]\n',
+        extra={
+            "Cargo.toml": WORKSPACE
+            + "\n[workspace.dependencies]\n"
+            + 'shared_alias = { path = "crates/shared", package = "shared" }\n',
+            "crates/shared/Cargo.toml": package("shared"),
+            "crates/a/Cargo.toml": package(
+                "a", "\n[dependencies]\nshared_alias = { workspace = true }\n"
+            ),
+        },
+    ),
+    "discovery_switched_off_for_tests": designed(
+        '[no_std_fs_operations]\n# Ambient.\nexcluded_crates = ["old", "kept"]\n',
+        extra={
+            "crates/a/Cargo.toml": package(
+                "a",
+                "autotests = false\n\n[[test]]\n"
+                'name = "kept"\npath = "tests/kept.rs"\n',
+            ),
+            "crates/a/tests/old.rs": "",
+            "crates/a/tests/kept.rs": "",
+        },
+    ),
 }
 
 
-def lay_out(files: dict[str, str], checkout: Path) -> None:
+def lay_out(files: Files, checkout: Path) -> None:
     """Populate *checkout* with the scenario's files.
 
     Parameters
@@ -217,7 +289,10 @@ def lay_out(files: dict[str, str], checkout: Path) -> None:
     for relative, text in files.items():
         path = checkout / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        if isinstance(text, Link):
+            path.symlink_to(text.target)
+        else:
+            path.write_text(text, encoding="utf-8")
 
 
 def manifest_parameters() -> dict[str, object]:
@@ -232,7 +307,7 @@ def manifest_parameters() -> dict[str, object]:
     return dict(manifest["parameters"]["defaults"])
 
 
-def build_fixture_envelope(files: dict[str, str]) -> WhitakerExclusionsEnvelope:
+def build_fixture_envelope(files: Files) -> WhitakerExclusionsEnvelope:
     """Return the production envelope for a scenario, with a stable path.
 
     Returns

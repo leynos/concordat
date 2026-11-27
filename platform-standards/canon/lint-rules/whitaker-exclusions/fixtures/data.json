@@ -592,6 +592,188 @@
       "unreadable": [
         "dylint.toml: [no_std_fs_operations] excluded_crates is not a list of strings, so its entries cannot be read"
       ]
+    },
+    "dylint_config_is_a_symlink": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [],
+      "unreadable": [
+        "dylint.toml: is a symbolic link, which the audit does not follow, so the exclusions it holds are unknown"
+      ]
+    },
+    "tests_folder_is_a_symlink": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "l",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "old_tests",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": [
+        "crates/a/tests: is a symbolic link, which the audit does not follow, so the crate names it would hold are unknown"
+      ]
+    },
+    "multiline_string_lends_nothing": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 2,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "repeated_table_header_is_ambiguous": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "rule",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": null,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "a",
+              "resolved": "unknown"
+            }
+          ]
+        },
+        {
+          "file": "dylint.toml",
+          "table": "rule",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": null,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "b",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "target_specific_path_alias": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "_a",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "workspace_inherited_path_alias": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "shared_alias",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "discovery_switched_off_for_tests": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "old",
+              "resolved": "unknown"
+            },
+            {
+              "name": "kept",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
     }
   },
   "parameters": {

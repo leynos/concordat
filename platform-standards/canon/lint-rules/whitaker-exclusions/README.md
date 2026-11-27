@@ -29,8 +29,10 @@ A **reason** is a non-empty comment block directly above the key or, when there
 is none, directly above the table header. A blank line ends a block, and a
 block of bare `#` lines says nothing. The audit checks that a reason exists,
 not that it is good: a reviewer judges that, as with `missing_docs`. The text
-scan finds keys at the start of a line; a dotted key or inline table is
-reported as not located (EN-001) instead of read as having no reason.
+scan finds keys at the start of a line, and ignores lines inside multi-line
+strings, so a string that quotes a key and a comment lends neither to a real
+key. A dotted key, an inline table, or a table header that repeats (`[[rule]]`
+twice) is reported as not located (EN-001) instead of read as having no reason.
 
 A crate name is resolved as rustc spells it, so hyphens are underscores and a
 test target is named after its file. A name is a crate the repository
@@ -40,7 +42,17 @@ target (declared with `[[test]]` and the like, or found as `tests/*.rs`,
 path dependency (femtologging's `_femtologging_rs`). It is a **fixture** when
 it lives under a fixture, vendored or build-output tree (`fixtures`, `vendor`,
 `third_party`, `patches`, `templates`, `examples`, `target`). A registry
-dependency is not a crate of the repository.
+dependency is not a crate of the repository. A path dependency is local whether
+it is declared in the package, under a `[target.*]` table, or inherited from
+`[workspace.dependencies]`. A package's `autotests`, `autobenches`,
+`autoexamples` and `autobins` switches are honoured: with `autotests = false`
+only the declared `[[test]]` targets count, not the files in `tests/`.
+
+The audit never follows a symbolic link. A `dylint.toml`, a manifest, a target
+folder or a file in one that is a link is reported as unreadable (EN-001), not
+read as absent, so a link cannot make an exclusion look stale or a repository
+look clean, and a link out of the checkout cannot put host filenames into a
+verdict.
 
 ## Findings
 

@@ -22,6 +22,8 @@ import pathlib
 import tomllib
 import typing as typ
 
+from concordat.errors import OperationalRuleError
+
 from .documentation_rust import RUST_PRUNED_DIRECTORIES
 from .markdown_envelope import (
     Repository,
@@ -91,20 +93,35 @@ class WhitakerExclusionsEnvelope(typ.TypedDict):
     unreadable: list[str]
 
 
-def _dylint_files(checkout: pathlib.Path) -> list[str]:
-    """Return the checkout's `dylint.toml` files, outside the pruned trees."""
+def _dylint_files(checkout: pathlib.Path, unreadable: list[str]) -> list[str]:
+    """Return the checkout's `dylint.toml` files, outside the pruned trees.
+
+    The walk never follows a symbolic link. A `dylint.toml` that is one is
+    recorded in *unreadable* and not returned, so the audit says it could not
+    judge it instead of reporting a repository with no exclusions.
+
+    Returns
+    -------
+    list[str]
+        Paths relative to the checkout, sorted, in POSIX form.
+    """
     found: list[str] = []
     for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
         directories[:] = sorted(
             name for name in directories if name not in RUST_PRUNED_DIRECTORIES
         )
         base = pathlib.Path(current)
-        found.extend(
-            (base / name).relative_to(checkout).as_posix()
-            for name in files
-            if name == DYLINT_CONFIG
-            and not is_symlink(base / name, OPERATION_SCAN_DYLINT)
-        )
+        for name in files:
+            if name != DYLINT_CONFIG:
+                continue
+            relative = (base / name).relative_to(checkout).as_posix()
+            if is_symlink(base / name, OPERATION_SCAN_DYLINT):
+                unreadable.append(
+                    f"{relative}: is a symbolic link, which the audit does not "
+                    "follow, so the exclusions it holds are unknown"
+                )
+            else:
+                found.append(relative)
     return sorted(found)
 
 
@@ -119,6 +136,11 @@ def _decode(
     try:
         text = read_text(path, OPERATION_READ_DYLINT)
         return text, tomllib.loads(text)
+    except OperationalRuleError as error:
+        # Containment was settled above, so a file inside the checkout that
+        # cannot be opened is a fact about the repository (EN-001), not a
+        # reason to stop the audit.
+        unreadable.append(f"{relative}: {error}")
     except UnicodeDecodeError as error:
         unreadable.append(f"{relative}: not UTF-8 text: {error}")
     except tomllib.TOMLDecodeError as error:
@@ -129,17 +151,36 @@ def _decode(
 def _exclusion_keys(
     parsed: dict[str, object], prefix: str = ""
 ) -> list[tuple[str, str, object]]:
-    """Return `(table, key, value)` for every `excluded_*` key in a document."""
+    """Return `(table, key, value)` for every `excluded_*` key in a document.
+
+    Tables inside an array of tables (`[[rule]]`) are searched too: a key there
+    would otherwise be an exclusion nobody read.
+
+    Returns
+    -------
+    list[tuple[str, str, object]]
+        The dotted table name, the key and its decoded value, for each key.
+    """
     found = [
         (prefix, key, value)
         for key, value in parsed.items()
         if key.startswith(EXCLUSION_PREFIX)
     ]
     for key, value in parsed.items():
-        if isinstance(value, dict) and not key.startswith(EXCLUSION_PREFIX):
-            nested = f"{prefix}.{key}" if prefix else key
-            found.extend(_exclusion_keys(typ.cast("dict[str, object]", value), nested))
+        nested = f"{prefix}.{key}" if prefix else key
+        for item in _tables_in(value) if not key.startswith(EXCLUSION_PREFIX) else []:
+            found.extend(_exclusion_keys(item, nested))
     return found
+
+
+def _tables_in(value: object) -> list[dict[str, object]]:
+    """Return the tables a value is, or holds when it is an array of tables."""
+    candidates = value if isinstance(value, list) else [value]
+    return [
+        typ.cast("dict[str, object]", item)
+        for item in candidates
+        if isinstance(item, dict)
+    ]
 
 
 def _kind(key: str) -> str:
@@ -212,12 +253,31 @@ class _Config(typ.NamedTuple):
     keys: list[_Key]
 
 
+def _places(text: str) -> dict[tuple[str, str], Located | None]:
+    """Return where each `(table, key)` sits in *text*.
+
+    A pair found more than once (the same table header repeated) is ambiguous:
+    its slot is None, so the policy reports it as not located instead of
+    giving one key another's comment.
+
+    Returns
+    -------
+    dict[tuple[str, str], Located | None]
+        Each pair's place, or None when it is ambiguous.
+    """
+    found: dict[tuple[str, str], Located | None] = {}
+    for item in locate_exclusions(text):
+        slot = (item.table, item.key)
+        found[slot] = None if slot in found else item
+    return found
+
+
 def _configs(
     checkout: pathlib.Path, root: pathlib.Path, unreadable: list[str]
 ) -> list[_Config]:
     """Return every readable `dylint.toml` that holds an exclusion key."""
     found: list[_Config] = []
-    for relative in _dylint_files(checkout):
+    for relative in _dylint_files(checkout, unreadable):
         decoded = _decode(checkout, root, relative, unreadable)
         if decoded is None:
             continue
@@ -258,9 +318,7 @@ def build_whitaker_exclusions_envelope(
     kinds = crate_kinds(reader) if configs else {}
     exclusions: list[Exclusion] = []
     for config in configs:
-        places = {
-            (item.table, item.key): item for item in locate_exclusions(config.text)
-        }
+        places = _places(config.text)
         exclusions.extend(
             _exclusion(key, places.get((key.table, key.key)), kinds, unreadable)
             for key in config.keys

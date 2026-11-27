@@ -197,6 +197,46 @@ test_an_exclusion_that_is_not_a_list_of_strings_is_en_001 if {
 	contains(f.msg, "not a list of strings")
 }
 
+test_a_symlinked_dylint_config_is_en_001_not_a_clean_repository if {
+	ids(data.fixtures.dylint_config_is_a_symlink) == {"EN-001"}
+	[msg] := messages_of(data.fixtures.dylint_config_is_a_symlink, "EN-001")
+	contains(msg, "symbolic link")
+	contains(msg, "dylint.toml")
+}
+
+test_a_symlinked_target_folder_makes_a_missing_crate_indeterminate_not_stale if {
+	ids(data.fixtures.tests_folder_is_a_symlink) == {"EN-001"}
+	[msg] := messages_of(data.fixtures.tests_folder_is_a_symlink, "EN-001")
+	contains(msg, "crates/a/tests")
+}
+
+test_a_string_that_quotes_a_key_and_a_comment_lends_neither_to_the_real_key if {
+	ids(data.fixtures.multiline_string_lends_nothing) == {"WX-001"}
+}
+
+test_a_table_header_that_repeats_leaves_the_key_not_located if {
+	fs := findings(data.fixtures.repeated_table_header_is_ambiguous)
+	{f.rule_id | some f in fs} == {"EN-001"}
+	some f in fs
+	contains(f.msg, "could not find")
+}
+
+test_a_path_alias_under_a_target_table_is_a_governed_crate if {
+	ids(data.fixtures.target_specific_path_alias) == {"WX-002"}
+}
+
+test_a_path_dependency_inherited_from_the_workspace_is_a_governed_crate if {
+	ids(data.fixtures.workspace_inherited_path_alias) == {"WX-002"}
+}
+
+test_switching_off_test_discovery_leaves_only_declared_test_targets if {
+	[msg] := messages_of(data.fixtures.discovery_switched_off_for_tests, "WX-003")
+	contains(msg, "names old,")
+	not contains(msg, "kept")
+	[governed] := messages_of(data.fixtures.discovery_switched_off_for_tests, "WX-002")
+	contains(governed, "Whitaker lint: kept.")
+}
+
 test_a_document_of_another_kind_is_an_envelope_error if {
 	fs := policy.deny with input as {"schema_version": 1, "kind": "policy-input/other"}
 		with data.parameters as default_parameters
