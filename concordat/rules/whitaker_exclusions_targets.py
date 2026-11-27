@@ -89,10 +89,12 @@ def _inferred_target(
         return None
     if entry.is_file() and entry.suffix == ".rs":
         return entry.stem, entry
+    if not entry.is_dir():
+        return None
     main = entry / "main.rs"
-    if entry.is_dir() and not _is_linked(main, reader) and main.is_file():
-        return entry.name, main
-    return None
+    if _is_linked(main, reader):
+        return None
+    return (entry.name, main) if main.is_file() else None
 
 
 def _claimed_paths(manifest: dict[str, object]) -> set[str]:
