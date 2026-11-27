@@ -35,7 +35,12 @@ from .markdown_envelope import (
 )
 from .nested_cargo import origin_slug
 from .test_environment_types import Reader, strings
-from .whitaker_exclusions_crates import crate_kinds, normalised
+from .whitaker_exclusions_crates import (
+    crate_kinds,
+    normalised,
+    note_linked_directories,
+)
+from .whitaker_exclusions_targets import linked_note
 from .whitaker_exclusions_text import Located, locate_exclusions
 
 if typ.TYPE_CHECKING:
@@ -107,19 +112,19 @@ def _dylint_files(checkout: pathlib.Path, unreadable: list[str]) -> list[str]:
     """
     found: list[str] = []
     for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
+        base = pathlib.Path(current)
+        note_linked_directories(
+            base, directories, RUST_PRUNED_DIRECTORIES, unreadable, checkout
+        )
         directories[:] = sorted(
             name for name in directories if name not in RUST_PRUNED_DIRECTORIES
         )
-        base = pathlib.Path(current)
         for name in files:
             if name != DYLINT_CONFIG:
                 continue
             relative = (base / name).relative_to(checkout).as_posix()
             if is_symlink(base / name, OPERATION_SCAN_DYLINT):
-                unreadable.append(
-                    f"{relative}: is a symbolic link, which the audit does not "
-                    "follow, so the exclusions it holds are unknown"
-                )
+                unreadable.append(linked_note(relative))
             else:
                 found.append(relative)
     return sorted(found)

@@ -371,6 +371,120 @@ class TestCrateNames:
         assert exclusion["entries"] == [{"name": "secret_tests", "resolved": "unknown"}]
         assert any("tests: is a symbolic link" in n for n in envelope["unreadable"])
 
+    def test_a_link_in_the_path_to_a_target_folder_is_not_followed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`src` linked out of the checkout must not lend `src/bin` to the verdict."""
+        outside = tmp_path / "host"
+        (outside / "bin").mkdir(parents=True)
+        (outside / "bin" / "secret.rs").write_text("", encoding="utf-8")
+        checkout = tmp_path / "checkout"
+        _write(
+            checkout,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["secret"]\n',
+            },
+        )
+        (checkout / "src").symlink_to(outside)
+        envelope = build_whitaker_exclusions_envelope(checkout)
+        [exclusion] = envelope["exclusions"]
+        assert exclusion["entries"] == [{"name": "secret", "resolved": "unknown"}]
+        assert any("src: is a symbolic link" in n for n in envelope["unreadable"])
+
+    def test_a_dangling_target_folder_link_is_recorded(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A link to nothing is still a link; it must not read as no folder."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["gone"]\n',
+            },
+        )
+        (tmp_path / "tests").symlink_to("nowhere")
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any("tests: is a symbolic link" in n for n in envelope["unreadable"])
+
+    def test_a_linked_main_rs_in_a_binary_directory_is_recorded(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The probe for `main.rs` is a read too."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "elsewhere.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["tool"]\n',
+                "src/bin/tool/placeholder": "",
+            },
+        )
+        (tmp_path / "src" / "bin" / "tool" / "main.rs").symlink_to(
+            "../../../elsewhere.rs"
+        )
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any("main.rs: is a symbolic link" in n for n in envelope["unreadable"])
+
+    def test_a_linked_directory_is_recorded_whatever_it_might_hold(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`os.walk` lists a linked directory and does not enter it."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "real/sub/dylint.toml": '[l]\n# r\nexcluded_paths = ["x"]\n',
+            },
+        )
+        (tmp_path / "linked").symlink_to("real")
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any(
+            n.startswith("linked: is a symbolic link") for n in envelope["unreadable"]
+        )
+
+    def test_one_workspaces_path_dependency_does_not_make_anothers_local(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An inherited dependency is resolved in the workspace that owns it."""
+        _write(
+            tmp_path,
+            {
+                "a/Cargo.toml": "[workspace]\nmembers = ['m']\n"
+                '[workspace.dependencies]\nshared = "1"\n',
+                "a/m/Cargo.toml": MANIFEST.format(
+                    name="m", extra="[dependencies]\nshared = { workspace = true }\n"
+                ),
+                "b/Cargo.toml": '[workspace]\nmembers = ["n"]\n'
+                '[workspace.dependencies]\nshared = { path = "n" }\n',
+                "b/n/Cargo.toml": MANIFEST.format(
+                    name="n", extra="[dependencies]\nshared = { workspace = true }\n"
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["shared"]\n',
+            },
+        )
+        [exclusion] = build_whitaker_exclusions_envelope(tmp_path)["exclusions"]
+        # `b` makes `shared` local for b's own members, so the name resolves.
+        assert exclusion["entries"] == [{"name": "shared", "resolved": "governed"}]
+
+    def test_a_registry_dependency_in_one_workspace_stays_a_registry_one(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The same alias is not local where its owning workspace says registry."""
+        _write(
+            tmp_path,
+            {
+                "a/Cargo.toml": "[workspace]\nmembers = ['m']\n"
+                '[workspace.dependencies]\nshared = "1"\n',
+                "a/m/Cargo.toml": MANIFEST.format(
+                    name="m", extra="[dependencies]\nshared = { workspace = true }\n"
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["shared"]\n',
+            },
+        )
+        [exclusion] = build_whitaker_exclusions_envelope(tmp_path)["exclusions"]
+        assert exclusion["entries"] == [{"name": "shared", "resolved": "unknown"}]
+
     def test_a_symlinked_entry_in_a_target_folder_is_not_followed(
         self, tmp_path: pathlib.Path
     ) -> None:

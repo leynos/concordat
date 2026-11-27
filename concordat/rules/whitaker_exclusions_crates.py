@@ -7,18 +7,18 @@ estate's own `dylint.toml` files hold all of these (`file_handler_tests`,
 `whitaker_package_lints`, `_femtologging_rs`). To say whether an entry names a
 crate the repository governs, names a fixture or vendored crate, or names
 nothing, this module collects every such name from the manifests and the
-conventional target directories, hyphens read as underscores as rustc does.
+conventional target directories (`whitaker_exclusions_targets`), hyphens read
+as underscores as rustc does.
 
-Cargo's rules are followed where they decide a name: a package's `autotests`,
-`autobins`, `autobenches` and `autoexamples` switch off discovery of that kind
-(declared `[[test]]`-style targets still count), a path dependency is local
+Cargo's rules are followed where they decide a name: a path dependency is local
 whether it is declared in the package, under a `[target.*]` table, or inherited
-from `[workspace.dependencies]`, and a registry dependency is not a crate of
-the repository.
+from `[workspace.dependencies]` of the workspace that owns the package (the
+nearest manifest above it with a `[workspace]` table), and a registry
+dependency is not a crate of the repository.
 
-The walk never follows a symbolic link. A link that would hide a manifest or a
-target folder is recorded as unreadable, so the policy reports it instead of
-reading its absence as a name that does not exist.
+The walk never follows a symbolic link. A link that would hide a manifest, a
+directory or a target folder is recorded as unreadable, so the policy reports it
+instead of reading its absence as a name that does not exist.
 
 A crate under a fixture, vendored or build-output tree is a `fixture`; the
 audit's other rules do not govern it either. A name found in both kinds is
@@ -38,24 +38,23 @@ from .markdown_envelope import (
     raise_walk_error,
 )
 from .test_environment_types import CARGO_MANIFEST, table
+from .whitaker_exclusions_targets import discovered_targets, linked_note
 
 if typ.TYPE_CHECKING:
     from .test_environment_types import Reader
 
-__all__ = ["FIXTURE", "GOVERNED", "crate_kinds", "normalised"]
+__all__ = [
+    "FIXTURE",
+    "GOVERNED",
+    "crate_kinds",
+    "normalised",
+    "note_linked_directories",
+]
 
 GOVERNED: typ.Final = "governed"
 FIXTURE: typ.Final = "fixture"
 OPERATION_SCAN_CRATES: typ.Final = "scan-rust-crates"
 
-# Each conventional target folder, with the `[package]` switch that turns its
-# discovery off.
-_TARGET_FOLDERS: typ.Final = (
-    ("tests", "autotests"),
-    ("benches", "autobenches"),
-    ("examples", "autoexamples"),
-    ("src/bin", "autobins"),
-)
 _TARGET_TABLES: typ.Final = ("bin", "test", "bench", "example")
 _DEPENDENCY_TABLES: typ.Final = (
     "dependencies",
@@ -69,11 +68,24 @@ def normalised(name: str) -> str:
     return name.replace("-", "_")
 
 
-def _symlink_note(relative: str) -> str:
-    """Return why a symbolic link is not read."""
-    return (
-        f"{relative}: is a symbolic link, which the audit does not follow, so the "
-        "crate names it would hold are unknown"
+def note_linked_directories(
+    base: pathlib.Path,
+    directories: list[str],
+    skipped: typ.Collection[str],
+    unreadable: list[str],
+    checkout: pathlib.Path,
+) -> None:
+    """Record each symbolic link among a walk's directories as unreadable.
+
+    `os.walk` lists a link to a directory among the directories but does not
+    descend into it, so whatever the link holds is never read; a manifest or a
+    configuration inside it would be missed without a word. Names the walk
+    prunes anyway are not noted.
+    """
+    unreadable.extend(
+        linked_note((base / name).relative_to(checkout).as_posix())
+        for name in directories
+        if name not in skipped and is_symlink(base / name, OPERATION_SCAN_CRATES)
     )
 
 
@@ -81,8 +93,8 @@ def _manifests(checkout: pathlib.Path, unreadable: list[str]) -> list[str]:
     """Return every Cargo.toml outside build-output and VCS trees, sorted.
 
     Fixture and vendored crates are included here, unlike in the lint-table
-    walk, because an exclusion may name one on purpose. A manifest that is a
-    symbolic link is recorded in *unreadable* and not returned.
+    walk, because an exclusion may name one on purpose. A manifest or a
+    directory that is a symbolic link is recorded in *unreadable*.
 
     Returns
     -------
@@ -92,14 +104,15 @@ def _manifests(checkout: pathlib.Path, unreadable: list[str]) -> list[str]:
     skipped = PRUNED_DIRECTORIES | {"target"}
     found: list[str] = []
     for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
-        directories[:] = sorted(name for name in directories if name not in skipped)
         base = pathlib.Path(current)
+        note_linked_directories(base, directories, skipped, unreadable, checkout)
+        directories[:] = sorted(name for name in directories if name not in skipped)
         for name in files:
             if name != CARGO_MANIFEST:
                 continue
             relative = (base / name).relative_to(checkout).as_posix()
             if is_symlink(base / name, OPERATION_SCAN_CRATES):
-                unreadable.append(_symlink_note(relative))
+                unreadable.append(linked_note(relative))
             else:
                 found.append(relative)
     return sorted(found)
@@ -109,54 +122,6 @@ def _is_fixture(relative: str) -> bool:
     """Return whether a manifest sits under a fixture, vendored or output tree."""
     parts = pathlib.PurePosixPath(relative).parent.parts
     return any(part in RUST_PRUNED_DIRECTORIES for part in parts)
-
-
-def _target_name(entry: pathlib.Path) -> str | None:
-    """Return the crate name Cargo gives a file or directory in a target folder."""
-    if entry.is_file() and entry.suffix == ".rs":
-        return entry.stem
-    if entry.is_dir() and (entry / "main.rs").is_file():
-        return entry.name
-    return None
-
-
-def _folder_targets(folder: pathlib.Path, reader: Reader) -> set[str]:
-    """Return the crate names under one target folder, never following a link."""
-    relative = folder.relative_to(reader.checkout).as_posix()
-    if is_symlink(folder, OPERATION_SCAN_CRATES):
-        reader.unreadable.append(_symlink_note(relative))
-        return set()
-    names: set[str] = set()
-    for entry in sorted(folder.iterdir()):
-        if is_symlink(entry, OPERATION_SCAN_CRATES):
-            reader.unreadable.append(
-                _symlink_note(entry.relative_to(reader.checkout).as_posix())
-            )
-        elif (name := _target_name(entry)) is not None:
-            names.add(name)
-    return names
-
-
-def _discovered_targets(
-    directory: pathlib.Path, package: dict[str, object], reader: Reader
-) -> set[str]:
-    """Return the crate names Cargo auto-discovers under a package directory.
-
-    A folder whose `[package]` switch is `false` (`autotests = false`) is not
-    discovered; only its declared targets count.
-
-    Returns
-    -------
-    set[str]
-        The names of the files and directories in each discovered folder.
-    """
-    found: set[str] = set()
-    for sub, switch in _TARGET_FOLDERS:
-        folder = directory / sub
-        if package.get(switch) is False or not folder.is_dir():
-            continue
-        found |= _folder_targets(folder, reader)
-    return found
 
 
 def _strings_named(values: object) -> set[str]:
@@ -209,25 +174,71 @@ def _declared_names(manifest: dict[str, object], inherited: frozenset[str]) -> s
     return names | _alias_names(manifest, inherited)
 
 
-def _inherited_local(reader: Reader, manifests: list[str]) -> frozenset[str]:
-    """Return the `[workspace.dependencies]` keys that are path dependencies."""
-    found: set[str] = set()
+def _directory_key(directory: pathlib.PurePosixPath) -> str:
+    """Return a directory as a checkout-relative key, `""` for the top."""
+    text = directory.as_posix()
+    return "" if text == "." else text
+
+
+def _local_workspace_dependencies(
+    reader: Reader, manifests: list[str]
+) -> dict[str, frozenset[str]]:
+    """Return, per workspace root directory, its `[workspace.dependencies]` paths.
+
+    The key is the root's directory relative to the checkout (`""` at the top);
+    the value holds the dependency keys that are path dependencies.
+
+    Returns
+    -------
+    dict[str, frozenset[str]]
+        The path-dependency keys of each workspace root, by directory.
+    """
+    roots: dict[str, frozenset[str]] = {}
     for relative in manifests:
         workspace = table(reader.toml(reader.checkout / relative)).get("workspace")
-        for alias, spec in table(table(workspace).get("dependencies")).items():
-            if "path" in table(spec):
-                found.add(alias)
-    return frozenset(found)
+        if isinstance(workspace, dict):
+            dependencies = table(table(workspace).get("dependencies"))
+            directory = pathlib.PurePosixPath(relative).parent
+            roots[_directory_key(directory)] = frozenset(
+                alias for alias, spec in dependencies.items() if "path" in table(spec)
+            )
+    return roots
 
 
-def _crate_names(reader: Reader, relative: str, inherited: frozenset[str]) -> set[str]:
+def _owning_workspace(
+    relative: str, roots: dict[str, frozenset[str]]
+) -> frozenset[str]:
+    """Return the inherited path dependencies of the workspace that owns a manifest.
+
+    The owner is the nearest manifest at or above the package's directory that
+    has a `[workspace]` table, as Cargo searches. A package under no workspace
+    inherits nothing, so an unrelated workspace's dependencies cannot make its
+    registry dependency look local.
+
+    Returns
+    -------
+    frozenset[str]
+        The owning workspace's path-dependency keys, or none.
+    """
+    directory = pathlib.PurePosixPath(relative).parent
+    for candidate in (directory, *directory.parents):
+        key = _directory_key(candidate)
+        if key in roots:
+            return roots[key]
+    return frozenset()
+
+
+def _crate_names(
+    reader: Reader, relative: str, roots: dict[str, frozenset[str]]
+) -> set[str]:
     """Return the normalised crate names one manifest and its directory hold."""
     path = reader.checkout / relative
     manifest = reader.toml(path)
     if manifest is None:
         return set()
+    inherited = _owning_workspace(relative, roots)
     package = table(manifest.get("package"))
-    names = _declared_names(manifest, inherited) | _discovered_targets(
+    names = _declared_names(manifest, inherited) | discovered_targets(
         path.parent, package, reader
     )
     return {normalised(name) for name in names}
@@ -247,11 +258,11 @@ def crate_kinds(reader: Reader) -> dict[str, str]:
         Normalised crate name to `governed` or `fixture`.
     """
     manifests = _manifests(reader.checkout, reader.unreadable)
-    inherited = _inherited_local(reader, manifests)
+    roots = _local_workspace_dependencies(reader, manifests)
     names: dict[str, set[str]] = {GOVERNED: set(), FIXTURE: set()}
     for relative in manifests:
         kind = FIXTURE if _is_fixture(relative) else GOVERNED
-        names[kind] |= _crate_names(reader, relative, inherited)
+        names[kind] |= _crate_names(reader, relative, roots)
     # A name found in both kinds is governed, so the governed names go last.
     return {
         **dict.fromkeys(names[FIXTURE], FIXTURE),
