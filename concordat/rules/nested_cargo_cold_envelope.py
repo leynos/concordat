@@ -41,6 +41,7 @@ from .nested_cargo_spawns import (
     collect_rust_evidence,
     fixture_directories,
 )
+from .rust_sources import has_rust_sources
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -105,6 +106,22 @@ def build_nested_cargo_cold_envelope(
     """
     problems: list[str] = []
     manifests = load_manifests(checkout, problems)
+    if not manifests and not problems and not has_rust_sources(checkout):
+        # No Cargo manifest and no Rust source anywhere: the repository owns no
+        # Rust, so there is no nested cargo build to judge, and its Makefile's
+        # `test` recipe (a Python or uv gate) is not this rule's business. The
+        # empty envelope carries no finding. A manifest that exists but cannot be
+        # read leaves a problem, so an unreadable tree never turns into a
+        # repository without Rust.
+        return {
+            "schema_version": ENVELOPE_SCHEMA_VERSION,
+            "kind": ENVELOPE_KIND,
+            "repository": {"path": ".", "name": origin_slug(checkout)},
+            "spawns": [],
+            "builds": [],
+            "passes": [],
+            "problems": [],
+        }
     evidence = collect_rust_evidence(checkout, manifests, problems, cold_build=True)
     fixtures = fixture_directories(checkout, manifests)
     # The sources are read a second time rather than shared with the spawn
