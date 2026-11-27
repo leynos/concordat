@@ -38,6 +38,7 @@ if typ.TYPE_CHECKING:
 
     from .gate_scope_commands import Invocation
     from .gate_scope_workflow_model import Place
+    from .makefile_expansion import Expansion
     from .makefile_facts import MakefileInspector, MakeutilReport
     from .markdown_envelope import WorkflowFile
 
@@ -164,10 +165,17 @@ def _recipe_miri(
     verdict = _line_miri(expanded.text)
     if verdict:
         scan.sources.append(source)
-    elif verdict is None or (not expanded.is_resolved and _NAMES_MIRI.search(text)):
-        # A line that will not lex, or a reference that could stand for the
-        # command word, while the text names Miri.
+    elif verdict is None or _may_hide_miri(expanded, text):
         scan.is_resolved = False
+
+
+def _may_hide_miri(expanded: Expansion, text: str) -> bool:
+    """Return whether an unresolved Make reference could stand for the command.
+
+    Only a line that names Miri is in doubt: an unresolved word in a line that
+    never mentions it cannot be the command.
+    """
+    return not expanded.is_resolved and _NAMES_MIRI.search(text) is not None
 
 
 def _miri_steps(
