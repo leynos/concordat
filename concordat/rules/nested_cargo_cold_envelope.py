@@ -85,6 +85,37 @@ class NestedCargoColdEnvelope(typ.TypedDict):
     problems: list[str]
 
 
+def _owns_no_rust(
+    checkout: pathlib.Path,
+    manifests: typ.Mapping[pathlib.Path, object],
+    problems: list[str],
+) -> bool:
+    """Return whether the checkout has no Cargo manifest and no Rust source.
+
+    A manifest that exists but cannot be read leaves a problem, so an unreadable
+    tree never turns into a repository without Rust.
+    """
+    if manifests or problems:
+        return False
+    return not has_rust_sources(checkout)
+
+
+def _empty_envelope(checkout: pathlib.Path) -> NestedCargoColdEnvelope:
+    """Return the envelope of a repository with no Rust: no fact, so no finding.
+
+    Its Makefile's `test` recipe (a Python or uv gate) is not this rule's business.
+    """
+    return {
+        "schema_version": ENVELOPE_SCHEMA_VERSION,
+        "kind": ENVELOPE_KIND,
+        "repository": {"path": ".", "name": origin_slug(checkout)},
+        "spawns": [],
+        "builds": [],
+        "passes": [],
+        "problems": [],
+    }
+
+
 def build_nested_cargo_cold_envelope(
     checkout: pathlib.Path, parameters: typ.Mapping[str, object] | None = None
 ) -> NestedCargoColdEnvelope:
@@ -106,22 +137,8 @@ def build_nested_cargo_cold_envelope(
     """
     problems: list[str] = []
     manifests = load_manifests(checkout, problems)
-    if not manifests and not problems and not has_rust_sources(checkout):
-        # No Cargo manifest and no Rust source anywhere: the repository owns no
-        # Rust, so there is no nested cargo build to judge, and its Makefile's
-        # `test` recipe (a Python or uv gate) is not this rule's business. The
-        # empty envelope carries no finding. A manifest that exists but cannot be
-        # read leaves a problem, so an unreadable tree never turns into a
-        # repository without Rust.
-        return {
-            "schema_version": ENVELOPE_SCHEMA_VERSION,
-            "kind": ENVELOPE_KIND,
-            "repository": {"path": ".", "name": origin_slug(checkout)},
-            "spawns": [],
-            "builds": [],
-            "passes": [],
-            "problems": [],
-        }
+    if _owns_no_rust(checkout, manifests, problems):
+        return _empty_envelope(checkout)
     evidence = collect_rust_evidence(checkout, manifests, problems, cold_build=True)
     fixtures = fixture_directories(checkout, manifests)
     # The sources are read a second time rather than shared with the spawn
