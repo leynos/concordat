@@ -73,35 +73,52 @@ class _Scan:
             self.newline()
         self.index += 1
 
-    def step_inside(self) -> None:
-        """Advance one step with a string open."""
+    def escape(self) -> None:
+        """Skip a backslash and the character it takes, which may be a line break."""
+        if self.text[self.index + 1 : self.index + 2] == "\n":
+            self.newline()
+        self.index += 2
+
+    def step_multiline(self) -> None:
+        """Advance one step inside a multi-line string."""
         char = self.text[self.index]
-        if self.state in _MULTILINE and self.text.startswith(self.state, self.index):
+        if self.state is not None and self.text.startswith(self.state, self.index):
             self.state, self.index = None, self.index + 3
-        elif char == "\\" and self.state not in ("'", "'''"):
-            # An escape takes the next character, which may be a line break.
-            if self.text[self.index + 1 : self.index + 2] == "\n":
+        elif char == "\\" and self.state == '"""':
+            self.escape()
+        else:
+            if char == "\n":
                 self.newline()
-            self.index += 2
+            self.index += 1
+
+    def step_single_line(self) -> None:
+        """Advance one step inside a one-line string, which a line break ends."""
+        char = self.text[self.index]
+        if char == self.state:
+            self.state, self.index = None, self.index + 1
+        elif char == "\\" and self.state == '"':
+            self.escape()
         elif char == "\n":
             self.newline()
-            if self.state in ('"', "'"):
-                self.state = None  # an unterminated one-line string ends here
-            self.index += 1
+            self.state, self.index = None, self.index + 1
         else:
             self.index += 1
+
+    def step(self) -> None:
+        """Advance one step, whatever string is or is not open."""
+        if self.state is None:
+            self.step_outside()
+        elif self.state in _MULTILINE:
+            self.step_multiline()
+        else:
+            self.step_single_line()
 
 
 def _string_interior_lines(text: str) -> set[int]:
     """Return the 0-based indexes of the lines that start inside a multi-line string."""
     scan = _Scan(text)
     while scan.index < len(text):
-        if scan.state is None:
-            scan.step_outside()
-        elif scan.state in ('"', "'") and text[scan.index] == scan.state:
-            scan.state, scan.index = None, scan.index + 1
-        else:
-            scan.step_inside()
+        scan.step()
     return scan.inside
 
 
