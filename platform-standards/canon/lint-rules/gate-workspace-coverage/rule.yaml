@@ -22,8 +22,8 @@ description: >-
   tool indeterminate (EN-001), never a guess. The finding names the narrowing
   commands and the fenced examples in `AGENTS.md` and `docs/` that show the same
   narrowing. Only the root workspace is audited; a repository with no root
-  `Cargo.toml` is not. The rule ships at `warning` severity so the estate can be
-  surveyed before it blocks. Audit-only: this rule declares no mutations.
+  `Cargo.toml` is not. GC-001 ships at `error` severity and the indeterminate
+  findings (EN-001) at `warning`. Audit-only: this rule declares no mutations.
 version: 0.1.0
 sensor:
   type: conftest
@@ -42,12 +42,18 @@ parameters:
         type: string
         enum: [warning, error]
         description: >-
-          The severity of every GC-001 finding, and of the indeterminate
-          findings that report evidence the reader could not establish. An
-          envelope defect is always `error`: it says the rule could not run,
-          not that the repository is unsafe. A `warning` finding is reported
-          but does not block; promotion to `error` is the intended end state
-          once the estate survey is clean.
+          The severity of every GC-001 finding: a gate command that leaves a
+          workspace member out. It defaults to `error`, since the estate
+          survey is clean. A `warning` finding is reported but does not block.
+      indeterminate_severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of the indeterminate findings (EN-001) that report
+          evidence the reader could not establish. It defaults to `warning`:
+          the audit declining to guess is not a defect in the repository.
+          An envelope defect is always `error`: it says the rule could not
+          run, not that the repository is unsafe.
       exemptions:
         type: array
         items:
@@ -81,5 +87,6 @@ parameters:
           exemption nobody must revisit is not a record. A crate another
           command of the same tool already covers needs no entry.
   defaults:
-    severity: warning
+    severity: error
+    indeterminate_severity: warning
     exemptions: []
