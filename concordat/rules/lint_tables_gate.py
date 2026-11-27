@@ -25,6 +25,7 @@ import re
 import typing as typ
 
 from .gate_scope_commands import cargo_subcommand_word, without_keywords
+from .gate_scope_shell import FRESH_SHELL, runnable
 from .gate_scope_sources import GATE_TARGETS, makefile_lines, workflow_lines
 from .gate_scope_workflow_model import places, step_runs
 from .interrogate_invocation import lex_segments
@@ -37,6 +38,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from .gate_scope_commands import Invocation
+    from .gate_scope_shell import ShellState
     from .gate_scope_workflow_model import Place
     from .makefile_expansion import Expansion
     from .makefile_facts import MakefileInspector, MakeutilReport
@@ -78,23 +80,28 @@ def _runs_cargo_miri(segment: list[str]) -> bool:
     return cargo_subcommand_word(words[1:]) == "miri"
 
 
-def _line_miri(text: str) -> bool | None:
-    """Return whether a line runs `cargo miri`, or None if it cannot be told.
+def _line_miri(
+    text: str, state: ShellState = FRESH_SHELL
+) -> tuple[bool | None, ShellState]:
+    """Return whether a line runs `cargo miri`, and the shell the next line starts in.
 
     The line is lexed into simple commands, so `echo "cargo miri test"` and a
-    comment are not runs. A line that will not lex but names Miri is unknown,
-    not absent.
+    comment are not runs. Shell control flow is read as `gate-workspace-coverage`
+    reads it: a command inside `if false; then ... fi` (also across lines, which
+    *state* carries) cannot run and is not counted. A line that will not lex but
+    names Miri is unknown, not absent.
 
     Returns
     -------
-    bool | None
-        Whether a simple command in the line is `cargo miri`, or None when the
-        line names Miri but will not lex.
+    tuple[bool | None, ShellState]
+        Whether a command that can run is `cargo miri`, or None when the line
+        names Miri but will not lex; and the state after the line.
     """
     segments = lex_segments(text)
     if segments is None:
-        return None if _NAMES_MIRI.search(text) else False
-    return any(_runs_cargo_miri(segment) for segment in segments)
+        return (None if _NAMES_MIRI.search(text) else False), state
+    kept, after = runnable(segments, state)
+    return any(_runs_cargo_miri(command) for command, _frames in kept), after
 
 
 class MiriFact(typ.TypedDict):
@@ -162,7 +169,7 @@ def _recipe_miri(
 ) -> None:
     """Record whether one recipe line runs Miri, or might (an unresolved word)."""
     expanded = expand(text, values)
-    verdict = _line_miri(expanded.text)
+    verdict, _after = _line_miri(expanded.text)
     if verdict:
         scan.sources.append(source)
     elif verdict is None or _may_hide_miri(expanded, text):
@@ -189,12 +196,31 @@ def _miri_steps(
     """Return the steps of *place*, for one matrix combination, that run Miri."""
     found: list[str] = []
     for step in step_runs(place, combination):
-        verdicts = [_line_miri(line) for line in step.lines]
+        verdicts = _step_verdicts(step.lines)
         if any(verdicts):
             found.append(f"{path} {step.source}")
         elif None in verdicts:
             scan.is_resolved = False
     return found
+
+
+def _step_verdicts(lines: list[str]) -> list[bool | None]:
+    """Return `_line_miri` for each line of one step, which is one shell.
+
+    The shell state carries from line to line, so an `if false` that opens on
+    one line still hides the commands on the lines after it.
+
+    Returns
+    -------
+    list[bool | None]
+        One verdict per line.
+    """
+    verdicts: list[bool | None] = []
+    state = FRESH_SHELL
+    for line in lines:
+        verdict, state = _line_miri(line, state)
+        verdicts.append(verdict)
+    return verdicts
 
 
 def _place_miri(path: str, place: Place, scan: _MiriScan) -> None:

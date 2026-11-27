@@ -9956,6 +9956,289 @@
       "unreadable": [],
       "gate_unreadable": []
     },
+    "boundary_miri_in_a_branch_that_cannot_run": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-lint-tables",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "packages": [
+        {
+          "name": "ffi",
+          "manifest": "Cargo.toml",
+          "directory": "",
+          "state": "own",
+          "workspace": null,
+          "workspace_has_lints": false,
+          "effective": {
+            "clippy": {
+              "pedantic": {
+                "level": "warn",
+                "priority": -1
+              },
+              "allow_attributes": {
+                "level": "deny",
+                "priority": null
+              },
+              "allow_attributes_without_reason": {
+                "level": "deny",
+                "priority": null
+              },
+              "blanket_clippy_restriction_lints": {
+                "level": "deny",
+                "priority": null
+              },
+              "cognitive_complexity": {
+                "level": "deny",
+                "priority": null
+              },
+              "disallowed_methods": {
+                "level": "deny",
+                "priority": null
+              },
+              "needless_pass_by_value": {
+                "level": "deny",
+                "priority": null
+              },
+              "implicit_hasher": {
+                "level": "deny",
+                "priority": null
+              },
+              "missing_assert_message": {
+                "level": "deny",
+                "priority": null
+              },
+              "dbg_macro": {
+                "level": "deny",
+                "priority": null
+              },
+              "print_stdout": {
+                "level": "deny",
+                "priority": null
+              },
+              "print_stderr": {
+                "level": "deny",
+                "priority": null
+              },
+              "unwrap_used": {
+                "level": "deny",
+                "priority": null
+              },
+              "expect_used": {
+                "level": "deny",
+                "priority": null
+              },
+              "indexing_slicing": {
+                "level": "deny",
+                "priority": null
+              },
+              "string_slice": {
+                "level": "deny",
+                "priority": null
+              },
+              "integer_division": {
+                "level": "deny",
+                "priority": null
+              },
+              "integer_division_remainder_used": {
+                "level": "deny",
+                "priority": null
+              },
+              "panic_in_result_fn": {
+                "level": "deny",
+                "priority": null
+              },
+              "unreachable": {
+                "level": "deny",
+                "priority": null
+              },
+              "host_endian_bytes": {
+                "level": "deny",
+                "priority": null
+              },
+              "little_endian_bytes": {
+                "level": "deny",
+                "priority": null
+              },
+              "big_endian_bytes": {
+                "level": "deny",
+                "priority": null
+              },
+              "let_underscore_must_use": {
+                "level": "deny",
+                "priority": null
+              },
+              "or_fun_call": {
+                "level": "deny",
+                "priority": null
+              },
+              "option_if_let_else": {
+                "level": "deny",
+                "priority": null
+              },
+              "self_named_module_files": {
+                "level": "deny",
+                "priority": null
+              },
+              "shadow_reuse": {
+                "level": "deny",
+                "priority": null
+              },
+              "shadow_same": {
+                "level": "deny",
+                "priority": null
+              },
+              "shadow_unrelated": {
+                "level": "deny",
+                "priority": null
+              },
+              "str_to_string": {
+                "level": "deny",
+                "priority": null
+              },
+              "string_lit_as_bytes": {
+                "level": "deny",
+                "priority": null
+              },
+              "try_err": {
+                "level": "deny",
+                "priority": null
+              },
+              "unneeded_field_pattern": {
+                "level": "deny",
+                "priority": null
+              },
+              "use_self": {
+                "level": "deny",
+                "priority": null
+              },
+              "float_arithmetic": {
+                "level": "deny",
+                "priority": null
+              },
+              "cast_possible_truncation": {
+                "level": "deny",
+                "priority": null
+              },
+              "cast_possible_wrap": {
+                "level": "deny",
+                "priority": null
+              },
+              "cast_precision_loss": {
+                "level": "deny",
+                "priority": null
+              },
+              "lossy_float_literal": {
+                "level": "deny",
+                "priority": null
+              },
+              "missing_const_for_fn": {
+                "level": "deny",
+                "priority": null
+              },
+              "must_use_candidate": {
+                "level": "deny",
+                "priority": null
+              },
+              "unused_async": {
+                "level": "deny",
+                "priority": null
+              },
+              "missing_docs_in_private_items": {
+                "level": "deny",
+                "priority": null
+              },
+              "missing_panics_doc": {
+                "level": "deny",
+                "priority": null
+              },
+              "error_impl_error": {
+                "level": "deny",
+                "priority": null
+              },
+              "result_large_err": {
+                "level": "deny",
+                "priority": null
+              }
+            },
+            "rust": {
+              "unknown_lints": {
+                "level": "deny",
+                "priority": null
+              },
+              "renamed_and_removed_lints": {
+                "level": "deny",
+                "priority": null
+              },
+              "unsafe_code": {
+                "level": "deny",
+                "priority": null
+              },
+              "missing_docs": {
+                "level": "deny",
+                "priority": null
+              },
+              "unexpected_cfgs": {
+                "level": "warn",
+                "priority": null
+              }
+            },
+            "rustdoc": {
+              "missing_crate_level_docs": {
+                "level": "deny",
+                "priority": null
+              },
+              "broken_intra_doc_links": {
+                "level": "deny",
+                "priority": null
+              },
+              "private_intra_doc_links": {
+                "level": "deny",
+                "priority": null
+              },
+              "bare_urls": {
+                "level": "deny",
+                "priority": null
+              },
+              "invalid_html_tags": {
+                "level": "deny",
+                "priority": null
+              },
+              "invalid_codeblock_attributes": {
+                "level": "deny",
+                "priority": null
+              },
+              "unescaped_backticks": {
+                "level": "deny",
+                "priority": null
+              }
+            }
+          },
+          "depends_on_pyo3": false,
+          "config": {
+            "clippy": {
+              "path": null,
+              "cognitive_threshold": null
+            },
+            "dylint": {
+              "path": null,
+              "experimental": null,
+              "table": null,
+              "max_complexity_is_integer": false
+            }
+          }
+        }
+      ],
+      "miri": {
+        "is_reachable": false,
+        "is_resolved": true,
+        "sources": []
+      },
+      "whitaker_runs": [],
+      "unreadable": [],
+      "gate_unreadable": []
+    },
     "boundary_miri_behind_an_environment_prefix": {
       "schema_version": 1,
       "kind": "policy-input/rust-lint-tables",

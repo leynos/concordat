@@ -378,6 +378,9 @@ class TestGate:
             ("MIRIFLAGS=-Zmiri-strict-provenance cargo miri test", True),
             ("env MIRIFLAGS=x cargo miri test", True),
             ("if true; then cargo miri test; fi", True),
+            ('if [ -n "$X" ]; then cargo miri test; fi', True),
+            ("if false; then cargo miri test; fi", False),
+            ("if false; then cargo miri test; else cargo miri nextest run; fi", True),
             ('echo "cargo miri test"', False),
             ("printf '%s' 'cargo miri test'", False),
             ("cargo test --features miri-helpers", False),
@@ -398,6 +401,37 @@ class TestGate:
         )
         miri = build_lint_tables_envelope(tmp_path)["miri"]
         assert miri["is_reachable"] is expected, recipe
+
+    @pytest.mark.parametrize(
+        ("body", "expected"),
+        [
+            ("if false; then\n            cargo miri test\n          fi\n", False),
+            ("if true; then\n            cargo miri test\n          fi\n", True),
+            (
+                (
+                    "if false; then\n            true\n          fi\n"
+                    "          cargo miri test\n"
+                ),
+                True,
+            ),
+        ],
+    )
+    def test_shell_control_flow_across_a_workflow_step_is_read(
+        self, tmp_path: pathlib.Path, body: str, *, expected: bool
+    ) -> None:
+        """A block that cannot run hides its commands, on the lines after it too."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": _package("app", PACKAGE_LINTS),
+                ".github/workflows/ci.yml": (
+                    "name: ci\non: push\njobs:\n  miri:\n    runs-on: ubuntu-latest\n"
+                    f"    steps:\n      - run: |\n          {body}"
+                ),
+            },
+        )
+        miri = build_lint_tables_envelope(tmp_path)["miri"]
+        assert miri["is_reachable"] is expected, body
 
     def test_a_miri_target_outside_the_gate_is_not_reachable(
         self, tmp_path: pathlib.Path

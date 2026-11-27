@@ -297,6 +297,12 @@ SCENARIOS: dict[str, dict[str, str]] = {
         ),
         ".github/workflows/ci.yml": workflow('echo "cargo miri test"'),
     },
+    "boundary_miri_in_a_branch_that_cannot_run": {
+        **boundary(
+            makefile=(".PHONY: test\ntest:\n\tif false; then cargo miri test; fi\n")
+        ),
+        ".github/workflows/ci.yml": workflow("if false; then\n  cargo miri test\nfi"),
+    },
     "boundary_miri_behind_an_environment_prefix": boundary(
         makefile=(
             ".PHONY: test\ntest:\n"

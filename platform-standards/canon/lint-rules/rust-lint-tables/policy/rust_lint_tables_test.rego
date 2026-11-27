@@ -225,6 +225,13 @@ test_miri_quoted_in_an_echo_or_printf_is_not_a_command if {
 	contains(f.msg, "no Miri command")
 }
 
+test_miri_in_a_shell_branch_that_cannot_run_is_not_a_command if {
+	fs := with_boundary(data.fixtures.boundary_miri_in_a_branch_that_cannot_run)
+	{f.rule_id | some f in fs} == {"LT-004"}
+	some f in fs
+	contains(f.msg, "no Miri command")
+}
+
 test_miri_behind_an_environment_prefix_is_a_command if {
 	count(with_boundary(data.fixtures.boundary_miri_behind_an_environment_prefix)) == 0
 }
