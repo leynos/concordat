@@ -85,6 +85,16 @@ not packages. Every other option, before or after the `--`, goes to Cargo
 on either side of the separator and `--all` does not. `cargo test --doc` is a
 tool of its own (`test-doc`): doctests are judged apart from unit tests.
 
+`cargo nextest run` and `cargo test` without `--doc` are two runners of one
+tool, the unit and integration tests, and their commands count together. A
+repository may run everything under nextest and keep one special target under
+`cargo test` (the `whitaker` repository does: its `dylint_testing` harness
+needs its own flags); every member is covered when the two runners select it
+between them. A finding names the members neither selects and reads "the test
+commands". Nextest does not run doctests, so a `cargo test --doc` command never
+covers the tests. An exemption's `tools` may name `nextest`, `test` or `tests`;
+each applies to the tests.
+
 A command that narrows is not a finding while another command of the same tool
 covers the rest. The `whitaker` repository lints every crate with one command
 and the two crates that keep deliberately violating fixtures with another.
@@ -137,15 +147,16 @@ another directory's workspace, so the rule reports `EN-001` and a person checks
 the gate by hand. The reasons name the construct; they are not defects in the
 repositories.
 
-| Repository  | Why the audit stays indeterminate                                                                              |
-| ----------- | -------------------------------------------------------------------------------------------------------------- |
-| axinite     | A tool is given a `--manifest-path` outside the root manifest, and its matrices are expressions.               |
-| chutoro     | The nextest steps take their flags from variables, and the matrices are expressions.                           |
-| combobulate | The profile-measurements job runs in another directory, so its workspace is not the root one.                  |
-| ddlint      | The Makefile walk skips a target it cannot resolve, while some member looks uncovered.                         |
-| evert       | The Makefile wraps each cargo command in a `define` function (`$(call ...)`) that the audit does not evaluate. |
-| netsuke     | A step runs `cd test_support` first, and another uses a PowerShell `@suite` splat.                             |
-| wildside    | The gate uses `make -C` and `cd`, and the nextest word is a variable.                                          |
+| Repository  | Why the audit stays indeterminate                                                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| axinite     | A tool is given a `--manifest-path` outside the root manifest, and its matrices are expressions.                                               |
+| chutoro     | The nextest steps take their flags from variables, and the matrices are expressions.                                                           |
+| combobulate | The profile-measurements job runs in another directory, so its workspace is not the root one.                                                  |
+| ddlint      | The Makefile walk skips a target it cannot resolve, while some member looks uncovered.                                                         |
+| evert       | The Makefile wraps each cargo command in a `define` function (`$(call ...)`) that the audit does not evaluate.                                 |
+| netsuke     | A step runs `cd test_support` first, and another uses a PowerShell `@suite` splat.                                                             |
+| whitaker    | The test recipe has unresolved references (`$(HOME)`) in quoted strings that hold parentheses, and one could close a string and run a command. |
+| wildside    | The gate uses `make -C` and `cd`, and the nextest word is a variable.                                                                          |
 
 ## Exemptions
 

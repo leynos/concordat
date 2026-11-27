@@ -60,6 +60,34 @@ test_a_second_run_covers_what_the_first_excludes if {
 	count(findings(data.fixtures.whitaker_two_runs_cover)) == 0
 }
 
+test_nextest_and_cargo_test_cover_the_tests_together if {
+	count(findings(data.fixtures.tests_two_runners_cover)) == 0
+}
+
+test_a_member_neither_runner_selects_is_named_once_under_the_tests if {
+	fs := findings(data.fixtures.tests_runners_leave_one_out)
+	{[f.rule_id, f.verdict] | some f in fs} == {["GC-001", "noncompliant"]}
+	count(fs) == 1
+	some f in fs
+	contains(f.msg, "the test commands")
+	contains(f.msg, "leave 1 of 3 workspace member(s) out: c")
+}
+
+test_a_doctest_run_does_not_cover_the_tests if {
+	some f in findings(data.fixtures.tests_doc_run_does_not_cover)
+	f.rule_id == "GC-001"
+	contains(f.msg, "out: c")
+}
+
+test_an_exemption_naming_either_runner_applies_to_the_tests if {
+	nextest := [object.union(exemptions[0], {"tools": ["nextest"]})]
+	runner := [object.union(exemptions[0], {"tools": ["test"]})]
+	tests := [object.union(exemptions[0], {"tools": ["tests"]})]
+	count(exempted(data.fixtures.tests_runners_leave_one_out, nextest)) == 0
+	count(exempted(data.fixtures.tests_runners_leave_one_out, runner)) == 0
+	count(exempted(data.fixtures.tests_runners_leave_one_out, tests)) == 0
+}
+
 test_a_doc_example_beside_a_workspace_gate_is_not_a_finding if {
 	count(findings(data.fixtures.docs_outside_fences_ignored)) == 0
 }

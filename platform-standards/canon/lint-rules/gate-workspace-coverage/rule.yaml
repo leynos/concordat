@@ -63,7 +63,7 @@ parameters:
               type: array
               items:
                 type: string
-                enum: [clippy, nextest, test, test-doc, whitaker]
+                enum: [clippy, nextest, test, tests, test-doc, whitaker]
             rationale:
               type: string
               minLength: 1
@@ -73,7 +73,8 @@ parameters:
         description: >-
           Workspace members the gate may leave out, each with its repository
           (`owner/name`, read from the `origin` remote), the crate's package
-          name, the tools it applies to (all of them when absent), the
+          name, the tools it applies to (all of them when absent; `nextest`,
+          `test` and `tests` all name the unit and integration tests), the
           rationale and the review trigger (the event after which the
           exemption is revisited). Both text fields must be non-blank; the
           policy ignores an entry that leaves either blank, because an
