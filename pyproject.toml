@@ -9,7 +9,7 @@ authors = [
     { name = "Payton McIntosh", email = "pmcintosh@df12.net" },
 ]
 dependencies = [
-    "boto3>=1.43.68",
+    "boto3>=1.44.7",
     "cyclopts",
     "github3.py",
     "pathspec==1.1.1",
@@ -17,7 +17,7 @@ dependencies = [
     "requests",
     "ruamel.yaml",
     "tofupy>=1.1.2,<2.0",
-    "tree-sitter==0.25.2",
+    "tree-sitter==0.26.1",
     "tree-sitter-rust==0.24.2",
 ]
 
@@ -35,7 +35,7 @@ dev = [
     "pyright",
     "pytest-timeout",
     "betamax",
-    "hypothesis>=6.165.10,<7.0",
+    "hypothesis>=6.170.16,<7.0",
     "textual>=8.2.8,<9.0",
     "df12-python-lints @ git+https://github.com/leynos/df12-python-lints.git@9c835f35b0f1690597ade799c9c6a30bc5922959",
 ]
