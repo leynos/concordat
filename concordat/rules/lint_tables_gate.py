@@ -42,6 +42,7 @@ if typ.TYPE_CHECKING:
     from .gate_scope_workflow_model import Place
     from .makefile_expansion import Expansion
     from .makefile_facts import MakefileInspector, MakeutilReport
+    from .makefile_reach import Rule
     from .markdown_envelope import WorkflowFile
 
 __all__ = ["GateFacts", "MiriFact", "WhitakerRun", "read_gate"]
@@ -138,10 +139,17 @@ class GateFacts(typ.TypedDict):
 
 @dataclasses.dataclass(slots=True)
 class _MiriScan:
-    """Accumulates where Miri was found and whether the scan was complete."""
+    """Accumulates where Miri was found and whether the scan was complete.
+
+    `values` and `is_one_shell` describe the Makefile being read: the Make
+    variables its recipes expand with, and whether `.ONESHELL` makes a rule's
+    recipe lines one shell.
+    """
 
     sources: list[str] = dataclasses.field(default_factory=list)
     is_resolved: bool = True
+    values: cabc.Mapping[str, str] = dataclasses.field(default_factory=dict)
+    is_one_shell: bool = False
 
     def fact(self) -> MiriFact:
         """Return the accumulated facts as an envelope value."""
@@ -155,29 +163,28 @@ class _MiriScan:
 def _makefile_miri(report: MakeutilReport, scan: _MiriScan) -> None:
     """Record Miri commands in the recipes `lint` and `test` reach."""
     index = rules_by_target(report)
-    values = single_assignments(report["variables"])
-    walk = reachable(index, values, GATE_TARGETS)
+    scan.values = single_assignments(report["variables"])
+    walk = reachable(index, scan.values, GATE_TARGETS)
     scan.is_resolved = scan.is_resolved and walk.is_resolved
     # Under `.ONESHELL` a rule's recipe lines are one shell, so an `if false`
     # opened on one line hides the lines after it; otherwise each is its own.
-    is_one_shell = ".ONESHELL" in index
+    scan.is_one_shell = ".ONESHELL" in index
     for target in walk.names:
         for rule in index[target]:
+            _rule_miri(scan, target, rule)
+
+
+def _rule_miri(scan: _MiriScan, target: str, rule: Rule) -> None:
+    """Record Miri commands in the recipe lines of one rule of *target*."""
+    state = FRESH_SHELL
+    for number, text in rule.recipes:
+        state = _recipe_miri(scan, f"Makefile:{number} ({target})", text, state)
+        if not scan.is_one_shell:
             state = FRESH_SHELL
-            for number, text in rule.recipes:
-                state = _recipe_miri(
-                    f"Makefile:{number} ({target})", text, values, scan, state
-                )
-                if not is_one_shell:
-                    state = FRESH_SHELL
 
 
 def _recipe_miri(
-    source: str,
-    text: str,
-    values: cabc.Mapping[str, str],
-    scan: _MiriScan,
-    state: ShellState,
+    scan: _MiriScan, source: str, text: str, state: ShellState
 ) -> ShellState:
     """Record whether one recipe line runs Miri, or might (an unresolved word).
 
@@ -186,7 +193,7 @@ def _recipe_miri(
     ShellState
         The shell the next line of the recipe starts in.
     """
-    expanded = expand(text, values)
+    expanded = expand(text, scan.values)
     verdict, after = _line_miri(expanded.text, state)
     if verdict:
         scan.sources.append(source)
