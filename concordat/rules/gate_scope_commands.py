@@ -46,6 +46,8 @@ __all__ = [
 TOOLS: typ.Final = ("clippy", "nextest", "test", "test-doc", "whitaker")
 _WORKSPACE_FLAGS: typ.Final = frozenset({"--workspace", "--all"})
 _PACKAGE_FLAGS: typ.Final = frozenset({"-p", "--package"})
+# The options that take a value to choose which packages Cargo builds.
+_VALUE_SELECTORS: typ.Final = _PACKAGE_FLAGS | {"--exclude", "--manifest-path"}
 # `cargo` options that take the next word as a value, so it is not the subcommand.
 _CARGO_VALUE_FLAGS: typ.Final = frozenset({
     "-Z",
@@ -165,12 +167,17 @@ def _hides_selection(arguments: list[str]) -> bool:
     reference is substituted as text before the shell splits it, and an
     unquoted shell variable splits into words, so neither is one value.
 
+    A selecting option with no value after it is hidden too: the shell took
+    its value out as a command substitution (`--exclude "$(printf member)"`),
+    which the lexer reads as a command of its own, so the value is not known.
+
     Returns
     -------
     bool
         Whether the selection cannot be read.
     """
-    return any(_is_unresolved(word) for word in arguments)
+    lacks_value = bool(arguments) and arguments[-1] in _VALUE_SELECTORS
+    return lacks_value or any(_is_unresolved(word) for word in arguments)
 
 
 def _cargo_subcommand(arguments: list[str]) -> tuple[str | None, list[str]]:

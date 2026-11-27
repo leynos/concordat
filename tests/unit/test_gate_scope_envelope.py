@@ -381,6 +381,21 @@ class TestMakefile:
         assert envelope["unreadable"] == []
         assert [i["tool"] for i in envelope["invocations"]] == ["test"]
 
+    def test_a_string_holding_a_shell_substitution_is_not_muted(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`"$(P)$$(printf member)"` runs a shell command; it is not the text `_`."""
+        makefile = (
+            "P ?=\n.PHONY: test\ntest:\n"
+            '\tcargo nextest run --workspace --exclude "$(P)$$(printf member)"\n'
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        excluded = [e for i in envelope["invocations"] for e in i["excludes"]]
+        assert "_" not in excluded
+        assert envelope["unreadable"] or not all(
+            i["resolved"] for i in envelope["invocations"]
+        )
+
     def test_an_option_added_only_when_a_variable_is_set_is_read(
         self, tmp_path: pathlib.Path
     ) -> None:

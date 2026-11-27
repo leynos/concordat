@@ -413,6 +413,27 @@ def test_an_if_with_a_settled_condition_takes_one_branch(
     assert (result.text, result.is_resolved) == (expected, True)
 
 
+def test_a_comma_in_a_variable_does_not_move_an_if_argument() -> None:
+    """Make splits the arguments before it expands the condition."""
+    result = expand(
+        "cargo nextest run $(if $(COND),--package member)", {"COND": "x,--workspace"}
+    )
+
+    assert (result.text, result.is_resolved) == (
+        "cargo nextest run --package member",
+        True,
+    )
+
+
+def test_a_condition_that_expands_to_a_space_is_true() -> None:
+    """Make strips the condition before it expands it, so a space is not empty."""
+    values = {"EMPTY": "", "SPACE": "$(EMPTY) $(EMPTY)"}
+
+    result = expand("run $(if $(SPACE),--package member,--workspace)", values)
+
+    assert (result.text, result.is_resolved) == ("run --package member", True)
+
+
 @pytest.mark.parametrize(
     "text",
     [

@@ -134,7 +134,10 @@ _WHITAKER_REFERENCE: typ.Final = re.compile(
 )
 # A plain Make reference that survived expansion, such as `$(HOME)`.
 _PLAIN_REFERENCE: typ.Final = re.compile(r"\$\([A-Za-z_][A-Za-z0-9_-]*\)")
-# A quoted string with no shell expansion in it. A plain Make reference may
+# A quoted string with no Make expansion left in it but a plain reference, and no
+# backtick or backslash. The shell-dollar placeholder (the expansion's mark for
+# `$$`) matches so that quotes pair up as they do in the shell; the muting
+# function below then leaves such a string alone. A plain Make reference may
 # stand in it, because the lexer blanks references later.
 _QUOTED_STRING: typ.Final = re.compile(
     r"\"(?:[^\"$`\\]|\$\([A-Za-z_][A-Za-z0-9_-]*\))*\""
@@ -156,7 +159,9 @@ def _mute_parenthesised(match: re.Match[str]) -> str:
         `"_"` when the string holds a parenthesis of its own, else the string.
     """
     text = match.group(0)
-    return '"_"' if re.search(r"[()]", _PLAIN_REFERENCE.sub("", text)) else text
+    has_shell_dollar = SHELL_DOLLAR in text
+    has_parenthesis = re.search(r"[()]", _PLAIN_REFERENCE.sub("", text)) is not None
+    return '"_"' if has_parenthesis and not has_shell_dollar else text
 
 
 def _name_whitaker(text: str) -> str:

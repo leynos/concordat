@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import itertools
 import posixpath
 import re
 import types
@@ -422,26 +423,32 @@ def _evaluate_affixes(text: str) -> str:
     return text
 
 
-_JUDGED_IF_CALL: typ.Final = re.compile(r"\$\(" + JUDGED_MARK + r"?if\s")
+def _branch_taken(body: str, commas: list[int], condition: str) -> str:
+    """Return the raw THEN or ELSE text of an `if` whose *condition* has expanded."""
+    then_end = commas[1] if len(commas) == 2 else len(body)
+    if condition:
+        return body[commas[0] + 1 : then_end]
+    return body[commas[1] + 1 :] if len(commas) == 2 else ""
 
 
-def _is_settled_condition(condition: str) -> bool:
-    """Return whether *condition* is plain text with nothing left to expand."""
-    unsettled = ("$", "(", ")", SHELL_DOLLAR, UNRESOLVED_MARK)
-    return not any(char in condition for char in unsettled)
+def _evaluate_ifs(text: str, values: cabc.Mapping[str, str]) -> str:
+    """Evaluate each `$(if COND,THEN[,ELSE])` whose condition expands completely.
 
+    Make strips the condition, expands it, and takes THEN when anything is left,
+    otherwise ELSE (nothing, when there is none). `$(if $(PROFILE),--profile
+    $(PROFILE))` with `PROFILE` empty is therefore empty, which is how a Makefile
+    adds an option only when a variable is set. The condition is stripped before
+    it is expanded, so a variable that expands to a space is true.
 
-def _evaluate_ifs(text: str) -> str:
-    """Evaluate each `$(if COND,THEN[,ELSE])` whose condition is settled plain text.
-
-    Make strips the condition and takes THEN when anything is left, otherwise
-    ELSE (nothing, when there is none). `$(if $(PROFILE),--profile $(PROFILE))`
-    with `PROFILE` empty is therefore empty, which is how a Makefile adds an
-    option only when a variable is set. A condition that still holds a
-    reference, a shell dollar or a parenthesis is left for a later pass, and
-    ends up unresolved if none settles it. The branch that is not taken is
-    dropped unread, as Make does; the branch that is taken keeps its text, so
-    an `$(error ...)` in it still leaves the expansion unresolved.
+    The call is read where it stands in the text, before any variable is
+    substituted into its arguments, so a comma or a parenthesis in a variable's
+    value cannot move an argument boundary. Only the condition is expanded here;
+    the branch Make takes is returned as written and expanded by the caller's
+    later passes, and the branch it does not take is dropped unread. A call whose
+    condition does not expand completely (an unset variable, a `$(shell ...)`
+    probe, an `$(eval ...)`), one with other than two or three arguments, and one
+    with an `$(error ...)` branch (which the guard rule below judges) is left as
+    it is.
 
     Returns
     -------
@@ -449,21 +456,20 @@ def _evaluate_ifs(text: str) -> str:
         *text* with the settled calls replaced by the branch Make takes.
     """
     position = 0
-    while (match := _JUDGED_IF_CALL.search(text, position)) is not None:
+    while (match := _IF_CALL.search(text, position)) is not None:
         close = close_of(text, match.start() + 1)
         body = text[match.end() : close] if close is not None else ""
         commas = top_level_commas(body)
         if close is None or len(commas) not in {1, 2}:
             position = match.end()
             continue
-        if not _is_settled_condition(body[: commas[0]]):
+        edges = [commas[0], *commas[1:], len(body)]
+        branches = [body[a + 1 : b] for a, b in itertools.pairwise(edges)]
+        condition = expand(body[: commas[0]].strip(), values)
+        if not condition.is_resolved or any(_is_error_call(b) for b in branches):
             position = match.end()
             continue
-        then_end = commas[1] if len(commas) == 2 else len(body)
-        if body[: commas[0]].strip():
-            taken = body[commas[0] + 1 : then_end]
-        else:
-            taken = body[commas[1] + 1 :] if len(commas) == 2 else ""
+        taken = _branch_taken(body, commas, condition.text)
         text = text[: match.start()] + taken + text[close + 1 :]
         position = match.start()
     return text
@@ -497,17 +503,18 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
 
     current = text.replace("$$", SHELL_DOLLAR)
     for _ in range(EXPANSION_PASSES):
-        updated = _evaluate_ifs(
-            _evaluate_affixes(
-                _FILTER_CALL.sub(
-                    _call_filter,
-                    _FUNCTION_CALL.sub(
-                        _call_function,
-                        _VARIABLE_REFERENCE.sub(
-                            substitute, _drop_error_guards(current, known, assigned)
+        updated = _evaluate_affixes(
+            _FILTER_CALL.sub(
+                _call_filter,
+                _FUNCTION_CALL.sub(
+                    _call_function,
+                    _VARIABLE_REFERENCE.sub(
+                        substitute,
+                        _drop_error_guards(
+                            _evaluate_ifs(current, values), known, assigned
                         ),
                     ),
-                )
+                ),
             )
         )
         if updated == current:
