@@ -203,7 +203,7 @@ class TestRuns:
     def test_a_computed_matrix_job_that_may_lint_is_unreadable(
         self, tmp_path: pathlib.Path, command: str
     ) -> None:
-        """A job whose matrix is an expression may run a lint through make or a script."""
+        """A computed-matrix job may lint through make or a script."""
         _app(
             tmp_path,
             {
