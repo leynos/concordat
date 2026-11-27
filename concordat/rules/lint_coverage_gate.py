@@ -62,6 +62,8 @@ OPERATION_READ_SCRIPT: typ.Final = "read-lint-script"
 _NAMES_TOOL: typ.Final = re.compile(
     r"(?<![\w.-])whitaker(?![\w.-])|cargo\s+(?:\+\S+\s+)?(?:clippy|doc|dylint)\b"
 )
+# A command that may reach a lint without naming a tool: `make`, or a script.
+_MAY_LINT: typ.Final = re.compile(r"\bmake\b|\.(?:sh|py|bash|js|ts)\b|\blint\b")
 # What a lane-building script's text must show to stand for a tool: the command
 # itself, as a shell line or as the words of a subprocess list.
 _RUNS_CLIPPY: typ.Final = re.compile(r"cargo[\s\"',\[]+(?:\+\S+[\s\"',]+)?clippy\b")
@@ -287,8 +289,13 @@ def _place_runs(reader: _Reader, path: str, place: Place) -> None:
 
 
 def _note_computed_matrix(reader: _Reader, path: str, place: Place) -> None:
-    """Record a job whose matrix is computed, if it names a lint tool."""
-    if _NAMES_TOOL.search(repr(place.steps)):
+    """Record a job whose matrix is computed, if it may run a lint.
+
+    A job may lint by naming a tool, by `make` (which may reach a lint target) or
+    by a script, so any of these leaves the job indeterminate.
+    """
+    steps = repr(place.steps)
+    if _NAMES_TOOL.search(steps) or _MAY_LINT.search(steps):
         reader.unreadable.append(
             f"{path} ({place.label}): matrix is computed by an expression, so "
             "its commands cannot be filled in"

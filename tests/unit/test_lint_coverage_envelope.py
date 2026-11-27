@@ -196,6 +196,44 @@ class TestRuns:
         assert all(run["is_resolved"] is False for run in runs)
         assert all("matrix" in run["why"] for run in runs)
 
+    @pytest.mark.parametrize(
+        "command",
+        ["cargo clippy", "make lint", "./scripts/lint.sh", "python tools/gate.py"],
+    )
+    def test_a_computed_matrix_job_that_may_lint_is_unreadable(
+        self, tmp_path: pathlib.Path, command: str
+    ) -> None:
+        """A job whose matrix is an expression may run a lint through make or a script."""
+        _app(
+            tmp_path,
+            {
+                ".github/workflows/ci.yml": (
+                    f"{WORKFLOW_HEAD}    strategy:\n"
+                    "      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}\n"
+                    f"    steps:\n      - run: {command}\n"
+                )
+            },
+        )
+        envelope = build_lint_coverage_envelope(tmp_path)
+        assert envelope["runs"] == []
+        assert any("matrix is computed" in note for note in envelope["unreadable"])
+
+    def test_a_computed_matrix_job_that_lints_nothing_is_not_noted(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Only a job that may lint is a gap in the audit."""
+        _app(
+            tmp_path,
+            {
+                ".github/workflows/ci.yml": (
+                    f"{WORKFLOW_HEAD}    strategy:\n"
+                    "      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}\n"
+                    "    steps:\n      - run: echo hello\n"
+                )
+            },
+        )
+        assert build_lint_coverage_envelope(tmp_path)["unreadable"] == []
+
 
 class TestEnvironment:
     """What the Makefile and the Cargo configuration say about warnings."""
