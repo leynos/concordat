@@ -96,6 +96,7 @@ def given_root_crate_excluded(rust_checkout: pathlib.Path) -> None:
         rust_checkout,
         {
             "Cargo.toml": _package("app", "\n") + WORKSPACE,
+            "src/lib.rs": "",
             "crates/b/Cargo.toml": _package("b"),
             "dylint.toml": (
                 "[no_std_fs_operations]\n# The root crate is ambient.\n"

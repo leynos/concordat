@@ -70,7 +70,9 @@ def designed(dylint: str, *, extra: Files | None = None) -> Files:
     return {
         "Cargo.toml": WORKSPACE,
         "crates/a/Cargo.toml": package("a"),
+        "crates/a/src/lib.rs": "",
         "crates/b/Cargo.toml": package("b"),
+        "crates/b/src/lib.rs": "",
         "dylint.toml": dylint,
         **(extra or {}),
     }
@@ -80,7 +82,9 @@ def grown(dylint: str) -> Files:
     """Return a root package that gained a member, with this `dylint.toml`."""
     return {
         "Cargo.toml": package("app", "\n") + WORKSPACE,
+        "src/lib.rs": "",
         "crates/b/Cargo.toml": package("b"),
+        "crates/b/src/lib.rs": "",
         "dylint.toml": dylint,
     }
 
@@ -168,7 +172,10 @@ SCENARIOS: dict[str, Files] = {
     "designed_governed_crate_excluded_by_rustc_name": designed(
         "[no_std_fs_operations]\n# Crate my-crate stages ambient files.\n"
         'excluded_crates = ["my_crate"]\n',
-        extra={"crates/my-crate/Cargo.toml": package("my-crate")},
+        extra={
+            "crates/my-crate/Cargo.toml": package("my-crate"),
+            "crates/my-crate/src/lib.rs": "",
+        },
     ),
     "grown_governed_crate_excluded": grown(
         "[no_std_fs_operations]\n# The root crate is ambient.\n"
@@ -182,7 +189,9 @@ SCENARIOS: dict[str, Files] = {
         'excluded_crates = ["bad", "dylint_testing"]\n',
         extra={
             "tests/fixtures/bad/Cargo.toml": package("bad"),
+            "tests/fixtures/bad/src/lib.rs": "",
             "vendor/dylint_testing/Cargo.toml": package("dylint_testing"),
+            "vendor/dylint_testing/src/lib.rs": "",
         },
     ),
     "designed_test_crate_by_file_name": designed(
@@ -220,6 +229,7 @@ SCENARIOS: dict[str, Files] = {
     "dylint_config_is_a_symlink": {
         "Cargo.toml": WORKSPACE,
         "crates/a/Cargo.toml": package("a"),
+        "crates/a/src/lib.rs": "",
         "real_dylint.toml": '[l]\n# Reason.\nexcluded_crates = ["a"]\n',
         "dylint.toml": Link("real_dylint.toml"),
     },

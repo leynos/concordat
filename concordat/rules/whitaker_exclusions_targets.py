@@ -1,17 +1,27 @@
-"""Find the crate names Cargo discovers from a package's target folders.
+"""Find the crate names Cargo gives a package's targets.
 
 An integration test compiles as its own crate named after its file, so
 `tests/file_handler_tests.rs` is the crate `file_handler_tests`. Cargo finds
 these by looking in `tests`, `benches`, `examples` and `src/bin` (a file
-`name.rs`, or a directory with a `main.rs`), unless the package switches that
-discovery off with `autotests`, `autobenches`, `autoexamples` or `autobins`.
+`name.rs`, or a directory with a `main.rs`), and the package itself is a crate
+only through its default targets: `src/lib.rs` is the library and `src/main.rs`
+the binary, each named after the package. A package with neither has no crate of
+its own name.
+
+Cargo's rules for what is discovered are followed:
+
+* `autotests`, `autobenches`, `autoexamples` and `autobins` switch discovery of a
+  kind off; in edition 2015 discovery of a kind is also off when the manifest
+  declares a target of that kind and the switch is unset;
+* a declared target's `path` stops Cargo inferring a second target of the same
+  kind from that file, whatever the declared name.
 
 The reader never follows a symbolic link, so a link out of the checkout cannot
 put host filenames into a verdict. Every component of a target folder's path is
 checked (`src` as well as `src/bin`), a dangling link counts, and so does a
-`main.rs` that is a link. Each link met is recorded as unreadable, so the
-policy reports that the crate names it would hold are unknown instead of
-reading their absence as a name that does not exist.
+`main.rs` that is a link. Each link met is recorded as unreadable, so the policy
+reports that the crate names it would hold are unknown instead of reading their
+absence as a name that does not exist.
 """
 
 from __future__ import annotations
@@ -26,21 +36,25 @@ from .test_environment_types import table
 if typ.TYPE_CHECKING:
     from .test_environment_types import Reader
 
-__all__ = ["discovered_targets", "linked_note"]
+__all__ = ["default_targets", "discovered_targets", "linked_note"]
 
 OPERATION_SCAN_TARGETS: typ.Final = "scan-rust-targets"
 
-# Each conventional target folder, with the `[package]` switch that turns its
-# discovery off.
+
+class _Folder(typ.NamedTuple):
+    """A conventional target folder: where, its auto-discovery switch, its kind."""
+
+    path: str
+    switch: str
+    kind: str
+
+
 _TARGET_FOLDERS: typ.Final = (
-    ("tests", "autotests"),
-    ("benches", "autobenches"),
-    ("examples", "autoexamples"),
-    ("src/bin", "autobins"),
+    _Folder("tests", "autotests", "test"),
+    _Folder("benches", "autobenches", "bench"),
+    _Folder("examples", "autoexamples", "example"),
+    _Folder("src/bin", "autobins", "bin"),
 )
-
-
-_TARGET_KINDS: typ.Final = ("bin", "test", "bench", "example")
 
 
 def linked_note(relative: str) -> str:
@@ -97,26 +111,82 @@ def _inferred_target(
     return (entry.name, main) if main.is_file() else None
 
 
-def _claimed_paths(manifest: dict[str, object]) -> set[str]:
-    """Return the source paths the manifest's declared targets give explicitly.
+def _declared(manifest: dict[str, object], kind: str) -> list[object]:
+    """Return the manifest's declared targets of one kind (`[[test]]` and so on)."""
+    declared = manifest.get(kind)
+    return (
+        list(typ.cast("list[object]", declared)) if isinstance(declared, list) else []
+    )
 
-    Cargo does not infer a second target from a file a declared target already
-    names with `path`, so `[[test]] name = "current" path = "tests/old.rs"`
-    leaves no `old` target.
+
+def _claimed_paths(manifest: dict[str, object], kind: str) -> set[str]:
+    """Return the source paths declared targets of one kind give explicitly.
+
+    Cargo does not infer a second target of a kind from a file a declared target
+    of that kind already names with `path`, so
+    `[[test]] name = "current" path = "tests/old.rs"` leaves no inferred `old`
+    test. A path of another kind claims nothing: an explicit binary at
+    `tests/scenario.rs` leaves the inferred test `scenario` alone.
 
     Returns
     -------
     set[str]
         The normalised `path` values, relative to the package directory.
     """
-    claimed: set[str] = set()
-    for kind in _TARGET_KINDS:
-        declared = manifest.get(kind)
-        for target in declared if isinstance(declared, list) else []:
-            path = table(target).get("path")
-            if isinstance(path, str):
-                claimed.add(posixpath.normpath(path))
-    return claimed
+    paths = (table(target).get("path") for target in _declared(manifest, kind))
+    return {posixpath.normpath(path) for path in paths if isinstance(path, str)}
+
+
+def _is_discovered(manifest: dict[str, object], folder: _Folder) -> bool:
+    """Return whether Cargo auto-discovers targets of a folder's kind.
+
+    An explicit switch decides. Unset, discovery is on, except in edition 2015
+    (the default when no edition is given), where a manifest that declares a
+    target of the kind turns discovery of that kind off.
+
+    Returns
+    -------
+    bool
+        Whether the folder's targets are inferred.
+    """
+    package = table(manifest.get("package"))
+    switch = package.get(folder.switch)
+    if isinstance(switch, bool):
+        return switch
+    edition = package.get("edition")
+    is_2015 = edition is None or edition == "2015"
+    return not (is_2015 and _declared(manifest, folder.kind))
+
+
+def default_targets(
+    directory: pathlib.Path, manifest: dict[str, object], reader: Reader
+) -> set[str]:
+    """Return the package name when a default target gives it a crate.
+
+    `src/lib.rs` is the library and `src/main.rs` the binary, each named after
+    the package (a `[lib]` or `[[bin]]` table with a `name` is a declared target,
+    read elsewhere). A package with neither, or whose binary discovery is off,
+    has no crate named after itself.
+
+    Returns
+    -------
+    set[str]
+        The package name, or nothing.
+    """
+    name = table(manifest.get("package")).get("name")
+    source = _target_folder(directory, "src", reader)
+    if source is None or not isinstance(name, str):
+        return set()
+    has_library = _has_file(source / "lib.rs", reader)
+    has_binary = _is_discovered(manifest, _TARGET_FOLDERS[3]) and _has_file(
+        source / "main.rs", reader
+    )
+    return {name} if has_library or has_binary else set()
+
+
+def _has_file(path: pathlib.Path, reader: Reader) -> bool:
+    """Return whether *path* is a regular file that is not a link."""
+    return not _is_linked(path, reader) and path.is_file()
 
 
 def discovered_targets(
@@ -124,29 +194,24 @@ def discovered_targets(
 ) -> set[str]:
     """Return the crate names Cargo auto-discovers under a package directory.
 
-    A folder whose `[package]` switch is `false` (`autotests = false`) is not
-    discovered; only its declared targets count. A file a declared target
-    already names by `path` infers no further target.
+    A kind whose discovery is off (see `_is_discovered`) is not discovered; only
+    its declared targets count. A file a declared target of the same kind already
+    names by `path` infers no further target.
 
     Returns
     -------
     set[str]
         The names of the files and directories in each discovered folder.
     """
-    package = table(manifest.get("package"))
-    claimed = _claimed_paths(manifest)
     found: set[str] = set()
-    for sub, switch in _TARGET_FOLDERS:
-        folder = (
-            None
-            if package.get(switch) is False
-            else _target_folder(directory, sub, reader)
-        )
-        if folder is None:
+    for folder in _TARGET_FOLDERS:
+        if not _is_discovered(manifest, folder):
             continue
-        inferred = (
-            _inferred_target(entry, reader) for entry in sorted(folder.iterdir())
-        )
+        root = _target_folder(directory, folder.path, reader)
+        if root is None:
+            continue
+        claimed = _claimed_paths(manifest, folder.kind)
+        inferred = (_inferred_target(entry, reader) for entry in sorted(root.iterdir()))
         found |= {
             name
             for name, source in filter(None, inferred)

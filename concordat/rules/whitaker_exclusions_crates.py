@@ -39,7 +39,11 @@ from .markdown_envelope import (
     raise_walk_error,
 )
 from .test_environment_types import CARGO_MANIFEST, table
-from .whitaker_exclusions_targets import discovered_targets, linked_note
+from .whitaker_exclusions_targets import (
+    default_targets,
+    discovered_targets,
+    linked_note,
+)
 
 if typ.TYPE_CHECKING:
     from .test_environment_types import Reader
@@ -170,10 +174,17 @@ def _alias_names(manifest: dict[str, object], inherited: frozenset[str]) -> set[
 
 
 def _declared_names(manifest: dict[str, object], inherited: frozenset[str]) -> set[str]:
-    """Return the names a manifest declares: package, lib, targets, local aliases."""
-    names = _strings_named(manifest.get("package")) | _strings_named(
-        manifest.get("lib")
-    )
+    """Return the names a manifest declares: lib, targets and local aliases.
+
+    The package's own name is not among them: it is a crate only through a
+    default target (`default_targets`).
+
+    Returns
+    -------
+    set[str]
+        The declared names, not normalised.
+    """
+    names = _strings_named(manifest.get("lib"))
     for kind in _TARGET_TABLES:
         names |= _strings_named(manifest.get(kind))
     return names | _alias_names(manifest, inherited)
@@ -266,9 +277,11 @@ def _crate_names(
             "package inherits are unknown"
         )
     inherited = _owning_workspace(relative, manifest, roots)
-    names = _declared_names(manifest, inherited) | discovered_targets(
-        path.parent, manifest, reader
-    )
+    names = _declared_names(manifest, inherited)
+    # A virtual workspace's root is not a package: it has no targets to find.
+    if "package" in manifest:
+        names |= default_targets(path.parent, manifest, reader)
+        names |= discovered_targets(path.parent, manifest, reader)
     return {normalised(name) for name in names}
 
 

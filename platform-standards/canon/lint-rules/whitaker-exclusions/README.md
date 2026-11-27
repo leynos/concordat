@@ -39,10 +39,16 @@ inferred test, bench, example or binary target is named after its file
 (`tests/old.rs` is `old`) or, for a directory with a `main.rs`, after the
 directory (`tests/group/main.rs` is `group`, not `main`); a declared target
 (`[[test]] name = "current"`) takes its declared name, and a declared target's
-`path` stops Cargo inferring a second target from the same file. A name is a
-crate the repository **governs** when it is a package, a library, a binary, a
-test, bench or example target (declared with `[[test]]` and the like, or found
-in `tests/`, `benches/`, `examples/` and `src/bin/`), or an alias of a path
+`path` stops Cargo inferring a second target of the same kind from that file (a
+path declared for a binary leaves an inferred test of the same file alone). The
+package's own name is a crate only through a default target, `src/lib.rs` or
+`src/main.rs`; a package with neither has no crate of that name. A virtual
+workspace root is not a package and has no targets. In edition 2015 (the
+default when no edition is set) a manifest that declares a target of a kind
+turns discovery of that kind off, as the `auto*` switches do. A name is a crate
+the repository **governs** when it is a package, a library, a binary, a test,
+bench or example target (declared with `[[test]]` and the like, or found in
+`tests/`, `benches/`, `examples/` and `src/bin/`), or an alias of a path
 dependency (femtologging's `_femtologging_rs`). A crate is a **fixture** when
 the *package's own* `Cargo.toml` sits under a fixture, vendored or build-output
 tree (`fixtures`, `vendor`, `third_party`, `patches`, `templates`, `examples`,

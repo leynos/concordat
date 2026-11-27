@@ -154,6 +154,35 @@ class TestEnvelope:
             ("rule", None),
         ]
 
+    def test_a_bare_and_a_quoted_spelling_of_one_key_share_no_reason(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The parser sees one key twice; the text cannot tie either to a place."""
+        found = _exclusions(
+            tmp_path,
+            {
+                "dylint.toml": (
+                    '[[rule]]\n# why\nexcluded_paths = ["a"]\n\n'
+                    '[[rule]]\n"excluded_paths" = ["b"]\n'
+                )
+            },
+        )
+        assert [(x["line"], x["has_reason"]) for x in found] == [
+            (None, False),
+            (None, False),
+        ]
+
+    def test_a_unicode_line_separator_in_a_string_does_not_move_a_line(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`str.splitlines` splits at U+2028; TOML does not, so the scans agree."""
+        text = (
+            '[t]\nnote = """a # fake reason\nexcluded_paths = ["bogus"]\n"""\n'  # noqa: RUF001 - U+2028 is the point
+            'excluded_paths = ["real"]\n'
+        )
+        [found] = locate_exclusions(text)
+        assert (found.line, found.has_reason) == (5, False)
+
     def test_a_symlinked_dylint_config_is_recorded_not_followed(
         self, tmp_path: pathlib.Path
     ) -> None:
@@ -242,11 +271,14 @@ class TestCrateNames:
             tmp_path,
             {
                 "Cargo.toml": MANIFEST.format(name="my-app", extra=""),
+                "src/lib.rs": "",
                 "tests/handler_tests.rs": "",
                 "tests/heavy/main.rs": "",
                 "src/bin/tool.rs": "",
                 "tests/fixtures/bad/Cargo.toml": MANIFEST.format(name="bad", extra=""),
+                "tests/fixtures/bad/src/lib.rs": "",
                 "vendor/harness/Cargo.toml": MANIFEST.format(name="harness", extra=""),
+                "vendor/harness/src/lib.rs": "",
                 "dylint.toml": (
                     "[l]\n# r\nexcluded_crates = [\n"
                     '"my_app", "my-app", "handler_tests", "heavy", "tool", "bad",\n'
@@ -375,7 +407,10 @@ class TestCrateNames:
             {
                 "Cargo.toml": MANIFEST.format(
                     name="app",
-                    extra='[[test]]\nname = "current"\npath = "tests/old.rs"\n',
+                    extra=(
+                        'edition = "2021"\n\n[[test]]\nname = "current"\n'
+                        'path = "tests/old.rs"\n'
+                    ),
                 ),
                 "tests/old.rs": "",
                 "tests/other.rs": "",
@@ -389,6 +424,80 @@ class TestCrateNames:
             "old": "unknown",
             "other": "governed",
         }
+
+    def test_edition_2015_turns_discovery_off_for_a_kind_with_a_declared_target(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Without an edition (2015), a declared `[[test]]` ends test discovery."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app", extra='[[test]]\nname = "kept"\npath = "tests/k.rs"\n'
+                ),
+                "tests/k.rs": "",
+                "tests/other.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["kept", "other"]\n',
+            },
+        )
+        assert resolved == {"kept": "governed", "other": "unknown"}
+
+    def test_a_path_declared_by_another_kind_claims_nothing(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An explicit binary at `tests/scenario.rs` leaves the test `scenario`."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'edition = "2021"\n\n[[bin]]\nname = "runner"\n'
+                        'path = "tests/scenario.rs"\n'
+                    ),
+                ),
+                "tests/scenario.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["runner", "scenario"]\n',
+            },
+        )
+        assert resolved == {"runner": "governed", "scenario": "governed"}
+
+    @pytest.mark.parametrize(
+        ("files", "expected"),
+        [
+            ({"src/lib.rs": ""}, "governed"),
+            ({"src/main.rs": ""}, "governed"),
+            ({}, "unknown"),
+            ({"src/other.rs": ""}, "unknown"),
+        ],
+    )
+    def test_the_package_name_is_a_crate_only_through_a_default_target(
+        self, tmp_path: pathlib.Path, files: dict[str, str], expected: str
+    ) -> None:
+        """A package with no `src/lib.rs` or `src/main.rs` has no crate of its name."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["app"]\n',
+                **files,
+            },
+        )
+        assert resolved == {"app": expected}
+
+    def test_a_virtual_workspace_root_has_no_targets(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`tests/old.rs` beside a virtual workspace root belongs to no package."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": "[workspace]\nmembers = []\n",
+                "tests/old.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["old"]\n',
+            },
+        )
+        assert resolved == {"old": "unknown"}
 
     def test_a_test_directory_is_named_after_itself_not_its_main(
         self, tmp_path: pathlib.Path

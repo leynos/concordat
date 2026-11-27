@@ -65,7 +65,10 @@ def locate_exclusions(text: str) -> list[Located]:
         One entry per key in file order. `line` is 1-based, and the table is
         `""` for a key above any header.
     """
-    lines = text.splitlines()
+    # TOML ends a line at LF (or CRLF) only. `str.splitlines` also splits at
+    # U+2028 and other separators, which would put a line number on content the
+    # string scanner counts as one line, so the two must use the same boundaries.
+    lines = text.split("\n")
     inside = string_interior_lines(text)
     table = ""
     header_at: int | None = None

@@ -17,6 +17,7 @@ for the policy to report as indeterminate.
 
 from __future__ import annotations
 
+import collections
 import os
 import pathlib
 import tomllib
@@ -324,8 +325,19 @@ def build_whitaker_exclusions_envelope(
     exclusions: list[Exclusion] = []
     for config in configs:
         places = _places(config.text)
+        # A key the parser sees more than once under one table name (the same
+        # `[[rule]]` header repeated, or a bare and a quoted spelling of one key)
+        # cannot be tied to one place in the text, so none of them is.
+        seen = collections.Counter((key.table, key.key) for key in config.keys)
         exclusions.extend(
-            _exclusion(key, places.get((key.table, key.key)), kinds, unreadable)
+            _exclusion(
+                key,
+                places.get((key.table, key.key))
+                if seen[key.table, key.key] == 1
+                else None,
+                kinds,
+                unreadable,
+            )
             for key in config.keys
         )
     return {
