@@ -2322,8 +2322,8 @@
           "tool": "nextest",
           "source": "Makefile:4 (test)",
           "command": "cargo nextest run --workspace",
-          "resolved": true,
-          "why": "",
+          "resolved": false,
+          "why": "a probe makes it one of two readings that select differently, and one run takes one of them",
           "workspace_flag": true,
           "packages": [],
           "excludes": [],
@@ -4292,7 +4292,8 @@
     }
   },
   "parameters": {
-    "severity": "warning",
+    "severity": "error",
+    "indeterminate_severity": "warning",
     "exemptions": []
   }
 }

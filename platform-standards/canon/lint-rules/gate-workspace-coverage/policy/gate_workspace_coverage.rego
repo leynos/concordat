@@ -18,9 +18,12 @@
 # trigger. A tool the gate does not run is not required; the rule asks that a
 # tool, once run, run over everything.
 #
-# GC-001 and the indeterminate findings that report evidence the reader could
-# not establish carry the configured severity, which defaults to `warning` so
-# the package ships as a survey. An envelope defect is always an error.
+# GC-001 carries the `severity` parameter, which defaults to `error`: the estate
+# survey is clean, so a gate that leaves a member out blocks. The indeterminate
+# findings (EN-001) that report evidence the reader could not establish carry
+# the `indeterminate_severity` parameter, which defaults to `warning`, because
+# the audit declining to guess is not a defect in the repository. An envelope
+# defect is always an error.
 package canon.lint_rules.gate_workspace_coverage
 
 import rego.v1
@@ -71,9 +74,13 @@ audited if {
 	input.applicability.cargo_manifest == true
 }
 
-default severity := "warning"
+default severity := "error"
 
 severity := data.parameters.severity
+
+default indeterminate_severity := "warning"
+
+indeterminate_severity := data.parameters.indeterminate_severity
 
 default exemptions := []
 
@@ -234,19 +241,19 @@ deny contains finding("EN-001", "error", "indeterminate", "", msg) if {
 	msg := "policy input is not a policy-input/gate-workspace-coverage envelope at schema version 1"
 }
 
-deny contains finding("EN-001", severity, "indeterminate", "", msg) if {
+deny contains finding("EN-001", indeterminate_severity, "indeterminate", "", msg) if {
 	audited
 	some entry in input.unreadable
 	msg := sprintf("a gate command or file could not be read, so the audit cannot say which workspace members it covers: %s", [entry])
 }
 
-deny contains finding("EN-001", severity, "indeterminate", "Cargo.toml", msg) if {
+deny contains finding("EN-001", indeterminate_severity, "indeterminate", "Cargo.toml", msg) if {
 	audited
 	not is_object(input.workspace)
 	msg := "the root Cargo.toml could not be read as a workspace, so no gate command can be judged against it"
 }
 
-deny contains finding("EN-001", severity, "indeterminate", i.source, msg) if {
+deny contains finding("EN-001", indeterminate_severity, "indeterminate", i.source, msg) if {
 	workspace_known
 	multi_member
 	some tool in tools
@@ -263,7 +270,7 @@ reason(i) := "it runs in another directory or against another manifest" if {
 
 # Reported on its own: a gate that is only `$(MAKE) -C nested lint` has no known
 # command at all, yet the Makefile it delegates to may narrow every tool.
-deny contains finding("EN-001", severity, "indeterminate", "Makefile", msg) if {
+deny contains finding("EN-001", indeterminate_severity, "indeterminate", "Makefile", msg) if {
 	workspace_known
 	multi_member
 	not walk_complete

@@ -96,7 +96,7 @@ test_a_doc_example_beside_a_workspace_gate_is_not_a_finding if {
 
 test_a_bare_clippy_in_a_root_package_workspace_is_noncompliant if {
 	fs := findings(data.fixtures.clippy_bare)
-	{[f.rule_id, f.verdict, f.severity] | some f in fs} == {["GC-001", "noncompliant", "warning"]}
+	{[f.rule_id, f.verdict, f.severity] | some f in fs} == {["GC-001", "noncompliant", "error"]}
 	some f in fs
 	contains(f.msg, "clippy")
 	contains(f.msg, "b, c")
@@ -450,9 +450,29 @@ test_an_unreadable_member_manifest_is_indeterminate if {
 
 # -- severity and the envelope ----------------------------------------------------------------
 
-test_severity_follows_the_parameter if {
-	fs := policy.deny with input as data.fixtures.clippy_bare with data.parameters as {"severity": "error", "exemptions": []}
-	{f.severity | some f in fs} == {"error"}
+test_a_narrowing_gate_is_an_error_by_default if {
+	{f.severity | some f in findings(data.fixtures.clippy_bare)} == {"error"}
+}
+
+test_an_indeterminate_gate_is_a_warning_by_default if {
+	fs := findings(data.fixtures.unresolved_selection)
+	{[f.rule_id, f.verdict, f.severity] | some f in fs} == {["EN-001", "indeterminate", "warning"]}
+}
+
+test_the_severity_parameter_sets_gc_001_only if {
+	lowered := {"severity": "warning", "exemptions": []}
+	gc := policy.deny with input as data.fixtures.clippy_bare with data.parameters as lowered
+	en := policy.deny with input as data.fixtures.unresolved_selection with data.parameters as lowered
+	{[f.rule_id, f.severity] | some f in gc} == {["GC-001", "warning"]}
+	{[f.rule_id, f.severity] | some f in en} == {["EN-001", "warning"]}
+}
+
+test_the_indeterminate_severity_parameter_sets_en_001_only if {
+	raised := {"indeterminate_severity": "error", "exemptions": []}
+	gc := policy.deny with input as data.fixtures.clippy_bare with data.parameters as raised
+	en := policy.deny with input as data.fixtures.unresolved_selection with data.parameters as raised
+	{[f.rule_id, f.severity] | some f in gc} == {["GC-001", "error"]}
+	{[f.rule_id, f.severity] | some f in en} == {["EN-001", "error"]}
 }
 
 test_an_envelope_defect_is_always_an_error if {
