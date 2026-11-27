@@ -179,18 +179,35 @@ def default_targets(
     source = _target_folder(directory, "src", reader)
     if not isinstance(name, str):
         return set()
+    is_named = _library_gives_package_name(manifest, source, reader)
+    return (
+        {name}
+        if is_named or _binary_gives_package_name(manifest, source, reader)
+        else set()
+    )
+
+
+def _library_gives_package_name(
+    manifest: dict[str, object], source: pathlib.Path | None, reader: Reader
+) -> bool:
+    """Return whether the library exists and is not renamed by `[lib] name`."""
     library = manifest.get("lib")
     has_library = isinstance(library, dict) or (
         source is not None and _has_file(source / "lib.rs", reader)
     )
-    names_library = isinstance(table(library).get("name"), str)
-    has_binary = (
+    return has_library and not isinstance(table(library).get("name"), str)
+
+
+def _binary_gives_package_name(
+    manifest: dict[str, object], source: pathlib.Path | None, reader: Reader
+) -> bool:
+    """Return whether `src/main.rs` is discovered and no `[[bin]]` claims it."""
+    return (
         source is not None
         and _is_discovered(manifest, _TARGET_FOLDERS[3])
         and "src/main.rs" not in _claimed_paths(manifest, "bin")
         and _has_file(source / "main.rs", reader)
     )
-    return {name} if (has_library and not names_library) or has_binary else set()
 
 
 def _has_file(path: pathlib.Path, reader: Reader) -> bool:
