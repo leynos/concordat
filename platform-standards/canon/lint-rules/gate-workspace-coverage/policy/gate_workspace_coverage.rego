@@ -25,7 +25,25 @@ package canon.lint_rules.gate_workspace_coverage
 
 import rego.v1
 
-tools := ["clippy", "nextest", "test", "test-doc", "whitaker"]
+# `cargo nextest run` and `cargo test` (without `--doc`) are two runners of one
+# thing, the unit and integration tests, so their commands count together under
+# the one tool `tests`: a repository may run everything under nextest and keep one
+# special target under `cargo test`, and every member is covered when the two
+# select it between them. Nextest does not run doctests, so `cargo test --doc` is
+# a tool of its own, `test-doc`.
+tools := ["clippy", "tests", "test-doc", "whitaker"]
+
+unit_test_runners := {"nextest", "test"}
+
+# The invocation tools a judged tool is made of.
+runners(tool) := unit_test_runners if tool == "tests"
+
+runners(tool) := {tool} if tool != "tests"
+
+# How a judged tool reads in a finding: the tests are `cargo test` commands.
+label(tool) := "test" if tool == "tests"
+
+label(tool) := tool if tool != "tests"
 
 finding(id, severity, verdict, path, msg) := {
 	"rule_id": id,
@@ -83,6 +101,12 @@ covers_tool(exemption, _) if not exemption.tools
 
 covers_tool(exemption, tool) if tool in exemption.tools
 
+# An exemption that names a runner (`nextest` or `test`) applies to the tests.
+covers_tool(exemption, tool) if {
+	some runner in runners(tool)
+	runner in exemption.tools
+}
+
 # -- the workspace ------------------------------------------------------------------
 
 workspace_known if {
@@ -137,7 +161,7 @@ selected(invocation) := members if {
 
 # -- invocations ----------------------------------------------------------------------
 
-invocations_of(tool) := [i | some i in input.invocations; i.tool == tool]
+invocations_of(tool) := [i | some i in input.invocations; i.tool in runners(tool)]
 
 # A command the reader cannot place cannot be counted as covering or as failing
 # to cover, so a tool with one is reported as unknown and not judged.
@@ -186,7 +210,7 @@ narrowing(tool) := [i |
 # gate leaves out; one that merely selects a different subset does not.
 narrowing_examples(tool) := [e |
 	some e in input.examples
-	e.tool == tool
+	e.tool in runners(tool)
 	e.resolved == true
 	e.changes_directory == false
 	count((members - selected(e)) & uncovered(tool)) > 0
@@ -227,7 +251,7 @@ deny contains finding("EN-001", severity, "indeterminate", i.source, msg) if {
 	multi_member
 	some tool in tools
 	some i in unplaced(tool)
-	msg := sprintf("%s: the audit cannot place this %s command (%s), so it does not count as covering or missing any member: %s", [i.source, tool, reason(i), i.command])
+	msg := sprintf("%s: the audit cannot place this %s command (%s), so it does not count as covering or missing any member: %s", [i.source, i.tool, reason(i), i.command])
 }
 
 reason(i) := i.why if i.why != ""
@@ -257,6 +281,6 @@ deny contains finding("GC-001", severity, "noncompliant", first_source(tool), ms
 	count(uncovered(tool)) > 0
 	msg := sprintf(
 		"the %s commands the gate runs leave %d of %d workspace member(s) out: %s. Select the whole workspace (Cargo's --workspace or --all; for Whitaker, `--workspace` on either side of the `--`), or exempt a crate by name with a rationale and a review trigger in the rule's parameters. Narrowing commands: %s%s",
-		[tool, count(uncovered(tool)), count(members), concat(", ", sort(uncovered(tool))), list_sources(narrowing(tool)), examples_note(tool)],
+		[label(tool), count(uncovered(tool)), count(members), concat(", ", sort(uncovered(tool))), list_sources(narrowing(tool)), examples_note(tool)],
 	)
 }
