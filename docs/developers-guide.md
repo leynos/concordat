@@ -905,6 +905,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   reports `allow`, reasonless `expect` and wide-scope `expect` attributes.
   `test_environment_config` reads the lints tables and Cargo flags. Fixtures
   are regenerated with `fixtures/generate.py` in the package.
+- `policy-input/whitaker-exclusions` —
+  `whitaker_exclusions_envelope.build_whitaker_exclusions_envelope`. It walks
+  the checkout's `dylint.toml` files outside the pruned Rust trees and records
+  each `excluded_*` key: its line and whether a comment states a reason
+  (`whitaker_exclusions_text`, a line scan, because the parsed TOML has no
+  comments), and, for `excluded_crates`, what each name resolves to
+  (`whitaker_exclusions_crates`: governed, fixture or unknown, from packages,
+  targets, discovered test and bin files and path-dependency aliases). Fixtures
+  are regenerated with `fixtures/generate.py` in the package.
 - `policy-input/gate-workspace-coverage` —
   `gate_scope_envelope.build_gate_scope_envelope`. It reads the root workspace
   (`gate_scope_workspace`, sharing

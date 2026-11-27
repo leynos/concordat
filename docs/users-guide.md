@@ -1571,6 +1571,30 @@ as a command. The rule ships at `warning` severity; the `severity` parameter
 raises it to `error`. See the
 [rule reference](../platform-standards/canon/lint-rules/gate-workspace-coverage/README.md).
 
+### Auditing Whitaker exclusions
+
+The `whitaker-exclusions` package audits every exclusion in a repository's
+`dylint.toml` files (`excluded_crates`, `excluded_paths` and any other
+`excluded_*` key):
+
+```shell
+concordat artefact rule run whitaker-exclusions --repo /path/to/checkout
+```
+
+- **WX-001**: an exclusion has no reason. Put a comment block directly above the
+  key, or above its table header; a blank line ends the block.
+- **WX-002**: a whole-crate exclusion names a library, binary or test crate the
+  repository governs. Prefer `excluded_paths` for the module that needs it, or
+  name the crate in the rule's `crate_exclusions` parameter with a reason and a
+  review trigger. Fixture and vendored crates need no entry.
+- **WX-003**: an exclusion names no crate the repository has, so it does
+  nothing. Remove it or correct the name (Whitaker matches rustc crate names:
+  hyphens are underscores, and a test target is named after its file).
+- **EN-001** (indeterminate): a file or key the audit could not read or locate.
+
+The rule ships at `warning` severity. See the
+[rule reference](../platform-standards/canon/lint-rules/whitaker-exclusions/README.md).
+
 ### Auditing documentation presence (Python and Rust)
 
 The `documentation-presence` package audits the interrogate gate that keeps

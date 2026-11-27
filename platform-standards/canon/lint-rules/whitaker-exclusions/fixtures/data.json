@@ -1,0 +1,601 @@
+{
+  "fixtures": {
+    "no_dylint_config": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [],
+      "unreadable": []
+    },
+    "config_without_exclusions": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [],
+      "unreadable": []
+    },
+    "designed_reason_above_key": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 4,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_reason_above_table": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 4,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_paths_without_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 2,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_blank_line_ends_the_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 4,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_bare_hash_is_no_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 4,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_other_exclusion_key_without_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "some_lint",
+          "key": "excluded_modules",
+          "kind": "other",
+          "line": 2,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "m",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_root_level_key_with_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 2,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "fixtures",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "grown_paths_without_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 2,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "grown_reason_above_key": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 4,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "extension_paths_without_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "rust_extension/dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_paths",
+          "kind": "paths",
+          "line": 2,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "loader",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_governed_crate_excluded": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "a",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_governed_crate_excluded_by_rustc_name": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "my_crate",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "grown_governed_crate_excluded": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "app",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "extension_femtologging_shape": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "rust_extension/dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 13,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "_femtologging_rs",
+              "resolved": "governed"
+            },
+            {
+              "name": "file_handler_tests",
+              "resolved": "governed"
+            },
+            {
+              "name": "heavy",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_fixture_and_vendored_crates_excluded": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "bad",
+              "resolved": "fixture"
+            },
+            {
+              "name": "dylint_testing",
+              "resolved": "fixture"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_test_crate_by_file_name": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "handler_tests",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_binary_crate_excluded": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "tool",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_stale_crate_exclusion": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "ghost",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "designed_registry_dependency_is_not_a_crate": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "serde",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "unreadable_dylint_config": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [],
+      "unreadable": [
+        "dylint.toml: invalid TOML: Expected ']' at the end of a table declaration (at line 1, column 10)"
+      ]
+    },
+    "unreadable_manifest_blocks_stale": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": [
+            {
+              "name": "ghost",
+              "resolved": "unknown"
+            }
+          ]
+        }
+      ],
+      "unreadable": [
+        "crates/b/Cargo.toml: invalid TOML: Expected ']' at the end of a table declaration (at line 1, column 9)"
+      ]
+    },
+    "dotted_key_is_not_located": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": null,
+          "has_reason": false,
+          "entries": [
+            {
+              "name": "a",
+              "resolved": "governed"
+            }
+          ]
+        }
+      ],
+      "unreadable": []
+    },
+    "exclusion_that_is_not_a_list": {
+      "schema_version": 1,
+      "kind": "policy-input/whitaker-exclusions",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "exclusions": [
+        {
+          "file": "dylint.toml",
+          "table": "no_std_fs_operations",
+          "key": "excluded_crates",
+          "kind": "crates",
+          "line": 3,
+          "has_reason": true,
+          "entries": []
+        }
+      ],
+      "unreadable": [
+        "dylint.toml: [no_std_fs_operations] excluded_crates is not a list of strings, so its entries cannot be read"
+      ]
+    }
+  },
+  "parameters": {
+    "severity": "warning",
+    "crate_exclusions": []
+  }
+}

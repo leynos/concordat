@@ -79,6 +79,9 @@ from concordat.rules.toolchain_policy_envelope import (
 from concordat.rules.uv_gate_envelope import (
     ENVELOPE_KIND as UV_GATE_ENVELOPE_KIND,
 )
+from concordat.rules.whitaker_exclusions_envelope import (
+    ENVELOPE_KIND as WHITAKER_EXCLUSIONS_ENVELOPE_KIND,
+)
 from concordat.rules.whitaker_provisioning_envelope import (
     ENVELOPE_KIND as PROVISIONING_ENVELOPE_KIND,
 )
@@ -503,6 +506,7 @@ class TestDeclaredInputKind:
             ("python-duplication-gate", DUPLICATION_GATE_ENVELOPE_KIND),
             ("rust-test-environment", TEST_ENVIRONMENT_ENVELOPE_KIND),
             ("gate-workspace-coverage", GATE_SCOPE_ENVELOPE_KIND),
+            ("whitaker-exclusions", WHITAKER_EXCLUSIONS_ENVELOPE_KIND),
             ("yaml-lint-baseline", YAML_LINT_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)

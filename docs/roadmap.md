@@ -788,6 +788,14 @@ the Section 2.1.2 format.
   command in a root-package workspace, a `-p` list that misses a member,
   `default-members` narrowing, Whitaker's own `--all` and a CI matrix whose
   every entry narrows as noncompliant.
+- [x] Ship the Whitaker exclusions rule (WX-001 to WX-003; DF12-121): the
+  `whitaker-exclusions` package holds every `excluded_*` key in a `dylint.toml`
+  to carrying a reason, keeps a whole-crate exclusion of a governed crate to a
+  named decision with a reason and a review trigger, and reports an exclusion
+  that names nothing as stale. It ships at `warning` severity. Acceptance: the
+  audit reads a path exclusion with a comment as compliant, and an uncommented
+  one, femtologging's three whole-crate exclusions and a stale crate name as
+  noncompliant.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and
