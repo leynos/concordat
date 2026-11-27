@@ -434,16 +434,13 @@ class TestGate:
         assert miri["is_reachable"] is expected, body
 
     @pytest.mark.parametrize(
-        ("preamble", "expected"),
-        [
-            (".ONESHELL:\n", False),
-            ("", True),
-        ],
+        "preamble",
+        [".ONESHELL:\n", "S := .ONESHELL\n$(S):\n", "S = .ONESHELL\n$(S):\n"],
     )
     def test_oneshell_carries_an_if_false_across_recipe_lines(
-        self, tmp_path: pathlib.Path, preamble: str, *, expected: bool
+        self, tmp_path: pathlib.Path, preamble: str
     ) -> None:
-        """Without .ONESHELL each recipe line is a shell, so the middle line runs."""
+        """`.ONESHELL`, spelled directly or through a variable, makes one shell."""
         _write(
             tmp_path,
             {
@@ -455,7 +452,38 @@ class TestGate:
             },
         )
         miri = build_lint_tables_envelope(tmp_path)["miri"]
-        assert miri["is_reachable"] is expected
+        assert miri["is_reachable"] is False
+
+    def test_a_target_name_that_may_expand_to_oneshell_leaves_miri_open(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An unresolved target name could be `.ONESHELL`; no line is credited."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": _package("app", PACKAGE_LINTS),
+                "Makefile": ("$(MODE):\n.PHONY: test\ntest:\n\tcargo miri test\n"),
+            },
+        )
+        miri = build_lint_tables_envelope(tmp_path)["miri"]
+        assert (miri["is_reachable"], miri["is_resolved"]) == (False, False)
+
+    def test_each_recipe_line_is_its_own_shell_without_oneshell(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A recipe of whole lines runs each on its own, and each counts."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": _package("app", PACKAGE_LINTS),
+                "Makefile": (
+                    ".PHONY: test\ntest:\n\tif false; then cargo miri test; fi\n"
+                    "\tcargo miri test\n"
+                ),
+            },
+        )
+        miri = build_lint_tables_envelope(tmp_path)["miri"]
+        assert miri["sources"] == ["Makefile:4 (test)"]
 
     def test_a_miri_target_outside_the_gate_is_not_reachable(
         self, tmp_path: pathlib.Path

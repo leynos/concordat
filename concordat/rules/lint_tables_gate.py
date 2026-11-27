@@ -29,6 +29,7 @@ from .gate_scope_shell import FRESH_SHELL, runnable
 from .gate_scope_sources import GATE_TARGETS, makefile_lines, workflow_lines
 from .gate_scope_workflow_model import places, step_runs
 from .interrogate_invocation import lex_segments
+from .make_shell_mode import ShellMode, shell_mode
 from .makefile_expansion import expand, single_assignments
 from .makefile_reach import reachable, rules_by_target
 from .markdown_envelope import load_workflows
@@ -168,7 +169,13 @@ def _makefile_miri(report: MakeutilReport, scan: _MiriScan) -> None:
     scan.is_resolved = scan.is_resolved and walk.is_resolved
     # Under `.ONESHELL` a rule's recipe lines are one shell, so an `if false`
     # opened on one line hides the lines after it; otherwise each is its own.
-    scan.is_one_shell = ".ONESHELL" in index
+    mode = shell_mode(index, scan.values)
+    if mode is ShellMode.UNKNOWN:
+        # A target name that might expand to `.ONESHELL`: the lines cannot be
+        # read as shells, so no Makefile line is credited and the answer is open.
+        scan.is_resolved = False
+        return
+    scan.is_one_shell = mode is ShellMode.ONE_SHELL
     for target in walk.names:
         for rule in index[target]:
             _rule_miri(scan, target, rule)
