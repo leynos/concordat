@@ -238,8 +238,9 @@ def _owning_workspace(
         The owning workspace's path-dependency keys, or none.
     """
     declared = _declared_root(relative, manifest)
-    if declared is not None and declared in roots:
-        return roots[declared]
+    if declared is not None:
+        # A named root the scan did not find gives no ancestor's dependencies.
+        return roots.get(declared, frozenset())
     directory = pathlib.PurePosixPath(relative).parent
     for candidate in (directory, *directory.parents):
         key = _directory_key(candidate)
@@ -256,6 +257,14 @@ def _crate_names(
     manifest = reader.toml(path)
     if manifest is None:
         return set()
+    declared = _declared_root(relative, manifest)
+    if declared is not None and declared not in roots:
+        reader.unreadable.append(
+            f"{relative}: names the workspace root {declared or '.'!r} with "
+            "package.workspace, which the audit cannot inspect (outside the "
+            "checkout, or no [workspace] there), so the path dependencies this "
+            "package inherits are unknown"
+        )
     inherited = _owning_workspace(relative, manifest, roots)
     names = _declared_names(manifest, inherited) | discovered_targets(
         path.parent, manifest, reader

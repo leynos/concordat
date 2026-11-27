@@ -340,6 +340,32 @@ class TestCrateNames:
         )
         assert resolved == {"old": "unknown"}
 
+    def test_a_workspace_root_the_scan_cannot_inspect_leaves_the_aliases_unknown(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A named root outside the checkout is not guessed from an ancestor."""
+        checkout = tmp_path / "checkout"
+        _write(
+            checkout,
+            {
+                "Cargo.toml": '[workspace]\nmembers = ["app"]\n'
+                '[workspace.dependencies]\nshared_alias = { path = "shared" }\n',
+                "shared/Cargo.toml": MANIFEST.format(name="shared", extra=""),
+                "app/Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'workspace = "../../elsewhere"\n\n[dependencies]\n'
+                        "shared_alias = { workspace = true }\n"
+                    ),
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["shared_alias"]\n',
+            },
+        )
+        envelope = build_whitaker_exclusions_envelope(checkout)
+        [exclusion] = envelope["exclusions"]
+        assert exclusion["entries"] == [{"name": "shared_alias", "resolved": "unknown"}]
+        assert any("cannot inspect" in note for note in envelope["unreadable"])
+
     def test_a_file_a_declared_target_names_by_path_infers_no_second_target(
         self, tmp_path: pathlib.Path
     ) -> None:
