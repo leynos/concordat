@@ -174,6 +174,11 @@ def _may_hide_miri(expanded: Expansion, text: str) -> bool:
 
     Only a line that names Miri is in doubt: an unresolved word in a line that
     never mentions it cannot be the command.
+
+    Returns
+    -------
+    bool
+        Whether the reference is unresolved and the line names Miri.
     """
     return not expanded.is_resolved and _NAMES_MIRI.search(text) is not None
 
