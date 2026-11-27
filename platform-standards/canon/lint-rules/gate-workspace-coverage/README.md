@@ -179,9 +179,12 @@ exemptions:
 
 ## Severity
 
-The rule ships at `warning` severity so the estate can be surveyed before it
-blocks. The `severity` parameter raises GC-001 and the indeterminate findings to
-`error` without a code change. An envelope defect is always `error`.
+GC-001 ships at `error` severity: a gate that leaves a workspace member out
+blocks. The indeterminate findings (EN-001) ship at `warning`, because the
+audit declining to guess is not a defect in the repository, and the by-design
+repositories above would otherwise block for ever. Two parameters set them
+apart without a code change: `severity` for GC-001 and `indeterminate_severity`
+for EN-001. An envelope defect is always `error`.
 
 ## Scope
 
