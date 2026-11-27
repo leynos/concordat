@@ -144,6 +144,18 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "whitaker_exclusion_alone": checkout_for(
         lint=["whitaker --all -- --workspace --exclude c"]
     ),
+    # -- nextest and cargo test are one tool, `tests` ---------------------------
+    # The whitaker repository's shape: everything under nextest, one special
+    # target under `cargo test`.
+    "tests_two_runners_cover": checkout_for(
+        test=["cargo nextest run --workspace --exclude c", "cargo test -p c --lib"]
+    ),
+    "tests_runners_leave_one_out": checkout_for(
+        test=["cargo nextest run --workspace --exclude c", "cargo test -p b"]
+    ),
+    "tests_doc_run_does_not_cover": checkout_for(
+        test=["cargo nextest run --workspace --exclude c", "cargo test --doc -p c"]
+    ),
     # -- shapes of reaching the gate -------------------------------------------
     "variables_and_prerequisites": {
         "Cargo.toml": ROOT_PACKAGE,
