@@ -402,9 +402,26 @@ def _resolve_probes(
     flat = [i for line in lines for reading in line.readings for i in reading]
     ambiguous = _ambiguous_tools(lines, elsewhere)
     return [
-        _unplaced([i], _ALTERNATIVE_REASON)[0] if i["tool"] in ambiguous else i
+        _unplaced([i], _ALTERNATIVE_REASON)[0]
+        if _runner_group(i["tool"]) in ambiguous
+        else i
         for i in flat
     ]
+
+
+def _runner_group(tool: str) -> str:
+    """Return the tool a runner counts under when the policy judges coverage.
+
+    `cargo nextest run` and `cargo test` are two runners of the tests, and the
+    policy counts their commands together, so a probe that makes one of them
+    conditional makes the other's coverage conditional too.
+
+    Returns
+    -------
+    str
+        `tests` for nextest and `cargo test`, else the tool's own name.
+    """
+    return "tests" if tool in {"nextest", "test"} else tool
 
 
 def _selection_signature(invocation: Invocation) -> tuple[object, ...]:
@@ -435,19 +452,28 @@ def _ambiguous_tools(lines: list[_Line], elsewhere: cabc.Collection[str]) -> set
     A line whose readings all run the same commands is no probe. Of the tools
     the others run, those whose every invocation is a probe's and selects the
     whole workspace are safe: whichever reading runs, the tool covers everything.
-    A tool the gate also runs *elsewhere* is never safe on that ground.
+    A tool the gate also runs *elsewhere* is never safe on that ground. The
+    tools here are the policy's groups (see :func:`_runner_group`): a probe that
+    picks `nextest run --workspace` is not safe beside a `cargo test -p app`
+    that always runs, because on a run that skips the probe only `app` is tested.
 
     Returns
     -------
     set[str]
-        The tools to leave unplaced.
+        The groups to leave unplaced.
     """
     probes = [line for line in lines if _is_probe(line)]
-    tools = {i["tool"] for line in probes for reading in line.readings for i in reading}
+    groups = {
+        _runner_group(i["tool"])
+        for line in probes
+        for reading in line.readings
+        for i in reading
+    }
+    elsewhere_groups = {_runner_group(tool) for tool in elsewhere}
     return {
-        tool
-        for tool in tools
-        if tool in elsewhere or not _only_whole_workspace_probes(tool, lines)
+        group
+        for group in groups
+        if group in elsewhere_groups or not _only_whole_workspace_probes(group, lines)
     }
 
 
@@ -461,14 +487,14 @@ def _is_probe(line: _Line) -> bool:
     return len(signatures) > 1
 
 
-def _only_whole_workspace_probes(tool: str, lines: list[_Line]) -> bool:
-    """Return whether every invocation of *tool* is a whole-workspace probe's."""
+def _only_whole_workspace_probes(group: str, lines: list[_Line]) -> bool:
+    """Return whether every invocation of the *group* is a whole-workspace probe's."""
     return all(
         _is_probe(line) and _is_whole_workspace(invocation)
         for line in lines
         for reading in line.readings
         for invocation in reading
-        if invocation["tool"] == tool
+        if _runner_group(invocation["tool"]) == group
     )
 
 

@@ -220,6 +220,14 @@ def _cargo_tool(
 ) -> tuple[str | None, list[str]]:
     """Return the gate tool a Cargo subcommand runs, and its own arguments."""
     own = rest[: rest.index("--")] if "--" in rest else rest
+    # `--no-run` compiles the tests and runs none, so it covers no member's tests.
+    is_compile_only = "--no-run" in own and subcommand in {
+        "test",
+        "nextest",
+        "llvm-cov",
+    }
+    if is_compile_only:
+        return None, []
     match subcommand:
         case "clippy":
             return "clippy", rest
@@ -234,7 +242,8 @@ def _cargo_tool(
                 return "nextest", rest[1:]
             if rest[:1] and rest[0] in _LLVM_COV_REPORTING:
                 return None, []
-            return "test", rest
+            # `cargo llvm-cov --doc` measures the doctests alone.
+            return ("test-doc" if "--doc" in own else "test"), rest
         case _:
             return None, []
 
