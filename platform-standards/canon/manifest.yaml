@@ -345,7 +345,7 @@ artifacts:
       rustdoc tables), with `unsafe_code` forbidden except for named boundary
       crates that have a Miri command and an ADR, divergences only as reviewed
       records, and unreadable inputs indeterminate.
-    sha256: f01ee0327a6df7db37e3f2cefd481cfbfefaaf2b4d62cea53e9081da3f78c086
+    sha256: 2e6f3c9c8b2a474572ecffb7220d0be76a66188ac55cf1b9e4827930f0abae80
   - id: lint-rule-rust-lint-tables-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-lint-tables/rule.yaml

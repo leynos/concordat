@@ -222,13 +222,19 @@ macro_aware_credit(pkg) if {
 	whitaker_covers_root_workspace
 }
 
-# Configured as the macro-aware gate, but the gate has lines the reader could not
-# place and none it could prove covers the workspace: whether Whitaker gates it
-# is unknown, so the lint is neither credited nor reported missing (EN-001).
+# Configured as the macro-aware gate, but the gate has lines or Whitaker commands
+# the reader could not place (a line that will not read, a command after `cd`, a
+# step that runs for some matrix entries only) and none it could prove covers the
+# workspace: whether Whitaker gates it is unknown, so the lint is neither
+# credited nor reported missing (EN-001).
+unplaced_whitaker_runs := sort([run.source | some run in input.whitaker_runs; not placed_run(run)])
+
+unplaced_gate := array.concat(sort(input.gate_unreadable), unplaced_whitaker_runs)
+
 macro_aware_unknown(pkg) if {
 	macro_aware_configured(pkg)
 	not whitaker_covers_root_workspace
-	count(input.gate_unreadable) > 0
+	count(unplaced_gate) > 0
 }
 
 # -- the requirement, entry by entry --------------------------------------------------
@@ -306,8 +312,8 @@ deny contains finding("EN-001", severity, "indeterminate", pkg.manifest, msg) if
 	has_tables(pkg)
 	macro_aware_unknown(pkg)
 	msg := sprintf(
-		"package %s opts in to Whitaker's macro-aware complexity gate, but the audit cannot tell whether Whitaker runs over the whole workspace: it found no such command, and some gate lines could not be read (%s). Clippy's cognitive_complexity is neither required nor credited until it can",
-		[pkg.name, concat("; ", input.gate_unreadable)],
+		"package %s opts in to Whitaker's macro-aware complexity gate, but the audit cannot tell whether Whitaker runs over the whole workspace: it found no such command, and some gate lines or Whitaker commands could not be placed (%s). Clippy's cognitive_complexity is neither required nor credited until it can",
+		[pkg.name, concat("; ", unplaced_gate)],
 	)
 }
 

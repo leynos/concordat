@@ -23,6 +23,7 @@ unreadable, and the policy reports it as indeterminate.
 from __future__ import annotations
 
 import pathlib
+import posixpath
 import typing as typ
 
 from .documentation_rust import manifest_paths
@@ -140,25 +141,57 @@ def _members_of(reader: Reader, path: str, manifest: dict[str, object]) -> set[s
     """
     prefix = _directory(path)
     scoped = Reader(reader.checkout / prefix, reader.root)
-    members = {reader.relative(found) for found in member_directories(scoped, manifest)}
+    members = {
+        posixpath.normpath(reader.relative(found))
+        for found in member_directories(scoped, manifest)
+    }
     reader.unreadable.extend(
         f"{prefix}/{message}" if prefix else message for message in scoped.unreadable
     )
     return {"" if member == "." else member for member in members}
 
 
-def _governing_workspace(directory: str, workspaces: dict[str, set[str]]) -> str | None:
-    """Return the nearest workspace manifest that has *directory* as a member."""
-    candidates = [
-        path
-        for path, members in workspaces.items()
-        if directory in members
-        and (
-            not _directory(path)
-            or directory == _directory(path)
-            or directory.startswith(_directory(path) + "/")
-        )
-    ]
+def _declared_workspace(
+    directory: str, manifest: dict[str, object], workspaces: dict[str, set[str]]
+) -> str | None:
+    """Return the workspace a package names with `package.workspace`, if any.
+
+    The key is a path to the workspace root's directory, relative to the
+    package. It is how a member outside the root's directory tree says which
+    workspace it belongs to.
+
+    Returns
+    -------
+    str | None
+        The workspace manifest's path, or None when the key is absent or names
+        no workspace the checkout holds.
+    """
+    declared = table(manifest.get("package")).get("workspace")
+    if not isinstance(declared, str):
+        return None
+    root = posixpath.normpath(posixpath.join(directory or ".", declared))
+    target = posixpath.normpath(posixpath.join(root, "Cargo.toml"))
+    return target if target in workspaces else None
+
+
+def _governing_workspace(
+    directory: str, manifest: dict[str, object], workspaces: dict[str, set[str]]
+) -> str | None:
+    """Return the workspace that contains a package, or None if it is standalone.
+
+    A package that names its workspace (`package.workspace`) belongs to it.
+    Otherwise it belongs to the nearest workspace whose member set lists it; the
+    member may sit outside the root's directory (`members = ["../crate"]`).
+
+    Returns
+    -------
+    str | None
+        The workspace manifest's path, or None for a standalone package.
+    """
+    declared = _declared_workspace(directory, manifest, workspaces)
+    if declared is not None:
+        return declared
+    candidates = [path for path, members in workspaces.items() if directory in members]
     if not candidates:
         return None
     return max(candidates, key=lambda candidate: len(_directory(candidate)))
@@ -182,7 +215,7 @@ def _package_facts(
 ) -> PackageFacts:
     """Return one package's facts, resolving its workspace and its lint tables."""
     directory = _directory(path)
-    owner = _governing_workspace(directory, workspaces)
+    owner = _governing_workspace(directory, manifest, workspaces)
     workspace_lints = (
         table(table(parsed[owner].get("workspace")).get("lints")) if owner else {}
     )

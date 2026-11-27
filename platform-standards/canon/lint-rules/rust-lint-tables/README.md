@@ -81,7 +81,9 @@ workspace root is not a package. Membership is Cargo's, applied to each
 workspace root, not only the checkout's root: the same member rules as
 `gate-workspace-coverage`. A crate no workspace lists is standalone.
 `default-members` does not narrow the audit: every member is governed, whatever
-a bare command selects.
+a bare command selects. A member may sit outside its root's directory: a crate
+belongs to the workspace it names with `package.workspace`, else to the nearest
+workspace whose members list it (`members = ["../crate"]`).
 
 How a package's levels are resolved:
 
@@ -127,9 +129,11 @@ credits that only when all of the following hold:
   which stays the authority.
 - The package is in the root workspace.
 
-When the lint is configured but the gate has lines the reader could not place
-and none it can prove covers the workspace, the rule reports EN-001 and neither
-requires nor credits the Clippy lint.
+When the lint is configured but the gate has lines or Whitaker commands the
+reader could not place (a line that will not read, a command after `cd`, a step
+that runs for some matrix entries only) and none it can prove covers the
+workspace, the rule reports EN-001 and neither requires nor credits the Clippy
+lint.
 
 ### unsafe_code and boundary crates
 
@@ -137,10 +141,12 @@ requires nor credits the Clippy lint.
 `boundary_crates` parameter. A boundary crate sets `deny`, so each use needs
 its own reviewed `#[expect(unsafe_code, reason = "...")]`; has a `cargo miri`
 command in a target `make lint` or `make test` reaches (with prerequisites) or
-in a workflow or composite-action `run` step; and names the ADR that records
-why it needs `unsafe`. axinite's ADR 0015 and wireframe's ADR 0016 are the
-models. A boundary crate is not required to forbid anything, and a crate that
-forbids `unsafe` is reported for being on the list.
+in a workflow or composite-action `run` step (a command, not quoted text:
+`echo "cargo miri test"` is not a run; `MIRIFLAGS=... cargo +nightly miri test`
+is); and names the ADR that records why it needs `unsafe`. axinite's ADR 0015
+and wireframe's ADR 0016 are the models. A boundary crate is not required to
+forbid anything, and a crate that forbids `unsafe` is reported for being on the
+list.
 
 ## Parameters
 

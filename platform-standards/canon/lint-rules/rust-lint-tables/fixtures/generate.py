@@ -203,6 +203,18 @@ SCENARIOS: dict[str, dict[str, str]] = {
         "tools/Cargo.toml": '[workspace]\nmembers = ["xtask"]\n\n' + WORKSPACE_LINTS,
         "tools/xtask/Cargo.toml": package("xtask"),
     },
+    "designed_member_outside_the_root_directory": {
+        "ws/Cargo.toml": '[workspace]\nmembers = ["../crate"]\n\n' + WORKSPACE_LINTS,
+        "crate/Cargo.toml": package("outside", f"\n{INHERIT}"),
+    },
+    "designed_member_names_its_workspace": {
+        "ws/Cargo.toml": "[workspace]\nmembers = []\n\n" + WORKSPACE_LINTS,
+        "crate/Cargo.toml": package("outside", f'workspace = "../ws"\n\n{INHERIT}'),
+    },
+    "designed_member_outside_the_root_directory_bare": {
+        "ws/Cargo.toml": '[workspace]\nmembers = ["../crate"]\n\n' + WORKSPACE_LINTS,
+        "crate/Cargo.toml": package("outside"),
+    },
     # -- a workspace grown from a single crate -----------------------------------
     "grown_clean": {
         "Cargo.toml": package("app", f"\n{INHERIT}\n")
@@ -276,6 +288,21 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "boundary_miri_only_named_in_echo": boundary(
         makefile=".PHONY: test\ntest:\n\t@echo cargo-miri is not run here\n"
     ),
+    "boundary_miri_quoted_in_an_echo": {
+        **boundary(
+            makefile=(
+                '.PHONY: test\ntest:\n\t@echo "run cargo miri test later"\n'
+                "\t@printf '%s\\n' 'cargo miri test'\n"
+            )
+        ),
+        ".github/workflows/ci.yml": workflow('echo "cargo miri test"'),
+    },
+    "boundary_miri_behind_an_environment_prefix": boundary(
+        makefile=(
+            ".PHONY: test\ntest:\n"
+            "\tMIRIFLAGS=-Zmiri-strict-provenance cargo +nightly miri test\n"
+        )
+    ),
     "boundary_gate_unreadable": {
         **boundary(makefile=PLAIN_MAKEFILE),
         ".github/workflows/ci.yml": workflow(
@@ -329,6 +356,20 @@ SCENARIOS: dict[str, dict[str, str]] = {
         "Makefile": (
             ".PHONY: lint test\nlint:\n"
             "\twhitaker --all -- -p app --all-targets\ntest:\n\t@echo test\n"
+        ),
+    },
+    "cognitive_whitaker_conditional_run": {
+        "Cargo.toml": package(
+            "app", f"\n{without(PACKAGE_LINTS, 'cognitive_complexity')}"
+        ),
+        "dylint.toml": MACRO_AWARE_DYLINT,
+        "clippy.toml": OTHER_CLIPPY,
+        "Makefile": PLAIN_MAKEFILE,
+        ".github/workflows/ci.yml": (
+            "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+            "    strategy:\n      matrix:\n        os: [linux, windows]\n"
+            "    steps:\n      - if: matrix.os == 'linux'\n"
+            "        run: whitaker --all -- --workspace --all-targets\n"
         ),
     },
     "cognitive_whitaker_line_unreadable": {

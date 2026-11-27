@@ -56,6 +56,18 @@ test_a_nested_workspace_with_inheriting_members_is_clean if {
 	count(findings(data.fixtures.designed_nested_workspace_clean)) == 0
 }
 
+test_a_member_outside_the_root_directory_inherits_when_the_workspace_lists_it if {
+	count(findings(data.fixtures.designed_member_outside_the_root_directory)) == 0
+}
+
+test_a_member_that_names_its_workspace_inherits_from_it if {
+	count(findings(data.fixtures.designed_member_names_its_workspace)) == 0
+}
+
+test_a_member_outside_the_root_directory_that_does_not_opt_in_is_lt_001 if {
+	paths_of(data.fixtures.designed_member_outside_the_root_directory_bare, "LT-001") == {"crate/Cargo.toml"}
+}
+
 test_a_grown_workspace_that_inherits_everywhere_is_clean if {
 	count(findings(data.fixtures.grown_clean)) == 0
 }
@@ -206,6 +218,17 @@ test_miri_named_only_in_an_echo_is_not_a_command if {
 	{f.rule_id | some f in with_boundary(data.fixtures.boundary_miri_only_named_in_echo)} == {"LT-004"}
 }
 
+test_miri_quoted_in_an_echo_or_printf_is_not_a_command if {
+	fs := with_boundary(data.fixtures.boundary_miri_quoted_in_an_echo)
+	{f.rule_id | some f in fs} == {"LT-004"}
+	some f in fs
+	contains(f.msg, "no Miri command")
+}
+
+test_miri_behind_an_environment_prefix_is_a_command if {
+	count(with_boundary(data.fixtures.boundary_miri_behind_an_environment_prefix)) == 0
+}
+
 test_a_boundary_crate_that_forbids_unsafe_is_lt_004 if {
 	fs := with_boundary(data.fixtures.boundary_forbids_unsafe)
 	some f in fs
@@ -272,6 +295,13 @@ test_unplaceable_gate_lines_leave_the_macro_aware_gate_indeterminate if {
 	some f in fs
 	f.verdict == "indeterminate"
 	contains(f.msg, "whole workspace")
+}
+
+test_a_whitaker_run_only_some_matrix_entries_run_leaves_the_gate_indeterminate if {
+	fs := findings(data.fixtures.cognitive_whitaker_conditional_run)
+	{f.rule_id | some f in fs} == {"EN-001"}
+	some f in fs
+	contains(f.msg, "could not be placed")
 }
 
 test_a_leftover_clippy_threshold_means_two_gates_and_does_not_count if {

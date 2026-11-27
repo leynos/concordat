@@ -20,11 +20,14 @@ reports it instead of guessing.
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 import re
 import typing as typ
 
+from .gate_scope_commands import cargo_subcommand_word, without_keywords
 from .gate_scope_sources import GATE_TARGETS, makefile_lines, workflow_lines
 from .gate_scope_workflow_model import places, step_runs
+from .interrogate_invocation import lex_segments
 from .makefile_expansion import expand, single_assignments
 from .makefile_reach import reachable, rules_by_target
 from .markdown_envelope import load_workflows
@@ -32,7 +35,6 @@ from .uv_gate_envelope import load_actions
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import pathlib
 
     from .gate_scope_commands import Invocation
     from .gate_scope_workflow_model import Place
@@ -41,11 +43,57 @@ if typ.TYPE_CHECKING:
 
 __all__ = ["GateFacts", "MiriFact", "WhitakerRun", "read_gate"]
 
-# `cargo miri test`, `cargo +nightly miri nextest run`, `$(CARGO) miri ...`
-# (after expansion). A word boundary on both sides keeps `cargo-miri-setup` and
-# `cargo miri-something` from counting.
-_MIRI_COMMAND: typ.Final = re.compile(r"(?<![\w-])cargo(?:\s+\+\S+)?\s+miri(?![\w-])")
 _NAMES_MIRI: typ.Final = re.compile(r"(?<![\w-])miri(?![\w-])")
+_ASSIGNMENT: typ.Final = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+# Words that run the next command rather than being it.
+_LAUNCHERS: typ.Final = frozenset({"env", "time", "command", "exec", "nice"})
+
+
+def _command_words(segment: list[str]) -> list[str]:
+    """Return a simple command's words from its command word on.
+
+    Shell keywords (`then`, `if`), leading `NAME=value` assignments and launcher
+    words (`env`, `time`) run the next command; they are not it.
+
+    Returns
+    -------
+    list[str]
+        The command word and its arguments.
+    """
+    words = without_keywords(segment)
+    start = 0
+    while start < len(words) and (
+        _ASSIGNMENT.match(words[start]) or words[start].lstrip("@-+") in _LAUNCHERS
+    ):
+        start += 1
+    return words[start:]
+
+
+def _runs_cargo_miri(segment: list[str]) -> bool:
+    """Return whether one simple command is `cargo [+toolchain] miri ...`."""
+    words = _command_words(segment)
+    if not words or pathlib.PurePosixPath(words[0].lstrip("@-+")).name != "cargo":
+        return False
+    return cargo_subcommand_word(words[1:]) == "miri"
+
+
+def _line_miri(text: str) -> bool | None:
+    """Return whether a line runs `cargo miri`, or None if it cannot be told.
+
+    The line is lexed into simple commands, so `echo "cargo miri test"` and a
+    comment are not runs. A line that will not lex but names Miri is unknown,
+    not absent.
+
+    Returns
+    -------
+    bool | None
+        Whether a simple command in the line is `cargo miri`, or None when the
+        line names Miri but will not lex.
+    """
+    segments = lex_segments(text)
+    if segments is None:
+        return None if _NAMES_MIRI.search(text) else False
+    return any(_runs_cargo_miri(segment) for segment in segments)
 
 
 class MiriFact(typ.TypedDict):
@@ -113,20 +161,27 @@ def _recipe_miri(
 ) -> None:
     """Record whether one recipe line runs Miri, or might (an unresolved word)."""
     expanded = expand(text, values)
-    if _MIRI_COMMAND.search(expanded.text):
+    verdict = _line_miri(expanded.text)
+    if verdict:
         scan.sources.append(source)
-    elif not expanded.is_resolved and _NAMES_MIRI.search(text):
-        # A reference that could stand for the command word.
+    elif verdict is None or (not expanded.is_resolved and _NAMES_MIRI.search(text)):
+        # A line that will not lex, or a reference that could stand for the
+        # command word, while the text names Miri.
         scan.is_resolved = False
 
 
-def _miri_steps(path: str, place: Place, combination: dict[str, object]) -> list[str]:
+def _miri_steps(
+    path: str, place: Place, combination: dict[str, object], scan: _MiriScan
+) -> list[str]:
     """Return the steps of *place*, for one matrix combination, that run Miri."""
-    return [
-        f"{path} {step.source}"
-        for step in step_runs(place, combination)
-        if any(_MIRI_COMMAND.search(line) for line in step.lines)
-    ]
+    found: list[str] = []
+    for step in step_runs(place, combination):
+        verdicts = [_line_miri(line) for line in step.lines]
+        if any(verdicts):
+            found.append(f"{path} {step.source}")
+        elif None in verdicts:
+            scan.is_resolved = False
+    return found
 
 
 def _place_miri(path: str, place: Place, scan: _MiriScan) -> None:
@@ -138,7 +193,7 @@ def _place_miri(path: str, place: Place, scan: _MiriScan) -> None:
             scan.is_resolved = False
         return
     for combination in place.combinations:
-        scan.sources.extend(_miri_steps(path, place, combination))
+        scan.sources.extend(_miri_steps(path, place, combination, scan))
 
 
 def _workflow_miri(files: list[WorkflowFile], scan: _MiriScan) -> None:

@@ -228,6 +228,56 @@ class TestWorkspaces:
         assert set(found) == {"app"}
 
 
+class TestExternalMembers:
+    """A member may sit outside its workspace root's directory."""
+
+    def test_a_member_the_workspace_lists_by_a_parent_path_belongs_to_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`members = ["../crate"]` is a member, though not below the root."""
+        found = _packages(
+            tmp_path,
+            {
+                "ws/Cargo.toml": '[workspace]\nmembers = ["../crate"]\n'
+                + WORKSPACE_LINTS,
+                "crate/Cargo.toml": _package("outside", INHERIT),
+            },
+        )
+        assert found["outside"]["workspace"] == "ws/Cargo.toml"
+        assert found["outside"]["state"] == "inherited"
+
+    def test_a_member_that_names_its_workspace_belongs_to_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`package.workspace` says which root, whatever the root lists."""
+        found = _packages(
+            tmp_path,
+            {
+                "ws/Cargo.toml": "[workspace]\nmembers = []\n" + WORKSPACE_LINTS,
+                "crate/Cargo.toml": _package(
+                    "outside", 'workspace = "../ws"\n' + INHERIT
+                ),
+            },
+        )
+        assert found["outside"]["workspace"] == "ws/Cargo.toml"
+        assert found["outside"]["state"] == "inherited"
+
+    def test_a_package_naming_a_workspace_that_is_not_there_is_standalone(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Nothing is guessed about a root the checkout does not hold."""
+        found = _packages(
+            tmp_path,
+            {
+                "crate/Cargo.toml": _package(
+                    "lone", 'workspace = "../missing"\n' + INHERIT
+                )
+            },
+        )
+        assert found["lone"]["workspace"] is None
+        assert found["lone"]["state"] == "dangling"
+
+
 class TestPyo3:
     """Whether a package depends on PyO3."""
 
@@ -319,6 +369,35 @@ class TestGate:
         miri = build_lint_tables_envelope(tmp_path)["miri"]
         assert miri["is_reachable"] is True
         assert miri["sources"] == ["Makefile:3 (test)"]
+
+    @pytest.mark.parametrize(
+        ("recipe", "expected"),
+        [
+            ("cargo miri test", True),
+            ("@cargo +nightly miri nextest run", True),
+            ("MIRIFLAGS=-Zmiri-strict-provenance cargo miri test", True),
+            ("env MIRIFLAGS=x cargo miri test", True),
+            ("if true; then cargo miri test; fi", True),
+            ('echo "cargo miri test"', False),
+            ("printf '%s' 'cargo miri test'", False),
+            ("cargo test --features miri-helpers", False),
+            ("cargo-miri-setup", False),
+            ("cargo miri-ish", False),
+        ],
+    )
+    def test_only_a_command_that_runs_cargo_miri_counts(
+        self, tmp_path: pathlib.Path, recipe: str, *, expected: bool
+    ) -> None:
+        """Quoted text and look-alike words are not runs."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": _package("app", PACKAGE_LINTS),
+                "Makefile": f".PHONY: test\ntest:\n\t{recipe}\n",
+            },
+        )
+        miri = build_lint_tables_envelope(tmp_path)["miri"]
+        assert miri["is_reachable"] is expected, recipe
 
     def test_a_miri_target_outside_the_gate_is_not_reachable(
         self, tmp_path: pathlib.Path
