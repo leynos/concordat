@@ -339,23 +339,34 @@ def _script_target(words: list[str]) -> str | None:
     """
     if not words:
         return None
-    head = pathlib.PurePosixPath(words[0]).name
     if words[0].endswith(_SCRIPT_SUFFIXES):
         return words[0]
+    head = pathlib.PurePosixPath(words[0]).name
     if head not in _INTERPRETERS:
         return None
     arguments = words[1:]
     if head == "uv":
-        if arguments[:1] != ["run"]:
-            return None
-        arguments = arguments[1:]
+        arguments = arguments[1:] if arguments[:1] == ["run"] else None
+    first = _first_operand(arguments) if arguments is not None else None
+    return first if first and first.endswith(_SCRIPT_SUFFIXES) else None
+
+
+def _first_operand(arguments: list[str]) -> str | None:
+    """Return the first argument that is not an option or an option's value.
+
+    `-m` runs a module, so what follows is not a script.
+
+    Returns
+    -------
+    str | None
+        The operand, or None when there is none or `-m` was given.
+    """
     index = 0
     while index < len(arguments) and arguments[index].startswith("-"):
         if arguments[index] == "-m":
             return None
         index += 2 if arguments[index] in _VALUE_OPTIONS else 1
-    first = arguments[index] if index < len(arguments) else ""
-    return first if first.endswith(_SCRIPT_SUFFIXES) else None
+    return arguments[index] if index < len(arguments) else None
 
 
 def script_run(

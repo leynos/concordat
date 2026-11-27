@@ -80,7 +80,7 @@ surface holds, a step that runs for some matrix entries only, a Makefile walk
 that skipped a target (`make -C`), and any unreadable manifest, workflow or
 line.
 
-A script is recognised by running it (`python x.py`, `uv run --script x.py`,
+A script is recognized by running it (`python x.py`, `uv run --script x.py`,
 `bash x.sh`, `./x.sh`) with its text showing `cargo clippy` (as a shell line or
 as the words of a subprocess list) or `whitaker`/`cargo dylint`. A tool that
 merely names a script (`ruff format x.py`, `python -m pytest test_x.py`) runs

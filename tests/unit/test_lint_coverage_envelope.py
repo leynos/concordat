@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import typing as typ
 
+import pytest
+
 from concordat.rules.lint_coverage_envelope import (
     ENVELOPE_KIND,
     build_lint_coverage_envelope,
@@ -19,6 +21,10 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 MANIFEST: typ.Final = '[package]\nname = "{name}"\nversion = "0.1.0"\n{extra}'
+APP: typ.Final = MANIFEST.format(name="app", extra="")
+WORKFLOW_HEAD: typ.Final = (
+    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+)
 
 
 def _write(checkout: pathlib.Path, files: dict[str, str]) -> None:
@@ -33,6 +39,17 @@ def _gate(*lines: str, preamble: str = "") -> str:
     """Return a Makefile whose `lint` target runs *lines*."""
     body = "".join(f"\t{line}\n" for line in lines)
     return f"{preamble}.PHONY: lint\nlint:\n{body}"
+
+
+def _app(checkout: pathlib.Path, files: dict[str, str]) -> None:
+    """Write a one-package checkout (`app` at the root) plus *files*."""
+    _write(checkout, {"Cargo.toml": APP, **files})
+
+
+def _runs(checkout: pathlib.Path) -> list[tuple[str, str | None]]:
+    """Return `(tool, surface)` for each run of the checkout."""
+    runs = build_lint_coverage_envelope(checkout)["runs"]
+    return [(r["tool"], r["surface"]) for r in runs]
 
 
 def test_the_envelope_names_its_kind(tmp_path: pathlib.Path) -> None:
@@ -94,23 +111,12 @@ class TestSurfaces:
 class TestRuns:
     """Which surface each command targets."""
 
-    def _surface_of_runs(self, checkout: pathlib.Path) -> list[tuple[str, str | None]]:
-        """Return `(tool, surface)` for each run of the checkout."""
-        runs = build_lint_coverage_envelope(checkout)["runs"]
-        return [(r["tool"], r["surface"]) for r in runs]
-
     def test_a_command_at_the_root_targets_the_root_surface(
         self, tmp_path: pathlib.Path
     ) -> None:
         """No manifest named means the root manifest."""
-        _write(
-            tmp_path,
-            {
-                "Cargo.toml": MANIFEST.format(name="app", extra=""),
-                "Makefile": _gate("cargo clippy --all-targets"),
-            },
-        )
-        assert self._surface_of_runs(tmp_path) == [("clippy", "Cargo.toml")]
+        _app(tmp_path, {"Makefile": _gate("cargo clippy --all-targets")})
+        assert _runs(tmp_path) == [("clippy", "Cargo.toml")]
 
     def test_manifest_path_and_cd_place_the_command_on_the_extension(
         self, tmp_path: pathlib.Path
@@ -126,7 +132,7 @@ class TestRuns:
                 ),
             },
         )
-        assert self._surface_of_runs(tmp_path) == [
+        assert _runs(tmp_path) == [
             ("clippy", "rust_extension/Cargo.toml"),
             ("doc", "rust_extension/Cargo.toml"),
         ]
@@ -135,61 +141,54 @@ class TestRuns:
         self, tmp_path: pathlib.Path
     ) -> None:
         """The policy reports it as indeterminate."""
-        _write(
+        _app(
             tmp_path,
-            {
-                "Cargo.toml": MANIFEST.format(name="app", extra=""),
-                "Makefile": _gate("cargo clippy --manifest-path elsewhere/Cargo.toml"),
-            },
+            {"Makefile": _gate("cargo clippy --manifest-path elsewhere/Cargo.toml")},
         )
-        assert self._surface_of_runs(tmp_path) == [("clippy", None)]
+        assert _runs(tmp_path) == [("clippy", None)]
 
     def test_a_target_the_lint_target_does_not_reach_is_not_read(
         self, tmp_path: pathlib.Path
     ) -> None:
         """Only recipes `make lint` reaches are the gate."""
-        _write(
+        _app(
             tmp_path,
             {
-                "Cargo.toml": MANIFEST.format(name="app", extra=""),
                 "Makefile": (
                     ".PHONY: lint docs\nlint:\n\tcargo clippy\n\ndocs:\n\tcargo doc\n"
-                ),
+                )
             },
         )
-        assert self._surface_of_runs(tmp_path) == [("clippy", "Cargo.toml")]
+        assert _runs(tmp_path) == [("clippy", "Cargo.toml")]
 
     def test_a_workflow_step_is_a_run_and_a_false_branch_is_not(
         self, tmp_path: pathlib.Path
     ) -> None:
         """CI steps count, read as the shell reads them."""
-        _write(
+        _app(
             tmp_path,
             {
-                "Cargo.toml": MANIFEST.format(name="app", extra=""),
                 ".github/workflows/ci.yml": (
-                    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
-                    "    steps:\n      - run: |\n          cargo clippy\n"
+                    f"{WORKFLOW_HEAD}    steps:\n      - run: |\n"
+                    "          cargo clippy\n"
                     "          if false; then cargo doc; fi\n"
-                ),
+                )
             },
         )
-        assert self._surface_of_runs(tmp_path) == [("clippy", "Cargo.toml")]
+        assert _runs(tmp_path) == [("clippy", "Cargo.toml")]
 
     def test_a_step_that_runs_for_some_matrix_entries_only_is_unresolved(
         self, tmp_path: pathlib.Path
     ) -> None:
         """It may not run on the entry the audit is asked about."""
-        _write(
+        _app(
             tmp_path,
             {
-                "Cargo.toml": MANIFEST.format(name="app", extra=""),
                 ".github/workflows/ci.yml": (
-                    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
-                    "    strategy:\n      matrix:\n        os: [a, b]\n"
+                    f"{WORKFLOW_HEAD}    strategy:\n      matrix:\n        os: [a, b]\n"
                     "    steps:\n      - if: matrix.os == 'a'\n"
                     "        run: cargo clippy\n"
-                ),
+                )
             },
         )
         runs = build_lint_coverage_envelope(tmp_path)["runs"]
@@ -201,65 +200,48 @@ class TestRuns:
 class TestEnvironment:
     """What the Makefile and the Cargo configuration say about warnings."""
 
-    def test_exported_flags_are_expanded(self, tmp_path: pathlib.Path) -> None:
+    @pytest.mark.parametrize(
+        ("preamble", "expected"),
+        [
+            # Exported flags are expanded; an assignment that is not exported is
+            # not seen by a command.
+            (
+                "export RUSTFLAGS := -D warnings\nRUSTDOCFLAGS := -D warnings\n",
+                {"rustflags": "-D warnings", "rustdocflags": None, "is_resolved": True},
+            ),
+            # A value built with a Make function is not guessed.
+            (
+                "export RUSTFLAGS = $(shell echo -D warnings)\n",
+                {"rustflags": None, "rustdocflags": None, "is_resolved": False},
+            ),
+            # Nothing exported.
+            ("", {"rustflags": None, "rustdocflags": None, "is_resolved": True}),
+        ],
+    )
+    def test_exported_flags_are_expanded_or_left_unresolved(
+        self, tmp_path: pathlib.Path, preamble: str, expected: dict[str, object]
+    ) -> None:
         """`export RUSTFLAGS := ...` reaches every command."""
-        _write(
-            tmp_path,
-            {
-                "Cargo.toml": MANIFEST.format(name="app", extra=""),
-                "Makefile": _gate(
-                    "cargo clippy",
-                    preamble=(
-                        "export RUSTFLAGS := -D warnings\nRUSTDOCFLAGS := -D warnings\n"
-                    ),
-                ),
-            },
-        )
-        environment = build_lint_coverage_envelope(tmp_path)["make_environment"]
-        # RUSTDOCFLAGS is assigned but not exported, so a command does not see it.
-        assert environment["rustflags"] == "-D warnings"
-        assert environment["rustdocflags"] is None
-        assert environment["is_resolved"] is True
+        _app(tmp_path, {"Makefile": _gate("cargo clippy", preamble=preamble)})
+        assert build_lint_coverage_envelope(tmp_path)["make_environment"] == expected
 
-    def test_an_exported_value_the_audit_cannot_expand_is_unresolved(
-        self, tmp_path: pathlib.Path
+    @pytest.mark.parametrize(
+        ("config", "expected"),
+        [
+            (
+                '[build]\nrustflags = ["-D", "warnings"]\n',
+                {"denies_warnings": True, "is_readable": True},
+            ),
+            (None, {"denies_warnings": False, "is_readable": True}),
+        ],
+    )
+    def test_a_cargo_config_that_denies_warnings_or_is_absent(
+        self,
+        tmp_path: pathlib.Path,
+        config: str | None,
+        expected: dict[str, object],
     ) -> None:
-        """A `$(shell ...)` value is not guessed."""
-        _write(
-            tmp_path,
-            {
-                "Cargo.toml": MANIFEST.format(name="app", extra=""),
-                "Makefile": _gate(
-                    "cargo clippy",
-                    preamble="export RUSTFLAGS = $(shell echo -D warnings)\n",
-                ),
-            },
-        )
-        assert (
-            build_lint_coverage_envelope(tmp_path)["make_environment"]["is_resolved"]
-            is False
-        )
-
-    def test_a_cargo_config_that_denies_warnings_in_every_source(
-        self, tmp_path: pathlib.Path
-    ) -> None:
-        """`build.rustflags` with `-D warnings`."""
-        _write(
-            tmp_path,
-            {
-                "Cargo.toml": MANIFEST.format(name="app", extra=""),
-                ".cargo/config.toml": '[build]\nrustflags = ["-D", "warnings"]\n',
-            },
-        )
-        assert build_lint_coverage_envelope(tmp_path)["cargo_config"] == {
-            "denies_warnings": True,
-            "is_readable": True,
-        }
-
-    def test_no_cargo_config_denies_nothing(self, tmp_path: pathlib.Path) -> None:
-        """An absent configuration is readable and says nothing."""
-        _write(tmp_path, {"Cargo.toml": MANIFEST.format(name="app", extra="")})
-        assert build_lint_coverage_envelope(tmp_path)["cargo_config"] == {
-            "denies_warnings": False,
-            "is_readable": True,
-        }
+        """`build.rustflags` with `-D warnings`; an absent file says nothing."""
+        files = {".cargo/config.toml": config} if config is not None else {}
+        _app(tmp_path, files)
+        assert build_lint_coverage_envelope(tmp_path)["cargo_config"] == expected

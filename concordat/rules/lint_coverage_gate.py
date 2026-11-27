@@ -170,11 +170,24 @@ def _line_runs(
         return shell, directory
     kept, shell = runnable(segments, shell)
     for words, _frames in kept:
-        if words and words[0].lstrip("@-+") == "cd":
-            directory = _next_directory(directory, words)
-        else:
-            reader.runs.extend(_command_runs(reader, words, source, directory))
+        directory = _read_command(reader, words, source, directory)
     return shell, directory
+
+
+def _read_command(
+    reader: _Reader, words: list[str], source: str, directory: str | None
+) -> str | None:
+    """Read one simple command: a `cd` moves the directory, a lint run is added.
+
+    Returns
+    -------
+    str | None
+        The directory the next command runs in.
+    """
+    if words and words[0].lstrip("@-+") == "cd":
+        return _next_directory(directory, words)
+    reader.runs.extend(_command_runs(reader, words, source, directory))
+    return directory
 
 
 def _makefile_runs(
@@ -222,26 +235,39 @@ def _environment(
     report: MakeutilReport, values: cabc.Mapping[str, str]
 ) -> MakeEnvironment:
     """Return the `RUSTFLAGS` and `RUSTDOCFLAGS` the Makefile exports."""
-    index = rules_by_target(report)
-    export_all = ".EXPORT_ALL_VARIABLES" in index
+    export_all = ".EXPORT_ALL_VARIABLES" in rules_by_target(report)
     exported = {v["name"] for v in report["variables"] if v.get("exported")}
-    found: dict[str, str | None] = {}
-    is_resolved = True
-    for name in ("RUSTFLAGS", "RUSTDOCFLAGS"):
-        assigned = any(v["name"] == name for v in report["variables"])
-        if not assigned or not (export_all or name in exported):
-            found[name] = None
-        else:
-            expanded = expand(f"$({name})", values) if name in values else None
-            if expanded is None or not expanded.is_resolved:
-                found[name], is_resolved = None, False
-            else:
-                found[name] = expanded.text
-    return {
-        "rustflags": found["RUSTFLAGS"],
-        "rustdocflags": found["RUSTDOCFLAGS"],
-        "is_resolved": is_resolved,
+    assigned = {v["name"] for v in report["variables"]}
+    found = {
+        name: _exported_value(name, values, is_exported=export_all or name in exported)
+        if name in assigned
+        else (None, True)
+        for name in ("RUSTFLAGS", "RUSTDOCFLAGS")
     }
+    return {
+        "rustflags": found["RUSTFLAGS"][0],
+        "rustdocflags": found["RUSTDOCFLAGS"][0],
+        "is_resolved": all(is_known for _value, is_known in found.values()),
+    }
+
+
+def _exported_value(
+    name: str, values: cabc.Mapping[str, str], *, is_exported: bool
+) -> tuple[str | None, bool]:
+    """Return what an exported variable expands to, and whether that is known.
+
+    Returns
+    -------
+    tuple[str | None, bool]
+        The expanded text (None when not exported or not expandable), and False
+        when the variable is exported with a value that could not be expanded.
+    """
+    if not is_exported:
+        return None, True
+    expanded = expand(f"$({name})", values) if name in values else None
+    if expanded is None or not expanded.is_resolved:
+        return None, False
+    return expanded.text, True
 
 
 def _place_runs(reader: _Reader, path: str, place: Place) -> None:
