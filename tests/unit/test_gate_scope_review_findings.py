@@ -34,9 +34,11 @@ class TestThirdReview:
         )
         found = _makefile_invocations(tmp_path, makefile)
         resolved = {i["tool"]: i["resolved"] for i in found}
-        # `test -p b` covers only `b` when it runs, so the probe decides it;
-        # `nextest run --workspace` covers everything whenever it runs
-        assert resolved == {"test": False, "nextest": True}
+        # `test -p b` covers only `b` when it runs, so the probe decides it. The
+        # policy counts the two runners together as the tests, so the probe
+        # decides `nextest run --workspace` too: on a run that takes the other
+        # reading only `b` is tested.
+        assert resolved == {"test": False, "nextest": False}
 
     def test_a_cargo_subcommand_from_a_shell_variable_is_unreadable(
         self, tmp_path: pathlib.Path

@@ -452,3 +452,55 @@ class TestNonSelectingCommands:
         assert _build(tmp_path, files)["unreadable"], (
             "a variable subcommand is still unreadable when --help follows `--`"
         )
+
+
+class TestRunnerUnion:
+    """Behaviours of the tests tool, which counts nextest and `cargo test` together."""
+
+    def test_a_probe_runner_beside_an_always_running_one_is_left_to_the_probe(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`nextest run --workspace` behind a probe does not cover `test -p app`."""
+        makefile = (
+            ".PHONY: test\ntest:\n\tcargo test -p app\n"
+            "\t$(if $(shell cargo nextest --version 2>/dev/null),"
+            "cargo nextest run --workspace,echo skipped)\n"
+        )
+        found = _makefile_invocations(tmp_path, makefile)
+        assert {i["tool"] for i in found} == {"test", "nextest"}
+        assert not any(i["resolved"] for i in found)
+
+    def test_a_probe_that_only_picks_the_runner_stays_placed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Both readings select the workspace and nothing else runs the tests."""
+        makefile = (
+            ".PHONY: test\ntest:\n"
+            "\tcargo $(if $(shell cargo nextest --version 2>/dev/null),"
+            "nextest run,test) --workspace\n"
+        )
+        found = _makefile_invocations(tmp_path, makefile)
+        assert found
+        assert all(i["resolved"] for i in found)
+
+    def test_a_coverage_run_of_the_doctests_alone_is_a_doctest_run(self) -> None:
+        """`cargo llvm-cov --doc` measures doctests, so it does not cover the tests."""
+        (found,) = _read("cargo llvm-cov --doc -p c")
+        assert found["tool"] == "test-doc"
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "cargo test -p c --no-run",
+            "cargo nextest run -p c --no-run",
+            "cargo llvm-cov nextest -p c --no-run",
+        ],
+    )
+    def test_a_compile_only_run_covers_no_tests(self, command: str) -> None:
+        """`--no-run` builds the tests and runs none, so it is no test command."""
+        assert _read(command) == []
+
+    def test_a_no_run_flag_after_the_separator_is_the_test_binarys(self) -> None:
+        """What follows `--` goes to the harness, so it does not make a build only."""
+        (found,) = _read("cargo test -p c -- --no-run")
+        assert found["tool"] == "test"
