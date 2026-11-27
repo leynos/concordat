@@ -129,6 +129,24 @@ place one of its commands:
 A root `Cargo.toml` that cannot be read, or a member manifest without a package
 name, is reported the same way.
 
+### Repositories that stay indeterminate by design
+
+Each of these gates holds a command the audit refuses to guess at, for the
+reason given. Reading them would mean evaluating Make, GitHub expressions or
+another directory's workspace, so the rule reports `EN-001` and a person checks
+the gate by hand. The reasons name the construct; they are not defects in the
+repositories.
+
+| Repository  | Why the audit stays indeterminate                                                                              |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
+| axinite     | A tool is given a `--manifest-path` outside the root manifest, and its matrices are expressions.               |
+| chutoro     | The nextest steps take their flags from variables, and the matrices are expressions.                           |
+| combobulate | The profile-measurements job runs in another directory, so its workspace is not the root one.                  |
+| ddlint      | The Makefile walk skips a target it cannot resolve, while some member looks uncovered.                         |
+| evert       | The Makefile wraps each cargo command in a `define` function (`$(call ...)`) that the audit does not evaluate. |
+| netsuke     | A step runs `cd test_support` first, and another uses a PowerShell `@suite` splat.                             |
+| wildside    | The gate uses `make -C` and `cd`, and the nextest word is a variable.                                          |
+
 ## Exemptions
 
 `exemptions` names a workspace member the gate may leave out: its repository
