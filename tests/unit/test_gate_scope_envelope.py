@@ -396,6 +396,23 @@ class TestMakefile:
             i["resolved"] for i in envelope["invocations"]
         )
 
+    @pytest.mark.parametrize(
+        "argument",
+        [
+            '--exclude "$(P) (note)"',
+            '--exclude="$$(printf member)"',
+        ],
+    )
+    def test_an_exclusion_the_reader_cannot_see_stays_unresolved(
+        self, tmp_path: pathlib.Path, argument: str
+    ) -> None:
+        """A muted string or a lost substitution is not a named exclusion."""
+        makefile = (
+            f"P ?=\n.PHONY: test\ntest:\n\tcargo nextest run --workspace {argument}\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert not any(i["resolved"] for i in envelope["invocations"])
+
     def test_an_option_added_only_when_a_variable_is_set_is_read(
         self, tmp_path: pathlib.Path
     ) -> None:

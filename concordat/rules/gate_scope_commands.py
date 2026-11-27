@@ -167,16 +167,19 @@ def _hides_selection(arguments: list[str]) -> bool:
     reference is substituted as text before the shell splits it, and an
     unquoted shell variable splits into words, so neither is one value.
 
-    A selecting option with no value after it is hidden too: the shell took
-    its value out as a command substitution (`--exclude "$(printf member)"`),
-    which the lexer reads as a command of its own, so the value is not known.
+    A selecting option with no value is hidden too: the shell took its value
+    out as a command substitution (`--exclude "$(printf member)"` or
+    `--exclude="$(printf member)"`), which the lexer reads as a command of its
+    own, so the value is not known.
 
     Returns
     -------
     bool
         Whether the selection cannot be read.
     """
-    lacks_value = bool(arguments) and arguments[-1] in _VALUE_SELECTORS
+    last = arguments[-1] if arguments else ""
+    flag, equals, inline = last.partition("=")
+    lacks_value = flag in _VALUE_SELECTORS and (not equals or not inline)
     return lacks_value or any(_is_unresolved(word) for word in arguments)
 
 

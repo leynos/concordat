@@ -146,22 +146,27 @@ _QUOTED_STRING: typ.Final = re.compile(
 
 
 def _mute_parenthesised(match: re.Match[str]) -> str:
-    """Return `"_"` for a quoted string that holds a parenthesis, else the string.
+    """Return an unresolved word for a quoted string that holds a parenthesis.
 
     The shared lexer rewrites `)"` to close a command substitution, which
-    unbalances such a string, and nothing in it can select a package. A Make
-    reference left in the string does not count: its own parentheses are not the
-    string's.
+    unbalances such a string. It is muted to one word that carries the
+    unresolved mark, so a gate tool given it as an argument reads as having an
+    unresolved word (what the string says is not known), while an `echo` of it
+    is as harmless as before. A Make reference left in the string does not count
+    towards the parenthesis: its own parentheses are not the string's.
 
     Returns
     -------
     str
-        `"_"` when the string holds a parenthesis of its own, else the string.
+        The mute word when the string holds a parenthesis of its own and no
+        shell dollar, else the string.
     """
     text = match.group(0)
     has_shell_dollar = SHELL_DOLLAR in text
     has_parenthesis = re.search(r"[()]", _PLAIN_REFERENCE.sub("", text)) is not None
-    return '"_"' if has_parenthesis and not has_shell_dollar else text
+    if has_parenthesis and not has_shell_dollar:
+        return f'"{UNRESOLVED_MARK}"'
+    return text
 
 
 def _name_whitaker(text: str) -> str:

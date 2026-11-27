@@ -431,7 +431,13 @@ def _branch_taken(body: str, commas: list[int], condition: str) -> str:
     return body[commas[1] + 1 :] if len(commas) == 2 else ""
 
 
-def _evaluate_ifs(text: str, values: cabc.Mapping[str, str]) -> str:
+# How deep a condition may nest another one's expansion. A variable that names
+# itself in a condition never settles, so past this depth the call is left alone
+# and the expansion ends as unresolved rather than recursing without end.
+MAX_CONDITION_DEPTH: typ.Final = 3
+
+
+def _evaluate_ifs(text: str, values: cabc.Mapping[str, str], depth: int = 0) -> str:
     """Evaluate each `$(if COND,THEN[,ELSE])` whose condition expands completely.
 
     Make strips the condition, expands it, and takes THEN when anything is left,
@@ -455,6 +461,8 @@ def _evaluate_ifs(text: str, values: cabc.Mapping[str, str]) -> str:
     str
         *text* with the settled calls replaced by the branch Make takes.
     """
+    if depth >= MAX_CONDITION_DEPTH:
+        return text
     position = 0
     while (match := _IF_CALL.search(text, position)) is not None:
         close = close_of(text, match.start() + 1)
@@ -465,7 +473,7 @@ def _evaluate_ifs(text: str, values: cabc.Mapping[str, str]) -> str:
             continue
         edges = [commas[0], *commas[1:], len(body)]
         branches = [body[a + 1 : b] for a, b in itertools.pairwise(edges)]
-        condition = expand(body[: commas[0]].strip(), values)
+        condition = _expand(body[: commas[0]].strip(), values, depth + 1)
         if not condition.is_resolved or any(_is_error_call(b) for b in branches):
             position = match.end()
             continue
@@ -487,6 +495,11 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     Expansion
         The substituted text and whether every reference was resolved.
     """
+    return _expand(text, values, 0)
+
+
+def _expand(text: str, values: cabc.Mapping[str, str], depth: int) -> Expansion:
+    """Expand *text* as :func:`expand` does, *depth* conditions deep."""
     assigned = getattr(values, "assigned", frozenset())
     # A built-in the Makefile assigns itself is the Makefile's, not Make's.
     known = {
@@ -511,7 +524,7 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
                     _VARIABLE_REFERENCE.sub(
                         substitute,
                         _drop_error_guards(
-                            _evaluate_ifs(current, values), known, assigned
+                            _evaluate_ifs(current, values, depth), known, assigned
                         ),
                     ),
                 ),

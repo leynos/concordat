@@ -425,6 +425,14 @@ def test_a_comma_in_a_variable_does_not_move_an_if_argument() -> None:
     )
 
 
+def test_a_condition_that_names_itself_ends_unresolved() -> None:
+    """A recursive variable in a nested condition is bounded, not followed forever."""
+    values = {"X": "$(if $(X),yes,no)"}
+    text = "run $(if $(UNSET),$(if $(X),--package member,),--workspace)"
+
+    assert expand(text, values).is_resolved is False
+
+
 def test_a_condition_that_expands_to_a_space_is_true() -> None:
     """Make strips the condition before it expands it, so a space is not empty."""
     values = {"EMPTY": "", "SPACE": "$(EMPTY) $(EMPTY)"}
