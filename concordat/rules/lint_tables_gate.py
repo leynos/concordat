@@ -31,6 +31,7 @@ from .markdown_envelope import load_workflows
 from .uv_gate_envelope import load_actions
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
     from .gate_scope_commands import Invocation
@@ -104,12 +105,19 @@ def _makefile_miri(report: MakeutilReport, scan: _MiriScan) -> None:
     for target in walk.names:
         for rule in index[target]:
             for number, text in rule.recipes:
-                expanded = expand(text, values)
-                if _MIRI_COMMAND.search(expanded.text):
-                    scan.sources.append(f"Makefile:{number} ({target})")
-                elif not expanded.is_resolved and _NAMES_MIRI.search(text):
-                    # A reference that could stand for the command word.
-                    scan.is_resolved = False
+                _recipe_miri(f"Makefile:{number} ({target})", text, values, scan)
+
+
+def _recipe_miri(
+    source: str, text: str, values: cabc.Mapping[str, str], scan: _MiriScan
+) -> None:
+    """Record whether one recipe line runs Miri, or might (an unresolved word)."""
+    expanded = expand(text, values)
+    if _MIRI_COMMAND.search(expanded.text):
+        scan.sources.append(source)
+    elif not expanded.is_resolved and _NAMES_MIRI.search(text):
+        # A reference that could stand for the command word.
+        scan.is_resolved = False
 
 
 def _miri_steps(path: str, place: Place, combination: dict[str, object]) -> list[str]:
