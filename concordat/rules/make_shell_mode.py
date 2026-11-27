@@ -62,7 +62,8 @@ def shell_mode(
         if "$" not in name:
             continue
         expanded = expand(name, values)
-        if expanded.text.strip() == ONESHELL_TARGET:
+        # A variable can hold several targets: `T := .ONESHELL all`, `$(T):`.
+        if ONESHELL_TARGET in expanded.text.split():
             return ShellMode.ONE_SHELL
         is_unknown = is_unknown or not expanded.is_resolved
     return ShellMode.UNKNOWN if is_unknown else ShellMode.PER_LINE

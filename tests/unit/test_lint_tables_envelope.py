@@ -435,7 +435,13 @@ class TestGate:
 
     @pytest.mark.parametrize(
         "preamble",
-        [".ONESHELL:\n", "S := .ONESHELL\n$(S):\n", "S = .ONESHELL\n$(S):\n"],
+        [
+            ".ONESHELL:\n",
+            "S := .ONESHELL\n$(S):\n",
+            "S = .ONESHELL\n$(S):\n",
+            "T := .ONESHELL other\n$(T):\n",
+            ".ONESHELL other:\n",
+        ],
     )
     def test_oneshell_carries_an_if_false_across_recipe_lines(
         self, tmp_path: pathlib.Path, preamble: str
