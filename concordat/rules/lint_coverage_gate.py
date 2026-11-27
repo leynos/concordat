@@ -205,29 +205,31 @@ def _makefile_runs(
     index = rules_by_target(report)
     values = single_assignments(report["variables"])
     walk = reachable(index, values, LINT_TARGETS)
-    is_one_shell = ".ONESHELL" in index
+    makefile = _MakefileContext(values, is_one_shell=".ONESHELL" in index)
     for target in walk.names:
         for rule in index[target]:
-            _rule_runs(reader, target, rule, values, is_one_shell=is_one_shell)
+            _rule_runs(reader, target, rule, makefile)
     return walk.is_resolved, dict(values)
 
 
+class _MakefileContext(typ.NamedTuple):
+    """What reading a recipe needs of its Makefile: variables and shell mode."""
+
+    values: cabc.Mapping[str, str]
+    is_one_shell: bool
+
+
 def _rule_runs(
-    reader: _Reader,
-    target: str,
-    rule: Rule,
-    values: cabc.Mapping[str, str],
-    *,
-    is_one_shell: bool,
+    reader: _Reader, target: str, rule: Rule, makefile: _MakefileContext
 ) -> None:
     """Read the recipe lines of one rule of *target*."""
     state: tuple[ShellState, str | None] = (FRESH_SHELL, "")
     for number, text in rule.recipes:
-        expanded = expand(text, values)
+        expanded = expand(text, makefile.values)
         state = _line_runs(
             reader, expanded.text, f"Makefile:{number} ({target})", state
         )
-        if not is_one_shell:
+        if not makefile.is_one_shell:
             state = (FRESH_SHELL, "")
 
 
@@ -273,15 +275,24 @@ def _exported_value(
 def _place_runs(reader: _Reader, path: str, place: Place) -> None:
     """Read the steps of one workflow job or action, once per matrix entry."""
     if place.combinations is None:
-        if _NAMES_TOOL.search(repr(place.steps)):
-            reader.unreadable.append(
-                f"{path} ({place.label}): matrix is computed by an expression, so "
-                "its commands cannot be filled in"
-            )
+        _note_computed_matrix(reader, path, place)
         return
-    for combination in place.combinations:
-        for step in step_runs(place, combination):
-            _step_runs(reader, f"{path} {step.source}", step)
+    steps = (
+        step
+        for combination in place.combinations
+        for step in step_runs(place, combination)
+    )
+    for step in steps:
+        _step_runs(reader, f"{path} {step.source}", step)
+
+
+def _note_computed_matrix(reader: _Reader, path: str, place: Place) -> None:
+    """Record a job whose matrix is computed, if it names a lint tool."""
+    if _NAMES_TOOL.search(repr(place.steps)):
+        reader.unreadable.append(
+            f"{path} ({place.label}): matrix is computed by an expression, so "
+            "its commands cannot be filled in"
+        )
 
 
 def _step_runs(reader: _Reader, source: str, step: StepRun) -> None:
