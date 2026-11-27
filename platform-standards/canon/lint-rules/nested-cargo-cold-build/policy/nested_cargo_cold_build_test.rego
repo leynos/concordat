@@ -92,6 +92,22 @@ test_an_unprepared_pass_before_the_unresolved_command_keeps_nc010 if {
 	{[f.rule_id, f.path] | some f in findings(fixture); f.rule_id == "NC-010"} == {["NC-010", "tests/cli.rs"]}
 }
 
+# Order is the walk order of the facts, not the source line: a prerequisite
+# defined later in the file runs first.
+test_the_walk_order_decides_not_the_source_line if {
+	fixture := object.union(data.fixtures.unprepared_build, {"passes": [
+		{
+			"path": "Makefile", "line": 9, "command": "cargo test --workspace", "status": "unprepared",
+			"visible": 1, "reason": "",
+		},
+		{
+			"path": "Makefile", "line": 3, "command": "$(if $(WARM_FLAGS),...)", "status": "indeterminate",
+			"visible": 0, "reason": "the command word is a Make reference the reader cannot resolve",
+		},
+	]})
+	{[f.rule_id, f.path] | some f in findings(fixture); f.rule_id == "NC-010"} == {["NC-010", "tests/cli.rs"]}
+}
+
 test_an_unprepared_pass_after_the_unresolved_command_stays_indeterminate if {
 	fixture := object.union(data.fixtures.unprepared_build, {"passes": [
 		{

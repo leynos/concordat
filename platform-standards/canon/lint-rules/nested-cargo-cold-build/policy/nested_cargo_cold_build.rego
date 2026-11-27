@@ -134,24 +134,27 @@ _unresolved_word_reason := "the command word is a Make reference the reader cann
 #
 # A command can only prepare what runs after it. A pass the reader found
 # definitely unprepared (a real test run with nothing of its own before it) and
-# that sits before every unresolved command is cold whatever that command does,
-# so the definite finding stays.
-_unresolved_lines := {pass.line |
-	some pass in object.get(input, "passes", [])
+# that comes before every unresolved command in the order Make runs them is cold
+# whatever that command does, so the definite finding stays. The order is the
+# position in the `passes` array, which the reader writes in walk order (a
+# prerequisite before the recipe that needs it), not the source line, which says
+# nothing about what runs first.
+_unresolved_positions := {i |
+	some i, pass in object.get(input, "passes", [])
 	_well_formed_pass(pass)
 	pass.status == "indeterminate"
 	object.get(pass, "reason", "") == _unresolved_word_reason
 }
 
 _cold_pass_before_every_unresolved_command if {
-	some pass in object.get(input, "passes", [])
+	some i, pass in object.get(input, "passes", [])
 	_well_formed_pass(pass)
 	pass.status == "unprepared"
-	pass.line < min(_unresolved_lines)
+	i < min(_unresolved_positions)
 }
 
 _makefile_unsettled if {
-	count(_unresolved_lines) > 0
+	count(_unresolved_positions) > 0
 	not _cold_pass_before_every_unresolved_command
 }
 
