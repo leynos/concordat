@@ -93,8 +93,10 @@ def _gate_spec_is_pinned(spec: str) -> bool:
     if direct is not None:
         spec = direct.group("url")
     if spec.startswith("git+"):
-        ref = spec.rpartition("@")[2].partition("#")[0]
-        return _GATE_FULL_SHA.fullmatch(ref) is not None
+        # The ref is read before the fragment, as the helper (0.2.3) does: an
+        # `@` inside the fragment is never the Git ref.
+        _, found, ref = spec.partition("#")[0].rpartition("@")
+        return bool(found) and _GATE_FULL_SHA.fullmatch(ref) is not None
     return any(_gate_exact_pin(spec, separator) for separator in ("==", "@"))
 
 

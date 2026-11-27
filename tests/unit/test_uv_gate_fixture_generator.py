@@ -29,6 +29,7 @@ RELEASED_DIGESTS = {
     "0.1.0": "cc8dc5dfba51efcca4e3c117e55e2fcbb463455929f5988efbf9c4532988f163",
     "0.2.0": "1aee16702de67cc7dd5dfe15e434f589dfaecf3ca813c85fbff5320c5fe584fe",
     "0.2.1": "fe7671d8663ec89ce1076ebb857847802e46c8d6607ab1e012daa443e335e66e",
+    "0.2.3": "a95b20948a540d22fd685a22bc1fe6939e55fdee6285c9e154e9823373db9150",
 }
 
 _PACKAGE_DIR = (
@@ -166,9 +167,10 @@ def test_every_released_canon_digest_stays_listed() -> None:
     )
     digests = manifest["parameters"]["defaults"]["gate_digests"]
 
-    assert set(digests) >= {"0.1.0", "0.2.0", "0.2.1"}
+    assert set(digests) >= {"0.1.0", "0.2.0", "0.2.1", "0.2.3"}
     # Whole digests, not prefixes: a single changed character would fail every
     # repository that still vendors that release.
     assert digests["0.1.0"] == RELEASED_DIGESTS["0.1.0"]
     assert digests["0.2.0"] == RELEASED_DIGESTS["0.2.0"]
     assert digests["0.2.1"] == RELEASED_DIGESTS["0.2.1"]
+    assert digests["0.2.3"] == RELEASED_DIGESTS["0.2.3"]

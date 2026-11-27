@@ -557,6 +557,7 @@ def test_a_make_command_behind_an_environment_prefix_is_followed(
         "git+https://example.invalid/tool.git@main",
         "git+@" + "a" * 40,
         "git+https://example.invalid/tool.git@" + "a" * 40 + "#extra@main",
+        "git+https://example.invalid/tool.git#subdirectory=a@" + "a" * 40,
         "other[extra] @ git+https://example.invalid/tool.git@" + "a" * 40 + "#src",
         "git+https://example.invalid/tool.git@" + "A" * 40,
         "git+https://example.invalid/tool.git@" + "a" * 39,

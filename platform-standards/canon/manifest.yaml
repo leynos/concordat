@@ -486,7 +486,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/uv-gate-baseline/rule.yaml
     description: >
       Rule package manifest for the uv gate baseline policy.
-    sha256: 97d4df1b767975edc85eefd58ab5af39c96bbf8c6666a469fa47cf10c2e885fd
+    sha256: a8604696db73cf3111136bd45a93bb96b3217b32f15e50f1bcdbfb0448204966
   - id: lint-rule-documentation-presence
     type: opa-policy
     path: >-
