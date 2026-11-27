@@ -116,12 +116,65 @@ _unprepared(build) if {
 # file cannot hide the rule's own uncertainty.
 _definite(build) if build.kind != "cargo-unknown"
 
+#
+# A Makefile `test` target holding a pass the reader cannot read (it is reported
+# as EN-001 below) may be what prepares the build: the reader sees no
+# preparation there only because it cannot see into that line. "No preparation
+# declared" is then unknown, not a fact, so the unprepared builds are reported
+# as indeterminate and never as noncompliant (podbot's warm-up is a `$(if ...)`
+# runner call that the reader cannot follow, and it is compliant in fact).
+#
+# Only a command word the reader could not resolve counts (the reason in
+# `nested_cargo_makefile_passes.py`): that word may be anything, a preparation
+# included. A pass that is indeterminate because of which target defines `test`,
+# an unreadable signature, or a command the reader can see is not a preparation
+# (`make -t prepare`) leaves the definite finding in place, as before.
+_unresolved_word_reason := "the command word is a Make reference the reader cannot resolve"
+
+#
+# A command can only prepare what runs after it. A pass the reader found
+# definitely cold (a real test run with nothing of its own before it, or one that
+# only a compile preceded, which leaves trybuild and macrotest cold) and
+# that comes before every unresolved command in the order Make runs them is cold
+# whatever that command does, so the definite finding stays. The order is the
+# position in the `passes` array, which the reader writes in walk order (a
+# prerequisite before the recipe that needs it), not the source line, which says
+# nothing about what runs first.
+_unresolved_positions := {i |
+	some i, pass in object.get(input, "passes", [])
+	_well_formed_pass(pass)
+	pass.status == "indeterminate"
+	object.get(pass, "reason", "") == _unresolved_word_reason
+}
+
+_cold_pass_before_every_unresolved_command if {
+	some i, pass in object.get(input, "passes", [])
+	_well_formed_pass(pass)
+	pass.status in {"unprepared", "compiled"}
+	i < min(_unresolved_positions)
+}
+
+_makefile_unsettled if {
+	count(_unresolved_positions) > 0
+	not _cold_pass_before_every_unresolved_command
+}
+
 _cold_paths := {build.path |
 	some build in input.builds
 	_well_formed_build(build)
 	_unprepared(build)
 	_definite(build)
 	not is_exempt(build.path)
+	not _makefile_unsettled
+}
+
+_unsettled_paths := {build.path |
+	some build in input.builds
+	_well_formed_build(build)
+	_unprepared(build)
+	_definite(build)
+	not is_exempt(build.path)
+	_makefile_unsettled
 }
 
 # Paths with a definite unprepared build, exempt or not. An exempt file's
@@ -174,6 +227,16 @@ deny contains finding("EN-001", severity, "indeterminate", path, line, msg) if {
 	msg := sprintf(
 		"%s:%d starts cargo with a subcommand the reader cannot see, and the repository declares no preparation for it, so whether it compiles inside a timed test is unknown. If it does, prepare the build outside the timed test as NC-010 describes",
 		[path, line],
+	)
+}
+
+deny contains finding("EN-001", severity, "indeterminate", path, line, msg) if {
+	envelope_ok
+	some path in _unsettled_paths
+	line := _cold_line(path)
+	msg := sprintf(
+		"%s:%d compiles inside a timed test (%s) and no preparation is declared for it that the reader can see, but the Makefile's `test` target holds a pass the reader cannot read (reported separately), and it may be what prepares this build, so whether the build is cold is unknown",
+		[path, line, concat(", ", sort(_cold_kinds(path)))],
 	)
 }
 
