@@ -75,6 +75,37 @@ test_an_unreadable_test_target_makes_an_unprepared_build_indeterminate if {
 	}
 }
 
+# A command can only prepare what runs after it: a definitely unprepared pass
+# before the unresolved command keeps the definite finding, and one after it
+# does not.
+test_an_unprepared_pass_before_the_unresolved_command_keeps_nc010 if {
+	fixture := object.union(data.fixtures.unprepared_build, {"passes": [
+		{
+			"path": "Makefile", "line": 3, "command": "cargo test --workspace", "status": "unprepared",
+			"visible": 1, "reason": "",
+		},
+		{
+			"path": "Makefile", "line": 9, "command": "$(if $(WARM_FLAGS),...)", "status": "indeterminate",
+			"visible": 0, "reason": "the command word is a Make reference the reader cannot resolve",
+		},
+	]})
+	{[f.rule_id, f.path] | some f in findings(fixture); f.rule_id == "NC-010"} == {["NC-010", "tests/cli.rs"]}
+}
+
+test_an_unprepared_pass_after_the_unresolved_command_stays_indeterminate if {
+	fixture := object.union(data.fixtures.unprepared_build, {"passes": [
+		{
+			"path": "Makefile", "line": 3, "command": "$(if $(WARM_FLAGS),...)", "status": "indeterminate",
+			"visible": 0, "reason": "the command word is a Make reference the reader cannot resolve",
+		},
+		{
+			"path": "Makefile", "line": 9, "command": "cargo test --workspace", "status": "unprepared",
+			"visible": 1, "reason": "",
+		},
+	]})
+	count({f | some f in findings(fixture); f.path == "tests/cli.rs"; f.rule_id == "NC-010"}) == 0
+}
+
 # A pass that is indeterminate for another reason (which target defines `test`)
 # names no command that may prepare, so the definite finding stays.
 test_an_unsettled_target_name_leaves_an_unprepared_build_noncompliant if {
