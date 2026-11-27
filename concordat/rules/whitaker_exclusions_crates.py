@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import posixpath
 import typing as typ
 
 from .documentation_rust import RUST_PRUNED_DIRECTORIES
@@ -209,21 +210,36 @@ def _local_workspace_dependencies(
     return roots
 
 
+def _declared_root(relative: str, manifest: dict[str, object]) -> str | None:
+    """Return the directory key a package names with `package.workspace`, if any."""
+    declared = table(manifest.get("package")).get("workspace")
+    if not isinstance(declared, str):
+        return None
+    directory = pathlib.PurePosixPath(relative).parent
+    joined = posixpath.normpath(posixpath.join(directory.as_posix(), declared))
+    return _directory_key(pathlib.PurePosixPath(joined))
+
+
 def _owning_workspace(
-    relative: str, roots: dict[str, frozenset[str]]
+    relative: str, manifest: dict[str, object], roots: dict[str, frozenset[str]]
 ) -> frozenset[str]:
     """Return the inherited path dependencies of the workspace that owns a manifest.
 
-    The owner is the nearest manifest at or above the package's directory that
-    has a `[workspace]` table, as Cargo searches. A package under no workspace
-    inherits nothing, so an unrelated workspace's dependencies cannot make its
-    registry dependency look local.
+    A package that names its workspace (`package.workspace`, which may be a root
+    that is not an ancestor) belongs to it. Otherwise the owner is the nearest
+    manifest at or above the package's directory that has a `[workspace]`
+    table, as Cargo searches. A package under no workspace inherits nothing, so
+    an unrelated workspace's dependencies cannot make its registry dependency
+    look local.
 
     Returns
     -------
     frozenset[str]
         The owning workspace's path-dependency keys, or none.
     """
+    declared = _declared_root(relative, manifest)
+    if declared is not None and declared in roots:
+        return roots[declared]
     directory = pathlib.PurePosixPath(relative).parent
     for candidate in (directory, *directory.parents):
         key = _directory_key(candidate)
@@ -240,7 +256,7 @@ def _crate_names(
     manifest = reader.toml(path)
     if manifest is None:
         return set()
-    inherited = _owning_workspace(relative, roots)
+    inherited = _owning_workspace(relative, manifest, roots)
     package = table(manifest.get("package"))
     names = _declared_names(manifest, inherited) | discovered_targets(
         path.parent, package, reader

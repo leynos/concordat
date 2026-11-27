@@ -408,15 +408,18 @@ class TestCrateNames:
     @pytest.mark.parametrize(
         ("other_workspace", "expected"),
         [
-            # Workspace `b` declares `shared` as a path dependency for its own
-            # members, so the name is a crate of the repository.
-            (True, "governed"),
+            # Workspace `b` declares `shared` as a path dependency and a member
+            # uses it, so the name is a crate of the repository.
+            ("used", "governed"),
+            # `b` declares it but no member uses it: the declaration is not a
+            # crate, and must not be attributed to `a`'s registry dependency.
+            ("unused", "unknown"),
             # Alone, workspace `a` says registry, so the name is not a crate.
-            (False, "unknown"),
+            ("absent", "unknown"),
         ],
     )
     def test_an_inherited_dependency_is_resolved_in_the_workspace_that_owns_it(
-        self, tmp_path: pathlib.Path, expected: str, *, other_workspace: bool
+        self, tmp_path: pathlib.Path, other_workspace: str, expected: str
     ) -> None:
         """One workspace's registry dependency is not made local by another's."""
         inherit = "[dependencies]\nshared = { workspace = true }\n"
@@ -426,15 +429,42 @@ class TestCrateNames:
             "a/m/Cargo.toml": MANIFEST.format(name="m", extra=inherit),
             "dylint.toml": '[l]\n# r\nexcluded_crates = ["shared"]\n',
         }
-        if other_workspace:
+        if other_workspace != "absent":
             files["b/Cargo.toml"] = (
                 '[workspace]\nmembers = ["n"]\n'
                 '[workspace.dependencies]\nshared = { path = "n" }\n'
             )
-            files["b/n/Cargo.toml"] = MANIFEST.format(name="n", extra=inherit)
+            files["b/n/Cargo.toml"] = MANIFEST.format(
+                name="n", extra=inherit if other_workspace == "used" else ""
+            )
         _write(tmp_path, files)
         [exclusion] = build_whitaker_exclusions_envelope(tmp_path)["exclusions"]
         assert exclusion["entries"] == [{"name": "shared", "resolved": expected}]
+
+    def test_a_package_that_names_a_workspace_that_is_not_an_ancestor_inherits_from_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`package.workspace = "../ws"` selects the owner, wherever it is."""
+        _write(
+            tmp_path,
+            {
+                "ws/Cargo.toml": "[workspace]\nmembers = []\n"
+                '[workspace.dependencies]\nshared_alias = { path = "../shared" }\n',
+                "shared/Cargo.toml": MANIFEST.format(name="shared", extra=""),
+                "app/Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'workspace = "../ws"\n\n[dependencies]\n'
+                        "shared_alias = { workspace = true }\n"
+                    ),
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["shared_alias"]\n',
+            },
+        )
+        [exclusion] = build_whitaker_exclusions_envelope(tmp_path)["exclusions"]
+        assert exclusion["entries"] == [
+            {"name": "shared_alias", "resolved": "governed"}
+        ]
 
     def test_a_symlinked_entry_in_a_target_folder_is_not_followed(
         self, tmp_path: pathlib.Path
