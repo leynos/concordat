@@ -62,6 +62,52 @@ test_an_unprepared_build_is_noncompliant if {
 	profile(data.fixtures.unprepared_build) == {["NC-010", "noncompliant", "tests/cli.rs"]}
 }
 
+# A `test` target the reader cannot read may be what prepares the build, so the
+# absence of a visible preparation is unknown there, never a definite finding.
+test_an_unreadable_test_target_makes_an_unprepared_build_indeterminate if {
+	fixture := object.union(data.fixtures.unprepared_build, {"passes": [{
+		"path": "Makefile", "line": 174, "command": "$(if $(WARM_FLAGS),...)", "status": "indeterminate",
+		"visible": 0, "reason": "the command word is a Make reference the reader cannot resolve",
+	}]})
+	profile(fixture) == {
+		["EN-001", "indeterminate", "Makefile"],
+		["EN-001", "indeterminate", "tests/cli.rs"],
+	}
+}
+
+# A pass that is indeterminate for another reason (which target defines `test`)
+# names no command that may prepare, so the definite finding stays.
+test_an_unsettled_target_name_leaves_an_unprepared_build_noncompliant if {
+	fixture := object.union(data.fixtures.unprepared_build, {"passes": [{
+		"path": "Makefile", "line": 3, "command": "test", "status": "indeterminate",
+		"visible": 0, "reason": "an included file may define `test`",
+	}]})
+	{[f.rule_id, f.path] | some f in findings(fixture); f.rule_id == "NC-010"} == {["NC-010", "tests/cli.rs"]}
+}
+
+# A readable `test` target with a pass that is not indeterminate leaves the
+# definite finding alone.
+test_a_readable_pass_leaves_an_unprepared_build_noncompliant if {
+	fixture := object.union(data.fixtures.unprepared_build, {"passes": [{
+		"path": "Makefile", "line": 3, "command": "cargo test", "status": "unprepared",
+		"visible": 1, "reason": "",
+	}]})
+	{[f.rule_id, f.path] | some f in findings(fixture); f.rule_id == "NC-010"} == {["NC-010", "tests/cli.rs"]}
+}
+
+# An exemption still silences the file when the Makefile is unreadable.
+test_an_exempt_build_stays_silent_beside_an_unreadable_test_target if {
+	fixture := object.union(data.fixtures.unprepared_build, {"passes": [{
+		"path": "Makefile", "line": 174, "command": "test", "status": "indeterminate",
+		"visible": 0, "reason": "the command word is a Make reference the reader cannot resolve",
+	}]})
+	listed := [{
+		"repository": "leynos/example", "path": "tests/cli.rs",
+		"rationale": "builds fresh on purpose", "review_trigger": "review on a new dependency",
+	}]
+	{f.path | some f in findings_with(fixture, listed)} == {"Makefile"}
+}
+
 # Two kinds of build in one file are one problem with one fix, reported once at
 # the first compile and naming both.
 test_one_finding_per_file_naming_every_kind if {

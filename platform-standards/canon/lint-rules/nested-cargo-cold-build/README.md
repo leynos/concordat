@@ -42,7 +42,10 @@ recorded in `docs/roadmap.md` (DF12-109).
   repository declares no preparation outside it. The finding is reported once
   per file, at its first compile, and names every kind of build the file starts
   (`cargo`, `trybuild`, `macrotest`, `helper`). The message says what to do and
-  links two examples.
+  links two examples. When the Makefile's `test` target runs a command whose
+  word is a Make reference the reader cannot resolve, that command may be what
+  prepares the build, so the file is reported as indeterminate (EN-001)
+  instead: no visible preparation is then unknown, not a fact.
 - **NC-010 per pass** (same severity, except the in-suite warning below): a
   test pass of the Makefile's `test` target that no preparation of its own
   flags precedes, in a repository whose preparation is declared in the Makefile
