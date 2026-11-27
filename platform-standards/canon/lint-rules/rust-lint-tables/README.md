@@ -119,10 +119,12 @@ credits that only when all of the following hold:
 - `dylint.toml` opts the lint in (`[whitaker] experimental`), with
   `max_complexity` a TOML integer from 1 to 9 as the only key of its table;
 - Clippy's threshold is removed, so one gate owns the budget;
-- Whitaker runs over the whole workspace: a resolved command that selects the
-  workspace without excluding a member, with no Whitaker command the reader
-  could not place. This is a close reading of `gate-workspace-coverage` for
-  Whitaker, which stays the authority.
+- Whitaker runs over the whole workspace: the resolved commands that run in the
+  root directory select every member of the root workspace between them
+  (`--workspace` less its `--exclude` list, or `-p` lists), and there is no
+  Whitaker command the reader could not place. A command run after `cd` does
+  not count. This is a close reading of `gate-workspace-coverage` for Whitaker,
+  which stays the authority.
 - The package is in the root workspace.
 
 When the lint is configured but the gate has lines the reader could not place

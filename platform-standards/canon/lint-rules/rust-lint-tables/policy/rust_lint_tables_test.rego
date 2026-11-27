@@ -253,6 +253,14 @@ test_the_macro_aware_gate_over_the_whole_workspace_replaces_clippys if {
 	count(findings(data.fixtures.cognitive_by_whitaker)) == 0
 }
 
+test_whitaker_commands_that_cover_the_members_between_them_count if {
+	count(findings(data.fixtures.cognitive_whitaker_two_runs_cover)) == 0
+}
+
+test_a_package_list_that_misses_a_member_does_not_count if {
+	paths_of(data.fixtures.cognitive_whitaker_packages_miss_a_member, "LT-002") == {"Cargo.toml", "crates/b/Cargo.toml"}
+}
+
 test_the_macro_aware_gate_without_whole_workspace_whitaker_does_not_count if {
 	[msg] := messages_of(data.fixtures.cognitive_whitaker_not_whole_workspace, "LT-002")
 	contains(msg, "clippy::cognitive_complexity")

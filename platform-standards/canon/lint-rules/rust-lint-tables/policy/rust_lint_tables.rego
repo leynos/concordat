@@ -144,9 +144,10 @@ cognitive := baseline.cognitive
 # Whitaker's macro-aware lint replaces Clippy's only where it is a real gate:
 # opted in through dylint.toml with a valid ceiling, Clippy's threshold removed
 # so one gate owns the budget, and Whitaker run over the whole workspace. The
-# last condition is a close reading of gate-workspace-coverage for Whitaker: a
-# resolved command that selects the workspace without excluding a member, and
-# no Whitaker command the reader could not place.
+# last condition is a close reading of gate-workspace-coverage for Whitaker: the
+# resolved commands that run in the root directory select every member of the
+# root workspace between them (`--workspace` less its excludes, or `-p` lists),
+# and there is no Whitaker command the reader could not place.
 macro_aware_known_fields := {"max_complexity"}
 
 macro_aware_opted_in(pkg) if {
@@ -178,12 +179,33 @@ in_root_workspace(pkg) if {
 	pkg.manifest == "Cargo.toml"
 }
 
-whitaker_covers_root_workspace if {
-	some run in input.whitaker_runs
+root_members := {p.name | some p in input.packages; in_root_workspace(p)}
+
+# The members a Cargo package selector list names; Cargo accepts glob patterns.
+named_members(selectors) := {m |
+	some m in root_members
+	some selector in selectors
+	glob.match(selector, [], m)
+}
+
+placed_run(run) if {
 	run.is_resolved == true
-	run.is_workspace == true
-	count(run.excludes) == 0
 	run.changes_directory == false
+}
+
+selected_members(run) := root_members - named_members(run.excludes) if run.is_workspace == true
+
+selected_members(run) := named_members(run.packages) if run.is_workspace == false
+
+whitaker_covered_members := {m |
+	some run in input.whitaker_runs
+	placed_run(run)
+	some m in selected_members(run)
+}
+
+whitaker_covers_root_workspace if {
+	count(root_members) > 0
+	count(root_members - whitaker_covered_members) == 0
 	count([r | some r in input.whitaker_runs; r.is_resolved == false]) == 0
 }
 

@@ -306,6 +306,31 @@ SCENARIOS: dict[str, dict[str, str]] = {
         "clippy.toml": OTHER_CLIPPY,
         "Makefile": WHITAKER_BARE_MAKEFILE,
     },
+    "cognitive_whitaker_two_runs_cover": {
+        "Cargo.toml": package("app", f"\n{INHERIT}\n")
+        + ROOT_PACKAGE_WORKSPACE
+        + without(WORKSPACE_LINTS, "cognitive_complexity"),
+        **members("b"),
+        "dylint.toml": MACRO_AWARE_DYLINT,
+        "clippy.toml": OTHER_CLIPPY,
+        "Makefile": (
+            ".PHONY: lint test\nlint:\n"
+            "\twhitaker --all -- --workspace --exclude b --all-targets\n"
+            "\twhitaker --all -- -p b --all-targets\ntest:\n\t@echo test\n"
+        ),
+    },
+    "cognitive_whitaker_packages_miss_a_member": {
+        "Cargo.toml": package("app", f"\n{INHERIT}\n")
+        + ROOT_PACKAGE_WORKSPACE
+        + without(WORKSPACE_LINTS, "cognitive_complexity"),
+        **members("b"),
+        "dylint.toml": MACRO_AWARE_DYLINT,
+        "clippy.toml": OTHER_CLIPPY,
+        "Makefile": (
+            ".PHONY: lint test\nlint:\n"
+            "\twhitaker --all -- -p app --all-targets\ntest:\n\t@echo test\n"
+        ),
+    },
     "cognitive_whitaker_line_unreadable": {
         "Cargo.toml": package(
             "app", f"\n{without(PACKAGE_LINTS, 'cognitive_complexity')}"
