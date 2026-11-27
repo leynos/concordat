@@ -415,3 +415,40 @@ class TestFifteenthReview:
         )
         found = _makefile_invocations(tmp_path, makefile)
         assert [i["resolved"] for i in found] == [True]
+
+
+class TestNonSelectingCommands:
+    """Commands that name a gate tool without selecting packages."""
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            '"$cargo_dylint" dylint --version',
+            "report=\"$(cargo nextest show-config test-groups | sed 's/\\x1b\\[//')\"",
+        ],
+    )
+    def test_a_query_of_the_tool_hides_nothing(
+        self, tmp_path: pathlib.Path, line: str
+    ) -> None:
+        """Asking a tool its version or configuration is not a gate command."""
+        files = _workspace_files(extra=_step_workflow(line))
+
+        assert _build(tmp_path, files)["unreadable"] == []
+
+    def test_a_variable_cargo_subcommand_with_a_version_flag_hides_nothing(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cargo "$GATE" --version` asks Cargo for its version."""
+        files = _workspace_files(extra=_step_workflow('cargo "$GATE" --version'))
+
+        assert _build(tmp_path, files)["unreadable"] == []
+
+    def test_a_help_flag_after_the_separator_does_not_hide_a_tool(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Cargo passes a flag after `--` to the test binary, so it asks nothing."""
+        files = _workspace_files(extra=_step_workflow('cargo "$GATE" test -- --help'))
+
+        assert _build(tmp_path, files)["unreadable"], (
+            "a variable subcommand is still unreadable when --help follows `--`"
+        )

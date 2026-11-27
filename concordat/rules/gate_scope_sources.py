@@ -82,7 +82,9 @@ OPERATION_READ_EXAMPLES: typ.Final = "read-gate-scope-examples"
 # name (`WHITAKER_INSTALLER_VERSION`, `whitaker-installer`, `$whitaker`) is not
 # a command, so a line that only mentions one is not unreadable.
 _NAMES_TOOL: typ.Final = re.compile(
-    r"(?<![\w$./-])(?:whitaker|clippy|nextest|dylint)(?![\w-])", re.IGNORECASE
+    r"(?<![\w$./-])(?:whitaker|clippy|nextest(?!\s+(?:show-config|list|archive|self|"
+    r"help|--version))|dylint(?!\s+(?:--version|--help|list)))(?![\w-])",
+    re.IGNORECASE,
 )
 # The same, loosely, for a step of a job whose matrix cannot be expanded: the
 # commands are unknown there, so any mention of a tool is reason to say so.
@@ -94,6 +96,8 @@ _MATRIX_TOOL: typ.Final = re.compile(
 )
 # Words that, beside a command word the expansion left unresolved, say the
 # command is one of the gate tools.
+# A command that only asks a tool about itself selects no package.
+_INFORMATION_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 _TOOL_ARGUMENTS: typ.Final = frozenset({
     "clippy",
     "nextest",
@@ -219,12 +223,28 @@ def _hides_tool(words: list[str]) -> bool:
     if start >= len(words):
         return False
     head = words[start]
+    arguments = words[start + 1 :]
+    if _asks_for_information(arguments):
+        return False
     if head.rsplit("/", 1)[-1] == "cargo":
-        subcommand = cargo_subcommand_word(words[start + 1 :])
+        subcommand = cargo_subcommand_word(arguments)
         return subcommand is not None and _holds_reference(subcommand)
-    return _holds_reference(head) and any(
-        word in _TOOL_ARGUMENTS for word in words[start + 1 :]
-    )
+    return _holds_reference(head) and any(word in _TOOL_ARGUMENTS for word in arguments)
+
+
+def _asks_for_information(arguments: list[str]) -> bool:
+    """Return whether the arguments before any `--` only ask the tool about itself.
+
+    What follows `--` goes to a test binary or a lint, not to the tool, so a
+    `--help` there asks nothing of it.
+
+    Returns
+    -------
+    bool
+        Whether an informational flag appears before `--`.
+    """
+    own = arguments[: arguments.index("--")] if "--" in arguments else arguments
+    return any(word in _INFORMATION_FLAGS for word in own)
 
 
 def makefile_lines(
