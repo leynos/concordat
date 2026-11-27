@@ -1,0 +1,195 @@
+{
+  "baseline": {
+    "clippy": {
+      "pedantic": {
+        "level": "warn",
+        "priority": -1
+      },
+      "allow_attributes": {
+        "level": "deny"
+      },
+      "allow_attributes_without_reason": {
+        "level": "deny"
+      },
+      "blanket_clippy_restriction_lints": {
+        "level": "deny"
+      },
+      "cognitive_complexity": {
+        "level": "deny"
+      },
+      "disallowed_methods": {
+        "level": "deny"
+      },
+      "needless_pass_by_value": {
+        "level": "deny"
+      },
+      "implicit_hasher": {
+        "level": "deny"
+      },
+      "missing_assert_message": {
+        "level": "deny"
+      },
+      "dbg_macro": {
+        "level": "deny"
+      },
+      "print_stdout": {
+        "level": "deny"
+      },
+      "print_stderr": {
+        "level": "deny"
+      },
+      "unwrap_used": {
+        "level": "deny"
+      },
+      "expect_used": {
+        "level": "deny"
+      },
+      "indexing_slicing": {
+        "level": "deny"
+      },
+      "string_slice": {
+        "level": "deny"
+      },
+      "integer_division": {
+        "level": "deny"
+      },
+      "integer_division_remainder_used": {
+        "level": "deny"
+      },
+      "panic_in_result_fn": {
+        "level": "deny"
+      },
+      "unreachable": {
+        "level": "deny"
+      },
+      "host_endian_bytes": {
+        "level": "deny"
+      },
+      "little_endian_bytes": {
+        "level": "deny"
+      },
+      "big_endian_bytes": {
+        "level": "deny"
+      },
+      "let_underscore_must_use": {
+        "level": "deny"
+      },
+      "or_fun_call": {
+        "level": "deny"
+      },
+      "option_if_let_else": {
+        "level": "deny"
+      },
+      "self_named_module_files": {
+        "level": "deny"
+      },
+      "shadow_reuse": {
+        "level": "deny"
+      },
+      "shadow_same": {
+        "level": "deny"
+      },
+      "shadow_unrelated": {
+        "level": "deny"
+      },
+      "str_to_string": {
+        "level": "deny"
+      },
+      "string_lit_as_bytes": {
+        "level": "deny"
+      },
+      "try_err": {
+        "level": "deny"
+      },
+      "unneeded_field_pattern": {
+        "level": "deny"
+      },
+      "use_self": {
+        "level": "deny"
+      },
+      "float_arithmetic": {
+        "level": "deny"
+      },
+      "cast_possible_truncation": {
+        "level": "deny"
+      },
+      "cast_possible_wrap": {
+        "level": "deny"
+      },
+      "cast_precision_loss": {
+        "level": "deny"
+      },
+      "lossy_float_literal": {
+        "level": "deny"
+      },
+      "missing_const_for_fn": {
+        "level": "deny"
+      },
+      "must_use_candidate": {
+        "level": "deny"
+      },
+      "unused_async": {
+        "level": "deny"
+      },
+      "missing_docs_in_private_items": {
+        "level": "deny"
+      },
+      "missing_panics_doc": {
+        "level": "deny"
+      },
+      "error_impl_error": {
+        "level": "deny"
+      },
+      "result_large_err": {
+        "level": "deny"
+      }
+    },
+    "rust": {
+      "unknown_lints": {
+        "level": "deny"
+      },
+      "renamed_and_removed_lints": {
+        "level": "deny"
+      },
+      "unsafe_code": {
+        "level": "forbid"
+      },
+      "missing_docs": {
+        "level": "deny"
+      },
+      "unexpected_cfgs": {
+        "level": "warn"
+      }
+    },
+    "rustdoc": {
+      "missing_crate_level_docs": {
+        "level": "deny"
+      },
+      "broken_intra_doc_links": {
+        "level": "deny"
+      },
+      "private_intra_doc_links": {
+        "level": "deny"
+      },
+      "bare_urls": {
+        "level": "deny"
+      },
+      "invalid_html_tags": {
+        "level": "deny"
+      },
+      "invalid_codeblock_attributes": {
+        "level": "deny"
+      },
+      "unescaped_backticks": {
+        "level": "deny"
+      }
+    },
+    "cognitive": {
+      "lint": "cognitive_complexity",
+      "threshold": 9,
+      "macro_aware_lint": "macro_aware_cognitive_complexity",
+      "macro_aware_ceiling": 9
+    },
+    "pyo3_divergences": []
+  }
+}

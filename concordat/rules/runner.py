@@ -287,8 +287,19 @@ def _conftest_argv(
     policy_dir: pathlib.Path,
     data_path: pathlib.Path,
     envelope_paths: cabc.Sequence[pathlib.Path],
+    *,
+    data_files: cabc.Sequence[pathlib.Path] = (),
 ) -> list[str]:
-    """Return the Conftest command line that evaluates *envelope_paths*."""
+    """Return the Conftest command line that evaluates *envelope_paths*.
+
+    *data_files* are the package's own reference data (its `data/*.json`),
+    loaded beside the parameters so a policy can read them as `data.<key>`.
+
+    Returns
+    -------
+    list[str]
+        The Conftest argument vector.
+    """
     return [
         "conftest",
         "test",
@@ -296,6 +307,7 @@ def _conftest_argv(
         str(policy_dir),
         "--data",
         str(data_path),
+        *(arg for path in data_files for arg in ("--data", str(path))),
         "--namespace",
         _policy_namespace(rule_id),
         "--output",
@@ -321,7 +333,13 @@ def _evaluate_envelopes(
         envelope_paths, data_path = _write_conftest_inputs(
             pathlib.Path(scratch), envelopes, parameters
         )
-        argv = _conftest_argv(rule_id, rule_dir / "policy", data_path, envelope_paths)
+        argv = _conftest_argv(
+            rule_id,
+            rule_dir / "policy",
+            data_path,
+            envelope_paths,
+            data_files=sorted((rule_dir / "data").glob("*.json")),
+        )
         completed = _run_conftest(argv, rule_id)
     return _decode_results(completed, rule_id)
 

@@ -1,0 +1,35 @@
+# What the paste-ready tables in `baseline.toml` cannot say. This file is not
+# copied into a repository; `generate.py` merges it into `baseline.json`.
+
+# Divergences every PyO3 extension needs, defined once here with their reason,
+# so no repository invents its own. A divergence lowers the required level of
+# one lint for a package that depends on `pyo3`:
+#
+#   [[pyo3_divergences]]
+#   lint = "clippy::example_lint"     # `clippy::`, `rust::` or `rustdoc::` prefix
+#   level = "warn"                    # the weakest level a PyO3 package may set
+#   reason = "why PyO3's generated code cannot meet the baseline"
+#   evidence = "https://example.invalid/issue"   # where it was measured
+#
+# The list is empty on purpose. On 27 November 2026 cuprum, stilyagi, tei-py
+# and femtologging's lint branch all carried the full tables, with
+# `unsafe_code = "forbid"` where they set it, over PyO3 0.2x and 0.30. The
+# friction PyO3 does cause (`clippy::too_many_arguments` on `#[pyfunction]`
+# wrappers) is handled at the item with `#[expect(..., reason = "...")]`,
+# which no manifest rule reads. Add an entry only when a measurement shows a
+# table-level need.
+pyo3_divergences = []
+
+# Lints whose requirement has a second way to be met.
+#
+# Clippy's `cognitive_complexity` is required at `deny` with
+# `cognitive-complexity-threshold = 9` in `clippy.toml`. It is not required
+# where Whitaker's `macro_aware_cognitive_complexity` gates the budget instead:
+# opted in through `dylint.toml` (`[whitaker] experimental`), `max_complexity`
+# an integer from 1 to `macro_aware_ceiling`, no other key in its table,
+# Clippy's threshold removed, and Whitaker run over the whole workspace.
+[cognitive]
+lint = "cognitive_complexity"
+threshold = 9
+macro_aware_lint = "macro_aware_cognitive_complexity"
+macro_aware_ceiling = 9
