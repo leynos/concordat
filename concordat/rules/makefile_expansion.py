@@ -422,6 +422,53 @@ def _evaluate_affixes(text: str) -> str:
     return text
 
 
+_JUDGED_IF_CALL: typ.Final = re.compile(r"\$\(" + JUDGED_MARK + r"?if\s")
+
+
+def _is_settled_condition(condition: str) -> bool:
+    """Return whether *condition* is plain text with nothing left to expand."""
+    unsettled = ("$", "(", ")", SHELL_DOLLAR, UNRESOLVED_MARK)
+    return not any(char in condition for char in unsettled)
+
+
+def _evaluate_ifs(text: str) -> str:
+    """Evaluate each `$(if COND,THEN[,ELSE])` whose condition is settled plain text.
+
+    Make strips the condition and takes THEN when anything is left, otherwise
+    ELSE (nothing, when there is none). `$(if $(PROFILE),--profile $(PROFILE))`
+    with `PROFILE` empty is therefore empty, which is how a Makefile adds an
+    option only when a variable is set. A condition that still holds a
+    reference, a shell dollar or a parenthesis is left for a later pass, and
+    ends up unresolved if none settles it. The branch that is not taken is
+    dropped unread, as Make does; the branch that is taken keeps its text, so
+    an `$(error ...)` in it still leaves the expansion unresolved.
+
+    Returns
+    -------
+    str
+        *text* with the settled calls replaced by the branch Make takes.
+    """
+    position = 0
+    while (match := _JUDGED_IF_CALL.search(text, position)) is not None:
+        close = close_of(text, match.start() + 1)
+        body = text[match.end() : close] if close is not None else ""
+        commas = top_level_commas(body)
+        if close is None or len(commas) not in {1, 2}:
+            position = match.end()
+            continue
+        if not _is_settled_condition(body[: commas[0]]):
+            position = match.end()
+            continue
+        then_end = commas[1] if len(commas) == 2 else len(body)
+        if body[: commas[0]].strip():
+            taken = body[commas[0] + 1 : then_end]
+        else:
+            taken = body[commas[1] + 1 :] if len(commas) == 2 else ""
+        text = text[: match.start()] + taken + text[close + 1 :]
+        position = match.start()
+    return text
+
+
 def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     """Substitute `$(NAME)` references until the text settles.
 
@@ -450,15 +497,17 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
 
     current = text.replace("$$", SHELL_DOLLAR)
     for _ in range(EXPANSION_PASSES):
-        updated = _evaluate_affixes(
-            _FILTER_CALL.sub(
-                _call_filter,
-                _FUNCTION_CALL.sub(
-                    _call_function,
-                    _VARIABLE_REFERENCE.sub(
-                        substitute, _drop_error_guards(current, known, assigned)
+        updated = _evaluate_ifs(
+            _evaluate_affixes(
+                _FILTER_CALL.sub(
+                    _call_filter,
+                    _FUNCTION_CALL.sub(
+                        _call_function,
+                        _VARIABLE_REFERENCE.sub(
+                            substitute, _drop_error_guards(current, known, assigned)
+                        ),
                     ),
-                ),
+                )
             )
         )
         if updated == current:

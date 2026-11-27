@@ -368,6 +368,31 @@ class TestMakefile:
         assert envelope["unreadable"] == []
         assert [i["tool"] for i in envelope["invocations"]] == ["whitaker"]
 
+    def test_a_parenthesised_string_holding_a_make_reference_still_lexes(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`"$(HOME)/x (note)"` is text: the reference is Make's, not the string's."""
+        makefile = (
+            ".PHONY: test\ntest:\n"
+            '\t@set -eu; f() { echo "made $(HOME)/x (a note)"; }; f; \\\n'
+            "\tcargo test --workspace\n"
+        )
+        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
+        assert envelope["unreadable"] == []
+        assert [i["tool"] for i in envelope["invocations"]] == ["test"]
+
+    def test_an_option_added_only_when_a_variable_is_set_is_read(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`$(if $(PROFILE),--profile $(PROFILE))` is empty while PROFILE is."""
+        makefile = (
+            "PROFILE ?=\n.PHONY: test\ntest:\n"
+            "\tcargo nextest run --workspace $(if $(PROFILE),--profile $(PROFILE))\n"
+        )
+        (found,) = _build(tmp_path, _workspace_files(makefile=makefile))["invocations"]
+        assert found["tool"] == "nextest"
+        assert found["resolved"]
+
     def test_the_root_manifest_named_explicitly_stays_in_the_root_workspace(
         self, tmp_path: pathlib.Path
     ) -> None:

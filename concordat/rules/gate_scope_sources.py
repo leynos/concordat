@@ -132,12 +132,31 @@ _WHITAKER_REFERENCE: typ.Final = re.compile(
     r"|(?:or|firstword|wildcard|shell|if)\s.*(?<![\w-])whitaker(?![\w-]))",
     re.DOTALL,
 )
-# A quoted string that holds a parenthesis and no shell expansion. The shared
-# lexer rewrites `)"` to close a command substitution, which unbalances such a
-# string, and nothing in it can select a package.
-_PARENTHESISED_STRING: typ.Final = re.compile(
-    r"\"[^\"$`\\]*[()][^\"$`\\]*\"|'[^'$`\\]*[()][^'$`\\]*'"
+# A plain Make reference that survived expansion, such as `$(HOME)`.
+_PLAIN_REFERENCE: typ.Final = re.compile(r"\$\([A-Za-z_][A-Za-z0-9_-]*\)")
+# A quoted string with no shell expansion in it. A plain Make reference may
+# stand in it, because the lexer blanks references later.
+_QUOTED_STRING: typ.Final = re.compile(
+    r"\"(?:[^\"$`\\]|\$\([A-Za-z_][A-Za-z0-9_-]*\))*\""
+    r"|'(?:[^'$`\\]|\$\([A-Za-z_][A-Za-z0-9_-]*\))*'"
 )
+
+
+def _mute_parenthesised(match: re.Match[str]) -> str:
+    """Return `"_"` for a quoted string that holds a parenthesis, else the string.
+
+    The shared lexer rewrites `)"` to close a command substitution, which
+    unbalances such a string, and nothing in it can select a package. A Make
+    reference left in the string does not count: its own parentheses are not the
+    string's.
+
+    Returns
+    -------
+    str
+        `"_"` when the string holds a parenthesis of its own, else the string.
+    """
+    text = match.group(0)
+    return '"_"' if re.search(r"[()]", _PLAIN_REFERENCE.sub("", text)) else text
 
 
 def _name_whitaker(text: str) -> str:
@@ -164,7 +183,7 @@ def _name_whitaker(text: str) -> str:
 
 def _lexed(text: str) -> list[list[str]] | None:
     """Return the simple commands of one expanded line, or ``None`` if it won't lex."""
-    muted = _PARENTHESISED_STRING.sub('"_"', joined(text))
+    muted = _QUOTED_STRING.sub(_mute_parenthesised, joined(text))
     return lex_segments(blank_references(_name_whitaker(muted)))
 
 

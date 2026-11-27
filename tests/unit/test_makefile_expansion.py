@@ -392,3 +392,43 @@ def test_alternatives_naming_different_tools_keep_their_value() -> None:
     value = "$(or $(shell command -v cargo),$(HOME)/bin/rustc)"
 
     assert _read(_variable("CARGO", value)) == {"CARGO": value}
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("cargo test $(if $(P),--profile $(P))", "cargo test "),
+        ("cargo test $(if $(P),--profile $(P),--quiet)", "cargo test --quiet"),
+        ("cargo test $(if $(Q),--profile $(Q))", "cargo test --profile ci"),
+        ("cargo test $(if $(Q),--a,--b)", "cargo test --a"),
+        ("cargo test $(if   ,--a)", "cargo test "),
+    ],
+)
+def test_an_if_with_a_settled_condition_takes_one_branch(
+    text: str, expected: str
+) -> None:
+    """Make takes THEN when the stripped condition is not empty, else ELSE."""
+    result = expand(text, {"P": "", "Q": "ci"})
+
+    assert (result.text, result.is_resolved) == (expected, True)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The condition names a variable nothing defines: it may come from the
+        # environment.
+        "cargo test $(if $(NOPE),--profile $(NOPE))",
+        # A probe's outcome is not known before the command runs.
+        "cargo test $(if $(shell command -v x),--a,--b)",
+        # The branch Make takes is a reference with no name to follow.
+        "cargo test $(if yes,$(error))",
+        # An if with four arguments is not one Make evaluates.
+        "cargo test $(if a,b,c,d)",
+    ],
+)
+def test_an_if_with_an_unsettled_condition_or_branch_stays_unresolved(
+    text: str,
+) -> None:
+    """Only a condition made of plain text is judged; nothing is guessed."""
+    assert expand(text, {"P": ""}).is_resolved is False
