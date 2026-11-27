@@ -25,6 +25,15 @@ if typ.TYPE_CHECKING:
 MANIFEST: typ.Final = '[package]\nname = "{name}"\nversion = "0.1.0"\n{extra}'
 
 
+class LinkCase(typ.NamedTuple):
+    """A symbolic link to lay in a checkout, and the note it must raise."""
+
+    files: dict[str, str]
+    link: str
+    target: str
+    note: str
+
+
 def _write(checkout: pathlib.Path, files: dict[str, str]) -> None:
     """Write *files* under *checkout*, creating directories."""
     for relative, text in files.items():
@@ -351,27 +360,24 @@ class TestCrateNames:
         assert resolved == {"kept": "governed"}
 
     @pytest.mark.parametrize(
-        ("files", "link", "target", "note"),
+        "case",
         [
-            ({}, "tests", "../host", "tests: is a symbolic link"),
-            ({}, "src", "../host", "src: is a symbolic link"),
-            ({}, "tests", "nowhere", "tests: is a symbolic link"),
-            (
+            LinkCase({}, "tests", "../host", "tests: is a symbolic link"),
+            LinkCase({}, "src", "../host", "src: is a symbolic link"),
+            LinkCase({}, "tests", "nowhere", "tests: is a symbolic link"),
+            LinkCase(
                 {"src/bin/secret/placeholder": ""},
                 "src/bin/secret/main.rs",
                 "../../../../host/secret.rs",
                 "main.rs: is a symbolic",
             ),
-            ({"real/sub/dylint.toml": ""}, "linked", "real", "linked: is a symbolic"),
+            LinkCase(
+                {"real/sub/dylint.toml": ""}, "linked", "real", "linked: is a symbolic"
+            ),
         ],
     )
     def test_a_link_anywhere_a_name_could_come_from_is_recorded_not_followed(
-        self,
-        tmp_path: pathlib.Path,
-        files: dict[str, str],
-        link: str,
-        target: str,
-        note: str,
+        self, tmp_path: pathlib.Path, case: LinkCase
     ) -> None:
         """A link to the host, to nothing, or to a probe is never read as absence.
 
@@ -387,15 +393,17 @@ class TestCrateNames:
             {
                 "Cargo.toml": MANIFEST.format(name="app", extra=""),
                 "dylint.toml": '[l]\n# r\nexcluded_crates = ["secret"]\n',
-                **files,
+                **case.files,
             },
         )
-        (checkout / link).parent.mkdir(parents=True, exist_ok=True)
-        (checkout / link).symlink_to(target)
+        (checkout / case.link).parent.mkdir(parents=True, exist_ok=True)
+        (checkout / case.link).symlink_to(case.target)
         envelope = build_whitaker_exclusions_envelope(checkout)
         [exclusion] = envelope["exclusions"]
         assert exclusion["entries"] == [{"name": "secret", "resolved": "unknown"}]
-        assert any(note in n for n in envelope["unreadable"]), envelope["unreadable"]
+        assert any(case.note in n for n in envelope["unreadable"]), envelope[
+            "unreadable"
+        ]
 
     @pytest.mark.parametrize(
         ("other_workspace", "expected"),
