@@ -37,8 +37,8 @@ from .nested_cargo import origin_slug
 from .test_environment_types import Reader, strings
 from .whitaker_exclusions_crates import (
     crate_kinds,
+    linked_directory_notes,
     normalised,
-    note_linked_directories,
 )
 from .whitaker_exclusions_targets import linked_note
 from .whitaker_exclusions_text import Located, locate_exclusions
@@ -113,8 +113,8 @@ def _dylint_files(checkout: pathlib.Path, unreadable: list[str]) -> list[str]:
     found: list[str] = []
     for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
         base = pathlib.Path(current)
-        note_linked_directories(
-            base, directories, RUST_PRUNED_DIRECTORIES, unreadable, checkout
+        unreadable.extend(
+            linked_directory_notes(base, directories, RUST_PRUNED_DIRECTORIES, checkout)
         )
         directories[:] = sorted(
             name for name in directories if name not in RUST_PRUNED_DIRECTORIES

@@ -47,8 +47,8 @@ __all__ = [
     "FIXTURE",
     "GOVERNED",
     "crate_kinds",
+    "linked_directory_notes",
     "normalised",
-    "note_linked_directories",
 ]
 
 GOVERNED: typ.Final = "governed"
@@ -68,25 +68,29 @@ def normalised(name: str) -> str:
     return name.replace("-", "_")
 
 
-def note_linked_directories(
+def linked_directory_notes(
     base: pathlib.Path,
     directories: list[str],
     skipped: typ.Collection[str],
-    unreadable: list[str],
     checkout: pathlib.Path,
-) -> None:
-    """Record each symbolic link among a walk's directories as unreadable.
+) -> list[str]:
+    """Return a note for each symbolic link among a walk's directories.
 
     `os.walk` lists a link to a directory among the directories but does not
     descend into it, so whatever the link holds is never read; a manifest or a
     configuration inside it would be missed without a word. Names the walk
     prunes anyway are not noted.
+
+    Returns
+    -------
+    list[str]
+        One unreadable-input note per linked directory.
     """
-    unreadable.extend(
+    return [
         linked_note((base / name).relative_to(checkout).as_posix())
         for name in directories
         if name not in skipped and is_symlink(base / name, OPERATION_SCAN_CRATES)
-    )
+    ]
 
 
 def _manifests(checkout: pathlib.Path, unreadable: list[str]) -> list[str]:
@@ -105,7 +109,7 @@ def _manifests(checkout: pathlib.Path, unreadable: list[str]) -> list[str]:
     found: list[str] = []
     for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
         base = pathlib.Path(current)
-        note_linked_directories(base, directories, skipped, unreadable, checkout)
+        unreadable.extend(linked_directory_notes(base, directories, skipped, checkout))
         directories[:] = sorted(name for name in directories if name not in skipped)
         for name in files:
             if name != CARGO_MANIFEST:
