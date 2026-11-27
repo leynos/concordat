@@ -133,7 +133,8 @@ _unresolved_word_reason := "the command word is a Make reference the reader cann
 
 #
 # A command can only prepare what runs after it. A pass the reader found
-# definitely unprepared (a real test run with nothing of its own before it) and
+# definitely cold (a real test run with nothing of its own before it, or one that
+# only a compile preceded, which leaves trybuild and macrotest cold) and
 # that comes before every unresolved command in the order Make runs them is cold
 # whatever that command does, so the definite finding stays. The order is the
 # position in the `passes` array, which the reader writes in walk order (a
@@ -149,7 +150,7 @@ _unresolved_positions := {i |
 _cold_pass_before_every_unresolved_command if {
 	some i, pass in object.get(input, "passes", [])
 	_well_formed_pass(pass)
-	pass.status == "unprepared"
+	pass.status in {"unprepared", "compiled"}
 	i < min(_unresolved_positions)
 }
 
