@@ -151,13 +151,15 @@ def crate_kinds(reader: Reader) -> dict[str, str]:
     dict[str, str]
         Normalised crate name to `governed` or `fixture`.
     """
-    kinds: dict[str, str] = {}
+    names: dict[str, set[str]] = {GOVERNED: set(), FIXTURE: set()}
     for relative in _manifests(reader.checkout):
         kind = FIXTURE if _is_fixture(relative) else GOVERNED
-        for name in _crate_names(reader, relative):
-            # A name found in both kinds is governed.
-            kinds[name] = GOVERNED if GOVERNED in (kind, kinds.get(name)) else kind
-    return kinds
+        names[kind] |= _crate_names(reader, relative)
+    # A name found in both kinds is governed, so the governed names go last.
+    return {
+        **dict.fromkeys(names[FIXTURE], FIXTURE),
+        **dict.fromkeys(names[GOVERNED], GOVERNED),
+    }
 
 
 def _crate_names(reader: Reader, relative: str) -> set[str]:
