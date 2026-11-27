@@ -132,41 +132,32 @@ _WHITAKER_REFERENCE: typ.Final = re.compile(
     r"|(?:or|firstword|wildcard|shell|if)\s.*(?<![\w-])whitaker(?![\w-]))",
     re.DOTALL,
 )
-# A plain Make reference that survived expansion, such as `$(HOME)`.
-_PLAIN_REFERENCE: typ.Final = re.compile(r"\$\([A-Za-z_][A-Za-z0-9_-]*\)")
-# A quoted string with no Make expansion left in it but a plain reference, and no
-# backtick or backslash. The shell-dollar placeholder (the expansion's mark for
-# `$$`) matches so that quotes pair up as they do in the shell; the muting
-# function below then leaves such a string alone. A plain Make reference may
-# stand in it, because the lexer blanks references later.
-_QUOTED_STRING: typ.Final = re.compile(
-    r"\"(?:[^\"$`\\]|\$\([A-Za-z_][A-Za-z0-9_-]*\))*\""
-    r"|'(?:[^'$`\\]|\$\([A-Za-z_][A-Za-z0-9_-]*\))*'"
+# A quoted string that holds a parenthesis and no Make reference or backtick. The
+# shared lexer rewrites `)"` to close a command substitution, which unbalances
+# such a string, and nothing in it can select a package. A string that holds a
+# shell-dollar placeholder (the expansion's mark for `$$`) is left alone by the
+# muting function below, because `$$(printf x)` in it is a command substitution.
+_PARENTHESISED_STRING: typ.Final = re.compile(
+    r"\"[^\"$`\\]*[()][^\"$`\\]*\"|'[^'$`\\]*[()][^'$`\\]*'"
+)
+# A word that starts with `-` and ends in a shell substitution: `--exclude=mem`
+# followed by `$$(printf ber)`. The lexer lifts the substitution out as a command
+# of its own and leaves the front of the word, so the value is not known.
+_SELECTOR_SUBSTITUTION: typ.Final = re.compile(
+    r"(?<!\S)-[^\s;&|()]*" + SHELL_DOLLAR + r"\("
 )
 
 
 def _mute_parenthesised(match: re.Match[str]) -> str:
-    """Return an unresolved word for a quoted string that holds a parenthesis.
-
-    The shared lexer rewrites `)"` to close a command substitution, which
-    unbalances such a string. It is muted to one word that carries the
-    unresolved mark, so a gate tool given it as an argument reads as having an
-    unresolved word (what the string says is not known), while an `echo` of it
-    is as harmless as before. A Make reference left in the string does not count
-    towards the parenthesis: its own parentheses are not the string's.
+    """Return `"_"` for a parenthesised string, or the string if it runs a shell.
 
     Returns
     -------
     str
-        The mute word when the string holds a parenthesis of its own and no
-        shell dollar, else the string.
+        `"_"` when the string is text, else the string with its substitution.
     """
     text = match.group(0)
-    has_shell_dollar = SHELL_DOLLAR in text
-    has_parenthesis = re.search(r"[()]", _PLAIN_REFERENCE.sub("", text)) is not None
-    if has_parenthesis and not has_shell_dollar:
-        return f'"{UNRESOLVED_MARK}"'
-    return text
+    return text if SHELL_DOLLAR in text else '"_"'
 
 
 def _name_whitaker(text: str) -> str:
@@ -193,8 +184,11 @@ def _name_whitaker(text: str) -> str:
 
 def _lexed(text: str) -> list[list[str]] | None:
     """Return the simple commands of one expanded line, or ``None`` if it won't lex."""
-    muted = _QUOTED_STRING.sub(_mute_parenthesised, joined(text))
-    return lex_segments(blank_references(_name_whitaker(muted)))
+    muted = _PARENTHESISED_STRING.sub(_mute_parenthesised, joined(text))
+    marked = _SELECTOR_SUBSTITUTION.sub(
+        lambda m: f"{UNRESOLVED_MARK} {m.group(0)}", muted
+    )
+    return lex_segments(blank_references(_name_whitaker(marked)))
 
 
 def _read_line(

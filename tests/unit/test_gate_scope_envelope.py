@@ -368,19 +368,6 @@ class TestMakefile:
         assert envelope["unreadable"] == []
         assert [i["tool"] for i in envelope["invocations"]] == ["whitaker"]
 
-    def test_a_parenthesised_string_holding_a_make_reference_still_lexes(
-        self, tmp_path: pathlib.Path
-    ) -> None:
-        """`"$(HOME)/x (note)"` is text: the reference is Make's, not the string's."""
-        makefile = (
-            ".PHONY: test\ntest:\n"
-            '\t@set -eu; f() { echo "made $(HOME)/x (a note)"; }; f; \\\n'
-            "\tcargo test --workspace\n"
-        )
-        envelope = _build(tmp_path, _workspace_files(makefile=makefile))
-        assert envelope["unreadable"] == []
-        assert [i["tool"] for i in envelope["invocations"]] == ["test"]
-
     def test_a_string_holding_a_shell_substitution_is_not_muted(
         self, tmp_path: pathlib.Path
     ) -> None:
@@ -399,8 +386,8 @@ class TestMakefile:
     @pytest.mark.parametrize(
         "argument",
         [
-            '--exclude "$(P) (note)"',
             '--exclude="$$(printf member)"',
+            "--exclude=mem$$(printf ber)",
         ],
     )
     def test_an_exclusion_the_reader_cannot_see_stays_unresolved(

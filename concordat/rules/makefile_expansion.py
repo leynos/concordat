@@ -423,18 +423,35 @@ def _evaluate_affixes(text: str) -> str:
     return text
 
 
-def _branch_taken(body: str, commas: list[int], condition: str) -> str:
-    """Return the raw THEN or ELSE text of an `if` whose *condition* has expanded."""
-    then_end = commas[1] if len(commas) == 2 else len(body)
-    if condition:
-        return body[commas[0] + 1 : then_end]
-    return body[commas[1] + 1 :] if len(commas) == 2 else ""
-
-
 # How deep a condition may nest another one's expansion. A variable that names
 # itself in a condition never settles, so past this depth the call is left alone
 # and the expansion ends as unresolved rather than recursing without end.
 MAX_CONDITION_DEPTH: typ.Final = 3
+
+
+def _branch_taken(body: str, values: cabc.Mapping[str, str], depth: int) -> str | None:
+    """Return the raw THEN or ELSE text of the `if` whose arguments are *body*.
+
+    Returns
+    -------
+    str | None
+        The branch Make takes, or ``None`` when the call is not one to judge: it
+        has other than two or three arguments, its condition does not expand
+        completely, or a branch is an `$(error ...)` call.
+    """
+    commas = top_level_commas(body)
+    if len(commas) not in {1, 2}:
+        return None
+    edges = [commas[0], *commas[1:], len(body)]
+    branches = [body[a + 1 : b] for a, b in itertools.pairwise(edges)]
+    condition = _expand(body[: commas[0]].strip(), values, depth + 1)
+    # A `$X` left in the text is a single-character reference nothing set.
+    is_known = condition.is_resolved and "$" not in condition.text
+    if not is_known or any(_is_error_call(branch) for branch in branches):
+        return None
+    if condition.text:
+        return branches[0]
+    return branches[1] if len(branches) == 2 else ""
 
 
 def _evaluate_ifs(text: str, values: cabc.Mapping[str, str], depth: int = 0) -> str:
@@ -466,18 +483,14 @@ def _evaluate_ifs(text: str, values: cabc.Mapping[str, str], depth: int = 0) -> 
     position = 0
     while (match := _IF_CALL.search(text, position)) is not None:
         close = close_of(text, match.start() + 1)
-        body = text[match.end() : close] if close is not None else ""
-        commas = top_level_commas(body)
-        if close is None or len(commas) not in {1, 2}:
+        taken = (
+            None
+            if close is None
+            else _branch_taken(text[match.end() : close], values, depth)
+        )
+        if close is None or taken is None:
             position = match.end()
             continue
-        edges = [commas[0], *commas[1:], len(body)]
-        branches = [body[a + 1 : b] for a, b in itertools.pairwise(edges)]
-        condition = _expand(body[: commas[0]].strip(), values, depth + 1)
-        if not condition.is_resolved or any(_is_error_call(b) for b in branches):
-            position = match.end()
-            continue
-        taken = _branch_taken(body, commas, condition.text)
         text = text[: match.start()] + taken + text[close + 1 :]
         position = match.start()
     return text

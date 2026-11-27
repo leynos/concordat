@@ -425,6 +425,13 @@ def test_a_comma_in_a_variable_does_not_move_an_if_argument() -> None:
     )
 
 
+def test_a_single_character_reference_in_a_condition_is_not_judged() -> None:
+    """`$X` is a reference too; the expansion does not read it, so it is not known."""
+    result = expand("run $(if $X,--workspace,--package member)", {"X": ""})
+
+    assert result.is_resolved is False
+
+
 def test_a_condition_that_names_itself_ends_unresolved() -> None:
     """A recursive variable in a nested condition is bounded, not followed forever."""
     values = {"X": "$(if $(X),yes,no)"}
