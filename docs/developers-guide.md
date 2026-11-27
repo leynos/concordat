@@ -914,6 +914,21 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   (`whitaker_exclusions_crates`: governed, fixture or unknown, from packages,
   targets, discovered test and bin files and path-dependency aliases). Fixtures
   are regenerated with `fixtures/generate.py` in the package.
+- `policy-input/rust-lint-tables` —
+  `lint_tables_envelope.build_lint_tables_envelope`. `lint_tables_manifests`
+  walks every Cargo manifest outside the pruned trees (the walk
+  `documentation_rust.manifest_paths` shares with DG-003), computes each
+  workspace root's members with `test_environment_members.member_directories`
+  (one scoped reader per workspace, so nested workspaces and standalone crates
+  such as `rust_extension/` resolve), and records each package's effective
+  Clippy, rustc and rustdoc levels as Cargo resolves them (`inherited`, `own`,
+  `dangling`, `not_opted_in` or `none`). `lint_tables_config` reads the nearest
+  `clippy.toml` and `dylint.toml` for the cognitive-complexity alternative, and
+  `lint_tables_gate` reads Miri reachability and the Whitaker commands with the
+  `gate-workspace-coverage` readers. The baseline lives in the rule package's
+  `data/` (`baseline.toml` is the source; `lint_baseline.baseline_document`
+  derives `baseline.json`), and the runner passes a package's `data/*.json` to
+  Conftest beside the parameters.
 - `policy-input/gate-workspace-coverage` —
   `gate_scope_envelope.build_gate_scope_envelope`. It reads the root workspace
   (`gate_scope_workspace`, sharing

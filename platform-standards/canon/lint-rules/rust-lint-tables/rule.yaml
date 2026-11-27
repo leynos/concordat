@@ -1,0 +1,101 @@
+schema_version: 1
+id: rust-lint-tables
+name: Rust lint tables on every package
+description: >-
+  Audits that every Cargo package a repository owns compiles under the estate's
+  Rust lint baseline (Clippy, rustc and rustdoc tables), whatever the repository's
+  shape: a workspace designed as one, a workspace grown from a single crate, or a
+  standalone crate such as a PyO3 extension in `rust_extension/`. The audit
+  resolves each package's effective levels the way Cargo does (`[lints]
+  workspace = true` takes the containing workspace's `[workspace.lints]`) and
+  reports a package that has no lint tables (LT-001), one whose tables miss or
+  weaken a baseline entry (LT-002), one that does not forbid `unsafe_code`
+  and is not a named boundary crate (LT-003), and a boundary crate that does not
+  set `deny`, has no Miri command the gate reaches, or names no ADR (LT-004).
+  The baseline is data (`data/baseline.toml`, paste-ready, and the JSON derived
+  from it); the PyO3 divergences every extension needs are defined once in that
+  data, with a reason each. A repository diverges only through the
+  `exemptions` parameter, with a reason and a review trigger. Fixture, vendored
+  and build-output trees are not audited. A manifest or file the audit cannot
+  read is reported as indeterminate (EN-001), never guessed. The rule ships at
+  `warning` severity so the estate can be surveyed before it blocks.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/rust-lint-tables
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every LT finding and of the indeterminate findings
+          that report evidence the reader could not establish. An envelope
+          defect is always `error`. A `warning` finding is reported but does
+          not block; promotion to `error` is the intended end state once the
+          estate survey is clean.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, crate, lint, reason, review_trigger]
+          properties:
+            repository:
+              type: string
+            crate:
+              type: string
+            lint:
+              type: string
+              pattern: '^(clippy|rust|rustdoc)::[a-z_]+$'
+            level:
+              type: string
+              enum: [allow, warn, deny]
+            reason:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Reviewed divergences from the baseline: the repository (`owner/name`,
+          read from the `origin` remote), the crate's package name, the lint as
+          `clippy::name`, `rust::name` or `rustdoc::name`, the weakest `level`
+          the package may then set (absent: the lint is not required of it), the
+          reason and the review trigger (the event after which the divergence is
+          revisited). Both text fields must be non-blank; the policy ignores an
+          entry that leaves either blank. `unsafe_code` is not exemptable here:
+          it takes the boundary allow-list.
+      boundary_crates:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, crate, adr]
+          properties:
+            repository:
+              type: string
+            crate:
+              type: string
+            adr:
+              type: string
+              minLength: 1
+        description: >-
+          Crates allowed to hold `unsafe`: each sets `unsafe_code = "deny"`,
+          has a Miri command (`cargo miri ...`) in a target `make lint` or
+          `make test` reaches or in a CI step, and names the ADR that records why
+          it needs `unsafe` (axinite's ADR 0015 and wireframe's ADR 0016 are the
+          models).
+  defaults:
+    severity: warning
+    exemptions: []
+    boundary_crates: []

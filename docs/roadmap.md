@@ -795,6 +795,15 @@ the Section 2.1.2 format.
   that names nothing as stale. It ships at `warning` severity. Acceptance: the
   audit reads a path exclusion with a comment as compliant, and an uncommented
   one, femtologging's three whole-crate exclusions and a stale crate name as
+- [x] Ship the Rust lint tables rule (LT-001 to LT-004; DF12-121): the
+  `rust-lint-tables` package holds every Cargo package a repository owns,
+  whether a workspace designed as one, one grown from a single crate, or a
+  standalone PyO3 extension, to the canon baseline in `data/baseline.toml`,
+  `unsafe_code` forbidden except for named boundary crates with a Miri command
+  and an ADR. It ships at `warning` severity. Acceptance: the audit reads a
+  workspace whose members all inherit the baseline as compliant, and a member
+  without `[lints] workspace = true`, a root package that does not opt in,
+  femtologging's four-lint extension table and a boundary crate without Miri as
   noncompliant.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
