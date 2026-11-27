@@ -120,7 +120,7 @@ class _Manifest:
         return "" if parent == "." else parent
 
 
-def _manifest_paths(checkout: pathlib.Path) -> list[str]:
+def manifest_paths(checkout: pathlib.Path) -> list[str]:
     """Return the checkout's owned Cargo.toml files, as sorted POSIX paths.
 
     The walk never follows symbolic links and skips fixture, vendored and
@@ -334,7 +334,7 @@ def build_rust_facts(checkout: pathlib.Path, root: pathlib.Path) -> RustFacts:
     errors: list[str] = []
     manifests = [
         parsed
-        for relative in _manifest_paths(checkout)
+        for relative in manifest_paths(checkout)
         if (parsed := _read_manifest(checkout, root, relative, errors)) is not None
     ]
     workspaces = [m for m in manifests if isinstance(m.table.get("workspace"), dict)]

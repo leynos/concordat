@@ -336,6 +336,36 @@ artifacts:
     description: >-
       Rule package manifest for the gate-workspace-coverage audit.
     sha256: 148c6aeb4f981b535a68df710707de1e6eb504cd1b4fbd301bae30e9ed73edfd
+  - id: lint-rule-rust-lint-tables
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/rust-lint-tables/policy/rust_lint_tables.rego
+    description: >-
+      Audit-only LT-001 to LT-004 policy holding every Cargo package a
+      repository owns to the canon Rust lint baseline (Clippy, rustc and
+      rustdoc tables), with `unsafe_code` forbidden except for named boundary
+      crates that have a Miri command and an ADR, divergences only as reviewed
+      records, and unreadable inputs indeterminate.
+    sha256: 2e6f3c9c8b2a474572ecffb7220d0be76a66188ac55cf1b9e4827930f0abae80
+  - id: lint-rule-rust-lint-tables-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-lint-tables/rule.yaml
+    description: >-
+      Rule package manifest for the rust-lint-tables audit.
+    sha256: 74977e1ec9f5d705f2a3fbf1cb06ff474151194332722062c7e92dfc95e35083
+  - id: lint-rule-rust-lint-tables-baseline
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-lint-tables/data/baseline.toml
+    description: >-
+      The paste-ready Rust lint baseline: the `[workspace.lints.*]` tables a
+      workspace copies, or the `[lints.*]` tables a standalone package copies.
+    sha256: 2912cdd43340cf6f9af807c0d279876c22b03a09d103205a3d995ca485ef7c8a
+  - id: lint-rule-rust-lint-tables-baseline-data
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-lint-tables/data/baseline.json
+    description: >-
+      The baseline derived from `baseline.toml` and `extras.toml`, which the
+      rule and the root lint policy read.
+    sha256: ca205096d00d2cd63e101e8d8f560e918a869b1f3c9dce9f00eda82a9d575087
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

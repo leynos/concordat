@@ -1571,6 +1571,39 @@ as a command. GC-001 ships at `error` severity (the `severity` parameter) and
 EN-001 at `warning` (the `indeterminate_severity` parameter). See the
 [rule reference](../platform-standards/canon/lint-rules/gate-workspace-coverage/README.md).
 
+### Auditing Rust lint tables
+
+The `rust-lint-tables` package audits that every Cargo package a repository
+owns compiles under the estate's Rust lint baseline (Clippy, rustc and rustdoc
+tables):
+
+```shell
+concordat artefact rule run rust-lint-tables --repo /path/to/checkout
+```
+
+It covers a workspace designed as one, a workspace grown from a single crate
+and a standalone crate such as a PyO3 extension in `rust_extension/`: it walks
+every `Cargo.toml` outside fixture and vendored trees and resolves each
+package's levels the way Cargo does, so a member that never sets
+`[lints] workspace = true` is reported even when the workspace table is
+complete.
+
+- **LT-001**: a package has no lint tables that apply to it. The finding says
+  which of three cases it is and the two-line fix.
+- **LT-002**: its tables miss or weaken a baseline entry. The finding lists each
+  lint with the level it should have.
+- **LT-003**: `unsafe_code` is not `forbid` and the package is not a named
+  boundary crate.
+- **LT-004**: a boundary crate does not set `deny`, has no Miri command the gate
+  reaches, or names no ADR.
+- **EN-001** (indeterminate): a manifest or gate file the audit could not read.
+
+The baseline is paste-ready data in the rule package (`data/baseline.toml`).
+Divergences are allowed only through the rule's `exemptions` parameter, each
+with a reason and a review trigger. The rule ships at `warning` severity. See
+the
+[rule reference](../platform-standards/canon/lint-rules/rust-lint-tables/README.md).
+
 ### Auditing documentation presence (Python and Rust)
 
 The `documentation-presence` package audits the interrogate gate that keeps
