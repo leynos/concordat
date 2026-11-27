@@ -433,6 +433,30 @@ class TestGate:
         miri = build_lint_tables_envelope(tmp_path)["miri"]
         assert miri["is_reachable"] is expected, body
 
+    @pytest.mark.parametrize(
+        ("preamble", "expected"),
+        [
+            (".ONESHELL:\n", False),
+            ("", True),
+        ],
+    )
+    def test_oneshell_carries_an_if_false_across_recipe_lines(
+        self, tmp_path: pathlib.Path, preamble: str, *, expected: bool
+    ) -> None:
+        """Without .ONESHELL each recipe line is a shell, so the middle line runs."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": _package("app", PACKAGE_LINTS),
+                "Makefile": (
+                    f"{preamble}.PHONY: test\ntest:\n\tif false; then\n"
+                    "\t  cargo miri test\n\tfi\n"
+                ),
+            },
+        )
+        miri = build_lint_tables_envelope(tmp_path)["miri"]
+        assert miri["is_reachable"] is expected
+
     def test_a_miri_target_outside_the_gate_is_not_reachable(
         self, tmp_path: pathlib.Path
     ) -> None:

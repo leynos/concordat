@@ -158,22 +158,41 @@ def _makefile_miri(report: MakeutilReport, scan: _MiriScan) -> None:
     values = single_assignments(report["variables"])
     walk = reachable(index, values, GATE_TARGETS)
     scan.is_resolved = scan.is_resolved and walk.is_resolved
+    # Under `.ONESHELL` a rule's recipe lines are one shell, so an `if false`
+    # opened on one line hides the lines after it; otherwise each is its own.
+    is_one_shell = ".ONESHELL" in index
     for target in walk.names:
         for rule in index[target]:
+            state = FRESH_SHELL
             for number, text in rule.recipes:
-                _recipe_miri(f"Makefile:{number} ({target})", text, values, scan)
+                state = _recipe_miri(
+                    f"Makefile:{number} ({target})", text, values, scan, state
+                )
+                if not is_one_shell:
+                    state = FRESH_SHELL
 
 
 def _recipe_miri(
-    source: str, text: str, values: cabc.Mapping[str, str], scan: _MiriScan
-) -> None:
-    """Record whether one recipe line runs Miri, or might (an unresolved word)."""
+    source: str,
+    text: str,
+    values: cabc.Mapping[str, str],
+    scan: _MiriScan,
+    state: ShellState,
+) -> ShellState:
+    """Record whether one recipe line runs Miri, or might (an unresolved word).
+
+    Returns
+    -------
+    ShellState
+        The shell the next line of the recipe starts in.
+    """
     expanded = expand(text, values)
-    verdict, _after = _line_miri(expanded.text)
+    verdict, after = _line_miri(expanded.text, state)
     if verdict:
         scan.sources.append(source)
     elif verdict is None or _may_hide_miri(expanded, text):
         scan.is_resolved = False
+    return after
 
 
 def _may_hide_miri(expanded: Expansion, text: str) -> bool:
