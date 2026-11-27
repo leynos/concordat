@@ -114,6 +114,11 @@ def _alias_names(manifest: dict[str, object]) -> set[str]:
 
     Only a path dependency is a crate of this repository; a registry crate is
     not compiled under the workspace's lints.
+
+    Returns
+    -------
+    set[str]
+        The dependency keys that name a local path.
     """
     return {
         alias

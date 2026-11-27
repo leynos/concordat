@@ -160,6 +160,11 @@ def _entries(key: _Key, kinds: dict[str, str]) -> list[Entry]:
     """Return the names an exclusion lists, each with what it resolves to.
 
     Only a whole-crate exclusion names crates, so other kinds stay unresolved.
+
+    Returns
+    -------
+    list[Entry]
+        One entry per string in the exclusion's list.
     """
     is_whole_crate = _kind(key.key) == "crates"
     return [
