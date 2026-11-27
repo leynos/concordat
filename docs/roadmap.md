@@ -798,6 +798,16 @@ the Section 2.1.2 format.
   without `[lints] workspace = true`, a root package that does not opt in,
   femtologging's four-lint extension table and a boundary crate without Miri as
   noncompliant.
+- [x] Ship the gate lint coverage rule (LC-001 to LC-004; DF12-121): the
+  `gate-lint-coverage` package holds a Rust repository's lint gate, per Cargo
+  surface, to Clippy and Whitaker checking all targets and every feature, every
+  lint command denying warnings, and `make lint` reaching `cargo doc --no-deps`
+  over every library with `RUSTDOCFLAGS` denying warnings. A lane list built by
+  a script is indeterminate, not interpreted. It ships at `warning` severity.
+  Acceptance: the audit reads a gate that checks everything as compliant, and a
+  Clippy without `--all-targets`, a missing feature lane, a command that does
+  not deny warnings and a gate with no `cargo doc` as noncompliant, for a
+  designed workspace, a grown one and a Python extension.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and

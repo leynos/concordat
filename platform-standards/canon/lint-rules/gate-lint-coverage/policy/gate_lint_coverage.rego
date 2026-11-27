@@ -1,0 +1,413 @@
+# gate-lint-coverage: LC-001 to LC-004, and EN-001 for what could not be read.
+#
+# `gate-workspace-coverage` asks which packages a gate's commands select. This
+# rule asks the other half of "does the gate look at all of it": which targets,
+# which features, with warnings denied or not, and whether `cargo doc` is a gate.
+# femtologging's gate read green with no `cargo doc` anywhere, whole-crate
+# Whitaker exclusions nobody rechecked, and lane lists in a script (#421).
+#
+# The Python envelope found each Cargo surface (a workspace root, or a package
+# outside any workspace such as a PyO3 extension in `rust_extension/`), and every
+# Clippy, Whitaker and `cargo doc` command the Makefile's `lint` target and every
+# workflow reach, with what each one checks (`--all-targets`, features, `-D
+# warnings`) and which surface it targets. This policy decides what the facts
+# mean, per surface and per tool:
+#
+#   LC-001  Clippy or Whitaker does not check all targets;
+#   LC-002  the features checked do not cover the default set and every declared
+#           feature, across the tool's commands on the surface;
+#   LC-003  a command does not deny warnings;
+#   LC-004  `make lint` does not reach `cargo doc --no-deps` with `RUSTDOCFLAGS`
+#           denying warnings over a surface that holds a library.
+#
+# A tool the gate does not run on a surface is not required (DG-004 asks that
+# `make lint` reaches Clippy at all). A command the audit cannot place (a script
+# that builds the lanes, an unresolved word among the arguments, a command after
+# a `cd` it could not follow, a step that runs for some matrix entries only)
+# makes the tool on that surface indeterminate (EN-001): nothing is guessed.
+package canon.lint_rules.gate_lint_coverage
+
+import rego.v1
+
+judged_tools := ["clippy", "whitaker"]
+
+finding(id, severity, verdict, path, msg) := {
+	"rule_id": id,
+	"severity": severity,
+	"verdict": verdict,
+	"path": path,
+	"line": 0,
+	"msg": msg,
+}
+
+envelope_ok if {
+	input.schema_version == 1
+	input.kind == "policy-input/gate-lint-coverage"
+	is_array(input.surfaces)
+	is_array(input.runs)
+	is_object(input.make_environment)
+	is_object(input.cargo_config)
+	is_array(input.unreadable)
+	is_boolean(input.makefile_resolved)
+}
+
+audited if {
+	envelope_ok
+	count(input.surfaces) > 0
+}
+
+default severity := "warning"
+
+severity := data.parameters.severity
+
+default exemptions := []
+
+exemptions := data.parameters.exemptions
+
+repository_name := input.repository.name
+
+nonblank(value) if {
+	is_string(value)
+	trim_space(value) != ""
+}
+
+# An exemption is a reviewed record: repository, surface manifest, tool, why, and
+# what event sends it back for review. A blank reason or trigger exempts nothing.
+# It stands for the rule's `LC-001` need only: a Clippy lane that must leave out
+# the fixture crates (`--lib --bins --tests --benches`, as the runbook allows).
+is_exempt(surface, tool) if {
+	some exemption in exemptions
+	exemption.repository == repository_name
+	exemption.surface == surface.manifest
+	exemption.tool == tool
+	nonblank(exemption.reason)
+	nonblank(exemption.review_trigger)
+}
+
+# -- the runs of one tool on one surface ----------------------------------------------
+
+runs_for(surface, tool) := [r |
+	some r in input.runs
+	r.tool == tool
+	r.surface == surface.manifest
+]
+
+unplaced_runs(tool) := [r |
+	some r in input.runs
+	r.tool == tool
+	r.surface == null
+]
+
+# A command the reader could not place or settle: it may check more or less than
+# it says, so the tool is not judged on its surface.
+unresolved_runs(surface, tool) := [r |
+	some r in runs_for(surface, tool)
+	r.is_resolved == false
+]
+
+# Nothing else the audit could not read, or an unplaced command of the tool
+# anywhere, might hold the lane that covers the rest.
+nothing_unreadable if count(input.unreadable) == 0
+
+tool_known(surface, tool) if {
+	count(unresolved_runs(surface, tool)) == 0
+	count(unplaced_runs(tool)) == 0
+	input.makefile_resolved == true
+	nothing_unreadable
+}
+
+list_sources(runs) := concat("; ", sort([r.source | some r in runs]))
+
+# -- envelope and unreadable inputs ---------------------------------------------------
+
+deny contains finding("EN-001", "error", "indeterminate", "", msg) if {
+	not envelope_ok
+	msg := "policy input is not a policy-input/gate-lint-coverage envelope at schema version 1"
+}
+
+deny contains finding("EN-001", severity, "indeterminate", "", msg) if {
+	audited
+	some entry in input.unreadable
+	msg := sprintf("a manifest, gate file or line could not be read, so the audit cannot say what the gate checks: %s", [entry])
+}
+
+deny contains finding("EN-001", severity, "indeterminate", "Makefile", msg) if {
+	audited
+	count(input.runs) > 0
+	input.makefile_resolved == false
+	msg := "the Makefile walk from lint skipped a target it could not resolve (a `make -C`, or a variable that names a target), so the audit cannot say which lint commands the gate runs"
+}
+
+deny contains finding("EN-001", severity, "indeterminate", surface.manifest, msg) if {
+	audited
+	some surface in input.surfaces
+	some tool in array.concat(judged_tools, ["doc"])
+	runs := unresolved_runs(surface, tool)
+	count(runs) > 0
+	msg := sprintf(
+		"%s: the audit cannot place %d %s command(s) on this surface (%s), so it does not judge what %s checks there. Commands: %s",
+		[surface.manifest, count(runs), tool, why_unresolved(runs), tool, list_sources(runs)],
+	)
+}
+
+deny contains finding("EN-001", severity, "indeterminate", "", msg) if {
+	audited
+	some tool in array.concat(judged_tools, ["doc"])
+	runs := unplaced_runs(tool)
+	count(runs) > 0
+	msg := sprintf(
+		"the audit cannot say which Cargo surface %d %s command(s) target (%s), so it does not judge %s on any surface. Commands: %s%s",
+		[count(runs), tool, why_unresolved(runs), tool, list_sources(runs), lanes_note(runs)],
+	)
+}
+
+why_unresolved(runs) := concat("; ", sort({r.why | some r in runs; r.why != ""}))
+
+# The lane inputs a script was given are carried so the finding shows what could
+# not be read (and a person or the survey can measure it another way).
+lane_inputs(runs) := sort({lane | some r in runs; some lane in r.lanes})
+
+lanes_note(runs) := "" if count(lane_inputs(runs)) == 0
+
+lanes_note(runs) := sprintf(". Lane inputs it was given: %s", [concat("; ", lane_inputs(runs))]) if count(lane_inputs(runs)) > 0
+
+# -- LC-001: not every target -------------------------------------------------------------
+
+deny contains finding("LC-001", severity, "noncompliant", surface.manifest, msg) if {
+	audited
+	some surface in input.surfaces
+	some tool in judged_tools
+	runs := runs_for(surface, tool)
+	count(runs) > 0
+	tool_known(surface, tool)
+	count([r | some r in runs; r.all_targets == true]) == 0
+	not is_exempt(surface, tool)
+	msg := sprintf(
+		"%s: no %s command checks all targets, so tests, benches and examples are not linted. Add `--all-targets` (or `--lib --bins --tests --benches --examples`) to: %s. A lane that must leave fixture crates out can be exempted by surface and tool with a reason and a review trigger in the rule's parameters",
+		[surface.manifest, tool, list_sources(runs)],
+	)
+}
+
+# -- LC-002: not every feature --------------------------------------------------------------
+
+declared(surface) := {f | some f in surface.features}
+
+all_features_run(surface, tool) if {
+	some r in runs_for(surface, tool)
+	r.all_features == true
+}
+
+covered(surface, tool) := declared(surface) if all_features_run(surface, tool)
+
+covered(surface, tool) := {f |
+	some r in runs_for(surface, tool)
+	some f in r.features
+} if not all_features_run(surface, tool)
+
+# The default feature set is checked by a command that does not switch it off.
+default_checked(surface, tool) if {
+	some r in runs_for(surface, tool)
+	r.no_default_features == false
+}
+
+default_checked(surface, tool) if {
+	some r in runs_for(surface, tool)
+	r.all_features == true
+}
+
+uncovered_features(surface, tool) := sort(declared(surface) - covered(surface, tool))
+
+deny contains finding("LC-002", severity, "noncompliant", surface.manifest, msg) if {
+	audited
+	some surface in input.surfaces
+	some tool in judged_tools
+	runs := runs_for(surface, tool)
+	count(runs) > 0
+	tool_known(surface, tool)
+	missing := uncovered_features(surface, tool)
+	default_missing := not_default_checked(surface, tool)
+	count(missing) + count(default_missing) > 0
+	msg := sprintf(
+		"%s: the %s commands do not check %s. Add an `--all-features` run, or a lane for each: %s",
+		[surface.manifest, tool, describe_gaps(missing, default_missing), list_sources(runs)],
+	)
+}
+
+# The default set counts only for a surface that declares a `default` feature.
+not_default_checked(surface, tool) := ["the default feature set"] if {
+	surface.has_default == true
+	not default_checked(surface, tool)
+}
+
+not_default_checked(surface, tool) := [] if surface.has_default == false
+
+not_default_checked(surface, tool) := [] if {
+	surface.has_default == true
+	default_checked(surface, tool)
+}
+
+describe_gaps(missing, default_missing) := concat(", ", array.concat(
+	[sprintf("feature %s", [f]) | some f in missing],
+	default_missing,
+))
+
+# -- LC-003: warnings not denied ------------------------------------------------------------
+
+# What a run's command line says, falling back to what its environment says. A
+# workflow's own `env` is not read, so a workflow run that says nothing is
+# unknown.
+warnings_state(run) := "denied" if run.deny_warnings == true
+
+warnings_state(run) := "not_denied" if run.deny_warnings == false
+
+warnings_state(run) := state if {
+	run.deny_warnings == null
+	state := environment_state(run)
+}
+
+exported_flags(run) := input.make_environment.rustdocflags if run.tool == "doc"
+
+exported_flags(run) := input.make_environment.rustflags if run.tool != "doc"
+
+is_make_run(run) if startswith(run.source, "Makefile:")
+
+denies_text(text) := true if regex.match(`(^|\s)(-D\s*warnings|--deny[\s=]warnings)\b`, text)
+
+denies_text(text) := false if not regex.match(`(^|\s)(-D\s*warnings|--deny[\s=]warnings)\b`, text)
+
+environment_state(run) := "unknown" if input.make_environment.is_resolved == false
+
+environment_state(run) := state if {
+	input.make_environment.is_resolved == true
+	exported := exported_flags(run)
+	exported != null
+	state := {true: "denied", false: "not_denied"}[denies_text(exported)]
+}
+
+# Nothing exported: the configuration decides a Clippy or Whitaker run; a
+# `cargo doc` run has no configuration reading, and a workflow run may have an `env`.
+environment_state(run) := state if {
+	input.make_environment.is_resolved == true
+	exported_flags(run) == null
+	state := unexported_state(run)
+}
+
+unexported_state(run) := "unknown" if {
+	run.tool != "doc"
+	input.cargo_config.is_readable == false
+}
+
+unexported_state(run) := "denied" if {
+	run.tool != "doc"
+	input.cargo_config.is_readable == true
+	input.cargo_config.denies_warnings == true
+}
+
+unexported_state(run) := "not_denied" if {
+	input.cargo_config.is_readable == true
+	not config_denies(run)
+	is_make_run(run)
+}
+
+unexported_state(run) := "unknown" if {
+	input.cargo_config.is_readable == true
+	not config_denies(run)
+	not is_make_run(run)
+}
+
+config_denies(run) if {
+	run.tool != "doc"
+	input.cargo_config.denies_warnings == true
+}
+
+deny contains finding("LC-003", severity, "noncompliant", run.surface, msg) if {
+	audited
+	some run in input.runs
+	run.is_resolved == true
+	run.surface != null
+	warnings_state(run) == "not_denied"
+	msg := sprintf(
+		"%s: this %s command does not deny warnings, so a warning passes the gate. %s",
+		[run.source, run.tool, fix_for(run)],
+	)
+}
+
+fix_for(run) := "Set `RUSTDOCFLAGS=\"-D warnings\"` on the command or export it in the Makefile." if run.tool == "doc"
+
+fix_for(run) := "Set `RUSTFLAGS=\"-D warnings\"` on the command (or export it, or set `build.rustflags` in .cargo/config.toml)." if run.tool == "whitaker"
+
+fix_for(run) := "Set `RUSTFLAGS=\"-D warnings\"` on the command, or pass `-- -D warnings` (or set `build.rustflags` in .cargo/config.toml)." if run.tool == "clippy"
+
+# -- LC-004: the rustdoc gate ---------------------------------------------------------------
+
+doc_runs(surface) := [r |
+	some r in runs_for(surface, "doc")
+	is_make_run(r)
+]
+
+# A `cargo doc` command selects the whole surface when it spells out the
+# workspace, or when the surface holds one package.
+selects_all(surface, run) if run.workspace == true
+
+selects_all(surface, run) if count(surface.packages) == 1
+
+selects_all(surface, run) if {
+	count({p | some p in surface.packages} - {p | some p in run.packages}) == 0
+}
+
+is_gate_doc(surface, run) if {
+	run.is_resolved == true
+	run.no_deps == true
+	selects_all(surface, run)
+	warnings_state(run) == "denied"
+}
+
+# A `cargo doc` that would be a gate if its warnings are denied, but whether they
+# are is unknown (an exported value the audit could not expand, say): the answer
+# is open, not "no gate".
+doc_state(run) := warnings_state(run)
+
+doc_state(run) := "unknown" if not warnings_state(run)
+
+doc_gate_unknown(surface) if {
+	some r in doc_runs(surface)
+	r.is_resolved == true
+	r.no_deps == true
+	selects_all(surface, r)
+	doc_state(r) == "unknown"
+}
+
+deny contains finding("LC-004", severity, "noncompliant", surface.manifest, msg) if {
+	audited
+	some surface in input.surfaces
+	surface.has_library == true
+	count(unresolved_runs(surface, "doc")) == 0
+	count(unplaced_runs("doc")) == 0
+	input.makefile_resolved == true
+	nothing_unreadable
+	count([r | some r in doc_runs(surface); is_gate_doc(surface, r)]) == 0
+	not doc_gate_unknown(surface)
+	msg := doc_message(surface)
+}
+
+deny contains finding("EN-001", severity, "indeterminate", surface.manifest, msg) if {
+	audited
+	some surface in input.surfaces
+	surface.has_library == true
+	count([r | some r in doc_runs(surface); is_gate_doc(surface, r)]) == 0
+	doc_gate_unknown(surface)
+	msg := sprintf(
+		"%s: `make lint` runs `cargo doc --no-deps` over the whole surface, but the audit cannot tell whether warnings are denied (RUSTDOCFLAGS is exported with a value it could not expand, or not visible), so it does not judge the rustdoc gate. Commands: %s",
+		[surface.manifest, list_sources(doc_runs(surface))],
+	)
+}
+
+doc_message(surface) := sprintf(
+	"%s holds a library, but `make lint` reaches no `cargo doc`. Add `RUSTDOCFLAGS=\"-D warnings\" cargo doc --no-deps --workspace` (for a standalone crate, `--manifest-path %s`) to a target `lint` reaches, so a broken intra-doc link or bare URL fails the gate",
+	[surface.manifest, surface.manifest],
+) if count(doc_runs(surface)) == 0
+
+doc_message(surface) := sprintf(
+	"%s holds a library, and `make lint` reaches `cargo doc`, but not as a gate over the whole surface: it needs `--no-deps`, a selection of every package (`--workspace`) and `RUSTDOCFLAGS` denying warnings. Commands: %s",
+	[surface.manifest, list_sources(doc_runs(surface))],
+) if count(doc_runs(surface)) > 0

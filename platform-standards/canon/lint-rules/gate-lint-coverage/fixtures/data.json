@@ -1,0 +1,2950 @@
+{
+  "fixtures": {
+    "no_cargo_manifest": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [],
+      "runs": [],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_clean": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "whitaker",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:6 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_no_all_targets": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_explicit_target_list": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_feature_lanes_cover_everything": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [
+            "fast"
+          ],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "clippy",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [
+            "slow"
+          ],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:6 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_missing_feature_lane": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [
+            "fast"
+          ],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_default_set_never_checked": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": true,
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_package_qualified_features": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_warnings_not_denied": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_warnings_denied_after_separator": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_rustflags_without_deny": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": false,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_rustflags_exported": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:6 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:7 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": "-D warnings",
+        "rustdocflags": "-D warnings",
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_rustflags_exported_without_deny": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:6 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": "-C debuginfo=0",
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_rustdocflags_exported_unexpandable": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:6 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": false
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_config_denies_warnings": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": true,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_no_cargo_doc": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_doc_without_no_deps": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_doc_one_package_only": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [
+            "a"
+          ],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_doc_every_package_named": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [
+            "a",
+            "b"
+          ],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_doc_warnings_not_denied": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_doc_only_in_a_target_lint_does_not_reach": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:3 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_clippy_not_run": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "doc",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_workflow_clippy_without_deny_is_unknown": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "clippy",
+          "source": ".github/workflows/ci.yml (job lint, step 1)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_workflow_clippy_denies": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "clippy",
+          "source": ".github/workflows/ci.yml (job lint, step 1)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_unresolved_flags": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": false,
+          "why": "a word the audit could not resolve among the arguments may add flags",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": null,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_make_c_leaves_the_walk_unresolved": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": false,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_cd_into_a_directory_places_the_command": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "crates/a/Cargo.toml",
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "grown_clean": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "app",
+            "b"
+          ],
+          "manifests": [
+            "Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "grown_doc_selects_the_root_package_only": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "app",
+            "b"
+          ],
+          "manifests": [
+            "Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "grown_missing_feature_lane": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "app",
+            "b"
+          ],
+          "manifests": [
+            "Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [
+            "fast"
+          ],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "extension_clean": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "rust_extension/Cargo.toml",
+          "packages": [
+            "ext"
+          ],
+          "manifests": [
+            "rust_extension/Cargo.toml"
+          ],
+          "features": [
+            "extension-module",
+            "python",
+            "test-util"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "extension_cd_form": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "rust_extension/Cargo.toml",
+          "packages": [
+            "ext"
+          ],
+          "manifests": [
+            "rust_extension/Cargo.toml"
+          ],
+          "features": [
+            "extension-module",
+            "python",
+            "test-util"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "extension_missing_lane": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "rust_extension/Cargo.toml",
+          "packages": [
+            "ext"
+          ],
+          "manifests": [
+            "rust_extension/Cargo.toml"
+          ],
+          "features": [
+            "extension-module",
+            "python",
+            "test-util"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [
+            "python"
+          ],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "extension_no_doc_gate": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "rust_extension/Cargo.toml",
+          "packages": [
+            "ext"
+          ],
+          "manifests": [
+            "rust_extension/Cargo.toml"
+          ],
+          "features": [
+            "extension-module",
+            "python",
+            "test-util"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "extension_lanes_built_by_a_script": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "rust_extension/Cargo.toml",
+          "packages": [
+            "ext"
+          ],
+          "manifests": [
+            "rust_extension/Cargo.toml"
+          ],
+          "features": [
+            "extension-module",
+            "python",
+            "test-util"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:5 (lint)",
+          "is_placed": false,
+          "is_resolved": false,
+          "why": "the script scripts/lint_rust_lanes.py builds the lanes, and the audit does not read it",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": null,
+          "lanes": [
+            "INPUT_LANES=none python test-util default all"
+          ],
+          "surface": null
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "extension_manifest_no_surface_holds": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "rust_extension/Cargo.toml",
+          "packages": [
+            "ext"
+          ],
+          "manifests": [
+            "rust_extension/Cargo.toml"
+          ],
+          "features": [
+            "extension-module",
+            "python",
+            "test-util"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "elsewhere/Cargo.toml",
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": null
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "extension_with_whitaker": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "rust_extension/Cargo.toml",
+          "packages": [
+            "ext"
+          ],
+          "manifests": [
+            "rust_extension/Cargo.toml"
+          ],
+          "features": [
+            "extension-module",
+            "python",
+            "test-util"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        },
+        {
+          "tool": "whitaker",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:6 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "extension_whitaker_misses_targets": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "rust_extension/Cargo.toml",
+          "packages": [
+            "ext"
+          ],
+          "manifests": [
+            "rust_extension/Cargo.toml"
+          ],
+          "features": [
+            "extension-module",
+            "python",
+            "test-util"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        },
+        {
+          "tool": "whitaker",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": false,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:6 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": "rust_extension/Cargo.toml",
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "rust_extension/Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "unreadable_manifest": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml"
+          ],
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "deny_warnings": true,
+          "lanes": [],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": [
+        "crates/b/Cargo.toml: invalid TOML: Expected ']' at the end of a table declaration (at line 1, column 9)"
+      ]
+    }
+  },
+  "parameters": {
+    "severity": "warning",
+    "exemptions": []
+  }
+}

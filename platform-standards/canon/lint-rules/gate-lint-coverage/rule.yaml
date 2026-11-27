@@ -1,0 +1,78 @@
+schema_version: 1
+id: gate-lint-coverage
+name: The lint gate checks all targets and features, denies warnings, and builds the docs
+description: >-
+  Audits what a Rust repository's lint gate checks, per Cargo surface (a
+  workspace root, or a package outside any workspace such as a PyO3 extension in
+  `rust_extension/`) and per tool. `gate-workspace-coverage` asks which packages
+  the commands select; this asks the rest. Clippy and Whitaker check all targets
+  (LC-001). Across the tool's commands on a surface the features checked cover
+  the default set and every declared feature, by an `--all-features` run or lanes
+  whose union covers them (LC-002). Every Clippy, Whitaker and `cargo doc`
+  command denies warnings, in `RUSTFLAGS` or `RUSTDOCFLAGS`, after `--` for
+  Clippy, exported by the Makefile, or in `.cargo/config.toml` (LC-003). And for
+  every surface that holds a library, `make lint` reaches `cargo doc --no-deps`
+  over the whole surface with `RUSTDOCFLAGS` denying warnings (LC-004). A tool
+  the gate does not run on a surface is not required. A lane list built by a
+  script the audit does not read, an unresolved word among the arguments, a
+  command after a `cd` or against a manifest the audit could not place, or a
+  step that runs for some matrix entries only makes the tool on that surface
+  indeterminate (EN-001), never guessed. The rule ships at `warning` severity
+  so the estate can be surveyed before it blocks. Audit-only: this rule
+  declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/gate-lint-coverage
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every LC finding and of the indeterminate findings
+          that report evidence the reader could not establish. An envelope
+          defect is always `error`. A `warning` finding is reported but does
+          not block; promotion to `error` is the intended end state once the
+          estate survey is clean.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, surface, tool, reason, review_trigger]
+          properties:
+            repository:
+              type: string
+            surface:
+              type: string
+              description: The manifest of the workspace root or standalone package.
+            tool:
+              type: string
+              enum: [clippy, whitaker]
+            reason:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Surfaces whose Clippy or Whitaker lanes may not check all targets
+          (LC-001), for example a lane that must leave out the fixture crates
+          that break the lint on purpose. Each names its repository
+          (`owner/name`, read from the `origin` remote), the surface's
+          manifest, the tool, the reason and the review trigger. Both text
+          fields must be non-blank; the policy ignores an entry that leaves
+          either blank, because an exemption nobody must revisit is not a
+          record.
+  defaults:
+    severity: warning
+    exemptions: []

@@ -920,6 +920,21 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `data/` (`baseline.toml` is the source; `lint_baseline.baseline_document`
   derives `baseline.json`), and the runner passes a package's `data/*.json` to
   Conftest beside the parameters.
+- `policy-input/gate-lint-coverage` —
+  `lint_coverage_envelope.build_lint_coverage_envelope`.
+  `lint_coverage_surfaces` groups the packages `lint_tables_manifests` finds
+  into surfaces (a workspace root, or a package outside any workspace) with
+  their declared features and library status. `lint_coverage_gate` walks the
+  Makefile's `lint` closure and every workflow step with the
+  `gate-workspace-coverage` shell reader (so a branch that cannot run is not a
+  command, a `cd` moves the directory, `.ONESHELL` is read) and
+  `lint_coverage_commands` turns each simple command into a `Run`: Clippy,
+  Whitaker or `cargo doc`, its targets, features, selection, and what its
+  command line says about denying warnings. A script that builds the lanes is
+  an unresolved run, with its lane inputs. The envelope adds the Makefile's
+  exported `RUSTFLAGS` and `RUSTDOCFLAGS` and `.cargo/config.toml`'s
+  `build.rustflags`, and places each run on the surface its manifest or `cd`
+  names.
 - `policy-input/gate-workspace-coverage` —
   `gate_scope_envelope.build_gate_scope_envelope`. It reads the root workspace
   (`gate_scope_workspace`, sharing
