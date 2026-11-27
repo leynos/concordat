@@ -340,6 +340,44 @@ class TestCrateNames:
         )
         assert resolved == {"old": "unknown"}
 
+    def test_a_file_a_declared_target_names_by_path_infers_no_second_target(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Cargo merges targets by path: `current` owns `tests/old.rs`, so no `old`."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra='[[test]]\nname = "current"\npath = "tests/old.rs"\n',
+                ),
+                "tests/old.rs": "",
+                "tests/other.rs": "",
+                "dylint.toml": (
+                    '[l]\n# r\nexcluded_crates = ["current", "old", "other"]\n'
+                ),
+            },
+        )
+        assert resolved == {
+            "current": "governed",
+            "old": "unknown",
+            "other": "governed",
+        }
+
+    def test_a_test_directory_is_named_after_itself_not_its_main(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`tests/group/main.rs` is the target `group`; `main` is nothing."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "tests/group/main.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["group", "main"]\n',
+            },
+        )
+        assert resolved == {"group": "governed", "main": "unknown"}
+
     def test_a_declared_target_counts_even_when_discovery_is_off(
         self, tmp_path: pathlib.Path
     ) -> None:

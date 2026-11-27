@@ -17,9 +17,11 @@ reading their absence as a name that does not exist.
 from __future__ import annotations
 
 import pathlib
+import posixpath
 import typing as typ
 
 from .markdown_envelope import is_symlink
+from .test_environment_types import table
 
 if typ.TYPE_CHECKING:
     from .test_environment_types import Reader
@@ -36,6 +38,9 @@ _TARGET_FOLDERS: typ.Final = (
     ("examples", "autoexamples"),
     ("src/bin", "autobins"),
 )
+
+
+_TARGET_KINDS: typ.Final = ("bin", "test", "bench", "example")
 
 
 def linked_note(relative: str) -> str:
@@ -66,36 +71,83 @@ def _target_folder(
     return current if current.is_dir() else None
 
 
-def _target_name(entry: pathlib.Path, reader: Reader) -> str | None:
-    """Return the crate name Cargo gives a file or directory in a target folder."""
+def _inferred_target(
+    entry: pathlib.Path, reader: Reader
+) -> tuple[str, pathlib.Path] | None:
+    """Return the crate name and source file Cargo infers from a folder entry.
+
+    A file `name.rs` is the target `name`; a directory holding a `main.rs` is the
+    target named after the directory (`tests/group/main.rs` is `group`).
+
+    Returns
+    -------
+    tuple[str, pathlib.Path] | None
+        The crate name and its source file, or None for an entry that is not a
+        target (or is a link, which is recorded).
+    """
     if _is_linked(entry, reader):
         return None
     if entry.is_file() and entry.suffix == ".rs":
-        return entry.stem
-    is_binary_directory = entry.is_dir() and not _is_linked(entry / "main.rs", reader)
-    return entry.name if is_binary_directory and (entry / "main.rs").is_file() else None
+        return entry.stem, entry
+    main = entry / "main.rs"
+    if entry.is_dir() and not _is_linked(main, reader) and main.is_file():
+        return entry.name, main
+    return None
+
+
+def _claimed_paths(manifest: dict[str, object]) -> set[str]:
+    """Return the source paths the manifest's declared targets give explicitly.
+
+    Cargo does not infer a second target from a file a declared target already
+    names with `path`, so `[[test]] name = "current" path = "tests/old.rs"`
+    leaves no `old` target.
+
+    Returns
+    -------
+    set[str]
+        The normalised `path` values, relative to the package directory.
+    """
+    claimed: set[str] = set()
+    for kind in _TARGET_KINDS:
+        declared = manifest.get(kind)
+        for target in declared if isinstance(declared, list) else []:
+            path = table(target).get("path")
+            if isinstance(path, str):
+                claimed.add(posixpath.normpath(path))
+    return claimed
 
 
 def discovered_targets(
-    directory: pathlib.Path, package: dict[str, object], reader: Reader
+    directory: pathlib.Path, manifest: dict[str, object], reader: Reader
 ) -> set[str]:
     """Return the crate names Cargo auto-discovers under a package directory.
 
     A folder whose `[package]` switch is `false` (`autotests = false`) is not
-    discovered; only its declared targets count.
+    discovered; only its declared targets count. A file a declared target
+    already names by `path` infers no further target.
 
     Returns
     -------
     set[str]
         The names of the files and directories in each discovered folder.
     """
+    package = table(manifest.get("package"))
+    claimed = _claimed_paths(manifest)
     found: set[str] = set()
     for sub, switch in _TARGET_FOLDERS:
-        if package.get(switch) is False:
-            continue
-        folder = _target_folder(directory, sub, reader)
+        folder = (
+            None
+            if package.get(switch) is False
+            else _target_folder(directory, sub, reader)
+        )
         if folder is None:
             continue
-        names = (_target_name(entry, reader) for entry in sorted(folder.iterdir()))
-        found |= {name for name in names if name is not None}
+        inferred = (
+            _inferred_target(entry, reader) for entry in sorted(folder.iterdir())
+        )
+        found |= {
+            name
+            for name, source in filter(None, inferred)
+            if source.relative_to(directory).as_posix() not in claimed
+        }
     return found

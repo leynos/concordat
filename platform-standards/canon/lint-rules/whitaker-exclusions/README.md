@@ -34,19 +34,30 @@ strings, so a string that quotes a key and a comment lends neither to a real
 key. A dotted key, an inline table, or a table header that repeats (`[[rule]]`
 twice) is reported as not located (EN-001) instead of read as having no reason.
 
-A crate name is resolved as rustc spells it, so hyphens are underscores and a
-test target is named after its file. A name is a crate the repository
-**governs** when it is a package, a library, a binary, a test, bench or example
-target (declared with `[[test]]` and the like, or found as `tests/*.rs`,
-`tests/*/main.rs`, `benches/`, `examples/` and `src/bin/`), or an alias of a
-path dependency (femtologging's `_femtologging_rs`). It is a **fixture** when
-it lives under a fixture, vendored or build-output tree (`fixtures`, `vendor`,
-`third_party`, `patches`, `templates`, `examples`, `target`). A registry
-dependency is not a crate of the repository. A path dependency is local whether
-it is declared in the package, under a `[target.*]` table, or inherited from
+A crate name is resolved as rustc spells it, so hyphens are underscores. An
+inferred test, bench, example or binary target is named after its file
+(`tests/old.rs` is `old`) or, for a directory with a `main.rs`, after the
+directory (`tests/group/main.rs` is `group`, not `main`); a declared target
+(`[[test]] name = "current"`) takes its declared name, and a declared target's
+`path` stops Cargo inferring a second target from the same file. A name is a
+crate the repository **governs** when it is a package, a library, a binary, a
+test, bench or example target (declared with `[[test]]` and the like, or found
+in `tests/`, `benches/`, `examples/` and `src/bin/`), or an alias of a path
+dependency (femtologging's `_femtologging_rs`). A crate is a **fixture** when
+the *package's own* `Cargo.toml` sits under a fixture, vendored or build-output
+tree (`fixtures`, `vendor`, `third_party`, `patches`, `templates`, `examples`,
+`target`): a package's own `examples/` target is governed, and only a package
+that lives under an `examples/` directory is a fixture. A registry dependency
+is not a crate of the repository. A path dependency is local whether it is
+declared in the package, under a `[target.*]` table, or inherited from
 `[workspace.dependencies]`. A package's `autotests`, `autobenches`,
 `autoexamples` and `autobins` switches are honoured: with `autotests = false`
 only the declared `[[test]]` targets count, not the files in `tests/`.
+
+The audit reads `dylint.toml` files outside the same trees (`fixtures`,
+`vendor`, `third_party`, `patches`, `templates`, `examples`, `target` and the
+trees every audit skips), so a clean report does not cover exclusions kept
+there.
 
 The audit never follows a symbolic link. A `dylint.toml`, a manifest, a target
 folder or a file in one that is a link is reported as unreadable (EN-001), not

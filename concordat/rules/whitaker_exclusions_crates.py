@@ -257,9 +257,8 @@ def _crate_names(
     if manifest is None:
         return set()
     inherited = _owning_workspace(relative, manifest, roots)
-    package = table(manifest.get("package"))
     names = _declared_names(manifest, inherited) | discovered_targets(
-        path.parent, package, reader
+        path.parent, manifest, reader
     )
     return {normalised(name) for name in names}
 

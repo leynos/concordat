@@ -156,7 +156,7 @@ deny contains finding("WX-003", severity, "noncompliant", exclusion.file, line_o
 	names := stale_names(exclusion)
 	count(names) > 0
 	msg := sprintf(
-		"%s in %s names %s, which %s not a package, library, binary, test, bench, example or path-dependency alias in this repository, so the exclusion does nothing. Remove it, or correct the name (Whitaker matches the rustc crate name: hyphens are underscores, and a test target is named after its file)",
+		"%s in %s names %s, which %s not a package, library, binary, test, bench, example or path-dependency alias in this repository, so the exclusion does nothing. Remove it, or correct the name (Whitaker matches the rustc crate name: hyphens are underscores; a test target is named after its file, after its directory for `tests/group/main.rs`, or by its declared `name`)",
 		[where(exclusion), exclusion.file, concat(", ", names), is_or_are(count(names))],
 	)
 }

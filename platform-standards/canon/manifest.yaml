@@ -344,7 +344,7 @@ artifacts:
       `dylint.toml` to carrying a reason, whole-crate exclusions of governed
       crates to a named decision with a reason and a review trigger, and stale
       exclusions reported, with unreadable inputs indeterminate.
-    sha256: 67645e14165efc0981a2fc249f1538b8b56b399a6825eaddf1cdbbd2a72b966a
+    sha256: 3751bbcd314c008d9c61d67ffde7b9855dfef4465d58eee46ff15ad57aeea9a8
   - id: lint-rule-whitaker-exclusions-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/whitaker-exclusions/rule.yaml

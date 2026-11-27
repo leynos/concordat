@@ -602,7 +602,7 @@
       },
       "exclusions": [],
       "unreadable": [
-        "dylint.toml: is a symbolic link, which the audit does not follow, so the exclusions it holds are unknown"
+        "dylint.toml: is a symbolic link, which the audit does not follow, so the crate names or configuration it would hold are unknown"
       ]
     },
     "tests_folder_is_a_symlink": {
@@ -629,7 +629,7 @@
         }
       ],
       "unreadable": [
-        "crates/a/tests: is a symbolic link, which the audit does not follow, so the crate names it would hold are unknown"
+        "crates/a/tests: is a symbolic link, which the audit does not follow, so the crate names or configuration it would hold are unknown"
       ]
     },
     "multiline_string_lends_nothing": {
