@@ -153,13 +153,18 @@ def crate_kinds(reader: Reader) -> dict[str, str]:
     """
     kinds: dict[str, str] = {}
     for relative in _manifests(reader.checkout):
-        manifest = reader.toml(reader.checkout / relative)
-        if manifest is None:
-            continue
-        directory = (reader.checkout / relative).parent
-        names = _declared_names(manifest) | _discovered_targets(directory)
         kind = FIXTURE if _is_fixture(relative) else GOVERNED
-        for name in map(normalised, names):
-            if kinds.get(name) != GOVERNED:
-                kinds[name] = kind
+        for name in _crate_names(reader, relative):
+            # A name found in both kinds is governed.
+            kinds[name] = GOVERNED if GOVERNED in (kind, kinds.get(name)) else kind
     return kinds
+
+
+def _crate_names(reader: Reader, relative: str) -> set[str]:
+    """Return the normalised crate names one manifest and its directory hold."""
+    path = reader.checkout / relative
+    manifest = reader.toml(path)
+    if manifest is None:
+        return set()
+    names = _declared_names(manifest) | _discovered_targets(path.parent)
+    return {normalised(name) for name in names}
