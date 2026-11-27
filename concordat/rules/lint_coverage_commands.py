@@ -24,12 +24,15 @@ from .gate_scope_commands import split_cargo_subcommand
 from .make_commands import command_start
 from .makefile_expansion import SHELL_DOLLAR, UNRESOLVED_MARK
 
-__all__ = ["Run", "parse_command", "script_run"]
+__all__ = ["Run", "flags_deny_warnings", "parse_command", "script_run"]
 
 _ASSIGNMENT: typ.Final = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.DOTALL)
-_DENY_WARNINGS: typ.Final = re.compile(
-    r"(?:^|\s)(?:-D\s*warnings|--deny[\s=]warnings)\b"
+# A lint-level flag for `warnings`: the last one on a line decides, so a later
+# `-W warnings` undoes an earlier `-D warnings`.
+_WARNINGS_LEVEL: typ.Final = re.compile(
+    r"(?:^|\s)(-[DWAF]|--(?:deny|warn|allow|forbid))(?:\s|=)*warnings\b"
 )
+_DENYING_FLAGS: typ.Final = frozenset({"-D", "-F", "--deny", "--forbid"})
 _UNRESOLVED: typ.Final = (UNRESOLVED_MARK, SHELL_DOLLAR, "$")
 _ALL_TARGET_FLAGS: typ.Final = frozenset({
     "--lib",
@@ -69,6 +72,7 @@ class Run(typ.TypedDict):
     workspace: bool
     packages: list[str]
     no_deps: bool
+    narrows: bool
     deny_warnings: bool | None
     lanes: list[str]
 
@@ -126,14 +130,44 @@ def _values(arguments: list[str], flags: frozenset[str]) -> list[str]:
 
 
 def _features(arguments: list[str]) -> list[str]:
-    """Return the feature names `--features` and `-F` list, split on commas."""
+    """Return the feature names `--features` and `-F` list, split on commas.
+
+    A `package/feature` name keeps its qualifier: `a/fast` enables `fast` in `a`
+    only, so it must not stand for `fast` in another package.
+
+    Returns
+    -------
+    list[str]
+        The sorted feature names, as written.
+    """
     values = _values(arguments, frozenset({"--features", "-F"}))
     return sorted({
-        name.rpartition("/")[2]
-        for value in values
-        for name in re.split(r"[\s,]+", value)
-        if name
+        name for value in values for name in re.split(r"[\s,]+", value) if name
     })
+
+
+_NARROWING_FLAGS: typ.Final = frozenset({
+    "--exclude",
+    "--bin",
+    "--bins",
+    "--example",
+    "--examples",
+})
+
+
+def _narrows(arguments: list[str]) -> bool:
+    """Return whether the arguments leave out packages or target kinds.
+
+    `--exclude` drops packages from a workspace selection and `--bins` or
+    `--example` document only some targets, so such a command does not cover the
+    whole surface even when it says `--workspace`.
+
+    Returns
+    -------
+    bool
+        Whether a narrowing flag is present.
+    """
+    return any(word.partition("=")[0] in _NARROWING_FLAGS for word in arguments)
 
 
 def _all_targets(arguments: list[str]) -> bool:
@@ -143,10 +177,30 @@ def _all_targets(arguments: list[str]) -> bool:
 
 
 def _denies(text: str | None) -> bool | None:
-    """Return whether a flags string denies warnings, or None when it is absent."""
+    """Return whether a flags string denies warnings, or None when it is absent.
+
+    The last flag that sets the level of `warnings` decides.
+
+    Returns
+    -------
+    bool | None
+        True when the last level flag denies, False when it does not or none is
+        given, None when there is no text.
+    """
     if text is None:
         return None
-    return _DENY_WARNINGS.search(f" {text}") is not None
+    return _last_level(text) is True
+
+
+def flags_deny_warnings(text: str) -> bool:
+    """Return whether a flags string ends with `warnings` denied."""
+    return _last_level(text) is True
+
+
+def _last_level(text: str) -> bool | None:
+    """Return whether the last level flag for `warnings` denies, or None if none."""
+    levels = _WARNINGS_LEVEL.findall(f" {text}")
+    return None if not levels else levels[-1] in _DENYING_FLAGS
 
 
 def _warning_state(
@@ -164,9 +218,9 @@ def _warning_state(
         True when the command line denies warnings, False when it assigns the
         variable without the deny, and None when it says nothing.
     """
-    if _denies(" ".join(lint_flags)) is True:
-        return True
-    return _denies(environment.get(variable))
+    # Flags after `--` reach rustc after `RUSTFLAGS`, so they have the last word.
+    after = _last_level(" ".join(lint_flags))
+    return after if after is not None else _denies(environment.get(variable))
 
 
 def _arguments_without_whitaker_options(arguments: list[str]) -> list[str]:
@@ -238,6 +292,7 @@ def _describe(command: _Command, source: str, directory: str | None) -> Run:
         "workspace": any(word in _WORKSPACE_FLAGS for word in arguments),
         "packages": _values(arguments, frozenset({"-p", "--package"})),
         "no_deps": "--no-deps" in arguments,
+        "narrows": _narrows(arguments),
         "deny_warnings": _warning_state(
             command.environment, variable, command.lint_flags
         ),
@@ -423,6 +478,7 @@ def _script_fact(tool: str, source: str, path: str, lanes: list[str]) -> Run:
         "workspace": False,
         "packages": [],
         "no_deps": False,
+        "narrows": False,
         "deny_warnings": None,
         "lanes": lanes,
     }

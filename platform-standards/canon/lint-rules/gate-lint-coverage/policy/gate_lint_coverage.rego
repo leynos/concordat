@@ -126,14 +126,13 @@ deny contains finding("EN-001", "error", "indeterminate", "", msg) if {
 }
 
 deny contains finding("EN-001", severity, "indeterminate", "", msg) if {
-	audited
+	envelope_ok
 	some entry in input.unreadable
 	msg := sprintf("a manifest, gate file or line could not be read, so the audit cannot say what the gate checks: %s", [entry])
 }
 
 deny contains finding("EN-001", severity, "indeterminate", "Makefile", msg) if {
-	audited
-	count(input.runs) > 0
+	envelope_ok
 	input.makefile_resolved == false
 	msg := "the Makefile walk from lint skipped a target it could not resolve (a `make -C`, or a variable that names a target), so the audit cannot say which lint commands the gate runs"
 }
@@ -199,10 +198,18 @@ all_features_run(surface, tool) if {
 
 covered(surface, tool) := declared(surface) if all_features_run(surface, tool)
 
-covered(surface, tool) := {f |
+# A declared feature is covered by a run that names it as written (`a/fast`), or by
+# its bare name, which enables it in every selected package that has it.
+covered(surface, tool) := {d |
+	some d in declared(surface)
 	some r in runs_for(surface, tool)
 	some f in r.features
+	feature_named(d, f)
 } if not all_features_run(surface, tool)
+
+feature_named(declared_name, given) if declared_name == given
+
+feature_named(declared_name, given) if endswith(declared_name, concat("", ["/", given]))
 
 # The default feature set is checked by a command that does not switch it off.
 default_checked(surface, tool) if {
@@ -275,9 +282,25 @@ denies_text(text) := true if regex.match(`(^|\s)(-D\s*warnings|--deny[\s=]warnin
 
 denies_text(text) := false if not regex.match(`(^|\s)(-D\s*warnings|--deny[\s=]warnings)\b`, text)
 
-environment_state(run) := "unknown" if input.make_environment.is_resolved == false
+# What a Makefile exports reaches the commands its recipes run, not a workflow
+# step that runs `cargo` directly: that step's own `env` is not read.
+environment_state(run) := "denied" if {
+	not is_make_run(run)
+	config_denies(run)
+}
+
+environment_state(run) := "unknown" if {
+	not is_make_run(run)
+	not config_denies(run)
+}
+
+environment_state(run) := "unknown" if {
+	is_make_run(run)
+	input.make_environment.is_resolved == false
+}
 
 environment_state(run) := state if {
+	is_make_run(run)
 	input.make_environment.is_resolved == true
 	exported := exported_flags(run)
 	exported != null
@@ -287,6 +310,7 @@ environment_state(run) := state if {
 # Nothing exported: the configuration decides a Clippy or Whitaker run; a
 # `cargo doc` run has no configuration reading, and a workflow run may have an `env`.
 environment_state(run) := state if {
+	is_make_run(run)
 	input.make_environment.is_resolved == true
 	exported_flags(run) == null
 	state := unexported_state(run)
@@ -332,6 +356,24 @@ deny contains finding("LC-003", severity, "noncompliant", run.surface, msg) if {
 	)
 }
 
+# A Clippy or Whitaker command whose warning state the audit cannot tell: its
+# workflow `env` is not read, or the Makefile's export could not be expanded.
+deny contains finding("EN-001", severity, "indeterminate", surface.manifest, msg) if {
+	audited
+	some surface in input.surfaces
+	some tool in judged_tools
+	unknown := [r |
+		some r in runs_for(surface, tool)
+		r.is_resolved == true
+		warnings_state(r) == "unknown"
+	]
+	count(unknown) > 0
+	msg := sprintf(
+		"%s: the audit cannot tell whether %d %s command(s) deny warnings (a workflow `env` is not read, or an exported value could not be expanded), so it does not judge LC-003 for them. Commands: %s",
+		[surface.manifest, count(unknown), tool, list_sources(unknown)],
+	)
+}
+
 fix_for(run) := "Set `RUSTDOCFLAGS=\"-D warnings\"` on the command or export it in the Makefile." if run.tool == "doc"
 
 fix_for(run) := "Set `RUSTFLAGS=\"-D warnings\"` on the command (or export it, or set `build.rustflags` in .cargo/config.toml)." if run.tool == "whitaker"
@@ -358,6 +400,7 @@ selects_all(surface, run) if {
 is_gate_doc(surface, run) if {
 	run.is_resolved == true
 	run.no_deps == true
+	run.narrows == false
 	selects_all(surface, run)
 	warnings_state(run) == "denied"
 }

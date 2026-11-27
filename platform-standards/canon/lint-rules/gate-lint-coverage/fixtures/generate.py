@@ -204,6 +204,41 @@ SCENARIOS: dict[str, dict[str, str]] = {
         ),
     },
     "designed_clippy_not_run": designed(DOC),
+    "designed_both_packages_declare_fast": designed(
+        f"{DENY} cargo clippy --workspace --all-targets -F a/fast -F a/slow",
+        DOC,
+        extra={"crates/b/Cargo.toml": package("b", FEATURES)},
+    ),
+    "designed_doc_excludes_a_package": designed(
+        CLIPPY, f"{DENY_DOC} cargo doc --workspace --no-deps --exclude b"
+    ),
+    "designed_doc_of_binaries_only": designed(
+        CLIPPY, f"{DENY_DOC} cargo doc --workspace --no-deps --bins"
+    ),
+    "designed_later_warn_undoes_the_deny": designed(
+        f"{DENY} cargo clippy --workspace --all-targets --all-features -- -W warnings",
+        DOC,
+    ),
+    "designed_feature_lanes_in_a_shell_conditional": designed(
+        'if [ -n "$$FAST" ]; then cargo clippy --workspace --all-targets '
+        "--features fast; else cargo clippy --workspace --all-targets "
+        "--features slow; fi",
+        DOC,
+    ),
+    "designed_makefile_export_does_not_reach_a_workflow_run": designed(
+        CLIPPY,
+        DOC,
+        preamble="export RUSTFLAGS := -C debuginfo=0\n",
+        extra={
+            ".github/workflows/ci.yml": workflow(
+                "cargo clippy --workspace --all-targets --all-features"
+            )
+        },
+    ),
+    "no_surface_but_an_unreadable_workflow": {
+        "README.md": "# demo\n",
+        ".github/workflows/ci.yml": "jobs: [unclosed\n",
+    },
     "designed_workflow_clippy_without_deny_is_unknown": designed(
         CLIPPY,
         DOC,

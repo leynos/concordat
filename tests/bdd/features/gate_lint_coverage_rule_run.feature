@@ -25,7 +25,7 @@ Feature: Gate lint coverage rule run
   Scenario: a missing feature lane is reported
     Given a workspace whose clippy checks only one of two features
     When I audit the checkout for gate lint coverage
-    Then the audit output reports "LC-002" "feature slow"
+    Then the audit output reports "LC-002" "feature a/slow"
 
   Scenario: a command that does not deny warnings is reported
     Given a workspace whose clippy does not deny warnings

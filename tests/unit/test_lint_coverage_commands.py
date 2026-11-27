@@ -58,12 +58,12 @@ class TestFlags:
         assert _run("cargo clippy --lib --tests")["all_targets"] is False
         assert _run("cargo clippy")["all_targets"] is False
 
-    def test_features_are_split_and_qualified_names_are_reduced(self) -> None:
+    def test_features_are_split_and_qualified_names_keep_their_package(self) -> None:
         """`--features a,b`, `-F p/c`, `--features=d` and `--no-default-features`."""
         run = _run(
             "cargo clippy --features a,b -F pkg/c --features=d --no-default-features"
         )
-        assert run["features"] == ["a", "b", "c", "d"]
+        assert run["features"] == ["a", "b", "d", "pkg/c"]
         assert run["no_default_features"] is True
         assert run["all_features"] is False
         assert _run("cargo clippy --all-features")["all_features"] is True
@@ -77,6 +77,23 @@ class TestFlags:
             True,
         )
         assert _run("cargo doc --all")["workspace"] is True
+
+    @pytest.mark.parametrize(
+        ("command", "expected"),
+        [
+            ("cargo doc --workspace --no-deps", False),
+            ("cargo doc --workspace --exclude b --no-deps", True),
+            ("cargo doc --workspace --exclude=b --no-deps", True),
+            ("cargo doc --workspace --bins --no-deps", True),
+            ("cargo doc --workspace --example demo --no-deps", True),
+            ("cargo doc --workspace --lib --no-deps", False),
+        ],
+    )
+    def test_a_command_that_leaves_packages_or_targets_out_narrows(
+        self, command: str, *, expected: bool
+    ) -> None:
+        """`--exclude` and `--bins` mean the command does not cover the surface."""
+        assert _run(command)["narrows"] is expected
 
     def test_flags_after_the_separator_do_not_count_as_cargos(self) -> None:
         """`-- --all-targets` goes to Clippy's driver, not to Cargo."""
@@ -101,6 +118,9 @@ class TestWarnings:
             ("cargo clippy -- -D warnings", True),
             ("cargo clippy -- -Dwarnings", True),
             ("cargo clippy -- --deny warnings", True),
+            ("cargo clippy -- -D warnings -W warnings", False),
+            ("cargo clippy -- -D warnings --allow warnings", False),
+            ("cargo clippy -- -W warnings -D warnings", True),
             ("cargo clippy", None),
             ("cargo clippy -- -A clippy::all", None),
         ],

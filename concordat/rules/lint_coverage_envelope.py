@@ -93,7 +93,31 @@ def _placed(run: Run, surfaces: list[Surface]) -> PlacedRun:
     """
     manifest = run["manifest"] if run["manifest"] is not None else "Cargo.toml"
     surface = surface_of(manifest, surfaces) if run["is_placed"] else None
-    return {**run, "surface": surface}
+    return {
+        **run,
+        "features": _local_features(run, surface, surfaces),
+        "surface": surface,
+    }
+
+
+def _local_features(
+    run: Run, surface: str | None, surfaces: list[Surface]
+) -> list[str]:
+    """Return the run's features, as the surface names them.
+
+    In a surface of one package, `-F pkg/fast` and `-F fast` are the same
+    feature, which the surface names `fast`.
+
+    Returns
+    -------
+    list[str]
+        The run's features, unqualified where the surface has one package.
+    """
+    held = next((s for s in surfaces if s["manifest"] == surface), None)
+    if held is None or len(held["packages"]) != 1:
+        return run["features"]
+    prefix = f"{held['packages'][0]}/"
+    return sorted({f.removeprefix(prefix) for f in run["features"]})
 
 
 def build_lint_coverage_envelope(

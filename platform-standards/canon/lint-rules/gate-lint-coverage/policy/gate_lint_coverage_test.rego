@@ -108,9 +108,35 @@ test_an_exemption_for_another_tool_or_surface_does_not_stand if {
 test_a_missing_feature_lane_is_lc_002_and_names_the_features if {
 	ids(data.fixtures.designed_missing_feature_lane) == {"LC-002"}
 	[msg] := messages_of(data.fixtures.designed_missing_feature_lane, "LC-002")
-	contains(msg, "feature slow")
-	not contains(msg, "feature fast")
+	contains(msg, "feature a/slow")
+	not contains(msg, "a/fast")
 	contains(msg, "--all-features")
+}
+
+test_a_package_qualified_feature_covers_only_its_own_package if {
+	ids(data.fixtures.designed_both_packages_declare_fast) == {"LC-002"}
+	[msg] := messages_of(data.fixtures.designed_both_packages_declare_fast, "LC-002")
+	contains(msg, "feature b/fast")
+	contains(msg, "feature b/slow")
+	not contains(msg, "a/fast")
+}
+
+test_a_shell_conditional_lane_is_indeterminate_not_a_combined_lane if {
+	fixture := data.fixtures.designed_feature_lanes_in_a_shell_conditional
+	"EN-001" in ids(fixture)
+	not "LC-002" in ids(fixture)
+}
+
+test_a_later_warn_flag_undoes_an_earlier_deny if {
+	ids(data.fixtures.designed_later_warn_undoes_the_deny) == {"LC-003"}
+}
+
+test_a_makefile_export_does_not_reach_a_workflow_run if {
+	ids(data.fixtures.designed_makefile_export_does_not_reach_a_workflow_run) == {"EN-001"}
+}
+
+test_unreadable_inputs_are_reported_even_without_a_surface if {
+	ids(data.fixtures.no_surface_but_an_unreadable_workflow) == {"EN-001"}
 }
 
 test_a_lane_that_switches_the_default_set_off_never_checks_it if {
@@ -166,8 +192,8 @@ test_a_cargo_config_that_denies_warnings_counts_for_clippy if {
 	count(findings(data.fixtures.designed_config_denies_warnings)) == 0
 }
 
-test_a_workflow_command_that_says_nothing_is_not_judged if {
-	count(findings(data.fixtures.designed_workflow_clippy_without_deny_is_unknown)) == 0
+test_a_workflow_command_that_says_nothing_is_indeterminate_not_a_violation if {
+	ids(data.fixtures.designed_workflow_clippy_without_deny_is_unknown) == {"EN-001"}
 }
 
 test_a_workflow_command_that_denies_is_clean if {
@@ -175,6 +201,11 @@ test_a_workflow_command_that_denies_is_clean if {
 }
 
 # -- LC-004 ---------------------------------------------------------------------------
+
+test_a_doc_run_that_excludes_a_package_or_documents_binaries_only_is_no_gate if {
+	ids(data.fixtures.designed_doc_excludes_a_package) == {"LC-004"}
+	ids(data.fixtures.designed_doc_of_binaries_only) == {"LC-004"}
+}
 
 test_no_cargo_doc_is_lc_004 if {
 	ids(data.fixtures.designed_no_cargo_doc) == {"LC-004"}

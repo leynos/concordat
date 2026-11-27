@@ -54,17 +54,23 @@ Clippy at all).
   set; otherwise the union of the `--features`/`-F` lanes must name every
   feature declared in the surface's `[features]` tables (`default` apart), and
   some lane must leave the default set on, when a `default` feature is
-  declared. A package-qualified `-F pkg/feat` counts as `feat`.
+  declared. In a workspace of several packages a feature is `package/feature`,
+  and `-F a/fast` covers `a`'s `fast` only; a bare `-F fast` covers it in every
+  package that declares it. In a surface of one package `-F pkg/fast` is `fast`.
 - **Warnings** are denied by `-D warnings` in `RUSTFLAGS` on the command or
   exported by the Makefile, after `--` for Clippy, or in `.cargo/config.toml`
   `build.rustflags`; `cargo doc` needs `RUSTDOCFLAGS` (rustdoc does not read
-  `RUSTFLAGS`). A command that assigns the variable without the deny has said
-  it does not deny. A workflow's own `env` is not read, so a workflow command
-  that says nothing is unknown, not wrong; an exported value the audit cannot
-  expand is unknown too.
+  `RUSTFLAGS`). The last level flag for `warnings` decides, so a later
+  `-W warnings` undoes an earlier `-D warnings`. A command that assigns the
+  variable without the deny has said it does not deny. What a Makefile exports
+  reaches the commands its recipes run, not a workflow step that runs `cargo`
+  directly. A workflow's own `env` is not read, so a workflow command that says
+  nothing is reported as EN-001, not as a violation; an exported value the
+  audit cannot expand is the same.
 - **The rustdoc gate** is judged on the Makefile's `lint` closure. It needs
   `--no-deps`, a selection of every package (`--workspace`, or every package
-  named, or a surface of one package) and `RUSTDOCFLAGS` denying warnings.
+  named, or a surface of one package) with no `--exclude`, `--bin(s)` or
+  `--example(s)`, and `RUSTDOCFLAGS` denying warnings.
 
 Each finding names the surface and the commands, and says what to add.
 
@@ -76,9 +82,12 @@ EN-001 with the lane inputs it was given: the audit does not read the script,
 so it cannot say what targets, features and flags its lanes use. Other causes
 are an unresolved word among the arguments (it may stand for a flag), a command
 after a `cd` or against a manifest the audit could not place, a manifest no
-surface holds, a step that runs for some matrix entries only, a Makefile walk
-that skipped a target (`make -C`), and any unreadable manifest, workflow or
-line.
+surface holds, a step that runs for some matrix entries only, a command inside
+a shell `if` the audit cannot settle (it may be one of several exclusive
+lanes), a job whose matrix is computed by an expression and whose steps may
+lint (a tool name, `make`, or a script), a Makefile walk that skipped a target
+(`make -C`), and any unreadable manifest, workflow or line. These are reported
+even when the checkout holds no Cargo surface.
 
 A script is recognized by running it (`python x.py`, `uv run --script x.py`,
 `bash x.sh`, `./x.sh`) with its text showing `cargo clippy` (as a shell line or

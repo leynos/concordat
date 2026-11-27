@@ -65,7 +65,7 @@ class TestSurfaces:
     def test_a_workspace_is_one_surface_with_every_members_features(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """Features are the union across the members, `default` apart."""
+        """Features are the members' own, named `package/feature`, `default` apart."""
         _write(
             tmp_path,
             {
@@ -80,8 +80,39 @@ class TestSurfaces:
         [surface] = build_lint_coverage_envelope(tmp_path)["surfaces"]
         assert surface["manifest"] == "Cargo.toml"
         assert surface["packages"] == ["a", "b"]
-        assert surface["features"] == ["x", "y"]
+        assert surface["features"] == ["a/x", "b/y"]
         assert (surface["has_default"], surface["has_library"]) == (True, True)
+
+    def test_a_package_qualifier_is_dropped_only_in_a_one_package_surface(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`-F app/fast` is `fast` for one package, and stays `app/fast` otherwise."""
+        _app(
+            tmp_path,
+            {
+                "Makefile": _gate("cargo clippy -F app/fast -F other/fast"),
+                "src/lib.rs": "",
+            },
+        )
+        [run] = build_lint_coverage_envelope(tmp_path)["runs"]
+        assert run["features"] == ["fast", "other/fast"]
+
+    def test_a_lane_inside_a_shell_conditional_is_unresolved(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """It may be one of several exclusive lanes, not a lane of the whole gate."""
+        _app(
+            tmp_path,
+            {
+                "Makefile": _gate(
+                    'if [ -n "$$FAST" ]; then cargo clippy; else cargo clippy -F x; fi'
+                )
+            },
+        )
+        runs = build_lint_coverage_envelope(tmp_path)["runs"]
+        assert runs
+        assert all(run["is_resolved"] is False for run in runs)
+        assert all("conditional" in run["why"] for run in runs)
 
     def test_a_package_outside_every_workspace_is_its_own_surface(
         self, tmp_path: pathlib.Path
@@ -198,7 +229,14 @@ class TestRuns:
 
     @pytest.mark.parametrize(
         "command",
-        ["cargo clippy", "make lint", "./scripts/lint.sh", "python tools/gate.py"],
+        [
+            "cargo clippy",
+            "make lint",
+            "./scripts/lint.sh",
+            "python tools/gate.py",
+            "bash scripts/check",
+            "uv run lanes",
+        ],
     )
     def test_a_computed_matrix_job_that_may_lint_is_unreadable(
         self, tmp_path: pathlib.Path, command: str

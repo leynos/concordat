@@ -31,7 +31,12 @@ from .cargo_config import inspect_cargo_config
 from .gate_scope_shell import FRESH_SHELL, runnable
 from .gate_scope_workflow_model import places, step_runs
 from .interrogate_invocation import lex_segments
-from .lint_coverage_commands import Run, parse_command, script_run
+from .lint_coverage_commands import (
+    Run,
+    flags_deny_warnings,
+    parse_command,
+    script_run,
+)
 from .make_commands import blank_references
 from .makefile_expansion import expand, joined, single_assignments
 from .makefile_reach import reachable, rules_by_target
@@ -63,14 +68,16 @@ _NAMES_TOOL: typ.Final = re.compile(
     r"(?<![\w.-])whitaker(?![\w.-])|cargo\s+(?:\+\S+\s+)?(?:clippy|doc|dylint)\b"
 )
 # A command that may reach a lint without naming a tool: `make`, or a script.
-_MAY_LINT: typ.Final = re.compile(r"\bmake\b|\.(?:sh|py|bash|js|ts)\b|\blint\b")
+_MAY_LINT: typ.Final = re.compile(
+    r"\b(?:make|bash|sh|zsh|python3?|uv|node|npm|pnpm|yarn|just|task|lint)\b"
+    r"|\./|\.(?:sh|py|bash|js|ts)\b"
+)
 # What a lane-building script's text must show to stand for a tool: the command
 # itself, as a shell line or as the words of a subprocess list.
 _RUNS_CLIPPY: typ.Final = re.compile(r"cargo[\s\"',\[]+(?:\+\S+[\s\"',]+)?clippy\b")
 _RUNS_WHITAKER: typ.Final = re.compile(
     r"(?<![\w.-])whitaker(?![\w.-])[\s\"',\[]+(?:--all|--lib|--)|cargo[\s\"',\[]+dylint\b"
 )
-_DENY: typ.Final = re.compile(r"(?:^|\s)(?:-D\s*warnings|--deny[\s=]warnings)\b")
 
 
 class MakeEnvironment(typ.TypedDict):
@@ -171,8 +178,16 @@ def _line_runs(
             reader.unreadable.append(f"{source}: {' '.join(text.split())}")
         return shell, directory
     kept, shell = runnable(segments, shell)
-    for words, _frames in kept:
+    for words, frames in kept:
+        start = len(reader.runs)
         directory = _read_command(reader, words, source, directory)
+        if frames:
+            # Inside an `if` the audit cannot decide: it may be one of several
+            # exclusive lanes, so it does not count as a lane of the whole gate.
+            _mark_unresolved(
+                reader.runs[start:],
+                "it runs under a shell conditional it could not settle",
+            )
     return shell, directory
 
 
@@ -310,9 +325,14 @@ def _step_runs(reader: _Reader, source: str, step: StepRun) -> None:
     for line in step.lines:
         state = _line_runs(reader, line, source, state)
     if step.is_matrix_conditional:
-        for run in reader.runs[start:]:
-            run["is_resolved"] = False
-            run["why"] = "it runs for some matrix entries only"
+        _mark_unresolved(reader.runs[start:], "it runs for some matrix entries only")
+
+
+def _mark_unresolved(runs: list[Run], why: str) -> None:
+    """Mark runs the audit cannot settle, with the reason."""
+    for run in runs:
+        run["is_resolved"] = False
+        run["why"] = why
 
 
 def _workflow_runs(reader: _Reader, files: list[WorkflowFile]) -> None:
@@ -334,7 +354,7 @@ def _config_flags(reader: _Reader) -> ConfigFlags:
         return {"denies_warnings": False, "is_readable": False}
     sources = facts["sources"]
     denies = bool(sources) and all(
-        _DENY.search(" ".join(source["flags"])) for source in sources
+        flags_deny_warnings(" ".join(source["flags"])) for source in sources
     )
     return {"denies_warnings": denies, "is_readable": True}
 

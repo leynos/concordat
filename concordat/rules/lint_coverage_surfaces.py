@@ -60,6 +60,29 @@ def _has_library(reader: Reader, package: PackageFacts) -> bool:
     return "lib" in manifest or (root / "src" / "lib.rs").is_file()
 
 
+def _surface_features(reader: Reader, packages: list[PackageFacts]) -> set[str]:
+    """Return a surface's declared features, qualified when it has several packages.
+
+    In a surface of one package a feature is its bare name. In a workspace of
+    several, `fast` in `a` and `fast` in `b` are different features that one
+    `-F a/fast` does not both cover, so each is named `package/feature`;
+    `default` is kept bare because the surface only records that one exists.
+
+    Returns
+    -------
+    set[str]
+        The declared feature names of the surface.
+    """
+    if len(packages) == 1:
+        return _declared_features(reader, packages[0])
+    found: set[str] = set()
+    for package in packages:
+        declared = _declared_features(reader, package)
+        found |= {"default"} & declared
+        found |= {f"{package['name']}/{name}" for name in declared - {"default"}}
+    return found
+
+
 def read_surfaces(reader: Reader) -> list[Surface]:
     """Return the checkout's Cargo surfaces, sorted by manifest path.
 
@@ -79,7 +102,7 @@ def read_surfaces(reader: Reader) -> list[Surface]:
         grouped.setdefault(_surface_key(package), []).append(package)
     surfaces: list[Surface] = []
     for key, packages in sorted(grouped.items()):
-        features = set().union(*(_declared_features(reader, p) for p in packages))
+        features = _surface_features(reader, packages)
         surfaces.append({
             "manifest": key,
             "packages": sorted(p["name"] for p in packages),
