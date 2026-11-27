@@ -41,21 +41,25 @@ directory (`tests/group/main.rs` is `group`, not `main`); a declared target
 (`[[test]] name = "current"`) takes its declared name, and a declared target's
 `path` stops Cargo inferring a second target of the same kind from that file (a
 path declared for a binary leaves an inferred test of the same file alone). The
-package's own name is a crate only through a default target, `src/lib.rs` or
-`src/main.rs`; a package with neither has no crate of that name. A virtual
-workspace root is not a package and has no targets. In edition 2015 (the
-default when no edition is set) a manifest that declares a target of a kind
-turns discovery of that kind off, as the `auto*` switches do. A name is a crate
-the repository **governs** when it is a package, a library, a binary, a test,
-bench or example target (declared with `[[test]]` and the like, or found in
-`tests/`, `benches/`, `examples/` and `src/bin/`), or an alias of a path
-dependency (femtologging's `_femtologging_rs`). A crate is a **fixture** when
-the *package's own* `Cargo.toml` sits under a fixture, vendored or build-output
-tree (`fixtures`, `vendor`, `third_party`, `patches`, `templates`, `examples`,
-`target`): a package's own `examples/` target is governed, and only a package
-that lives under an `examples/` directory is a fixture. A registry dependency
-is not a crate of the repository. A path dependency is local whether it is
-declared in the package, under a `[target.*]` table, or inherited from
+package's own name is a crate only through a default target: a library (the file
+`src/lib.rs` or a `[lib]` table, unless `[lib] name` renames it) or the
+`src/main.rs` binary (unless a declared `[[bin]]` claims that path and names
+it); a package with neither has no crate of that name. An edition inherited with
+`edition.workspace = true` is the workspace's own, and one the audit cannot
+read is reported as unreadable. A virtual workspace root is not a package and
+has no targets. In edition 2015 (the default when no edition is set) a manifest
+that declares a target of a kind turns discovery of that kind off, as the
+`auto*` switches do. A name is a crate the repository **governs** when it is a
+package, a library, a binary, a test, bench or example target (declared with
+`[[test]]` and the like, or found in `tests/`, `benches/`, `examples/` and
+`src/bin/`), or an alias of a path dependency (femtologging's
+`_femtologging_rs`). A crate is a **fixture** when the *package's own*
+`Cargo.toml` sits under a fixture, vendored or build-output tree (`fixtures`,
+`vendor`, `third_party`, `patches`, `templates`, `examples`, `target`): a
+package's own `examples/` target is governed, and only a package that lives
+under an `examples/` directory is a fixture. A registry dependency is not a
+crate of the repository. A path dependency is local whether it is declared in
+the package, under a `[target.*]` table, or inherited from
 `[workspace.dependencies]`. A package's `autotests`, `autobenches`,
 `autoexamples` and `autobins` switches are honoured: with `autotests = false`
 only the declared `[[test]]` targets count, not the files in `tests/`.

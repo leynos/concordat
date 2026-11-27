@@ -196,27 +196,41 @@ def _directory_key(directory: pathlib.PurePosixPath) -> str:
     return "" if text == "." else text
 
 
+class _Root(typ.NamedTuple):
+    """What a workspace root hands its members: path dependencies and edition."""
+
+    dependencies: frozenset[str]
+    edition: str | None
+
+
 def _local_workspace_dependencies(
     reader: Reader, manifests: list[str]
-) -> dict[str, frozenset[str]]:
-    """Return, per workspace root directory, its `[workspace.dependencies]` paths.
+) -> dict[str, _Root]:
+    """Return, per workspace root directory, what its members inherit.
 
     The key is the root's directory relative to the checkout (`""` at the top);
-    the value holds the dependency keys that are path dependencies.
+    the value holds the `[workspace.dependencies]` keys that are path
+    dependencies and the `[workspace.package]` edition.
 
     Returns
     -------
-    dict[str, frozenset[str]]
-        The path-dependency keys of each workspace root, by directory.
+    dict[str, _Root]
+        The inheritable facts of each workspace root, by directory.
     """
-    roots: dict[str, frozenset[str]] = {}
+    roots: dict[str, _Root] = {}
     for relative in manifests:
         workspace = table(reader.toml(reader.checkout / relative)).get("workspace")
         if isinstance(workspace, dict):
             dependencies = table(table(workspace).get("dependencies"))
+            edition = table(table(workspace).get("package")).get("edition")
             directory = pathlib.PurePosixPath(relative).parent
-            roots[_directory_key(directory)] = frozenset(
-                alias for alias, spec in dependencies.items() if "path" in table(spec)
+            roots[_directory_key(directory)] = _Root(
+                frozenset(
+                    alias
+                    for alias, spec in dependencies.items()
+                    if "path" in table(spec)
+                ),
+                edition if isinstance(edition, str) else None,
             )
     return roots
 
@@ -231,10 +245,10 @@ def _declared_root(relative: str, manifest: dict[str, object]) -> str | None:
     return _directory_key(pathlib.PurePosixPath(joined))
 
 
-def _owning_workspace(
-    relative: str, manifest: dict[str, object], roots: dict[str, frozenset[str]]
-) -> frozenset[str]:
-    """Return the inherited path dependencies of the workspace that owns a manifest.
+def _owning_root(
+    relative: str, manifest: dict[str, object], roots: dict[str, _Root]
+) -> _Root:
+    """Return what the workspace that owns a manifest hands its members.
 
     A package that names its workspace (`package.workspace`, which may be a root
     that is not an ancestor) belongs to it. Otherwise the owner is the nearest
@@ -245,24 +259,49 @@ def _owning_workspace(
 
     Returns
     -------
-    frozenset[str]
-        The owning workspace's path-dependency keys, or none.
+    _Root
+        The owning workspace's inheritable facts, or an empty one.
     """
     declared = _declared_root(relative, manifest)
     if declared is not None:
         # A named root the scan did not find gives no ancestor's dependencies.
-        return roots.get(declared, frozenset())
+        return roots.get(declared, _Root(frozenset(), None))
     directory = pathlib.PurePosixPath(relative).parent
     for candidate in (directory, *directory.parents):
         key = _directory_key(candidate)
         if key in roots:
             return roots[key]
-    return frozenset()
+    return _Root(frozenset(), None)
 
 
-def _crate_names(
-    reader: Reader, relative: str, roots: dict[str, frozenset[str]]
-) -> set[str]:
+def _with_inherited_edition(
+    reader: Reader, relative: str, manifest: dict[str, object], owner: _Root
+) -> dict[str, object]:
+    """Return the manifest with `edition.workspace = true` replaced by its value.
+
+    The target scan reads the edition as a string. An inherited edition the
+    owning workspace does not supply cannot be resolved; that is recorded, and
+    the edition is left unset for the scan.
+
+    Returns
+    -------
+    dict[str, object]
+        The manifest, with the package's edition resolved where it was inherited.
+    """
+    package = table(manifest.get("package"))
+    edition = package.get("edition")
+    if table(edition).get("workspace") is not True:
+        return manifest
+    if owner.edition is None:
+        reader.unreadable.append(
+            f"{relative}: inherits its edition (edition.workspace = true) from a "
+            "workspace the audit cannot read it from, so whether Cargo discovers "
+            "its targets is unknown"
+        )
+    return {**manifest, "package": {**package, "edition": owner.edition}}
+
+
+def _crate_names(reader: Reader, relative: str, roots: dict[str, _Root]) -> set[str]:
     """Return the normalised crate names one manifest and its directory hold."""
     path = reader.checkout / relative
     manifest = reader.toml(path)
@@ -276,12 +315,13 @@ def _crate_names(
             "checkout, or no [workspace] there), so the path dependencies this "
             "package inherits are unknown"
         )
-    inherited = _owning_workspace(relative, manifest, roots)
-    names = _declared_names(manifest, inherited)
+    owner = _owning_root(relative, manifest, roots)
+    names = _declared_names(manifest, owner.dependencies)
     # A virtual workspace's root is not a package: it has no targets to find.
     if "package" in manifest:
-        names |= default_targets(path.parent, manifest, reader)
-        names |= discovered_targets(path.parent, manifest, reader)
+        resolved = _with_inherited_edition(reader, relative, manifest, owner)
+        names |= default_targets(path.parent, resolved, reader)
+        names |= discovered_targets(path.parent, resolved, reader)
     return {normalised(name) for name in names}
 
 

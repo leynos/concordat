@@ -403,6 +403,94 @@ class TestCrateNames:
         )
         assert resolved == {"app": expected}
 
+    @pytest.mark.parametrize(
+        ("manifest_extra", "files", "expected"),
+        [
+            # A renamed library leaves the package name to nothing.
+            ('\n[lib]\nname = "other"\n', {"src/lib.rs": ""}, ("app", "unknown")),
+            ('\n[lib]\nname = "other"\n', {"src/lib.rs": ""}, ("other", "governed")),
+            # A library at a custom path with no name is named after the package.
+            ('\n[lib]\npath = "core/l.rs"\n', {"core/l.rs": ""}, ("app", "governed")),
+            # A binary that claims src/main.rs takes its own name, not the package's.
+            (
+                '\n[[bin]]\nname = "runner"\npath = "src/main.rs"\n',
+                {"src/main.rs": ""},
+                ("app", "unknown"),
+            ),
+            (
+                '\n[[bin]]\nname = "runner"\npath = "src/main.rs"\n',
+                {"src/main.rs": ""},
+                ("runner", "governed"),
+            ),
+        ],
+    )
+    def test_default_targets_take_declared_names_and_paths(
+        self,
+        tmp_path: pathlib.Path,
+        manifest_extra: str,
+        files: dict[str, str],
+        expected: tuple[str, str],
+    ) -> None:
+        """A `[lib]` or `[[bin]]` table decides the crate name of a default file."""
+        name, kind = expected
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app", extra=f'edition = "2021"\n{manifest_extra}'
+                ),
+                "dylint.toml": f'[l]\n# r\nexcluded_crates = ["{name}"]\n',
+                **files,
+            },
+        )
+        assert resolved == {name: kind}
+
+    @pytest.mark.parametrize(
+        ("workspace_edition", "expected"),
+        [('edition = "2015"\n', "unknown"), ('edition = "2021"\n', "governed")],
+    )
+    def test_an_inherited_edition_decides_whether_a_kind_is_discovered(
+        self, tmp_path: pathlib.Path, workspace_edition: str, expected: str
+    ) -> None:
+        """`edition.workspace = true` is the workspace's edition, not a table."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": (
+                    '[workspace]\nmembers = ["crates/app"]\n'
+                    f"[workspace.package]\n{workspace_edition}"
+                ),
+                "crates/app/Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'edition.workspace = true\n\n[[test]]\nname = "kept"\n'
+                        'path = "tests/k.rs"\n'
+                    ),
+                ),
+                "crates/app/tests/k.rs": "",
+                "crates/app/tests/other.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["other"]\n',
+            },
+        )
+        assert resolved == {"other": expected}
+
+    def test_an_inherited_edition_the_workspace_lacks_is_recorded(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Nothing is guessed: the package's targets are unknown, so EN-001."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": '[workspace]\nmembers = ["crates/app"]\n',
+                "crates/app/Cargo.toml": MANIFEST.format(
+                    name="app", extra="edition.workspace = true\n"
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["x"]\n',
+            },
+        )
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any("inherits its edition" in n for n in envelope["unreadable"])
+
     def test_a_virtual_workspace_root_has_no_targets(
         self, tmp_path: pathlib.Path
     ) -> None:

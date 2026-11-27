@@ -163,10 +163,12 @@ def default_targets(
 ) -> set[str]:
     """Return the package name when a default target gives it a crate.
 
-    `src/lib.rs` is the library and `src/main.rs` the binary, each named after
-    the package (a `[lib]` or `[[bin]]` table with a `name` is a declared target,
-    read elsewhere). A package with neither, or whose binary discovery is off,
-    has no crate named after itself.
+    The library is `src/lib.rs`, or the file a `[lib]` table's `path` names; it
+    is named after the package unless `[lib] name` says otherwise (a declared
+    name is read elsewhere). The binary is `src/main.rs`, named after the
+    package, unless a declared `[[bin]]` claims that path (and so names it) or
+    binary discovery is off. A package with neither has no crate named after
+    itself.
 
     Returns
     -------
@@ -175,13 +177,20 @@ def default_targets(
     """
     name = table(manifest.get("package")).get("name")
     source = _target_folder(directory, "src", reader)
-    if source is None or not isinstance(name, str):
+    if not isinstance(name, str):
         return set()
-    has_library = _has_file(source / "lib.rs", reader)
-    has_binary = _is_discovered(manifest, _TARGET_FOLDERS[3]) and _has_file(
-        source / "main.rs", reader
+    library = manifest.get("lib")
+    has_library = isinstance(library, dict) or (
+        source is not None and _has_file(source / "lib.rs", reader)
     )
-    return {name} if has_library or has_binary else set()
+    names_library = isinstance(table(library).get("name"), str)
+    has_binary = (
+        source is not None
+        and _is_discovered(manifest, _TARGET_FOLDERS[3])
+        and "src/main.rs" not in _claimed_paths(manifest, "bin")
+        and _has_file(source / "main.rs", reader)
+    )
+    return {name} if (has_library and not names_library) or has_binary else set()
 
 
 def _has_file(path: pathlib.Path, reader: Reader) -> bool:
