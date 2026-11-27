@@ -107,9 +107,8 @@ def test_the_runner_loads_a_packages_reference_data_beside_the_parameters() -> N
     argv = _conftest_argv(
         "rust-lint-tables",
         pathlib.Path("policy"),
-        pathlib.Path("parameters.json"),
+        [pathlib.Path("parameters.json"), pathlib.Path("data/baseline.json")],
         [pathlib.Path("envelope.json")],
-        data_files=[pathlib.Path("data/baseline.json")],
     )
     pairs = list(itertools.pairwise(argv))
     assert ("--data", "data/baseline.json") in pairs, argv

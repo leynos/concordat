@@ -34,6 +34,7 @@ if typ.TYPE_CHECKING:
     import pathlib
 
     from .gate_scope_commands import Invocation
+    from .gate_scope_workflow_model import Place
     from .makefile_facts import MakefileInspector, MakeutilReport
     from .markdown_envelope import WorkflowFile
 
@@ -111,6 +112,27 @@ def _makefile_miri(report: MakeutilReport, scan: _MiriScan) -> None:
                     scan.is_resolved = False
 
 
+def _miri_steps(path: str, place: Place, combination: dict[str, object]) -> list[str]:
+    """Return the steps of *place*, for one matrix combination, that run Miri."""
+    return [
+        f"{path} {step.source}"
+        for step in step_runs(place, combination)
+        if any(_MIRI_COMMAND.search(line) for line in step.lines)
+    ]
+
+
+def _place_miri(path: str, place: Place, scan: _MiriScan) -> None:
+    """Record Miri commands in one job or action, read once per matrix entry."""
+    if place.combinations is None:
+        # An expression-built matrix cannot be filled in; it only matters when
+        # a step might name Miri.
+        if _NAMES_MIRI.search(repr(place.steps)):
+            scan.is_resolved = False
+        return
+    for combination in place.combinations:
+        scan.sources.extend(_miri_steps(path, place, combination))
+
+
 def _workflow_miri(files: list[WorkflowFile], scan: _MiriScan) -> None:
     """Record Miri commands in the `run` steps of workflows and actions."""
     for workflow in files:
@@ -118,18 +140,7 @@ def _workflow_miri(files: list[WorkflowFile], scan: _MiriScan) -> None:
             scan.is_resolved = False
             continue
         for place in places(workflow["parsed"]):
-            if place.combinations is None:
-                # An expression-built matrix cannot be filled in; it only
-                # matters when a step might name Miri.
-                if _NAMES_MIRI.search(repr(place.steps)):
-                    scan.is_resolved = False
-                continue
-            for combination in place.combinations:
-                scan.sources.extend(
-                    f"{workflow['path']} {step.source}"
-                    for step in step_runs(place, combination)
-                    if any(_MIRI_COMMAND.search(line) for line in step.lines)
-                )
+            _place_miri(workflow["path"], place, scan)
 
 
 def _whitaker_run(invocation: Invocation) -> WhitakerRun:
