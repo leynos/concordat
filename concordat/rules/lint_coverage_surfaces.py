@@ -110,21 +110,58 @@ def _default_selection(
         not when `default-members` holds a glob).
     """
     root = reader.toml(reader.checkout / key) or {}
-    workspace = table(root.get("workspace"))
-    names = sorted(p["name"] for p in packages)
-    default_members = workspace.get("default-members")
+    default_members = table(root.get("workspace")).get("default-members")
     if isinstance(default_members, list):
-        entries = [m for m in default_members if isinstance(m, str)]
-        if any(_GLOB_CHARACTERS & set(entry) for entry in entries):
-            return names, False
-        base = posixpath.dirname(key)
-        joined = (posixpath.normpath(posixpath.join(base, entry)) for entry in entries)
-        wanted = {"" if path == "." else path for path in joined}
-        return sorted(p["name"] for p in packages if p["directory"] in wanted), True
+        return _listed_members(
+            key, list(typ.cast("list[object]", default_members)), packages
+        )
     root_name = table(root.get("package")).get("name")
     if isinstance(root_name, str):
         return [root_name], True
-    return names, True
+    return sorted(p["name"] for p in packages), True
+
+
+def _listed_members(
+    key: str, default_members: list[object], packages: list[PackageFacts]
+) -> tuple[list[str], bool]:
+    """Return the packages a `default-members` list names, and whether it is known.
+
+    Returns
+    -------
+    tuple[list[str], bool]
+        The named packages, and False when an entry is a glob (every package is
+        then returned, for the caller to treat as unknown).
+    """
+    entries = [m for m in default_members if isinstance(m, str)]
+    if any(_GLOB_CHARACTERS & set(entry) for entry in entries):
+        return sorted(p["name"] for p in packages), False
+    base = posixpath.dirname(key)
+    joined = (posixpath.normpath(posixpath.join(base, entry)) for entry in entries)
+    wanted = {"" if path == "." else path for path in joined}
+    return sorted(p["name"] for p in packages if p["directory"] in wanted), True
+
+
+def _surface(reader: Reader, key: str, packages: list[PackageFacts]) -> Surface:
+    """Return the surface a set of packages makes under *key*.
+
+    Returns
+    -------
+    Surface
+        What a lint gate must cover there.
+    """
+    features = _surface_features(reader, packages)
+    selected, is_known = _default_selection(reader, key, packages)
+    return {
+        "by_manifest": {p["manifest"]: p["name"] for p in packages},
+        "default_selects": selected,
+        "is_default_known": is_known,
+        "manifest": key,
+        "packages": sorted(p["name"] for p in packages),
+        "manifests": sorted(p["manifest"] for p in packages),
+        "features": sorted(features - {"default"}),
+        "has_default": "default" in features,
+        "has_library": any(_has_library(reader, p) for p in packages),
+    }
 
 
 def read_surfaces(reader: Reader) -> list[Surface]:
@@ -144,22 +181,9 @@ def read_surfaces(reader: Reader) -> list[Surface]:
     grouped: dict[str, list[PackageFacts]] = {}
     for package in read_packages(reader):
         grouped.setdefault(_surface_key(package), []).append(package)
-    surfaces: list[Surface] = []
-    for key, packages in sorted(grouped.items()):
-        features = _surface_features(reader, packages)
-        selected, is_known = _default_selection(reader, key, packages)
-        surfaces.append({
-            "by_manifest": {p["manifest"]: p["name"] for p in packages},
-            "default_selects": selected,
-            "is_default_known": is_known,
-            "manifest": key,
-            "packages": sorted(p["name"] for p in packages),
-            "manifests": sorted(p["manifest"] for p in packages),
-            "features": sorted(features - {"default"}),
-            "has_default": "default" in features,
-            "has_library": any(_has_library(reader, p) for p in packages),
-        })
-    return surfaces
+    return [
+        _surface(reader, key, packages) for key, packages in sorted(grouped.items())
+    ]
 
 
 def surface_of(manifest: str, surfaces: list[Surface]) -> str | None:
