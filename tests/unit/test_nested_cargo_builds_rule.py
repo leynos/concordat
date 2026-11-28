@@ -701,6 +701,12 @@ UNREADABLE = {("EN-001", "tests/cli.rs")}
             id="called-after-an-unreadable-recursion",
         ),
         pytest.param(
+            "test:\n\t$(MAKE) warmup && $(MAKE) -f Makefile run-tests & "
+            "cargo nextest run\n\n" + WARM,
+            NC013,
+            id="backgrounded-past-an-unreadable-call",
+        ),
+        pytest.param(
             "test: warmup\ntest: run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
             NC013,
             id="separate-rules-for-one-target",

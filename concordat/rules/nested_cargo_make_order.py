@@ -42,23 +42,23 @@ def _is_quoted(text: str, offset: int) -> bool:
     return before.count('"') % 2 == 1 or before.count("'") % 2 == 1
 
 
-def _chain_goals(piece: str) -> list[str]:
+def _chain_goals(piece: str, head: str) -> list[str]:
     """Return the leading `make` calls of one `;`-separated piece, in order.
 
     A `&&` chain ends at its first part that is not a `make` call, because what
-    follows a command that may fail may be skipped.
+    follows a command that may fail may be skipped. A lone `&` anywhere in the
+    whole piece, even past the point where a test command starts, backgrounds
+    the list it ends, so none of its calls is done before what follows.
 
     Returns
     -------
     list[str]
-        The goals the piece always calls, in order.
+        The goals the piece always calls before *head* ends, in order.
     """
-    # A lone `&` backgrounds the whole list it ends, so nothing in it is done
-    # before what follows.
     if _BACKGROUND.search(piece):
         return []
     goals: list[str] = []
-    for part in piece.split("&&"):
+    for part in head.split("&&"):
         call = _MAKE_CALL.match(part)
         if call is None:
             break
@@ -75,15 +75,18 @@ def line_goals(text: str) -> list[str]:
         The goals, in order. A piece after `||`, one inside quotes and a line
         with a shell branch contribute none.
     """
-    head = text[: _first_start(text)]
-    if _CONTROL_FLOW.search(head):
+    limit = _first_start(text)
+    if _CONTROL_FLOW.search(text[:limit]):
         return []
-    pieces = [
-        piece.group()
-        for piece in re.finditer(r"[^;]+", head)
-        if not _is_quoted(head, piece.start()) and "||" not in piece.group()
-    ]
-    return [goal for piece in pieces for goal in _chain_goals(piece)]
+    found: list[str] = []
+    for piece in re.finditer(r"[^;]+", text):
+        if piece.start() >= limit:
+            break
+        if _is_quoted(text, piece.start()) or "||" in piece.group():
+            continue
+        head = text[piece.start() : min(piece.end(), limit)]
+        found.extend(_chain_goals(piece.group(), head))
+    return found
 
 
 def plain_prerequisites(rule: MakeRule) -> list[str]:
