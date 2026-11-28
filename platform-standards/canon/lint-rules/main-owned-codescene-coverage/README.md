@@ -40,7 +40,7 @@ One main-owned publisher writes the baseline and uploads:
   baseline wins. An expression is refused too, because it may evaluate true on
   the very push it matters for.
 
-Every uploader names the token in at most two places:
+An uploader names the token only in two kinds of place:
 
 - A workflow that uploads to CodeScene may name `CS_ACCESS_TOKEN` only in the
   check step's command and in the upload action's `access-token` input. Every
