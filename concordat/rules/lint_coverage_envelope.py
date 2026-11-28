@@ -20,6 +20,7 @@ that manifest's. A command that targets a manifest no surface holds is unplaced.
 
 from __future__ import annotations
 
+import fnmatch
 import typing as typ
 
 from .lint_coverage_commands import Run
@@ -126,6 +127,20 @@ def _is_unknown_default(run: Run, manifest: str, surface: Surface) -> bool:
     )
 
 
+def _matches(package: str, patterns: list[str]) -> bool:
+    """Return whether a package name matches one of Cargo's package patterns.
+
+    `-p` and `--exclude` take glob patterns (`b*`, `crate-?`, `[ab]`); a plain
+    name is a pattern that matches itself.
+
+    Returns
+    -------
+    bool
+        Whether any pattern matches.
+    """
+    return any(fnmatch.fnmatchcase(package, pattern) for pattern in patterns)
+
+
 def _selected(run: Run, manifest: str, surface: Surface) -> list[str]:
     """Return the packages of the surface a run selects, as Cargo does.
 
@@ -140,9 +155,9 @@ def _selected(run: Run, manifest: str, surface: Surface) -> list[str]:
         The names of the selected packages.
     """
     if run["workspace"]:
-        return [p for p in surface["packages"] if p not in run["excludes"]]
+        return [p for p in surface["packages"] if not _matches(p, run["excludes"])]
     if run["packages"]:
-        return sorted(run["packages"])
+        return [p for p in surface["packages"] if _matches(p, run["packages"])]
     member = surface["by_manifest"].get(manifest)
     if member is not None and manifest != surface["manifest"]:
         return [member]

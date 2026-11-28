@@ -152,6 +152,24 @@ test_an_excluded_member_is_not_covered_by_a_workspace_run if {
 	not contains(msg, "feature a/")
 }
 
+test_an_exclude_pattern_leaves_out_every_package_it_matches if {
+	fixture := data.fixtures.designed_workspace_run_excludes_a_pattern
+	ids(fixture) == {"LC-002"}
+	[msg] := messages_of(fixture, "LC-002")
+	contains(msg, "feature b/fast")
+	not contains(msg, "feature a/")
+}
+
+test_the_default_set_is_judged_for_each_package if {
+	fixture := data.fixtures.designed_default_set_checked_for_one_package_only
+	ids(fixture) == {"LC-002"}
+	[msg] := messages_of(fixture, "LC-002")
+	contains(msg, "the default feature set of b")
+	not contains(msg, "the default feature set of a")
+	not contains(msg, "feature b/")
+	not contains(msg, "feature a/")
+}
+
 test_default_members_with_a_glob_leave_a_bare_run_indeterminate if {
 	ids(data.fixtures.designed_default_members_glob_is_not_expanded) == {"EN-001"}
 }

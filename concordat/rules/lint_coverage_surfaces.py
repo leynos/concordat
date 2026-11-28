@@ -32,8 +32,10 @@ class Surface(typ.TypedDict):
     `manifest` is the workspace root's manifest, or the package's own when it is
     in no workspace. `features` holds every declared feature name except
     `default`; `has_default` says `default` is declared; `has_library` says some
-    package has a library target. `by_manifest` names the package each manifest
-    declares, since a command run at a member's manifest selects that member.
+    package has a library target. `default_packages` names the packages that
+    declare `default`, whose default feature sets a gate must check.
+    `by_manifest` names the package each manifest declares, since a command run
+    at a member's manifest selects that member.
     `default_selects` lists the packages a command with no `-p` or `--workspace`
     selects at the surface's own manifest, and `is_default_known` is false when
     `default-members` holds a pattern the audit does not expand.
@@ -44,6 +46,7 @@ class Surface(typ.TypedDict):
     manifests: list[str]
     features: list[str]
     has_default: bool
+    default_packages: list[str]
     has_library: bool
     by_manifest: dict[str, str]
     default_selects: list[str]
@@ -160,6 +163,9 @@ def _surface(reader: Reader, key: str, packages: list[PackageFacts]) -> Surface:
         "manifests": sorted(p["manifest"] for p in packages),
         "features": sorted(features - {"default"}),
         "has_default": "default" in features,
+        "default_packages": sorted(
+            p["name"] for p in packages if "default" in _declared_features(reader, p)
+        ),
         "has_library": any(_has_library(reader, p) for p in packages),
     }
 

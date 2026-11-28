@@ -53,6 +53,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -174,6 +177,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -271,6 +277,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -368,6 +377,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -493,6 +505,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -592,6 +607,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -692,6 +710,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -792,6 +813,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -889,6 +913,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -986,6 +1013,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1083,6 +1113,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1180,6 +1213,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1277,6 +1313,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1374,6 +1413,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1471,6 +1513,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1544,6 +1589,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1641,6 +1689,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1739,6 +1790,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1839,6 +1893,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -1936,6 +1993,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -2009,6 +2069,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -2084,6 +2147,10 @@
             "b/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a",
+            "b"
+          ],
           "has_library": true
         }
       ],
@@ -2186,6 +2253,10 @@
             "b/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a",
+            "b"
+          ],
           "has_library": true
         }
       ],
@@ -2312,6 +2383,10 @@
             "b/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "app",
+            "b"
+          ],
           "has_library": true
         }
       ],
@@ -2410,6 +2485,10 @@
             "b/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a",
+            "b"
+          ],
           "has_library": true
         }
       ],
@@ -2476,6 +2555,245 @@
       },
       "unreadable": []
     },
+    "designed_workspace_run_excludes_a_pattern": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "a/fast",
+            "a/slow",
+            "b/fast",
+            "b/slow"
+          ],
+          "has_default": true,
+          "default_packages": [
+            "a",
+            "b"
+          ],
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "narrows": true,
+          "excludes": [
+            "b*"
+          ],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a"
+          ],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_default_set_checked_for_one_package_only": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "a/fast",
+            "a/slow",
+            "b/fast",
+            "b/slow"
+          ],
+          "has_default": true,
+          "default_packages": [
+            "a",
+            "b"
+          ],
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "workspace": false,
+          "packages": [
+            "a"
+          ],
+          "no_deps": false,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a"
+          ],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "clippy",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": true,
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "workspace": false,
+          "packages": [
+            "b"
+          ],
+          "no_deps": false,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:6 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
     "designed_default_members_glob_is_not_expanded": {
       "schema_version": 1,
       "kind": "policy-input/gate-lint-coverage",
@@ -2508,6 +2826,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -2605,6 +2926,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -2699,6 +3023,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -2796,6 +3123,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -2917,6 +3247,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3015,6 +3348,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3112,6 +3448,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3209,6 +3548,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3334,6 +3676,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3478,6 +3823,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3599,6 +3947,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3720,6 +4071,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3817,6 +4171,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -3914,6 +4271,9 @@
             "a/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],
@@ -4010,6 +4370,9 @@
             "app/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "app"
+          ],
           "has_library": true
         }
       ],
@@ -4106,6 +4469,9 @@
             "app/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "app"
+          ],
           "has_library": true
         }
       ],
@@ -4201,6 +4567,9 @@
             "app/slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "app"
+          ],
           "has_library": true
         }
       ],
@@ -4297,6 +4666,9 @@
             "test-util"
           ],
           "has_default": true,
+          "default_packages": [
+            "ext"
+          ],
           "has_library": true
         }
       ],
@@ -4389,6 +4761,9 @@
             "test-util"
           ],
           "has_default": true,
+          "default_packages": [
+            "ext"
+          ],
           "has_library": true
         }
       ],
@@ -4481,6 +4856,9 @@
             "test-util"
           ],
           "has_default": true,
+          "default_packages": [
+            "ext"
+          ],
           "has_library": true
         }
       ],
@@ -4575,6 +4953,9 @@
             "test-util"
           ],
           "has_default": true,
+          "default_packages": [
+            "ext"
+          ],
           "has_library": true
         }
       ],
@@ -4644,6 +5025,9 @@
             "test-util"
           ],
           "has_default": true,
+          "default_packages": [
+            "ext"
+          ],
           "has_library": true
         }
       ],
@@ -4713,6 +5097,9 @@
             "test-util"
           ],
           "has_default": true,
+          "default_packages": [
+            "ext"
+          ],
           "has_library": true
         }
       ],
@@ -4803,6 +5190,9 @@
             "test-util"
           ],
           "has_default": true,
+          "default_packages": [
+            "ext"
+          ],
           "has_library": true
         }
       ],
@@ -4918,6 +5308,9 @@
             "test-util"
           ],
           "has_default": true,
+          "default_packages": [
+            "ext"
+          ],
           "has_library": true
         }
       ],
@@ -5032,6 +5425,9 @@
             "slow"
           ],
           "has_default": true,
+          "default_packages": [
+            "a"
+          ],
           "has_library": true
         }
       ],

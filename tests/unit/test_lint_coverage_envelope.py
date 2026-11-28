@@ -132,6 +132,8 @@ class TestSurfaces:
             ("cargo clippy --workspace", ["app", "b"]),
             ("cargo clippy --workspace --exclude b", ["app"]),
             ("cargo clippy -p b", ["b"]),
+            ("cargo clippy --workspace --exclude 'ap?'", ["b"]),
+            ("cargo clippy -p 'b*'", ["b"]),
             ("cargo clippy --manifest-path b/Cargo.toml", ["b"]),
         ],
     )

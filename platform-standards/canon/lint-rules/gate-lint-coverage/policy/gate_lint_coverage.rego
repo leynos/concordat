@@ -223,15 +223,18 @@ selects_package(_, d) if not contains(d, "/")
 
 selects_package(r, d) if split(d, "/")[0] in r.selected
 
-# The default feature set is checked by a command that does not switch it off.
-default_checked(surface, tool) if {
+# A package's default feature set is checked by a command that selects the
+# package and does not switch the defaults off.
+default_checked(surface, tool, name) if {
 	some r in runs_for(surface, tool)
 	r.no_default_features == false
+	name in r.selected
 }
 
-default_checked(surface, tool) if {
+default_checked(surface, tool, name) if {
 	some r in runs_for(surface, tool)
 	r.all_features == true
+	name in r.selected
 }
 
 uncovered_features(surface, tool) := sort(declared(surface) - covered(surface, tool))
@@ -252,18 +255,12 @@ deny contains finding("LC-002", severity, "noncompliant", surface.manifest, msg)
 	)
 }
 
-# The default set counts only for a surface that declares a `default` feature.
-not_default_checked(surface, tool) := ["the default feature set"] if {
-	surface.has_default == true
-	not default_checked(surface, tool)
-}
-
-not_default_checked(surface, tool) := [] if surface.has_default == false
-
-not_default_checked(surface, tool) := [] if {
-	surface.has_default == true
-	default_checked(surface, tool)
-}
+# The default set counts only for a package that declares a `default` feature,
+# and is judged for each such package.
+not_default_checked(surface, tool) := sort([sprintf("the default feature set of %s", [name]) |
+	some name in surface.default_packages
+	not default_checked(surface, tool, name)
+])
 
 describe_gaps(missing, default_missing) := concat(", ", array.concat(
 	[sprintf("feature %s", [f]) | some f in missing],
