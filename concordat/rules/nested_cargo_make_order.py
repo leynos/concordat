@@ -32,7 +32,9 @@ _TEST_COMMAND: typ.Final = re.compile(
     r"\b(?:cargo(?:-\w+)?\s+(?:\S+\s+)*?(?:nextest|test|bench|llvm-cov|tarpaulin)"
     r"|nextest|pytest)\b"
 )
-_COMPILE_ONLY: typ.Final = re.compile(r"--no-run\b|\bnextest\s+archive\b")
+_COMPILE_ONLY: typ.Final = re.compile(
+    r"--no-run\b|\bcargo(?:\s+nextest|-nextest(?:\s+nextest)?)\s+archive\b"
+)
 # A variable (other than `$(MAKE)`) anywhere on the line may expand to a test
 # command: `env $(RUNNER)`, `$(CARGO) test`.
 _VARIABLE: typ.Final = re.compile(r"\$[({](?!MAKE[)}])|\$[A-Za-z_]")

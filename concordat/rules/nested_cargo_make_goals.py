@@ -59,14 +59,13 @@ class MakeGoals:
 
 def _prerequisite_closure(goal: str, index: Index) -> set[str]:
     """Return every goal *goal* depends on through prerequisites, at any depth."""
-    pending, seen = [goal], set[str]()
+    seen: set[str] = set()
+    pending = [goal]
     while pending:
-        current = pending.pop()
-        for rule in index.get(current, []):
-            for name in plain_prerequisites(rule):
-                if name not in seen:
-                    seen.add(name)
-                    pending.append(name)
+        rules = index.get(pending.pop(), [])
+        fresh = {n for rule in rules for n in plain_prerequisites(rule)} - seen
+        seen |= fresh
+        pending.extend(fresh)
     return seen
 
 
