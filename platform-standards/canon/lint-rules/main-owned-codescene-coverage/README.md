@@ -19,10 +19,9 @@ Pull-request lanes keep coverage local:
   lane that omits it publishes the report; the rule reads the effective value.
 - Pull-request workflows do not invoke a CodeScene action or a direct
   `cs-coverage check`/`upload` command, and do not receive `CS_ACCESS_TOKEN`:
-  the rule reads the token in `env` at workflow, job or step level and as an
-  action input. This clause does not read `run` bodies: a reference there is
-  flagged only by the token-placement clause below, and only when the same
-  workflow has an explicit upload.
+  the rule reads the token in `env` at workflow, job or step level, as an
+  action input, and in a `run` body. The token-placement clause below applies
+  as well when the same workflow has an explicit upload.
 
 One main-owned publisher writes the baseline and uploads:
 

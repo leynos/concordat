@@ -676,3 +676,10 @@ test_an_exemption_does_not_cover_the_token_clause if {
   some f in findings
   contains(f.msg, "names CS_ACCESS_TOKEN outside")
 }
+
+# A pull-request `run` body that names the token receives it as surely as an
+# `env` binding does (https://github.com/leynos/concordat/issues/438).
+test_a_pull_request_run_body_naming_the_token_is_noncompliant if {
+  findings := policy.deny with input as data.fixtures.pr_token_in_a_run_body
+  "pull-request workflow receives CS_ACCESS_TOKEN" in {f.msg | some f in findings}
+}

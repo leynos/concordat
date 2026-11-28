@@ -457,9 +457,7 @@ It requires that:
 
 - pull-request coverage uses the main-derived local ratchet, sets
   `publish-artefact: 'false'`, and neither invokes CodeScene nor binds
-  `CS_ACCESS_TOKEN` in an `env` block or passes it as an action input (this
-  clause does not read `run` bodies; the token-placement clause flags one only
-  when the same workflow has an explicit upload);
+  `CS_ACCESS_TOKEN` in an `env` block, a `run` body or an action input;
 - exactly one workflow triggered by a push to `main` (optionally alongside
   `workflow_dispatch`) writes that baseline and uploads, under a `concurrency`
   block that queues rather than cancels. The uploader's `mode` defaults to

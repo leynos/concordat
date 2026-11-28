@@ -561,6 +561,15 @@ workflow_exposes_token(workflow) if {
   has_token_input(inputs)
 }
 
+# A `run` body naming the token puts the secret in a shell process that code
+# a pull request controls can read, so it counts as receiving the token.
+workflow_exposes_token(workflow) if {
+  some step in workflow_steps(workflow)
+  run := object.get(step, "run", null)
+  is_string(run)
+  has_token_reference(run)
+}
+
 workflow_exposes_token(workflow) if {
   some step in workflow_steps(workflow)
   is_codescene_step(step)
