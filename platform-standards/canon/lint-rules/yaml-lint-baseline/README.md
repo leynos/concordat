@@ -92,10 +92,13 @@ policy's variable expansion, so `$(SPECIAL): ...` with
 `SPECIAL := .IGNORE other` is read as `.IGNORE`. A rule whose target names a
 variable the policy cannot resolve (one assigned twice or under a condition,
 such as a `$(TOOLS):` rule) leaves the closure unproven, because it could be
-either. A target split across plain rules (`lint: a b` and, further down,
-`lint: c`) is proven too, because Make merges their prerequisites; it is
-unproven when more than one rule for any target the closure reaches carries a
-recipe, since Make keeps the later recipe and warns.
+either. The expansion substitutes the values the Makefile facts record; it does
+not model when Make reads a `:=` assignment, so a `:=` whose value names a
+variable assigned on a later line is outside what this audit proves. A target
+split across plain rules (`lint: a b` and, further down, `lint: c`) is proven
+too, because Make merges their prerequisites; it is unproven when more than one
+rule for any target the closure reaches carries a recipe, since Make keeps the
+later recipe and warns.
 
 The checks that read the Makefile prove the shape of the lint path, not that
 the tools run to completion on the repository's YAML; that is what the lint
