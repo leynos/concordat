@@ -127,15 +127,25 @@ def _provenance(masked: str, spans: list[Span]) -> dict[str, Origins]:
     return found
 
 
+def _is_manifest_binding(text: str, masked: str, span: Span) -> str | None:
+    """Return the name a statement binds to a manifest path, if it does.
+
+    Returns
+    -------
+    str | None
+        The bound name when the statement is a `let` that holds a `"Cargo.toml"`
+        literal as code and reads nothing; otherwise None.
+    """
+    bound = _LET_NAME.match(masked, span[0])
+    if bound is None or _READ_CALL.search(masked, span[0], span[1]):
+        return None
+    return bound.group("name") if _holds_manifest(text, masked, span) else None
+
+
 def _manifest_names(text: str, masked: str, spans: list[Span]) -> set[str]:
     """Return the names bound to a manifest path by a statement that reads nothing."""
-    names: set[str] = set()
-    for span in spans:
-        bound = _LET_NAME.match(masked, span[0])
-        is_path = _holds_manifest(text, masked, span)
-        if bound and is_path and not _READ_CALL.search(masked, span[0], span[1]):
-            names.add(bound.group("name"))
-    return names
+    names = {_is_manifest_binding(text, masked, span) for span in spans}
+    return {name for name in names if name is not None}
 
 
 def _first_argument(text: str, masked: str, call: re.Match[str]) -> tuple[str, str]:

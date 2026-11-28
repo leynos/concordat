@@ -651,8 +651,13 @@ NC013 = {("NC-013", "tests/cli.rs")}
         ),
         pytest.param(
             "test: warmup run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="unordered-sibling-prerequisites",
+        ),
+        pytest.param(
+            "test: warmup run\n\ttrue\n\nrun: warmup\n\tcargo nextest run\n\n" + WARM,
             NONE,
-            id="prerequisite-before-one-that-tests",
+            id="a-sibling-that-depends-on-the-warm-up",
         ),
     ],
 )
