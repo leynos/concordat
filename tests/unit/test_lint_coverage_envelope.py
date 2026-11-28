@@ -162,8 +162,10 @@ class TestSurfaces:
             (f'{APP}edition = "2024"\n[workspace]\nmembers = ["a"]\n', "3"),
             (f'{APP}[workspace]\nmembers = ["a"]\n', "1"),
             (
-                f'{APP}edition.workspace = true\n[workspace]\nmembers = ["a"]\n'
-                '[workspace.package]\nedition = "2021"\n',
+                (
+                    f'{APP}edition.workspace = true\n[workspace]\nmembers = ["a"]\n'
+                    '[workspace.package]\nedition = "2021"\n'
+                ),
                 "2",
             ),
             (
