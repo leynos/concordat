@@ -376,10 +376,10 @@ def _step_directory(step: StepRun) -> str | None:
         The normalised directory, or None when the audit cannot follow it.
     """
     given = step.directory
-    if given is None or "$" in given or posixpath.isabs(given):
+    if given is None or "$" in given:
         return None
     directory = posixpath.normpath(given.strip())
-    if directory == ".." or directory.startswith("../"):
+    if posixpath.isabs(directory) or directory.split("/")[0] == "..":
         return None
     return "" if directory == "." else directory
 
