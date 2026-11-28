@@ -258,6 +258,16 @@ class TestReport:
                 r"already \\\| escaped",
                 id="an-escape-is-not-reapplied",
             ),
+            pytest.param(
+                "migration: https://github.com/leynos/shared-actions/issues/588",
+                "migration: <https://github.com/leynos/shared-actions/issues/588>",
+                id="a-bare-url-is-bracketed",
+            ),
+            pytest.param(
+                "see https://example.test/a.",
+                "see <https://example.test/a>.",
+                id="sentence-punctuation-stays-outside-the-url",
+            ),
         ],
     )
     def test_free_text_cannot_break_the_table(

@@ -45,6 +45,16 @@ LOCK = """\
 version = 4
 
 [[package]]
+name = "demo"
+version = "0.1.0"
+dependencies = ["pyo3", "pyo3-build-config", "serde-pyobject"]
+
+[[package]]
+name = "native"
+version = "0.1.0"
+dependencies = ["pyo3", "pyo3-build-config"]
+
+[[package]]
 name = "pyo3"
 version = "0.28.3"
 
@@ -72,12 +82,22 @@ CATCH_ALL = """\
 
 
 def dependabot(
-    groups: str, *, ecosystem: str = "cargo", directory: str = "/", extra: str = ""
+    groups: str,
+    *,
+    ecosystem: str = "cargo",
+    directory: str = "/",
+    directories: str | None = None,
+    extra: str = "",
 ) -> str:
     """Return a Dependabot configuration with one entry and the given groups."""
+    scope = (
+        f"    directories: {directories}\n"
+        if directories is not None
+        else f"    directory: {directory}\n"
+    )
     return (
         "version: 2\nupdates:\n"
-        f"  - package-ecosystem: {ecosystem}\n    directory: {directory}\n"
+        f"  - package-ecosystem: {ecosystem}\n{scope}"
         f"    schedule:\n      interval: daily\n    groups:\n{groups}{extra}"
     )
 
@@ -143,18 +163,49 @@ def with_files(files: dict[str, str], **overrides: str | None) -> dict[str, str]
 
 
 SERDE_LOCK = LOCK + '\n[[package]]\nname = "serde-pyobject"\nversion = "0.8.0"\n'
-SERDE_CARGO = CARGO + 'pyo3-serde = { package = "serde-pyobject", version = "0.8.0" }\n'
-PYTEST_PYPROJECT = """\
-[project]
+UV_LOCK = """\
+version = 1
+revision = 1
+requires-python = ">=3.13"
+
+[[package]]
 name = "demo"
 version = "0.1.0"
-dependencies = ["maturin==1.13.3", "pytest==9.1.1", "pytest-bdd==9.0.0"]
+source = { virtual = "." }
+dependencies = [
+    { name = "maturin" },
+]
+
+[[package]]
+name = "maturin"
+version = "1.13.3"
+source = { registry = "https://pypi.org/simple" }
 """
+SERDE_CARGO = CARGO + 'pyo3-serde = { package = "serde-pyobject", version = "0.8.0" }\n'
 MATURIN_PYPROJECT = """\
 [project]
 name = "demo"
 version = "0.1.0"
 dependencies = ["maturin{spec}"]
+"""
+PYLINT_PYPROJECT = """\
+[project]
+name = "demo"
+version = "0.1.0"
+
+[dependency-groups]
+dev = ["pylint==4.0.9", "astroid==4.0.4"]
+"""
+PYLINT_LOCK = """\
+version = 1
+
+[[package]]
+name = "pylint"
+version = "4.0.9"
+
+[[package]]
+name = "astroid"
+version = "4.0.4"
 """
 NESTED_WORKSPACE = """\
 [workspace]
@@ -192,6 +243,11 @@ NETSUKE_LOCK = """\
 version = 4
 
 [[package]]
+name = "demo"
+version = "0.1.0"
+dependencies = ["ortho_config", "fluent-bundle"]
+
+[[package]]
 name = "ortho_config"
 version = "0.9.0"
 
@@ -203,23 +259,12 @@ FLUENT_GROUP = """\
       fluent:
         patterns: ['ortho_config', 'fluent-bundle']
 """
-
 SHADOWING = """\
       pyo3-only:
         patterns: ['pyo3']
       family:
         patterns: ['pyo3', 'pyo3-build-config']
 """
-
-ROOT_WORKSPACE = """\
-[workspace]
-members = ["native"]
-
-[workspace.dependencies]
-pyo3 = "0.28.3"
-pyo3-build-config = "0.28.3"
-"""
-
 SURFACES = (
     "language:\n  rust:\n    surfaces:\n"
     "      - path: rust/Cargo.toml\n      - path: rust/native/Cargo.toml\n"
@@ -228,6 +273,164 @@ PIP_ENTRY = (
     "  - package-ecosystem: pip\n    directory: /\n"
     "    schedule:\n      interval: daily\n    groups:\n"
 )
+UV_ENTRY = PIP_ENTRY.replace("package-ecosystem: pip", "package-ecosystem: uv")
+SERDE_IGNORE = (
+    "    ignore:\n      - dependency-name: {name}\n"
+    "        update-types: ['version-update:semver-major']\n"
+)
+SERDE_A = (
+    '[package]\nname = "a"\nversion = "0.1.0"\n[dependencies]\nserde = "1.0.100"\n'
+)
+SERDE_B = (
+    '[package]\nname = "b"\nversion = "0.1.0"\n[dependencies]\nserde = "1.0.200"\n'
+)
+EXCEPTION = (
+    "dependencies:\n  family_exceptions:\n"
+    "    - relationship: pyo3-build-config-family\n"
+    "      rationale: the extension stays on the 0.28 generation\n"
+    "      review_trigger: review when PyO3 0.30 ships\n"
+)
+INCOMPLETE_EXCEPTION = (
+    "dependencies:\n  family_exceptions:\n"
+    "    - relationship: pyo3-build-config-family\n"
+    "      rationale: the extension stays on the 0.28 generation\n"
+)
+PYO3_029_CARGO = CARGO.replace("0.28.3", "0.29.1")
+PYO3_029_LOCK = LOCK.replace("0.28.3", "0.29.1")
+PROTECTED_BOUND = """\
+dependencies:
+  protected_bounds:
+    - relationship: pyo3-build-config-family
+      package: pyo3
+      bound: "{bound}"
+      rationale: PyO3 0.29 changed the build-config interface
+      review_trigger: review when the extension migrates to 0.30
+"""
+DERIVED_SATISFIES = """\
+dependencies:
+  derived_inputs:
+    - id: pyo3-version
+      comparator: satisfies
+      canonical:
+        manifest: Cargo.toml
+        package: pyo3
+      selectors:
+        - kind: makefile-variable
+          path: Makefile
+          variable: PYO3_VERSION
+      rationale: every tool that compiles the extension uses one PyO3 line
+      review_trigger: review when PyO3 0.29 is adopted
+"""
+DERIVED_EQUAL = """\
+dependencies:
+  derived_inputs:
+    - id: maturin-version
+      comparator: equal
+      canonical:
+        manifest: pyproject.toml
+        package: maturin
+      selectors:
+        - kind: makefile-variable
+          path: Makefile
+          variable: MATURIN_VERSION
+      rationale: the wheel template and the build use one maturin release
+      review_trigger: review when maturin 1.14 is adopted
+"""
+ACTION_SHA = "a" * 40
+REVIEWED_SHA = "b" * 40
+ACTION_PIN = f"""\
+dependencies:
+  derived_inputs:
+    - id: checkout-pin
+      comparator: equal
+      canonical:
+        action:
+          uses: actions/checkout
+          path: .github/workflows/ci.yml
+      reviewed:
+        - sha: {REVIEWED_SHA}
+          provenance: reviewed in the pinning change
+      rationale: the checkout action is pinned to one reviewed commit
+      review_trigger: review when the action is upgraded
+"""
+WORKFLOW = f"""\
+name: ci
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{ACTION_SHA}
+"""
+MAKEFILE = """\
+PYO3_VERSION := {pyo3}
+MATURIN_VERSION := {maturin}
+
+.PHONY: check
+check:
+\t@echo compiling pyo3 $(PYO3_VERSION) with maturin $(MATURIN_VERSION)
+"""
+MULTI_ECOSYSTEM = """\
+version: 2
+multi-ecosystem-groups:
+  all:
+    schedule:
+      interval: daily
+    patterns: ['*']
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    multi-ecosystem-group: all
+    schedule:
+      interval: daily
+"""
+CONTRACT_UNKNOWN = "dependencies:\n  family_contracts:\n    - does-not-exist\n"
+FLUENT_SKEW_CARGO = NETSUKE_CARGO.replace(
+    'fluent-bundle = "0.16.0"', 'fluent-bundle = "0.17.0"'
+)
+FLUENT_SKEW_LOCK = (
+    NETSUKE_LOCK + '\n[[package]]\nname = "fluent-bundle"\nversion = "0.17.0"\n'
+)
+# The declaration resolves 0.8.0 while the owner's edge names the 0.9.0 entry.
+BRIDGE_SKEW_LOCK = """\
+version = 4
+
+[[package]]
+name = "demo"
+version = "0.1.0"
+dependencies = ["pyo3", "pyo3-build-config", "serde-pyobject 0.9.0"]
+
+[[package]]
+name = "pyo3"
+version = "0.28.3"
+
+[[package]]
+name = "pyo3-build-config"
+version = "0.28.3"
+
+[[package]]
+name = "serde-pyobject"
+version = "0.8.0"
+
+[[package]]
+name = "serde-pyobject"
+version = "0.9.0"
+"""
+
+PYTEST_PYPROJECT = """\
+[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["maturin==1.13.3", "pytest==9.1.1", "pytest-bdd==9.0.0"]
+"""
+ROOT_WORKSPACE = """\
+[workspace]
+members = ["native"]
+
+[workspace.dependencies]
+pyo3 = "0.28.3"
+pyo3-build-config = "0.28.3"
+"""
 MULTI_DEFINITION = (
     "multi-ecosystem-groups:\n  maturin-pyo3:\n    schedule:\n      interval: daily\n"
 )
@@ -259,26 +462,6 @@ JOIN_MATURIN_ELSEWHERE = (
 )
 JOIN_MATURIN_MISSING = (
     "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['pytest']\n"
-)
-SERDE_IGNORE = (
-    "    ignore:\n      - dependency-name: {name}\n        versions: ['>=0.9']\n"
-)
-SERDE_A = (
-    '[package]\nname = "a"\nversion = "0.1.0"\n[dependencies]\nserde = "1.0.100"\n'
-)
-SERDE_B = (
-    '[package]\nname = "b"\nversion = "0.1.0"\n[dependencies]\nserde = "1.0.200"\n'
-)
-EXCEPTION = (
-    "dependencies:\n  family_exceptions:\n"
-    "    - relationship: pyo3-build-config-family\n"
-    "      rationale: the extension stays on the 0.28 generation\n"
-    "      review_trigger: review when PyO3 0.30 ships\n"
-)
-INCOMPLETE_EXCEPTION = (
-    "dependencies:\n  family_exceptions:\n"
-    "    - relationship: pyo3-build-config-family\n"
-    "      rationale: the extension stays on the 0.28 generation\n"
 )
 
 SCENARIOS: dict[str, dict[str, str]] = {
@@ -341,25 +524,28 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "maturin_exact_pin": {
         **base(),
         "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
+        "uv.lock": UV_LOCK,
         ".github/dependabot.yml": dependabot(NARROW_FAMILY + CATCH_ALL)
-        + PIP_ENTRY
+        + UV_ENTRY
         + CATCH_ALL,
     },
     # An ignore rule on a member of an independently versioned tuple protects it.
     "maturin_pyo3_ignored": {
         **base(),
         "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
+        "uv.lock": UV_LOCK,
         ".github/dependabot.yml": dependabot(
             NARROW_FAMILY + CATCH_ALL, extra=SERDE_IGNORE.format(name="pyo3")
         )
-        + PIP_ENTRY
+        + UV_ENTRY
         + CATCH_ALL,
     },
     "maturin_bounded": {
         **base(),
         "pyproject.toml": MATURIN_PYPROJECT.format(spec=">=1.13.3,<2.0.0"),
+        "uv.lock": UV_LOCK,
         ".github/dependabot.yml": dependabot(NARROW_FAMILY + CATCH_ALL)
-        + PIP_ENTRY
+        + UV_ENTRY
         + CATCH_ALL,
     },
     # One multi-ecosystem group takes maturin and PyO3 into a single pull
@@ -426,6 +612,12 @@ SCENARIOS: dict[str, dict[str, str]] = {
         "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
         ".github/dependabot.yml": dependabot(CATCH_ALL, ecosystem="pip"),
     },
+    # A catalog relationship that records no migration still renders its finding.
+    "pylint_catch_all": {
+        "pyproject.toml": PYLINT_PYPROJECT,
+        "uv.lock": PYLINT_LOCK,
+        ".github/dependabot.yml": dependabot(CATCH_ALL, ecosystem="uv"),
+    },
     # Type identity: ortho_config and fluent-bundle in one group.
     "fluent_grouped": {
         "Cargo.toml": NETSUKE_CARGO,
@@ -450,7 +642,7 @@ SCENARIOS: dict[str, dict[str, str]] = {
             "      - path: Cargo.toml\n      - path: native/Cargo.toml\n"
         ),
         "Cargo.lock": 'version = 4\n[[package]]\nname = "serde"\nversion = "1.0.200"\n',
-        ".github/dependabot.yml": dependabot(CATCH_ALL),
+        ".github/dependabot.yml": dependabot(CATCH_ALL, directories="['/', '/native']"),
     },
     # An undeclared manifest that names no related package cannot hide a
     # relationship, so it draws no finding.
@@ -486,14 +678,93 @@ SCENARIOS: dict[str, dict[str, str]] = {
         "Cargo.toml": "[package\nname = ",
         ".github/dependabot.yml": dependabot(CATCH_ALL),
     },
-    # A Python project outside the root is read like the root one, so it is not
-    # an unreadable fact.
+    # A Python project outside the root is not read, and says so.
     "nested_pyproject": {
         "sub/pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
         ".github/dependabot.yml": dependabot(CATCH_ALL, ecosystem="pip"),
     },
     # Nothing declared: no relationship applies.
     "no_declarations": {".github/dependabot.yml": dependabot(CATCH_ALL)},
+    # A target-specific member is still a declared member of the family.
+    "target_specific_member": base(
+        NARROW_FAMILY + CATCH_ALL,
+        cargo=CARGO.replace(
+            'pyo3-build-config = "0.28.3"',
+            "[target.'cfg(unix)'.dependencies]\npyo3-build-config = \"0.28.3\"",
+        ),
+    ),
+    # A lock gives one member two identities: the exchanged type has no single one.
+    "renamed_bridge_version_skew": base(
+        BRIDGE_PUBLISHED + CATCH_ALL,
+        cargo=SERDE_CARGO,
+        lock=BRIDGE_SKEW_LOCK,
+    ),
+    # A declared Fluent version differs from the one ortho_config links.
+    "fluent_boundary_mismatch": {
+        "Cargo.toml": FLUENT_SKEW_CARGO,
+        "Cargo.lock": FLUENT_SKEW_LOCK,
+        ".github/dependabot.yml": dependabot(FLUENT_GROUP + CATCH_ALL),
+    },
+    # A documented bound still holds.
+    "protected_bound_held": {
+        **base(),
+        ".concordat": PROTECTED_BOUND.format(bound="<0.29"),
+    },
+    # The declaration now admits a version the documented bound excluded.
+    "protected_bound_relaxed": {
+        **base(cargo=PYO3_029_CARGO, lock=PYO3_029_LOCK),
+        ".concordat": PROTECTED_BOUND.format(bound="<0.29"),
+    },
+    # A bound this audit cannot parse is indeterminate, not held.
+    "protected_bound_unknown": {
+        **base(),
+        ".concordat": PROTECTED_BOUND.format(bound="latest"),
+    },
+    # A copied Makefile still satisfies the canonical PyO3 line.
+    "derived_satisfied": {
+        **base(),
+        ".concordat": DERIVED_SATISFIES,
+        "Makefile": MAKEFILE.format(pyo3="0.28.3", maturin="1.13.3"),
+    },
+    # The Build file has drifted from the canonical PyO3 line.
+    "derived_drifted": {
+        **base(),
+        ".concordat": DERIVED_SATISFIES,
+        "Makefile": MAKEFILE.format(pyo3="0.29.0", maturin="1.13.3"),
+    },
+    # An equal comparison catches a copied maturin pin that moved alone.
+    "derived_equal_drifted": {
+        **base(),
+        "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
+        "uv.lock": UV_LOCK,
+        ".concordat": DERIVED_EQUAL,
+        "Makefile": MAKEFILE.format(pyo3="0.28.3", maturin="1.14.0"),
+        ".github/dependabot.yml": dependabot(
+            NARROW_FAMILY + CATCH_ALL, extra=SERDE_IGNORE.format(name="pyo3")
+        )
+        + UV_ENTRY
+        + CATCH_ALL,
+    },
+    # An action pin with no matching review is unapproved.
+    "action_pin_unreviewed": {
+        **base(),
+        ".concordat": ACTION_PIN,
+        ".github/workflows/ci.yml": WORKFLOW,
+    },
+    # pip and uv entries over one project update the same requirement twice.
+    "duplicate_pip_uv": {
+        "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
+        "uv.lock": UV_LOCK,
+        ".github/dependabot.yml": dependabot(CATCH_ALL)
+        + PIP_ENTRY
+        + UV_ENTRY
+        + CATCH_ALL,
+    },
+    # A contract naming no known relationship is indeterminate.
+    "contract_unknown": {
+        **base(),
+        ".concordat": CONTRACT_UNKNOWN,
+    },
 }
 
 

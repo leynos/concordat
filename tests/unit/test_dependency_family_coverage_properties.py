@@ -17,7 +17,7 @@ import typing as typ
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from concordat.rules.dependency_family_coverage import coverage, is_ignored
+from concordat.rules.dependency_family_coverage import coverage
 from concordat.rules.dependency_family_envelope import (
     build_dependency_family_envelope,
 )
@@ -47,7 +47,11 @@ def _matches(pattern: str, name: str) -> bool:
 
 
 def _config(
-    groups: list[tuple[list[str], list[str]]], directory: str, ignore: list[str]
+    groups: list[tuple[list[str], list[str]]],
+    directory: str,
+    ignore: list[str],
+    *,
+    ecosystem: str = "cargo",
 ) -> ConfigFile:
     """Return a decoded configuration whose one entry holds *groups* in order."""
     named = {
@@ -55,7 +59,7 @@ def _config(
         for index, (patterns, excluded) in enumerate(groups)
     }
     entry = {
-        "package-ecosystem": "cargo",
+        "package-ecosystem": ecosystem,
         "directory": directory,
         "groups": named,
         "ignore": [{"dependency-name": name} for name in ignore],
@@ -79,10 +83,12 @@ def test_the_first_group_in_document_order_takes_the_package(
         if any(_matches(p, package) for p in patterns)
         and not any(_matches(p, package) for p in excluded)
     ]
+    # A group carrying `*` anywhere spans every package, so it is a catch-all
+    # even when it also names the family.
     narrow = [
         f"g{index}"
         for index, (patterns, _) in enumerate(groups)
-        if f"g{index}" in expected and patterns != ["*"]
+        if f"g{index}" in expected and "*" not in patterns
     ]
 
     fact = coverage(_config(groups, "/", []), "cargo", ["/"], package)
@@ -125,13 +131,11 @@ def test_an_ignore_rule_names_a_package_by_pattern(
     ignored: list[str], package: str
 ) -> None:
     """A wildcard `dependency-name` ignores every package it spans."""
-    entry: dict[str, object] = {
-        "ignore": [{"dependency-name": name} for name in ignored]
-    }
+    fact = coverage(_config([], "/", ignored), "cargo", ["/"], package)
+    naming = [name for name in ignored if _matches(name, package)]
 
-    assert is_ignored(entry, package, python=False) is any(
-        _matches(name, package) for name in ignored
-    )
+    assert fact["ignored"] is bool(naming)
+    assert [rule["dependency_name"] for rule in fact["ignore_rules"]] == naming
 
 
 @given(
@@ -143,12 +147,16 @@ def test_an_ignore_rule_names_a_package_by_pattern(
 )
 def test_python_ignore_names_are_compared_normalised(spelling: str) -> None:
     """PEP 503 spellings of one package are one package to a Python ignore."""
-    entry: dict[str, object] = {"ignore": [{"dependency-name": spelling}]}
-
-    assert is_ignored(entry, "typing-extensions", python=True)
-    assert not is_ignored(entry, "typing-extensions", python=False) or (
-        spelling == "typing-extensions"
+    python = coverage(
+        _config([], "/", [spelling], ecosystem="pip"),
+        "pip",
+        ["/"],
+        "typing-extensions",
     )
+    cargo = coverage(_config([], "/", [spelling]), "cargo", ["/"], "typing-extensions")
+
+    assert python["ignored"] is True
+    assert cargo["ignored"] is (spelling == "typing-extensions")
 
 
 _COMPONENTS: typ.Final = ("a", "b", "rust", "target", ".hidden", "vendor", "venv")
@@ -196,15 +204,11 @@ def _is_eligible(parts: tuple[str, ...]) -> bool:
 def test_every_ungoverned_related_cargo_manifest_is_named_exactly_once(
     layout: list[tuple[tuple[str, ...], bool]], *, declared: bool
 ) -> None:
-    """Without declared surfaces each eligible related nested manifest is named."""
-    expected = (
-        []
-        if declared
-        else sorted(
-            "/".join((*parts, "Cargo.toml"))
-            for parts, related in layout
-            if related and _is_eligible(parts)
-        )
+    """An empty declared surface list cannot hide a related nested manifest."""
+    expected = sorted(
+        "/".join((*parts, "Cargo.toml"))
+        for parts, related in layout
+        if related and _is_eligible(parts)
     )
     with tempfile.TemporaryDirectory() as raw:
         checkout = pathlib.Path(raw)

@@ -67,6 +67,57 @@ dependencies:
       rationale: the extension stays on the 0.28 generation
       review_trigger: review when PyO3 0.30 ships
 """
+_DERIVED: typ.Final = """\
+dependencies:
+  derived_inputs:
+    - id: pyo3-version
+      comparator: satisfies
+      canonical:
+        manifest: Cargo.toml
+        package: pyo3
+      selectors:
+        - kind: makefile-variable
+          path: Makefile
+          variable: PYO3_VERSION
+      rationale: one PyO3 line across the build
+      review_trigger: review when PyO3 0.29 is adopted
+"""
+_BOUND: typ.Final = """\
+dependencies:
+  protected_bounds:
+    - relationship: pyo3-build-config-family
+      package: pyo3
+      bound: "<0.29"
+      rationale: the extension relies on the 0.28 build interface
+      review_trigger: review when the extension migrates to 0.30
+"""
+_MAKEFILE: typ.Final = """\
+PYO3_VERSION := 0.29.0
+
+check:
+\t@echo $(PYO3_VERSION)
+"""
+_CARGO_029: typ.Final = """\
+[package]
+name = "demo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pyo3 = "0.29.1"
+pyo3-build-config = "0.29.1"
+"""
+_LOCK_029: typ.Final = """\
+version = 4
+
+[[package]]
+name = "pyo3"
+version = "0.29.1"
+
+[[package]]
+name = "pyo3-build-config"
+version = "0.29.1"
+"""
 
 
 _PYPROJECT: typ.Final = """\
@@ -146,10 +197,17 @@ def family_checkout(tmp_path: pathlib.Path) -> pathlib.Path:
     return checkout
 
 
-def _write_pyo3(checkout: pathlib.Path, *, narrow: str, concordat: str = "") -> None:
+def _write_pyo3(
+    checkout: pathlib.Path,
+    *,
+    narrow: str,
+    concordat: str = "",
+    cargo: str = _CARGO,
+    lock: str = _LOCK,
+) -> None:
     """Write a PyO3 crate, its lock and a Dependabot configuration."""
-    (checkout / "Cargo.toml").write_text(_CARGO, encoding="utf-8")
-    (checkout / "Cargo.lock").write_text(_LOCK, encoding="utf-8")
+    (checkout / "Cargo.toml").write_text(cargo, encoding="utf-8")
+    (checkout / "Cargo.lock").write_text(lock, encoding="utf-8")
     github = checkout / ".github"
     github.mkdir()
     (github / "dependabot.yml").write_text(
@@ -327,6 +385,25 @@ def given_catch_all(family_checkout: pathlib.Path) -> None:
 def given_exception(family_checkout: pathlib.Path) -> None:
     """Write the split shape with an exception that names its review trigger."""
     _write_pyo3(family_checkout, narrow="", concordat=_EXCEPTION)
+
+
+@given("a checkout whose Makefile pins a different PyO3 version from its manifest")
+def given_derived_drift(family_checkout: pathlib.Path) -> None:
+    """Write one PyO3 line into the Makefile that no longer matches the manifest."""
+    _write_pyo3(family_checkout, narrow=_NARROW, concordat=_DERIVED)
+    (family_checkout / "Makefile").write_text(_MAKEFILE, encoding="utf-8")
+
+
+@given("a checkout whose PyO3 declaration has moved past its documented bound")
+def given_relaxed_bound(family_checkout: pathlib.Path) -> None:
+    """Write the declaration at 0.29.1 while `.concordat` records a `<0.29` bound."""
+    _write_pyo3(
+        family_checkout,
+        narrow=_NARROW,
+        concordat=_BOUND,
+        cargo=_CARGO_029,
+        lock=_LOCK_029,
+    )
 
 
 @given("a checkout whose PyO3 crate sits in an undeclared subdirectory")

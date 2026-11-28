@@ -528,16 +528,23 @@ actuators that remediate them. Each check ships as a lint rule package under
   compares the real policy with independent expectations; and an estate run
   over every repository's default branch agrees with the rollout's own
   validator on the clauses they share.
-- [x] Ship the report-only dependency-family rule (DF-001 to DF-003 and DF-006,
+- [x] Ship the report-only dependency-family rule (DF-001 to DF-009,
   leynos/concordat#270): relationships the estate has recorded, such as PyO3
   and its build config, maturin and PyO3, and ortho_config with fluent-bundle,
   are checked against the Dependabot configuration from facts collected outside
-  policy evaluation. Acceptance: fixtures for a split family, a shadowed group,
-  a renamed bridge, nested and optional manifests, an exact-pin tuple, a
-  reviewed exception and missing evidence (all indeterminate); negative
-  fixtures for unrelated duplicate versions and a pure-Python template; and a
-  pilot over cuprum, femtologging, tei-rapporteur and netsuke. Derived-input
-  equality (DF-004) and bound relaxation (DF-005) are follow-on work.
+  policy evaluation. The rule also checks resolved lock identities (DF-007),
+  native ecosystem monitoring without duplicate `pip`/`uv` coverage (DF-008),
+  documented bounds (DF-005), derived inputs (DF-004) and reviewed action pins
+  (DF-009). Acceptance: fixtures for a split family, a shadowed group, a
+  renamed bridge, nested and optional manifests, an exact-pin tuple, a reviewed
+  exception, a relaxed bound, a drifted copy, a version skew, duplicate Python
+  entries, a multi-ecosystem group, an unreviewed action pin and missing
+  evidence (all indeterminate); negative fixtures for unrelated duplicate
+  versions and a pure-Python template; and a report-only pilot over cuprum,
+  femtologging, tei-rapporteur and netsuke, recorded in
+  `docs/parabellum/dependency-family-pilot/assessment.md`. Runtime
+  compatibility remains a matter for each consumer's canary; this work collects
+  facts and evaluates static policy only.
 - [ ] Ship the nested-cargo guard rails (DF12-109): checks that keep nested and
   fixture `cargo` builds on a warm, shared cache. The first, fixture lockfile
   alignment (NC-001, NC-002, `nested-cargo-fixture-lockfiles`), is shipped: a

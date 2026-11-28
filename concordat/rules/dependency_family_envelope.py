@@ -2,19 +2,26 @@
 
 The facts are collected here, outside policy evaluation, so the Rego policy
 reads a deterministic document: it opens no manifest, runs no repository code
-and contacts no registry. Three kinds of evidence are gathered.
+and contacts no registry. The evidence falls into six groups.
 
 - Declarations: every dependency edge in each governed Cargo manifest (found
   by the shared surface resolver, so nested workspaces and PyO3 crates are
-  seen) and in the root `pyproject.toml`, with the manifest path, the section
-  and target the edge sits in, the name as written, the published package
-  identity (a renamed `package =` key resolves to the name Dependabot matches),
-  the requirement as written and what it implies, and the locked versions.
-- Dependabot coverage: for each declaration, which `updates` entry covers its
-  directory, which group takes its published name first (document order is
-  part of the configuration's meaning), and whether an `ignore` rule names it.
-- Relationships: the versioned data in `platform-standards/canon/data`, and the
-  repository's recorded exceptions from `.concordat`.
+  seen), in the member crates of each governed workspace root (read for these
+  facts only, never judged as project roots) and in every `pyproject.toml`
+  outside hidden and vendored trees, with the manifest path, section, target
+  and feature context, the published package identity, the declared range and
+  the exact locked identity.
+- Dependabot coverage: per declaration, the covering entry, the group that
+  takes the package first for each update class (document order is part of the
+  configuration's meaning), ignore-rule protection and multi-ecosystem groups.
+- Monitoring: whether the ecosystem a repository actually uses has a native
+  Dependabot entry, and whether pip and uv entries overlap.
+- Relationships: the versioned data in `platform-standards/canon/data`, and
+  the relationships the repository has contracted to in `.concordat`.
+- Bounds: documented compatibility bounds whose relaxation would be a
+  compatibility change, and how the declaration now reads.
+- Derived inputs: canonical versions or action pins and every script,
+  workflow or action input that must still agree with them.
 
 Anything the builder cannot establish stays a fact with its reason, so the
 policy returns an indeterminate verdict instead of reading a missing manifest,
@@ -26,84 +33,66 @@ from __future__ import annotations
 
 import pathlib
 import re
-import tomllib
 import typing as typ
 
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from concordat.errors import OperationalRuleError
-
 from .dependabot_envelope import build_dependabot_envelope
-from .dependency_family_coverage import (
-    Coverage,
-    coverage,
-    directories_of,
-    mapping,
-    normalise,
-    sequence,
+from .dependency_family_coverage import mapping, sequence
+from .dependency_family_declarations import cargo_declarations
+from .dependency_family_derived import (
+    DerivedInput,
+    ProtectedBound,
+    derived_inputs,
+    protected_bounds,
 )
-from .dependency_family_discovery import (
-    cargo_tables,
-    loose_manifest,
-    nested_files,
-    published_name,
-    ungoverned_problems,
-    workspace_member_manifests,
-)
-from .dependency_family_workspaces import inherited_tables
+from .dependency_family_python import python_declarations
 from .fs_probe import probe_file
-from .rust_surfaces import resolve_rust_surfaces
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from .codescene_coverage_envelope import Repository
     from .dependabot_envelope import ConfigFile
+    from .dependency_family_facts import Declaration, Monitoring
 
-ENVELOPE_SCHEMA_VERSION: typ.Final = 1
+ENVELOPE_SCHEMA_VERSION: typ.Final = 2
 ENVELOPE_KIND: typ.Final = "policy-input/dependency-family-contracts"
 RULE_ID: typ.Final = "dependency-family-contracts"
 DATA_FILENAME: typ.Final = "dependency-families.yaml"
+REQUIRED_SCHEMA_VERSION: typ.Final = 2
+ECOSYSTEMS: typ.Final = frozenset({"cargo", "pip", "uv"})
+RELATIONSHIP_KINDS: typ.Final = frozenset({"family", "type-identity", "tuple"})
 
-_REQUIREMENT_NAME: typ.Final = re.compile(
-    r"^\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*"
-    r"(?P<spec>[^;]*?)\s*(?:;.*)?$"
-)
 _EXCEPTION_FIELDS: typ.Final = ("relationship", "rationale", "review_trigger")
+_SHA: typ.Final = re.compile(r"^[0-9a-f]{40}$")
 _yaml = YAML(typ="safe")
 
 
-class Resolved(typ.TypedDict):
-    """The locked versions of one package, or why they are unknown."""
+class RepositoryFacts(typ.TypedDict):
+    """The audited checkout's identity and the revision the facts describe."""
 
-    versions: list[str]
-    lock: str | None
-    reason: str | None
-
-
-class Declaration(typ.TypedDict):
-    """One dependency edge declared in a governed manifest."""
-
-    manifest: str
-    ecosystem: str
-    section: str
-    target: str | None
-    optional: bool
-    workspace_inherited: bool
-    declared_name: str
-    package: str
-    requirement: str
-    requirement_kind: str
-    upper_bounded: bool
-    resolved: Resolved
-    coverage: Coverage
+    path: str
+    name: str | None
+    revision: str | None
+    ref: str | None
+    revision_reason: str | None
 
 
 class RelationshipException(typ.TypedDict):
     """One repository exception to a named relationship."""
 
     relationship: str
+    rationale: str
+    review_trigger: str
+    manifest: str | None
+    owner: str | None
+
+
+class UnmonitoredManifest(typ.TypedDict):
+    """A manifest the repository has deliberately placed outside the audit."""
+
+    path: str
     rationale: str
     review_trigger: str
 
@@ -118,30 +107,44 @@ class DependencyFamilyEnvelope(typ.TypedDict):
     kind:
         The policy-input identifier, which the policy checks.
     repository:
-        The audited checkout's identity.
+        The audited checkout and the revision the facts describe.
     relationships_version:
-        The `schema_version` of the relationship data read, or None when it
-        could not be read.
+        The `schema_version` of the relationship data read, or None.
     relationships:
-        The estate's relationship data.
+        The estate's validated relationship data.
+    family_contracts:
+        The relationship identifiers the repository has contracted to.
     declarations:
         Every governed dependency edge, with its Dependabot coverage.
+    monitoring:
+        Whether each project's native ecosystem is monitored.
     config:
         The decoded Dependabot configuration, or None when there is none.
     exceptions:
         The repository's valid recorded exceptions.
+    protected_bounds:
+        Documented compatibility bounds and their current status.
+    derived_inputs:
+        Canonical values and the occurrences that must agree with them.
+    unmonitored_manifests:
+        Manifests deliberately outside the audit, with their review triggers.
     problems:
         Facts the builder could not establish, one sentence each.
     """
 
     schema_version: int
     kind: str
-    repository: Repository
+    repository: RepositoryFacts
     relationships_version: int | None
     relationships: list[dict[str, object]]
+    family_contracts: list[str]
     declarations: list[Declaration]
+    monitoring: list[Monitoring]
     config: ConfigFile | None
     exceptions: list[RelationshipException]
+    protected_bounds: list[ProtectedBound]
+    derived_inputs: list[DerivedInput]
+    unmonitored_manifests: list[UnmonitoredManifest]
     problems: list[str]
 
 
@@ -152,6 +155,20 @@ def _relationships_path() -> pathlib.Path:
     from .packages import rule_package_dir
 
     return rule_package_dir(RULE_ID).parents[1] / "data" / DATA_FILENAME
+
+
+def _text(value: object) -> str | None:
+    """Return a non-blank scalar as text, or None."""
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _strings(value: object) -> list[str]:
+    """Return a list's non-blank string items, in order."""
+    return [
+        item.strip()
+        for item in sequence(value) or []
+        if isinstance(item, str) and item.strip()
+    ]
 
 
 def _relationship_document(
@@ -169,13 +186,90 @@ def _relationship_document(
     return data
 
 
+def _member(raw: object, problems: list[str], label: str) -> dict[str, str] | None:
+    """Return one validated relationship member, or None with a problem."""
+    table = mapping(raw)
+    package = _text((table or {}).get("package"))
+    ecosystem = _text((table or {}).get("ecosystem"))
+    if package is None or ecosystem not in ECOSYSTEMS:
+        problems.append(
+            f"{label} needs a package and an ecosystem in "
+            f"{', '.join(sorted(ECOSYSTEMS))}"
+        )
+        return None
+    return {"package": package, "ecosystem": ecosystem}
+
+
+def _relationship(
+    raw: object, problems: list[str], seen: set[str]
+) -> dict[str, object] | None:
+    """Return one validated relationship, or None with the reason recorded."""
+    table = mapping(raw)
+    identifier = _text((table or {}).get("id"))
+    kind = _text((table or {}).get("kind"))
+    owner = _text((table or {}).get("owner"))
+    raw_provenance = (table or {}).get("provenance")
+    provenance = (
+        [raw_provenance]
+        if _text(raw_provenance) is not None
+        else _strings(raw_provenance)
+    )
+    if table is None or identifier is None or kind is None:
+        problems.append("a relationship in the data file needs an id and a kind")
+        return None
+    if identifier in seen:
+        problems.append(f"the relationship data repeats the id {identifier}")
+        return None
+    if kind not in RELATIONSHIP_KINDS:
+        problems.append(
+            f"relationship {identifier} has the unknown kind {kind!r}; "
+            f"expected one of {', '.join(sorted(RELATIONSHIP_KINDS))}"
+        )
+        return None
+    members = [
+        member
+        for entry in sequence(table.get("members")) or []
+        if (member := _member(entry, problems, f"relationship {identifier}"))
+        is not None
+    ]
+    if len(members) < 2:
+        problems.append(f"relationship {identifier} needs at least two members")
+        return None
+    if owner is None or not provenance:
+        problems.append(f"relationship {identifier} needs an owner and provenance")
+        return None
+    seen.add(identifier)
+    validated: dict[str, object] = {
+        "id": identifier,
+        "kind": kind,
+        "members": members,
+        "owner": owner,
+        "provenance": provenance,
+    }
+    relation = _text(table.get("relation"))
+    if relation is not None:
+        validated["relation"] = relation
+    boundary = mapping(table.get("boundary"))
+    if boundary is not None:
+        validated["boundary"] = {
+            "exchanged": _strings(boundary.get("exchanged")),
+            "providers": _strings(boundary.get("providers")),
+        }
+    migrations = _strings(table.get("migrations"))
+    if migrations:
+        validated["migrations"] = migrations
+    return validated
+
+
 def _load_relationships(
     problems: list[str],
 ) -> tuple[int | None, list[dict[str, object]]]:
-    """Return the data file's schema version and relationships.
+    """Return the data file's schema version and validated relationships.
 
-    A file that cannot be read or decoded leaves a problem and no
-    relationships, which the policy reports as indeterminate.
+    A file that cannot be read, decodes to the wrong schema version, or holds a
+    malformed relationship leaves a problem. Malformed entries are never
+    silently filtered out, because that would turn a broken contract into a
+    missing one and a missing one into a pass.
 
     Returns
     -------
@@ -191,430 +285,24 @@ def _load_relationships(
     if listed is None or not isinstance(version, int):
         problems.append(f"the relationship data {path.name} has no versioned list")
         return None, []
-    return version, [item for entry in listed if (item := mapping(entry)) is not None]
-
-
-def _cargo_requirement(value: object) -> tuple[str, bool]:
-    """Return a Cargo requirement's text and whether it is workspace-inherited."""
-    if isinstance(value, str):
-        return value, False
-    table = mapping(value) or {}
-    version = table.get("version")
-    if table.get("workspace") is True:
-        return "", True
-    return (version if isinstance(version, str) else ""), False
-
-
-def _is_path_only(value: object, inherited: dict[str, object], key: str) -> bool:
-    """Return whether a dependency is a local path with no registry version.
-
-    Dependabot never offers an update for a crate that resolves from a path, so
-    it cannot drift from its family and is not a declaration to judge. A path
-    dependency that also names a `version` is published and stays collected, as
-    does one inherited from `[workspace.dependencies]` whose entry has a version.
-
-    Returns
-    -------
-    bool
-        True for a table with `path` and neither `version` nor a versioned
-        workspace inheritance.
-    """
-    table = mapping(value) or {}
-    if table.get("workspace") is True:
-        table = mapping(inherited.get(key)) or {}
-    return "path" in table and not isinstance(table.get("version"), str)
-
-
-def _classify(requirement: str) -> tuple[str, bool]:
-    """Return how a requirement constrains its package, and whether it is bounded.
-
-    An exact pin is not an upper bound: it is the very thing a version-update
-    pull request replaces. A bound is an explicit `<`, `<=` or tilde clause.
-
-    Returns
-    -------
-    tuple[str, bool]
-        The requirement kind (`exact`, `bounded`, `caret` or `open`) and
-        whether it carries an explicit upper bound.
-    """
-    text = requirement.strip()
-    if not text or text == "*":
-        return "open", False
-    bounded = any(
-        clause.strip().startswith(("<", "~"))
-        for clause in text.split(",")
-        if clause.strip()
-    )
-    if bounded:
-        return "bounded", True
-    if re.fullmatch(r"(?:==|=)\s*[^*,<>~\s]+", text):
-        return "exact", False
-    return "caret", False
-
-
-def _read_lock(lock: pathlib.Path) -> tuple[dict[str, object], str | None]:
-    """Return a decoded lock file, or why it could not be read."""
-    probe = probe_file(lock)
-    if probe.read_error is not None:
-        return {}, f"cannot read {lock.name}: {probe.read_error}"
-    if not probe.present:
-        return {}, f"{lock.name} is absent"
-    try:
-        return tomllib.loads(lock.read_text(encoding="utf-8")), None
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
-        return {}, f"cannot parse {lock.name}: {error}"
-
-
-def _lock_versions(
-    lock: pathlib.Path, package_names: cabc.Collection[str], *, python: bool
-) -> tuple[dict[str, list[str]], str | None]:
-    """Return the locked versions of the named packages, or why not.
-
-    Returns
-    -------
-    tuple[dict[str, list[str]], str | None]
-        Versions by package name, and the reason the lock was unreadable.
-    """
-    document, reason = _read_lock(lock)
-    if reason is not None:
-        return {}, reason
-    found: dict[str, list[str]] = {}
-    items = (mapping(raw) or {} for raw in sequence(document.get("package")) or [])
-    for item in items:
-        name = str(item.get("name", ""))
-        key = normalise(name) if python else name
-        if key in package_names and isinstance(item.get("version"), str):
-            found.setdefault(key, []).append(str(item["version"]))
-    return found, None
-
-
-def _resolved(
-    versions: dict[str, list[str]], key: str, lock: str, reason: str | None
-) -> Resolved:
-    """Return the locked versions of one package from a decoded lock."""
-    if reason is not None:
-        return {"versions": [], "lock": None, "reason": reason}
-    if key not in versions:
-        return {"versions": [], "lock": lock, "reason": f"{key} is not in {lock}"}
-    return {"versions": sorted(set(versions[key])), "lock": lock, "reason": None}
-
-
-def _cargo_lock(checkout: pathlib.Path, manifest: str) -> pathlib.Path:
-    """Return the `Cargo.lock` that governs *manifest*.
-
-    A workspace member shares its workspace root's lock, so the search walks
-    from the manifest's directory up to the checkout and takes the first lock
-    it finds; with none, the root's path is returned and reported as absent.
-
-    Returns
-    -------
-    pathlib.Path
-        The nearest existing lock, else the checkout root's.
-    """
-    parent = pathlib.PurePosixPath(manifest).parent
-    for directory in (parent, *parent.parents):
-        candidate = checkout / directory / "Cargo.lock"
-        if probe_file(candidate).present:
-            return candidate
-    return checkout / "Cargo.lock"
-
-
-def _workspace_requirements(
-    surfaces: cabc.Iterable[dict[str, object]],
-) -> dict[str, object]:
-    """Return `[workspace.dependencies]` from every workspace surface."""
-    inherited: dict[str, object] = {}
-    for surface in surfaces:
-        workspace = mapping((mapping(surface.get("parsed")) or {}).get("workspace"))
-        listed = mapping((workspace or {}).get("dependencies"))
-        if listed is not None:
-            inherited.update(listed)
-    return inherited
-
-
-def _cargo_surfaces(
-    checkout: pathlib.Path, problems: list[str], members: cabc.Collection[str]
-) -> list[dict[str, object]]:
-    """Return the governed Cargo surfaces, or none with the reason recorded."""
-    try:
-        resolution = resolve_rust_surfaces(checkout)
-    except OperationalRuleError as error:
-        detail = str(error).replace(str(checkout), ".")
-        problems.append(f"the Rust surfaces could not be resolved: {detail}")
-        return []
-    surfaces = [dict(surface) for surface in resolution.surfaces]
-    listed = workspace_member_manifests(checkout, surfaces)
-    if not resolution.declared:
-        governed = {str(surface["path"]) for surface in surfaces}
-        ungoverned = [
-            nested
-            for nested in nested_files(checkout, "Cargo.toml", problems)
-            if nested.relative_to(checkout).as_posix() not in governed
-            and nested not in listed
-        ]
-        problems.extend(
-            ungoverned_problems(
-                checkout, ungoverned, members, _workspace_requirements(surfaces)
-            )
+    if version != REQUIRED_SCHEMA_VERSION:
+        problems.append(
+            f"the relationship data {path.name} has schema version {version}; "
+            f"this build reads version {REQUIRED_SCHEMA_VERSION}"
         )
-    return surfaces + _member_surfaces(checkout, listed, problems)
-
-
-def _member_surfaces(
-    checkout: pathlib.Path, listed: list[pathlib.Path], problems: list[str]
-) -> list[dict[str, object]]:
-    """Return the readable member manifests as surfaces for dependency facts.
-
-    A member that cannot be decoded is a problem, never an empty set of edges.
-    The dicts are used here only: they are not handed to any other rule, which
-    would judge a member as a project root.
-
-    Returns
-    -------
-    list[dict[str, object]]
-        One surface-shaped dict per member that decoded.
-    """
-    surfaces: list[dict[str, object]] = []
-    for manifest in listed:
-        relative = manifest.relative_to(checkout).as_posix()
-        document, error = loose_manifest(manifest)
-        if error is not None:
-            problems.append(
-                f"{relative} is a member of a governed Cargo workspace and "
-                f"cannot be read: {error}"
-            )
-            continue
-        surfaces.append({"path": relative, "role": "crate", "parsed": document})
-    return surfaces
-
-
-def _cargo_declarations(
-    checkout: pathlib.Path,
-    config: ConfigFile | None,
-    problems: list[str],
-    members: cabc.Collection[str],
-) -> list[Declaration]:
-    """Return every dependency edge of the governed Cargo surfaces."""
-    surfaces = _cargo_surfaces(checkout, problems, members)
-    inherited = inherited_tables(checkout, surfaces, problems)
-    parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
-    problems.extend(
-        f"{path} could not be parsed" for path, doc in parsed if doc is None
-    )
-    return [
-        declaration
-        for path, doc in parsed
-        if doc is not None
-        for declaration in _surface_declarations(
-            (checkout, path, doc),
-            inherited[path],
-            config,
-        )
+        return version, []
+    seen: set[str] = set()
+    return version, [
+        relationship
+        for entry in listed
+        if (relationship := _relationship(entry, problems, seen)) is not None
     ]
 
 
-def _surface_declarations(
-    surface: tuple[pathlib.Path, str, dict[str, object]],
-    inherited: dict[str, object],
-    config: ConfigFile | None,
-) -> list[Declaration]:
-    """Return every dependency edge of one parsed Cargo manifest."""
-    checkout, manifest, parsed = surface
-    lock = _cargo_lock(checkout, manifest)
-    table_rows = cargo_tables(parsed)
-    names = {
-        published_name(key, value, inherited)
-        for _, _, table in table_rows
-        for key, value in table.items()
-    }
-    versions, reason = _lock_versions(lock, names, python=False)
-    evidence = (config, versions, lock.relative_to(checkout).as_posix(), reason)
-    return [
-        _cargo_declaration(
-            (manifest, section, target), (key, value, inherited), evidence
-        )
-        for section, target, table in table_rows
-        for key, value in table.items()
-        if not _is_path_only(value, inherited, key)
-    ]
-
-
-def _cargo_declaration(
-    where: tuple[str, str, str | None],
-    entry: tuple[str, object, dict[str, object]],
-    evidence: tuple[ConfigFile | None, dict[str, list[str]], str, str | None],
-) -> Declaration:
-    """Return one Cargo dependency edge as a declaration fact."""
-    manifest, section, target = where
-    key, value, inherited = entry
-    config, versions, lock_name, lock_reason = evidence
-    requirement, workspace = _cargo_requirement(value)
-    if workspace and isinstance(inherited.get(key), (str, dict)):
-        requirement, _ = _cargo_requirement(inherited[key])
-    package = published_name(key, value, inherited)
-    kind, bounded = _classify(requirement)
-    optional = (mapping(value) or {}).get("optional") is True
-    return {
-        "manifest": manifest,
-        "ecosystem": "cargo",
-        "section": section,
-        "target": target,
-        "optional": optional,
-        "workspace_inherited": workspace,
-        "declared_name": key,
-        "package": package,
-        "requirement": requirement,
-        "requirement_kind": kind,
-        "upper_bounded": bounded,
-        "resolved": _resolved(versions, package, lock_name, lock_reason),
-        "coverage": coverage(config, "cargo", directories_of(manifest), package),
-    }
-
-
-def _named_rows(
-    section: str, name: str | None, items: object
-) -> list[tuple[str, str | None, str]]:
-    """Return the string requirements of one list as `(section, name, text)`."""
-    return [
-        (section, name, item) for item in sequence(items) or [] if isinstance(item, str)
-    ]
-
-
-def _python_requirements(
-    parsed: dict[str, object],
-) -> list[tuple[str, str | None, str]]:
-    """Return the `(section, extra, requirement)` strings of a pyproject."""
-    project = mapping(parsed.get("project")) or {}
-    found = _named_rows("dependencies", None, project.get("dependencies"))
-    extras = mapping(project.get("optional-dependencies")) or {}
-    groups = mapping(parsed.get("dependency-groups")) or {}
-    for section, tables in (
-        ("optional-dependencies", extras),
-        ("dependency-groups", groups),
-    ):
-        for name, items in tables.items():
-            found.extend(_named_rows(section, str(name), items))
-    return found
-
-
-def _read_pyproject(
-    checkout: pathlib.Path, relative: str, problems: list[str]
-) -> dict[str, object] | None:
-    """Return the decoded `pyproject.toml` at *relative*, or None with the reason.
-
-    Returns
-    -------
-    dict[str, object] | None
-        The decoded document, or None when absent or unreadable.
-    """
-    path = checkout / relative
-    probe = probe_file(path)
-    if probe.read_error is not None:
-        problems.append(f"cannot read {relative}: {probe.read_error}")
-        return None
-    if not probe.present:
-        return None
-    try:
-        return tomllib.loads(path.read_text(encoding="utf-8"))
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
-        problems.append(f"cannot parse {relative}: {error}")
-        return None
-
-
-def _python_declarations(
-    checkout: pathlib.Path,
-    config: ConfigFile | None,
-    problems: list[str],
-) -> list[Declaration]:
-    """Return every dependency edge of every `pyproject.toml` in the checkout.
-
-    The root project and each nested one (hidden and vendored trees excepted)
-    are read, each against the `uv.lock` beside it and the Dependabot entries
-    for its own directory.
-
-    Returns
-    -------
-    list[Declaration]
-        One declaration per requirement, with its locked versions and coverage.
-    """
-    manifests = ["pyproject.toml"] + [
-        path.relative_to(checkout).as_posix()
-        for path in nested_files(checkout, "pyproject.toml", problems)
-    ]
-    declarations: list[Declaration] = []
-    for manifest in manifests:
-        parsed = _read_pyproject(checkout, manifest, problems)
-        if parsed is not None:
-            declarations += _project_declarations(
-                (checkout, config), (manifest, parsed), problems
-            )
-    return declarations
-
-
-def _project_declarations(
-    context: tuple[pathlib.Path, ConfigFile | None],
-    project: tuple[str, dict[str, object]],
-    problems: list[str],
-) -> list[Declaration]:
-    """Return the dependency edges of one decoded `pyproject.toml`."""
-    checkout, config = context
-    manifest, parsed = project
-    parent = pathlib.PurePosixPath(manifest).parent
-    lock_name = (parent / "uv.lock").as_posix()
-    ecosystem = "uv" if probe_file(checkout / lock_name).present else "pip"
-    rows = _python_requirements(parsed)
-    matches = [
-        (_REQUIREMENT_NAME.match(text), section, extra) for section, extra, text in rows
-    ]
-    names = {normalise(m.group("name")) for m, _, _ in matches if m}
-    versions, reason = _lock_versions(checkout / lock_name, names, python=True)
-    directory = "/" if str(parent) == "." else f"/{parent.as_posix()}"
-    evidence = (config, ecosystem, versions, reason)
-    problems.extend(
-        f"cannot read the requirement {text!r} in {manifest}"
-        for (match, _, _), (_, _, text) in zip(matches, rows, strict=True)
-        if match is None
-    )
-    return [
-        _python_declaration(
-            (m, section, extra), evidence, (manifest, lock_name, directory)
-        )
-        for m, section, extra in matches
-        if m is not None
-    ]
-
-
-def _python_declaration(
-    requirement: tuple[re.Match[str], str, str | None],
-    evidence: tuple[ConfigFile | None, str, dict[str, list[str]], str | None],
-    where: tuple[str, str, str],
-) -> Declaration:
-    """Return one `pyproject.toml` requirement as a declaration fact."""
-    match, section, extra = requirement
-    config, ecosystem, versions, reason = evidence
-    manifest, lock_name, directory = where
-    package = normalise(match.group("name"))
-    spec = match.group("spec")
-    kind, bounded = _classify(spec)
-    return {
-        "manifest": manifest,
-        "ecosystem": ecosystem,
-        "section": section if extra is None else f"{section}:{extra}",
-        "target": None,
-        "optional": section == "optional-dependencies",
-        "workspace_inherited": False,
-        "declared_name": match.group("name"),
-        "package": package,
-        "requirement": spec,
-        "requirement_kind": kind,
-        "upper_bounded": bounded,
-        "resolved": _resolved(versions, package, lock_name, reason),
-        "coverage": coverage(config, ecosystem, [directory], package),
-    }
-
-
-def _exception_from(item: object) -> RelationshipException | None:
-    """Return one recorded exception, or None when a field is missing or blank.
+def _exception_from(
+    item: object, relationships: cabc.Collection[str], problems: list[str]
+) -> RelationshipException | None:
+    """Return one recorded exception, or None with the reason recorded.
 
     Returns
     -------
@@ -624,12 +312,24 @@ def _exception_from(item: object) -> RelationshipException | None:
     table = mapping(item) or {}
     texts = [table.get(name) for name in _EXCEPTION_FIELDS]
     if not all(isinstance(text, str) and text.strip() for text in texts):
+        problems.append(
+            "a dependencies.family_exceptions entry in .concordat needs a "
+            "relationship, a rationale and a review_trigger"
+        )
         return None
-    relationship, rationale, review_trigger = (str(text) for text in texts)
+    relationship, rationale, review_trigger = (str(text).strip() for text in texts)
+    if relationship not in relationships:
+        problems.append(
+            f"a dependencies.family_exceptions entry names the unknown "
+            f"relationship {relationship}"
+        )
+        return None
     return {
         "relationship": relationship,
         "rationale": rationale,
         "review_trigger": review_trigger,
+        "manifest": _text(table.get("manifest")),
+        "owner": _text(table.get("owner")),
     }
 
 
@@ -648,38 +348,180 @@ def _read_concordat(path: pathlib.Path, problems: list[str]) -> object:
         return None
 
 
+def _dependencies_section(document: object) -> dict[str, object]:
+    """Return the `.concordat` `dependencies` mapping, or an empty one."""
+    section = (mapping(document) or {}).get("dependencies")
+    return mapping(section) or {}
+
+
 def _family_exceptions(document: object, problems: list[str]) -> list[object]:
     """Return the raw `dependencies.family_exceptions` list of `.concordat`."""
-    section = (mapping(document) or {}).get("dependencies")
-    raw = (mapping(section) or {}).get("family_exceptions")
+    raw = _dependencies_section(document).get("family_exceptions")
     listed = sequence(raw)
     if raw is not None and listed is None:
         problems.append("dependencies.family_exceptions in .concordat is not a list")
     return listed or []
 
 
-def _load_exceptions(
-    checkout: pathlib.Path, problems: list[str]
-) -> list[RelationshipException]:
-    """Return the repository's valid exceptions recorded in `.concordat`.
+def _family_contracts(
+    document: object,
+    relationships: cabc.Collection[str],
+    problems: list[str],
+) -> list[str]:
+    """Return the relationship identifiers `.concordat` contracts the repository to.
 
-    An exception needs a relationship, a rationale and a review trigger. A
-    malformed one is a problem fact, never a silent exemption.
+    A contract makes a relationship applicable even when discovery finds only
+    some members, so a nested or renamed declaration cannot make a family
+    silently inapplicable.
 
     Returns
     -------
-    list[RelationshipException]
-        The exceptions that name all three fields.
+    list[str]
+        The known relationship identifiers, in declaration order.
     """
-    document = _read_concordat(checkout / ".concordat", problems)
-    parsed = [_exception_from(item) for item in _family_exceptions(document, problems)]
-    problems.extend(
-        "a dependencies.family_exceptions entry in .concordat needs a "
-        "relationship, a rationale and a review_trigger"
-        for exception in parsed
-        if exception is None
-    )
-    return [exception for exception in parsed if exception is not None]
+    raw = _dependencies_section(document).get("family_contracts")
+    listed = sequence(raw)
+    if raw is not None and listed is None:
+        problems.append("dependencies.family_contracts in .concordat is not a list")
+        return []
+    found: list[str] = []
+    for item in listed or []:
+        identifier = _text(item)
+        if identifier is None or identifier not in relationships:
+            problems.append(
+                "dependencies.family_contracts in .concordat names the unknown "
+                f"relationship {item!r}"
+            )
+            continue
+        if identifier not in found:
+            found.append(identifier)
+    return found
+
+
+def _unmonitored(document: object, problems: list[str]) -> list[UnmonitoredManifest]:
+    """Return manifests the repository has placed outside the audit."""
+    raw = _dependencies_section(document).get("unmonitored_manifests")
+    listed = sequence(raw)
+    if raw is not None and listed is None:
+        problems.append(
+            "dependencies.unmonitored_manifests in .concordat is not a list"
+        )
+        return []
+    found: list[UnmonitoredManifest] = []
+    for item in listed or []:
+        table = mapping(item) or {}
+        path = _text(table.get("path"))
+        rationale = _text(table.get("rationale"))
+        review_trigger = _text(table.get("review_trigger"))
+        unsafe = (
+            path is None
+            or path.startswith("/")
+            or ".." in pathlib.PurePosixPath(path).parts
+        )
+        if unsafe or rationale is None or review_trigger is None:
+            problems.append(
+                "a dependencies.unmonitored_manifests entry in .concordat needs a "
+                "repository-relative path, a rationale and a review_trigger"
+            )
+            continue
+        found.append({
+            "path": path,
+            "rationale": rationale,
+            "review_trigger": review_trigger,
+        })
+    return found
+
+
+def _git_directory(checkout: pathlib.Path) -> tuple[pathlib.Path | None, str | None]:
+    """Return the checkout's Git directory, following a worktree pointer."""
+    git = checkout / ".git"
+    if git.is_dir():
+        return git, None
+    if git.is_file():
+        try:
+            line = git.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeDecodeError) as error:
+            return None, f"cannot read .git: {error}"
+        if not line.startswith("gitdir:"):
+            return None, ".git names no gitdir"
+        return checkout / line.split(":", 1)[1].strip(), None
+    return None, "no .git directory or worktree pointer"
+
+
+def _common_git_directory(gitdir: pathlib.Path) -> pathlib.Path:
+    """Return the Git directory that holds refs for a linked worktree."""
+    try:
+        pointer = (gitdir / "commondir").read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return gitdir
+    return (gitdir / pointer).resolve()
+
+
+def _packed_ref(common: pathlib.Path, ref: str) -> str | None:
+    """Return a ref's SHA from `packed-refs`, when it is recorded there."""
+    try:
+        lines = (common / "packed-refs").read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    for line in lines:
+        if line.startswith(("#", "^")):
+            continue
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == ref and _SHA.match(parts[0]):
+            return parts[0]
+    return None
+
+
+def _revision(
+    checkout: pathlib.Path,
+) -> tuple[str | None, str | None, str | None]:
+    """Return the checkout's HEAD revision without running repository code.
+
+    Returns
+    -------
+    tuple[str | None, str | None, str | None]
+        The full SHA, the symbolic ref it came from, and the reason when the
+        revision is unknown. A checkout without Git metadata (a source tarball)
+        is described by that reason and never guessed at.
+    """
+    gitdir, reason = _git_directory(checkout)
+    if gitdir is None:
+        return None, None, reason
+    try:
+        head = (gitdir / "HEAD").read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError) as error:
+        return None, None, f"cannot read HEAD: {error}"
+    if _SHA.match(head):
+        return head, None, None
+    if not head.startswith("ref:"):
+        return None, None, f"HEAD is neither a SHA nor a ref: {head!r}"
+    ref = head.split(":", 1)[1].strip()
+    common = _common_git_directory(gitdir)
+    try:
+        sha = (common / ref).read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        sha = _packed_ref(common, ref) or ""
+    if _SHA.match(sha):
+        return sha, ref, None
+    return None, ref, f"{ref} does not name a revision"
+
+
+def _member_package_index(
+    relationships: cabc.Sequence[dict[str, object]],
+) -> dict[str, set[str]]:
+    """Return each relationship's member package names."""
+    index: dict[str, set[str]] = {}
+    for relationship in relationships:
+        identifier = relationship.get("id")
+        members = sequence(relationship.get("members")) or []
+        packages: set[str] = set()
+        for member in members:
+            package = (mapping(member) or {}).get("package")
+            if isinstance(package, str):
+                packages.add(package)
+        if isinstance(identifier, str):
+            index[identifier] = packages
+    return index
 
 
 def build_dependency_family_envelope(
@@ -695,29 +537,73 @@ def build_dependency_family_envelope(
     Returns
     -------
     DependencyFamilyEnvelope
-        The declarations with their Dependabot coverage, the relationship
-        data, the repository's exceptions and every fact that could not be
-        established.
+        The declarations with their Dependabot coverage, monitoring, the
+        relationship data, the repository's contracts and exceptions, its
+        documented bounds and derived inputs, and every fact that could not
+        be established.
 
     """
     problems: list[str] = []
     config = build_dependabot_envelope(checkout)["config"]
     version, relationships = _load_relationships(problems)
-    members = {
-        str(member)
+    identifiers = [str(relationship["id"]) for relationship in relationships]
+    cargo_members = {
+        str(member["package"])
         for relationship in relationships
-        for member in sequence(relationship.get("members")) or []
+        for member in typ.cast("list[dict[str, str]]", relationship["members"])
+        if member["ecosystem"] == "cargo"
     }
-    declarations = _cargo_declarations(checkout, config, problems, members)
-    declarations += _python_declarations(checkout, config, problems)
+    python_members = {
+        str(member["package"])
+        for relationship in relationships
+        for member in typ.cast("list[dict[str, str]]", relationship["members"])
+        if member["ecosystem"] in {"pip", "uv"}
+    }
+    concordat = _read_concordat(checkout / ".concordat", problems)
+    unmonitored = _unmonitored(concordat, problems)
+    declarations, monitoring = cargo_declarations(
+        checkout,
+        config,
+        problems,
+        cargo_members,
+        [fact["path"] for fact in unmonitored],
+    )
+    python_edges, python_monitoring = python_declarations(
+        checkout, config, problems, python_members
+    )
+    declarations += python_edges
+    monitoring += python_monitoring
+    section = _dependencies_section(concordat)
+    revision, ref, revision_reason = _revision(checkout)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
-        "repository": {"path": ".", "name": None},
+        "repository": {
+            "path": ".",
+            "name": None,
+            "revision": revision,
+            "ref": ref,
+            "revision_reason": revision_reason,
+        },
         "relationships_version": version,
         "relationships": relationships,
+        "family_contracts": _family_contracts(concordat, identifiers, problems),
         "declarations": declarations,
+        "monitoring": monitoring,
         "config": config,
-        "exceptions": _load_exceptions(checkout, problems),
+        "exceptions": [
+            exception
+            for item in _family_exceptions(concordat, problems)
+            if (exception := _exception_from(item, identifiers, problems)) is not None
+        ],
+        "protected_bounds": protected_bounds(
+            section,
+            declarations,
+            identifiers,
+            _member_package_index(relationships),
+            problems,
+        ),
+        "derived_inputs": derived_inputs(checkout, section, declarations, problems),
+        "unmonitored_manifests": unmonitored,
         "problems": problems,
     }

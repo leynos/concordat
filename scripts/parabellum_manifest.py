@@ -30,11 +30,15 @@ class EstateEntry:
     excluded:
         The operator-supplied reason this repository is skipped, or
         ``None`` when it is to be audited.
+    revision:
+        The full commit SHA to audit instead of the default-branch head,
+        or ``None`` when the sweep should resolve the head itself.
 
     """
 
     name: str
     excluded: str | None = None
+    revision: str | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -62,6 +66,10 @@ _OWNER_PATTERN: typ.Final = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
 )
 _REPO_NAME_PATTERN: typ.Final = re.compile(r"^(?=.*[^.])[A-Za-z0-9._-]{1,100}$")
+# A pilot must reproduce the exact tree it audited, so a pin is a full,
+# lowercase commit SHA rather than a branch, tag or abbreviated prefix. GitHub
+# still serves SHA-1 object names, so 40 hexadecimal characters is the length.
+_REVISION_PATTERN: typ.Final = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _validated_identifier(
@@ -122,11 +130,21 @@ def _repository_entry(item: object, path: pathlib.Path) -> EstateEntry:
             path,
             f"has a non-string exclusion reason: {excluded!r}",
         )
+    # A pin that is not a full SHA would silently audit a different tree than
+    # the one the pilot names, so it is refused rather than coerced to text.
+    match entry.get("revision"):
+        case None:
+            revision = None
+        case str() as pinned if _REVISION_PATTERN.fullmatch(pinned):
+            revision = pinned
+        case invalid:
+            raise _manifest_error(path, f"has an invalid revision: {invalid!r}")
     return EstateEntry(
         name=_validated_identifier(
             entry["name"], _REPO_NAME_PATTERN, "repository name", path
         ),
         excluded=excluded,
+        revision=revision,
     )
 
 

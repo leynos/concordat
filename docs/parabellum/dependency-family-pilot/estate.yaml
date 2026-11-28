@@ -1,0 +1,12 @@
+---
+schema_version: 1
+owner: leynos
+repositories:
+  - name: cuprum
+    revision: db4b14dfccc270e1387a3fe9713b14e071f2a062
+  - name: femtologging
+    revision: 33858df8a078a861982afc5fd1dbfd733293dd84
+  - name: tei-rapporteur
+    revision: eaea7024a73aa8cb2d7a35c22d0d92fb13ccd14a
+  - name: netsuke
+    revision: e52d3ef49429392eebeb484aa4d6622ca79782dd
