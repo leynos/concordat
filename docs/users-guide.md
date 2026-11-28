@@ -477,11 +477,25 @@ It requires that:
   `main` writes it.
 
 Malformed YAML is reported as indeterminate rather than assumed to comply. A
-job that delegates to a reusable workflow is reported by name, while the
-workflow's other jobs are still evaluated. A coverage job's runner platform is
-read from its literal labels; a label written as an expression is classified
-only when every literal it could select agrees, and is otherwise indeterminate.
-A repository that generates no coverage anywhere is not a subject of this rule.
+job that calls a workflow of the same repository
+(`uses: ./.github/workflows/<file>`) is read as that workflow's jobs under the
+caller's triggers, to three levels; a call that cannot be resolved (another
+repository, a missing file, a loop or a deeper chain) is reported by name,
+while the workflow's other jobs are still evaluated. A coverage job's runner
+platform is read from its literal labels; a label written as an expression is
+classified from the literals in value position (those after `&&`, `||` or the
+opening `${{`, never a comparison operand such as `'dependabot[bot]'`), and
+only when every such literal agrees; otherwise it is indeterminate. A
+repository that generates no coverage anywhere is not a subject of this rule.
+
+Named exemptions (`exemptions` in the rule's parameters, each with a
+`repository`, an exact workflow `path`, a `rationale` and a `review_trigger`)
+cover workflows that test the CodeScene actions themselves. An exemption
+suppresses only "pull-request workflow invokes CodeScene" and "CodeScene
+publication is not restricted to a main-only workflow"; token placement, the
+installer digest and every other clause stay audited, and an exempt workflow
+must not receive the real `CS_ACCESS_TOKEN` on pull requests. Two workflows of
+`leynos/shared-actions` are exempt today.
 
 The publisher and the cancellation rule do not compete for the same document.
 `pr-run-cancellation` audits workflows with a pull-request trigger, and this

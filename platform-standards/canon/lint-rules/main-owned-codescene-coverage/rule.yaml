@@ -11,7 +11,7 @@ description: >-
   quality gate from the pull-request lane, so an adoption is never a mechanical
   merge on green: it takes a full review round. Audit-only: this rule declares
   no mutations.
-version: 0.4.0
+version: 0.5.0
 sensor:
   type: conftest
   input: policy-input/main-owned-codescene-coverage
@@ -20,3 +20,56 @@ sensor:
     - policy/
   data:
     - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            rationale:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Workflows that test the CodeScene actions themselves, each with its
+          repository (`owner/name`, read from the `origin` remote), the exact
+          repository-relative workflow path, the rationale and the review
+          trigger (the event after which the exemption is revisited). Both
+          text fields must be non-blank; the policy ignores an entry that
+          leaves either blank. An exemption suppresses only "pull-request
+          workflow invokes CodeScene" and "CodeScene publication is not
+          restricted to a main-only workflow": token placement, the installer
+          digest and every other clause stay audited. A workflow that is
+          exempt must not receive the real `CS_ACCESS_TOKEN` on pull requests.
+  defaults:
+    exemptions:
+      - repository: leynos/shared-actions
+        path: .github/workflows/test-upload-codescene-coverage.yml
+        rationale: >-
+          Offline tests of the upload-codescene-coverage action itself: they
+          install and exercise the pinned CLI against fixtures on pull
+          requests, and hold no CS_ACCESS_TOKEN.
+        review_trigger: >-
+          Revisit when the action's tests no longer need to run on pull
+          requests, or when they start to need the token.
+      - repository: leynos/shared-actions
+        path: .github/workflows/test-codescene-parser-proof.yml
+        rationale: >-
+          The service-touching half of the action's own tests: dispatched by
+          hand, only from main (the job is guarded on refs/heads/main), never
+          on a pull request.
+        review_trigger: >-
+          Revisit when the parser proof runs on a schedule or from another
+          trigger, or when it is moved into a main-only workflow.

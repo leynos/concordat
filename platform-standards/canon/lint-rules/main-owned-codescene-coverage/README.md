@@ -95,20 +95,40 @@ reports what it could not see rather than a verdict.
 - Malformed workflow YAML and unsupported job shapes are `indeterminate` when
   they could carry pull-request coverage, a main publisher, or decoded
   CodeScene or coverage facts.
-- A job that delegates to a reusable workflow is reported by name. The
-  indeterminacy is scoped to that job: a reusable job hides its own steps, not
-  the document, so the workflow's other jobs are still evaluated. Treating the
-  whole file as unreadable would make the rule silent about a pull-request lane
-  it can see perfectly well, which is what happens in a repository whose matrix
-  delegates one platform leg. A scheduled support workflow that calls a shared
-  automation workflow cannot affect this contract and is left alone.
+- A job that calls a workflow of the same repository
+  (`uses: ./.github/workflows/<file>`, no `@ref`) is read as that workflow's
+  jobs, under the caller's triggers (a `workflow_call` document has none of its
+  own), to three levels. Findings name the caller, which is the document that
+  runs. A call that cannot be resolved stays reported by name: another
+  repository's workflow, a file the checkout does not hold, a loop, or a chain
+  deeper than three levels. The indeterminacy is scoped to that job, so the
+  workflow's other jobs are still evaluated. A scheduled support workflow that
+  calls a shared automation workflow cannot affect this contract and is left
+  alone.
 - A coverage job's `runs-on` is classified from its literal labels; a label
   list is a conjunction and is read as one runner's description. A label
-  written as an expression is classified only when every literal it could
-  select classifies, and all of them agree, which is the case for the common
-  fork fallback between two Linux labels. A mixed expression, or one naming a
-  label this rule does not recognize, stays `indeterminate` rather than being
+  written as an expression is classified from the literals in value position,
+  those that directly follow `&&`, `||` or the opening `${{`; a literal beside
+  a comparison, such as `'dependabot[bot]'`, is an operand and not a runner. It
+  classifies only when every such literal classifies and all of them agree,
+  which is the case for the common fork fallback between two Linux labels. A
+  mixed expression, one naming a label this rule does not recognize, or a
+  `matrix` reference with no literal, stays `indeterminate` rather than being
   guessed.
+
+### Named exemptions
+
+`exemptions` in the rule's parameters list workflows that test the CodeScene
+actions themselves, each with its `repository` (`owner/name`, read from the
+`origin` remote), the exact `path`, a `rationale` and a `review_trigger`. Both
+text fields must be non-blank. An exemption suppresses only "pull-request
+workflow invokes CodeScene" and "CodeScene publication is not restricted to a
+main-only workflow"; token placement, the installer digest and every other
+clause stay audited, and an exempt workflow must not receive the real
+`CS_ACCESS_TOKEN` on pull requests. Two workflows of `leynos/shared-actions`
+are exempt today: the offline action tests on pull requests, and the parser
+proof, which a hand dispatch runs from `main` only.
+
 - A repository that generates no coverage anywhere is not a subject of this
   rule: it has nothing for a publisher to publish.
 

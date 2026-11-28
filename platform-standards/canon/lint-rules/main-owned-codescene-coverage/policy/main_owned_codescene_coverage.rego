@@ -21,7 +21,121 @@ finding(verdict, path, message) := {
   "msg": message,
 }
 
-workflows := object.get(input, "workflows", [])
+raw_workflows := object.get(input, "workflows", [])
+
+# A workflow that tests the CodeScene actions themselves may invoke them from a
+# pull-request or dispatch workflow. An exemption is a reviewed record naming
+# the repository, the exact workflow, the reason and the event that sends it
+# back for review; a blank field is not a record and suppresses nothing. It
+# covers only the two clauses that keep CodeScene calls off pull-request CI
+# and in a main-only workflow: token placement, the installer digest and the
+# rest stay audited.
+default exemptions := []
+
+exemptions := data.parameters.exemptions
+
+default repository_name := null
+
+repository_name := name if {
+  is_object(input.repository)
+  name := object.get(input.repository, "name", null)
+}
+
+repository_identity_usable if {
+  is_string(repository_name)
+  trim_space(repository_name) != ""
+}
+
+is_exempt(path) if {
+  repository_identity_usable
+  some exemption in exemptions
+  is_object(exemption)
+  repository := object.get(exemption, "repository", null)
+  is_string(repository)
+  repository == repository_name
+  exempted_path := object.get(exemption, "path", null)
+  is_string(exempted_path)
+  exempted_path == path
+  rationale := object.get(exemption, "rationale", null)
+  is_string(rationale)
+  trim_space(rationale) != ""
+  review_trigger := object.get(exemption, "review_trigger", null)
+  is_string(review_trigger)
+  trim_space(review_trigger) != ""
+}
+
+# A job that calls a workflow of the same repository (`uses:
+# ./.github/workflows/<file>`) hides that workflow's jobs behind one name. The
+# envelope already holds every workflow of the checkout, so such a call is
+# resolved by reading the callee's jobs as the caller's own, under the
+# caller's triggers: a `workflow_call` document has none of its own. The
+# expansion runs three levels deep. A call that is still unresolved after
+# that, because the file is absent, the target is another repository, or the
+# chain loops or runs deeper, stays a reusable job and is reported by name.
+local_workflow_prefix := "./.github/workflows/"
+
+local_call_path(job) := path if {
+  is_object(job)
+  uses := object.get(job, "uses", null)
+  is_string(uses)
+  startswith(uses, local_workflow_prefix)
+  not contains(uses, "@")
+  path := trim_prefix(uses, "./")
+}
+
+callee_jobs(pool, path) := jobs if {
+  some candidate in pool
+  is_object(candidate)
+  object.get(candidate, "path", null) == path
+  jobs := workflow_jobs(candidate)
+}
+
+resolved_calls(workflow, pool) := {name: jobs |
+  caller_jobs := workflow_jobs(workflow)
+  some name, job in caller_jobs
+  path := local_call_path(job)
+  jobs := callee_jobs(pool, path)
+}
+
+expand_workflow(workflow, pool) := workflow if {
+  not is_object(workflow)
+}
+
+expand_workflow(workflow, pool) := workflow if {
+  is_object(workflow)
+  count(resolved_calls(workflow, pool)) == 0
+}
+
+expand_workflow(workflow, pool) := expanded if {
+  is_object(workflow)
+  calls := resolved_calls(workflow, pool)
+  count(calls) > 0
+  kept := {name: job |
+    some name, job in workflow_jobs(workflow)
+    not calls[name]
+  }
+  inlined := {sprintf("%s/%s", [call_name, inner_name]): inner_job |
+    some call_name, inner_jobs in calls
+    some inner_name, inner_job in inner_jobs
+  }
+  # `object.union` merges deeply, so the old `jobs` must be removed first or
+  # the resolved call would survive beside its own expansion.
+  parsed := object.union(
+    object.remove(workflow_parsed(workflow), ["jobs"]),
+    {"jobs": object.union(kept, inlined)},
+  )
+  expanded := object.union(object.remove(workflow, ["parsed"]), {"parsed": parsed})
+}
+
+expand_all(pool) := [expand_workflow(workflow, pool) | some workflow in pool]
+
+workflows_level_one := expand_all(raw_workflows) if is_array(raw_workflows)
+
+workflows_level_two := expand_all(workflows_level_one) if is_array(raw_workflows)
+
+workflows := expand_all(workflows_level_two) if is_array(raw_workflows)
+
+workflows := raw_workflows if not is_array(raw_workflows)
 
 envelope_ok if {
   input.schema_version == 1
@@ -713,8 +827,13 @@ job_platform(job) := platform if {
 # them agree; that concludes nothing the document does not already say. A
 # mixed expression, or one naming a label this rule does not recognize, stays
 # indeterminate rather than being guessed.
+#
+# Only a literal in value position can be selected: one that directly follows
+# `&&`, `||` or the opening `${{`. A literal beside a comparison or inside a
+# call (`github.actor == 'dependabot[bot]'`) is an operand, not a runner.
 expression_literals(text) := {literal |
-  some raw in regex.find_n(`'[^']*'`, text, -1)
+  some match in regex.find_n(`(?:&&|\|\||\$\{\{)\s*'[^']*'`, text, -1)
+  some raw in regex.find_n(`'[^']*'`, match, 1)
   literal := lower(trim(raw, "'"))
 }
 
@@ -821,6 +940,7 @@ deny contains f if {
   has_pr_trigger(workflow)
   not unsupported_workflow(workflow)
   has_codescene_step(workflow)
+  not is_exempt(workflow_path(workflow))
   f := finding("noncompliant", workflow_path(workflow), "pull-request workflow invokes CodeScene")
 }
 
@@ -860,6 +980,7 @@ deny contains f if {
   not unsupported_workflow(workflow)
   not has_pr_trigger(workflow)
   not main_only_trigger(workflow)
+  not is_exempt(workflow_path(workflow))
   f := finding("noncompliant", workflow_path(workflow), "CodeScene publication is not restricted to a main-only workflow")
 }
 

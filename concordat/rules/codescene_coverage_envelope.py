@@ -18,6 +18,9 @@ from __future__ import annotations
 
 import typing as typ
 
+from concordat.errors import OperationalRuleError
+
+from .nested_cargo import origin_slug
 from .workflow_evidence import OPERATION_READ_WORKFLOW as OPERATION_READ_WORKFLOW
 from .workflow_evidence import WorkflowFile as WorkflowFile
 from .workflow_evidence import WorkflowReaders as _WorkflowReaders
@@ -41,9 +44,10 @@ class Repository(typ.TypedDict):
     path:
         The audited checkout's path, as the caller supplied it.
     name:
-        The repository's name where one is known, otherwise None. A local
-        audit is given a directory rather than a slug, so this is None today
-        and reserved for a caller that knows better.
+        The repository's `owner/name` slug, read from the `origin` remote, or
+        None when the checkout has no origin or its origin is not a GitHub
+        URL. A named exemption matches on it; a checkout without a slug is
+        fully audited.
     """
 
     path: str
@@ -106,17 +110,42 @@ def build_codescene_coverage_envelope(checkout: pathlib.Path) -> CoverageEnvelop
         The repository checkout to read workflows from.
 
     An `OperationalRuleError` reaches the caller when the workflow directory
-    resolves outside the checkout, or when any part of reading it fails. An
-    absent directory is not a failure: it is a repository with no workflows.
+    resolves outside the checkout, when any part of reading it fails, or when
+    the checkout's origin changes during the read. An absent directory is not
+    a failure: it is a repository with no workflows.
 
     Returns
     -------
     CoverageEnvelope
-        Every root workflow document, decoded or carrying its content error.
+        Every root workflow document, decoded or carrying its content error,
+        and the repository slug a named exemption is matched against.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the workflow directory resolves outside the checkout, a workflow
+        cannot be read, or the origin remote changes while the workflows are
+        read.
     """
+    slug = origin_slug(checkout)
+    workflows = _load_workflows(checkout)
+    if origin_slug(checkout) != slug:
+        # The slug picks an exemption while the workflows decide the verdict;
+        # a checkout replaced mid-read would let the two describe different
+        # trees, so the read is refused.
+        message = (
+            f"{checkout}: the origin remote changed while its workflows were "
+            "read, so the repository identity and the workflow facts do not "
+            "describe one checkout"
+        )
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_READ_WORKFLOW,
+            resource=str(checkout),
+        )
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
-        "repository": {"path": str(checkout), "name": None},
-        "workflows": _load_workflows(checkout),
+        "repository": {"path": str(checkout), "name": slug},
+        "workflows": workflows,
     }

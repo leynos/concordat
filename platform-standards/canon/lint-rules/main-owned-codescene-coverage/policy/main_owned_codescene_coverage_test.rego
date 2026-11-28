@@ -367,6 +367,30 @@ test_a_fork_fallback_between_two_linux_labels_classifies if {
   count(findings) == 0
 }
 
+# A comparison operand such as `'dependabot[bot]'` is not a runner: only the
+# literals in value position are candidates, and here both are Linux.
+test_a_fork_fallback_with_a_comparison_literal_classifies if {
+  findings := policy.deny with input as data.fixtures.clause4_fork_fallback_with_comparison_literal_agrees
+  count(findings) == 0
+}
+
+# A quoted literal that is only a comparison operand leaves no candidate
+# runner, so the platform stays unresolved rather than guessed.
+test_a_comparison_literal_alone_is_not_a_runner if {
+  findings := policy.deny with input as data.fixtures.clause4_comparison_literal_alone_is_no_runner
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
+# A matrix reference names no literal at all.
+test_a_matrix_runner_is_unresolved if {
+  findings := policy.deny with input as data.fixtures.clause4_matrix_runner_is_unresolved
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
 test_an_expression_whose_arms_disagree_is_indeterminate if {
   findings := policy.deny with input as data.fixtures.clause4_expression_arms_disagree
   profile(findings) == {
@@ -547,4 +571,108 @@ test_defaulted_mode_upload_with_token_in_job_env_is_stray if {
   profile(findings) == {
     ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command and the upload's access-token input, at jobs.coverage-upload.env.CS_ACCESS_TOKEN"],
   }
+}
+
+# --------------------------------------------------------------------------
+# Local reusable workflows: a call to `./.github/workflows/<file>` is read as
+# the callee's jobs under the caller's triggers.
+# --------------------------------------------------------------------------
+
+test_a_local_call_to_a_clean_callee_adds_no_finding if {
+  findings := policy.deny with input as data.fixtures.local_call_resolves_to_a_clean_callee
+  count(findings) == 0
+}
+
+# The callee's coverage step is judged as the caller's own, so a pull-request
+# lane that hides its coverage behind a local call cannot publish its report
+# unnoticed. The finding names the caller, which is the document that runs.
+test_a_local_callee_is_judged_under_the_callers_triggers if {
+  findings := policy.deny with input as data.fixtures.local_call_resolves_to_a_leaking_callee
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/ci.yml", "pull-request coverage does not set publish-artefact false"],
+  }
+}
+
+test_a_local_call_to_a_missing_file_stays_indeterminate if {
+  findings := policy.deny with input as data.fixtures.local_call_to_a_missing_file
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "job call delegates to a reusable workflow this audit cannot read"],
+  }
+}
+
+# A chain that calls itself never resolves within the depth limit.
+test_a_local_call_that_loops_stays_indeterminate if {
+  findings := policy.deny with input as data.fixtures.local_call_that_loops
+  count(findings) > 0
+  every finding in findings {
+    finding.verdict == "indeterminate"
+  }
+}
+
+test_an_external_call_stays_indeterminate if {
+  findings := policy.deny with input as data.fixtures.external_call_stays_unresolved
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "job call delegates to a reusable workflow this audit cannot read"],
+  }
+}
+
+# --------------------------------------------------------------------------
+# Named exemptions: a workflow that tests the CodeScene actions themselves.
+# --------------------------------------------------------------------------
+
+named(fixture, repository) := json.patch(fixture, [
+  {"op": "replace", "path": "/repository/name", "value": repository},
+])
+
+exempting(path) := {"exemptions": [{
+  "repository": "leynos/shared-actions",
+  "path": path,
+  "rationale": "tests of the CodeScene actions themselves",
+  "review_trigger": "the uploader gains a hosted test project",
+}]}
+
+test_an_exempt_pull_request_workflow_may_invoke_codescene if {
+  fixture := named(data.fixtures.pr_check, "leynos/shared-actions")
+  findings := policy.deny with input as fixture with data.parameters as exempting(".github/workflows/ci.yml")
+  not "pull-request workflow invokes CodeScene" in {f.msg | some f in findings}
+}
+
+test_an_exempt_dispatch_workflow_may_be_off_main if {
+  fixture := named(data.fixtures.main_dispatch_extra_trigger, "leynos/shared-actions")
+  findings := policy.deny with input as fixture with data.parameters as exempting(".github/workflows/coverage-main.yml")
+  not "CodeScene publication is not restricted to a main-only workflow" in {f.msg | some f in findings}
+}
+
+test_an_exemption_names_the_repository if {
+  fixture := named(data.fixtures.pr_check, "leynos/other")
+  findings := policy.deny with input as fixture with data.parameters as exempting(".github/workflows/ci.yml")
+  "pull-request workflow invokes CodeScene" in {f.msg | some f in findings}
+}
+
+test_an_exemption_names_the_exact_workflow if {
+  fixture := named(data.fixtures.pr_check, "leynos/shared-actions")
+  findings := policy.deny with input as fixture with data.parameters as exempting(".github/workflows/other.yml")
+  "pull-request workflow invokes CodeScene" in {f.msg | some f in findings}
+}
+
+test_an_exemption_without_a_review_trigger_suppresses_nothing if {
+  fixture := named(data.fixtures.pr_check, "leynos/shared-actions")
+  blank := {"exemptions": [{
+    "repository": "leynos/shared-actions",
+    "path": ".github/workflows/ci.yml",
+    "rationale": "tests of the CodeScene actions themselves",
+    "review_trigger": " ",
+  }]}
+  findings := policy.deny with input as fixture with data.parameters as blank
+  "pull-request workflow invokes CodeScene" in {f.msg | some f in findings}
+}
+
+# The exemption covers the two clauses that keep CodeScene calls off
+# pull-request CI and in a main-only workflow, and nothing else: the token
+# stays audited.
+test_an_exemption_does_not_cover_the_token_clause if {
+  fixture := named(data.fixtures.main_shell_upload, "leynos/shared-actions")
+  findings := policy.deny with input as fixture with data.parameters as exempting(".github/workflows/coverage-main.yml")
+  some f in findings
+  contains(f.msg, "names CS_ACCESS_TOKEN outside")
 }
