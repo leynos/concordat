@@ -89,8 +89,9 @@ Every ratcheting platform runs on the trunk:
   only on a push to `main`. A Windows or macOS lane that ratchets on pull
   requests therefore needs the same platform running with the ratchet on the
   trunk push, or its baseline is never written and the pull-request ratchet
-  compares against an empty file. There are no unratcheted platform exceptions;
-  the fix is the trunk leg.
+  compares against an empty file. A platform that does not ratchet on pull
+  requests owes the trunk nothing (a matrix leg whose switch is false is one);
+  every platform that does ratchet needs the trunk leg.
 
 ## What the rule declines to judge
 
@@ -118,8 +119,10 @@ reports what it could not see rather than a verdict.
   classifies only when every such literal classifies and all of them agree,
   which is the case for the common fork fallback between two Linux labels. A
   mixed expression, one naming a label this rule does not recognize, or a
-  `matrix` reference with no literal, stays `indeterminate` rather than being
-  guessed.
+  `matrix.<key>` reference that no `include` leg defines, stays `indeterminate`
+  rather than being guessed. A `matrix.<key>` reference is read from the
+  `include` legs (only the ratcheting legs when the ratchet is switched by the
+  matrix); legs that disagree without such a switch stay `indeterminate`.
 
 ### Named exemptions
 

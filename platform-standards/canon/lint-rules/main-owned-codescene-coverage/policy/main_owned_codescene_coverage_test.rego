@@ -707,14 +707,13 @@ test_a_pull_request_run_body_naming_the_token_is_noncompliant if {
   "pull-request workflow receives CS_ACCESS_TOKEN" in {f.msg | some f in findings}
 }
 
-<<<<<<< HEAD
 # GitHub reads secret names without regard to case, so a lower-case reference
 # in a pull-request run body receives the token just the same.
 test_a_lower_case_token_in_a_pull_request_run_body_is_noncompliant if {
   findings := policy.deny with input as data.fixtures.pr_lower_case_token_in_a_run_body
   "pull-request workflow receives CS_ACCESS_TOKEN" in {f.msg | some f in findings}
-||||||| parent of c0dd275 (CV-005 0.6.0: matrix-switched ratchets and runners)
-=======
+}
+
 # --------------------------------------------------------------------------
 # Matrix-switched runners: the platform that must also run on the trunk is the
 # one the ratcheting legs name.
@@ -742,5 +741,4 @@ test_a_matrix_reference_no_leg_defines_stays_indeterminate if {
   profile(findings) == {
     ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
   }
->>>>>>> c0dd275 (CV-005 0.6.0: matrix-switched ratchets and runners)
 }
