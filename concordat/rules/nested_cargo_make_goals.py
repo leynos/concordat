@@ -18,13 +18,15 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
-from .nested_cargo_make_order import Index, has_hidden_prerequisite, next_goals
+from .nested_cargo_make_early import closure_hides, has_hidden_prerequisite, next_goals
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_preparation import includes_a_file, read_makefile
 from .nested_cargo_scripts import TEST_TARGET
 
 if typ.TYPE_CHECKING:
     import pathlib
+
+    from .nested_cargo_make_order import Index
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -82,6 +84,9 @@ def read_make_goals(checkout: pathlib.Path) -> MakeGoals:
         absent = not (checkout / "Makefile").exists()
         return MakeGoals(frozenset(), is_opaque=True, is_absent=absent)
     report, text = read
-    goals, hides = _reachable_goals(rules_by_target(report))
-    is_opaque = hides or includes_a_file(report, text)
+    index = rules_by_target(report)
+    goals, hides = _reachable_goals(index)
+    is_opaque = (
+        hides or closure_hides(index, TEST_TARGET) or includes_a_file(report, text)
+    )
     return MakeGoals(frozenset(goals), is_opaque, is_absent=False)

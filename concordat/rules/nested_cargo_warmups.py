@@ -113,7 +113,7 @@ def _make_coverage(goal: str, make: MakeGoals) -> str:
     str
         `resolved`, `unresolved` or `unreadable`.
     """
-    if goal in make.goals:
+    if goal in make.goals and not make.is_opaque:
         return COVERAGE_RESOLVED
     return (
         COVERAGE_UNRESOLVED

@@ -667,6 +667,12 @@ UNREADABLE = {("EN-001", "tests/cli.rs")}
             id="separate-rules-with-an-ordering-edge",
         ),
         pytest.param(
+            "RUN := run-tests\ntest: warmup run\n\ttrue\n\nrun: $(RUN)\n\ttrue\n\n"
+            "run-tests:\n\tcargo nextest run\n\n" + WARM,
+            UNREADABLE,
+            id="a-nested-variable-prerequisite-hides-a-sibling",
+        ),
+        pytest.param(
             "RUN := run\ntest: warmup $(RUN)\n\ttrue\n\nrun:\n\tcargo nextest run\n\n"
             + WARM,
             UNREADABLE,
