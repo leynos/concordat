@@ -3,7 +3,7 @@
 #
 # The Python envelope has read every function in test scope that owns a compiler
 # spawn, a trybuild or macrotest suite or a `cargo_metadata` query (the
-# `builders`), and the entries of `.concordat/nested-builds.toml` (the
+# `builders`), and the entries of `.concordat-nested-builds.toml` (the
 # `declarations`), each with whether its warm-up resolves. This policy turns an
 # undeclared builder into NC-011, a build of the test infrastructure into
 # NC-012, and a declared warm-up that is not there into NC-013. Anything the
@@ -145,7 +145,7 @@ deny contains finding("NC-011", severity, "noncompliant", builder.path, builder.
 	not is_declared(builder)
 	not is_exempt(builder.path)
 	msg := sprintf(
-		"%s:%d: %s spends a real compile and no entry in .concordat/nested-builds.toml declares it. Name the file (and the function), say what the build is the test of and which warm-up pays for it; if the build is not the thing under test, replace it with a synthetic input",
+		"%s:%d: %s spends a real compile and no entry in .concordat-nested-builds.toml declares it. Name the file (and the function), say what the build is the test of and which warm-up pays for it; if the build is not the thing under test, replace it with a synthetic input",
 		[builder.path, builder.line, _describe(builder)],
 	)
 }

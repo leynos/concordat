@@ -350,7 +350,7 @@
       "builders": [],
       "declarations": [],
       "problems": [
-        ".concordat/nested-builds.toml: Invalid value (at line 1, column 3)"
+        ".concordat-nested-builds.toml: Invalid value (at line 1, column 3)"
       ]
     },
     "malformed_builder": {

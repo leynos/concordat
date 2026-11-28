@@ -578,7 +578,7 @@ actuators that remediate them. Each check ships as a lint rule package under
 - [x] Ship the test-builds check (NC-011, NC-012, NC-013,
   `nested-cargo-test-builds`, DF12-109) at `warning` severity: every function
   in test scope that owns a real compile is declared in
-  `.concordat/nested-builds.toml` with what the build is the test of and the
+  `.concordat-nested-builds.toml` with what the build is the test of and the
   warm-up that pays for it (NC-011); a build of the test infrastructure itself
   is never acceptable and cannot be exempted (NC-012); a declared warm-up must
   resolve to a Makefile goal before `test`, a nextest setup script or an

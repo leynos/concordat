@@ -4,7 +4,7 @@ name: Nested cargo test builds
 description: >-
   Audits why a repository's tests spend real compilation. Every function in
   test scope that owns a compiler spawn, a trybuild or macrotest suite or a
-  `cargo_metadata` query must be declared in `.concordat/nested-builds.toml`
+  `cargo_metadata` query must be declared in `.concordat-nested-builds.toml`
   with the subject the build is the test of and the warm-up that pays for it
   (NC-011). A build whose subject is the test infrastructure itself, a harness,
   an evidence writer, timeout machinery, a preparation stamp or a compile
