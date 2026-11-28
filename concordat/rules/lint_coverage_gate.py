@@ -178,17 +178,35 @@ def _line_runs(
             reader.unreadable.append(f"{source}: {' '.join(text.split())}")
         return shell, directory
     kept, shell = runnable(segments, shell)
-    for words, frames in kept:
-        start = len(reader.runs)
-        directory = _read_command(reader, words, source, directory)
-        if frames:
-            # Inside an `if` the audit cannot decide: it may be one of several
-            # exclusive lanes, so it does not count as a lane of the whole gate.
-            _mark_unresolved(
-                reader.runs[start:],
-                "it runs under a shell conditional it could not settle",
-            )
+    for command in kept:
+        directory = _read_kept(reader, command, source, directory)
     return shell, directory
+
+
+def _read_kept(
+    reader: _Reader,
+    command: tuple[list[str], tuple[int, ...]],
+    source: str,
+    directory: str | None,
+) -> str | None:
+    """Read one kept command; one inside an undecided `if` is unresolved.
+
+    Such a command may be one of several exclusive lanes, so it does not count as
+    a lane of the whole gate.
+
+    Returns
+    -------
+    str | None
+        The directory the next command runs in.
+    """
+    words, frames = command
+    start = len(reader.runs)
+    directory = _read_command(reader, words, source, directory)
+    if frames:
+        _mark_unresolved(
+            reader.runs[start:], "it runs under a shell conditional it could not settle"
+        )
+    return directory
 
 
 def _read_command(
