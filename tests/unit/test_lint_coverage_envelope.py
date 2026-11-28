@@ -413,6 +413,26 @@ class TestRuns:
         (tmp_path / "link").symlink_to("nested/deep")
         assert _runs(tmp_path) == [("clippy", None)]
 
+    def test_a_climbing_manifest_path_from_a_symbolic_link_is_unplaced(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`--manifest-path ../Cargo.toml` from `link` is not the root manifest."""
+        _app(
+            tmp_path,
+            {
+                "nested/deep/placeholder": "",
+                "nested/Cargo.toml": MANIFEST.format(name="nested", extra=""),
+                ".github/workflows/ci.yml": (
+                    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+                    "    steps:\n"
+                    "      - run: cargo clippy --manifest-path ../Cargo.toml\n"
+                    "        working-directory: link\n"
+                ),
+            },
+        )
+        (tmp_path / "link").symlink_to("nested/deep")
+        assert _runs(tmp_path) == [("clippy", None)]
+
     def test_a_step_that_runs_for_some_matrix_entries_only_is_unresolved(
         self, tmp_path: pathlib.Path
     ) -> None:
