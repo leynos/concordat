@@ -337,6 +337,8 @@ class TestRuns:
                 [("clippy", None)],
             ),
             ("", "        working-directory: ' ext '\n", [("clippy", None)]),
+            ("", "        working-directory: ' . '\n", [("clippy", None)]),
+            ("", "        working-directory: ''\n", [("clippy", "Cargo.toml")]),
             ("", "        working-directory: /abs\n", [("clippy", None)]),
         ],
     )
@@ -361,10 +363,14 @@ class TestRuns:
         )
         assert _runs(tmp_path) == expected
 
+    @pytest.mark.parametrize(
+        ("directory", "expected"),
+        [("ext", "Cargo.toml"), ("${{ env.BASE }}", None)],
+    )
     def test_a_cd_in_a_step_moves_from_its_working_directory(
-        self, tmp_path: pathlib.Path
+        self, tmp_path: pathlib.Path, directory: str, expected: str | None
     ) -> None:
-        """`cd ..` from `ext` is the root, so the run is on the root surface."""
+        """`cd ..` from `ext` is the root; from an unknown directory it is unknown."""
         _app(
             tmp_path,
             {
@@ -372,11 +378,11 @@ class TestRuns:
                 ".github/workflows/ci.yml": (
                     "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
                     "    steps:\n      - run: cd .. && cargo clippy\n"
-                    "        working-directory: ext\n"
+                    f"        working-directory: {directory}\n"
                 ),
             },
         )
-        assert _runs(tmp_path) == [("clippy", "Cargo.toml")]
+        assert _runs(tmp_path) == [("clippy", expected)]
 
     def test_a_step_that_runs_for_some_matrix_entries_only_is_unresolved(
         self, tmp_path: pathlib.Path

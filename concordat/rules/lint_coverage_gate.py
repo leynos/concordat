@@ -379,13 +379,16 @@ def _step_directory(step: StepRun) -> str | None:
     Returns
     -------
     str | None
-        The normalised directory, or None when the audit cannot follow it.
+        The normalised directory (`""` at the root, including a step that sets
+        none), or None when the audit cannot follow it.
     """
     given = step.directory
+    if given is None:
+        return ""
     # An expression survives as a mark or a `$`, and normalising a path would
     # drop a mark before `/..`, so refuse it first. A padded value is a path
-    # with spaces in it, not the trimmed one.
-    if given is None or given != given.strip():
+    # with spaces in it, not the trimmed one, whatever it looks like.
+    if given != given.strip():
         return None
     if any(mark in given for mark in (UNRESOLVED_MARK, SHELL_DOLLAR, "$")):
         return None
@@ -398,7 +401,7 @@ def _step_directory(step: StepRun) -> str | None:
 def _step_runs(reader: _Reader, source: str, step: StepRun) -> None:
     """Read the lines of one workflow step as one shell."""
     start = len(reader.runs)
-    where = _step_directory(step) if step.is_elsewhere else ""
+    where = _step_directory(step)
     state: tuple[ShellState, str | None] = (FRESH_SHELL, where)
     for line in step.lines:
         state = _line_runs(reader, line, source, state)
