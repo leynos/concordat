@@ -1,12 +1,11 @@
-"""Property tests for the `codescene` environment: CV-005's clause and CV-006.
+"""Property tests for the `codescene` environment settings audit (CV-006).
 
-Each case is a set of decisions: which jobs upload and how each declares its
-environment, or where the environment and the token stand in the settings.
-The case is rendered into a workflow or a settings state and judged by the
-real policy or check, and the findings are compared with expectations read
-from the decisions through fixed tables. The tables name outcomes per
-decision rather than re-reading the rendered document, so a defect in the
-reader cannot be mirrored here.
+Each case is a set of decisions: where the environment and the token stand in
+the settings. The case is rendered into a settings state and judged by the real
+check, and the findings are compared with expectations read from the decisions
+through fixed tables. The tables name outcomes per decision rather than
+re-reading the rendered state, so a defect in the reader cannot be mirrored
+here.
 """
 
 from __future__ import annotations
@@ -14,136 +13,11 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
-import pytest
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
 from concordat.auditor import codescene_environment as cv006
 from concordat.auditor.models import AuditContext, RepositorySnapshot
-from concordat.rules import runner
-
-_RULE_ID: typ.Final = "main-owned-codescene-coverage"
-_KIND: typ.Final = "policy-input/main-owned-codescene-coverage"
-_UPLOADER: typ.Final = (
-    "leynos/shared-actions/.github/actions/upload-codescene-coverage@0000000"
-)
-
-# How a job spells its environment, and whether GitHub reads that as the
-# `codescene` environment.
-_DECLARATIONS: typ.Final[dict[str, tuple[object, bool]]] = {
-    "none": (None, False),
-    "exact": ("codescene", True),
-    "other case": ("CodeScene", True),
-    "mapping": ({"name": "codescene", "url": "https://codescene.io"}, True),
-    "near miss": ("codescene-prod", False),
-    "expression": ("${{ 'codescene' }}", False),
-    "unrelated": ("preview", False),
-}
-
-
-@dataclasses.dataclass(frozen=True)
-class JobCase:
-    """One job: whether it uploads and how it declares its environment."""
-
-    uploads: bool
-    declaration: str
-
-
-@dataclasses.dataclass(frozen=True)
-class WorkflowCase:
-    """One workflow: its trigger and its jobs."""
-
-    pull_request: bool
-    jobs: tuple[JobCase, ...]
-
-
-_WORKFLOWS = st.builds(
-    WorkflowCase,
-    pull_request=st.booleans(),
-    jobs=st.lists(
-        st.builds(
-            JobCase,
-            uploads=st.booleans(),
-            declaration=st.sampled_from(sorted(_DECLARATIONS)),
-        ),
-        min_size=1,
-        max_size=4,
-    ).map(tuple),
-)
-
-
-def _render(case: WorkflowCase) -> dict[str, object]:
-    """Render one workflow case as a decoded workflow fact."""
-    jobs: dict[str, object] = {}
-    for index, job in enumerate(case.jobs):
-        step: dict[str, object] = (
-            {"uses": _UPLOADER, "with": {"mode": "upload"}}
-            if job.uploads
-            else {"run": "make lint"}
-        )
-        rendered: dict[str, object] = {"runs-on": "ubuntu-latest", "steps": [step]}
-        spelling = _DECLARATIONS[job.declaration][0]
-        if spelling is not None:
-            rendered["environment"] = spelling
-        jobs[f"job{index}"] = rendered
-    trigger: object = (
-        {"pull_request": None}
-        if case.pull_request
-        else {"push": {"branches": ["main"]}}
-    )
-    return {
-        "path": ".github/workflows/w.yml",
-        "parsed": {"on": trigger, "jobs": jobs},
-        "error": None,
-    }
-
-
-def _expected(case: WorkflowCase) -> set[str]:
-    """Decide the environment clause's findings from the decisions alone."""
-    expected: set[str] = set()
-    for index, job in enumerate(case.jobs):
-        declares = _DECLARATIONS[job.declaration][1]
-        name = f'"job{index}"'
-        if case.pull_request:
-            if declares:
-                expected.add(
-                    f"pull-request workflow job {name} declares environment codescene"
-                )
-        elif job.uploads and not declares:
-            expected.add(
-                f"CodeScene upload job {name} does not declare environment: codescene"
-            )
-        elif declares and not job.uploads:
-            expected.add(
-                f"job {name} declares environment codescene but holds no CodeScene "
-                "upload step"
-            )
-    return expected
-
-
-def _environment_findings(case: WorkflowCase) -> set[str]:
-    """Run the real policy and keep the environment clause's messages."""
-    envelope = {
-        "schema_version": 1,
-        "kind": _KIND,
-        "repository": {"path": "/checkout", "name": None},
-        "workflows": [_render(case)],
-    }
-    results = runner._invoke_conftest(_RULE_ID, typ.cast("typ.Any", envelope))
-    return {
-        finding.message
-        for finding in runner._findings_from_results(results)
-        if "environment" in finding.message
-    }
-
-
-@pytest.mark.timeout(120)
-@settings(max_examples=60, deadline=None)
-@given(case=_WORKFLOWS)
-def test_the_environment_clause_matches_the_generated_jobs(case: WorkflowCase) -> None:
-    """Every generated workflow yields exactly the findings its jobs imply."""
-    assert _environment_findings(case) == _expected(case), case
-
 
 # Where the environment stands, as the settings fields it implies and the
 # policy statuses it earns once the environment exists.

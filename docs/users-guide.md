@@ -459,27 +459,16 @@ It requires that:
   `publish-artefact: 'false'`, and neither invokes CodeScene nor receives
   `CS_ACCESS_TOKEN`;
 - exactly one workflow triggered by a push to `main` (optionally alongside
-  `workflow_dispatch`) writes that baseline and uploads, from a step guarded on
-  `github.ref == 'refs/heads/main'` as well as the credential, under a
-  `concurrency` block that queues rather than cancels. The comparison must be a
-  whole `&&` conjunct, and a condition carrying an unquoted `||` counts as
-  unguarded, because the disjunction makes every other conjunct optional. The
-  credential guard is the output of an earlier step in the same job, which runs
-  exactly
-  `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`
-  with no `if:` and no `env`; the upload tests
-  `steps.<id>.outputs.available == 'true'` and passes
-  `${{ secrets.CS_ACCESS_TOKEN }}` directly to its `access-token` input. The
-  uploader's `mode` defaults to `upload`, so a step that omits the input
-  satisfies this; `check` and `install` do not;
-- the job holding the upload step declares `environment: codescene`, and no
-  other job, and no pull-request workflow, declares it;
-- a workflow that uploads to CodeScene names `CS_ACCESS_TOKEN` only in that
-  check step's command and in the upload's `access-token` input: never in an
-  `env` block at any level, another `run` body, another action's input or a
-  condition;
-- no workflow passes `installer-checksum`, references `CODESCENE_CLI_SHA256`,
-  or refreshes the CodeScene installer digest;
+  `workflow_dispatch`) writes that baseline and uploads, under a `concurrency`
+  block that queues rather than cancels. The uploader's `mode` defaults to
+  `upload`, so a step that omits the input satisfies this; `check` and
+  `install` do not;
+- a workflow that uploads to CodeScene names `CS_ACCESS_TOKEN` only in a
+  credential-check step's command and in the upload's `access-token` input:
+  never in an `env` block at any level, another `run` body, another action's
+  input or a condition;
+- no workflow passes `installer-checksum` or refreshes the CodeScene installer
+  digest;
 - every platform that ratchets coverage on pull requests also ratchets on the
   trunk push, because the baseline is keyed by `runner.os` and only a push to
   `main` writes it.
@@ -533,6 +522,19 @@ moves as follows:
   deployment branch policy admitting the branch `main` alone, and move
   `CS_ACCESS_TOKEN` from the repository secrets into it. The Concordat Auditor
   reports each step of that move (CV-006).
+
+CV-005 0.4.0 stops auditing the shape of the publisher and keeps the clauses
+that bear on pull-request CI and on secret handling. The rule no longer reports
+an upload step that lacks the `github.ref == 'refs/heads/main'` comparison or
+the credential-check guard, a job that does not declare
+`environment: codescene` (or a job that declares it without uploading, or a
+pull-request job that declares it), a direct `cs-coverage upload` command as
+such, or a reference to the `CODESCENE_CLI_SHA256` variable. A direct upload
+still breaks the token-placement clause, and the Concordat Auditor still checks
+the environment's settings (CV-006). The steps above remain good practice; they
+are no longer a condition of compliance. This follows the user rulings of 6 and
+28 November: publisher shape is out of scope, and the rule keeps the
+off-pull-request-CI and secret-handling clauses.
 
 With the environment declared, a `workflow_dispatch` of the publisher from any
 branch but `main` is refused for the whole job, matrix legs that do not upload

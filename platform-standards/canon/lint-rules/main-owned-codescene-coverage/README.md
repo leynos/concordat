@@ -31,28 +31,6 @@ One main-owned publisher writes the baseline and uploads:
   The rule reads the effective mode rather than the spelling, because reporting
   correct wiring as broken only teaches people to edit a working workflow to
   satisfy the audit.
-- That workflow's upload step is guarded on `github.ref == 'refs/heads/main'`
-  as well as on the credential. A `workflow_dispatch` selects a ref, and the
-  push filter says nothing about it, so a dispatch from a feature branch would
-  otherwise publish that branch's coverage as the trunk's. A push filter of
-  `branches: [main]` is therefore no substitute: it restricts pushes and says
-  nothing about dispatches. The comparison must be one whole `&&` conjunct of
-  the condition, and a condition carrying an unquoted `||` guards nothing:
-  `… && github.ref == 'refs/heads/main' ||
-  github.event_name == 'workflow_dispatch'`
-  contains the comparison while making it optional, which is exactly the
-  dispatch this clause exists to stop.
-- The credential guard is a check step's output. An earlier step in the same
-  job, with an `id`, no `if:` and no `env`, runs exactly
-  `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`
-  as its sole command. GitHub evaluates the expression before the shell starts,
-  so the token enters no process. The upload tests that step's
-  `outputs.available == 'true'` as a whole `&&` conjunct and passes
-  `${{ secrets.CS_ACCESS_TOKEN }}` directly to its `access-token` input. A
-  condition naming the token itself no longer counts: it needs the token bound
-  in `env`, and the composite upload action hands its step's `env` to every
-  nested step. This deliberately does not infer credential provenance through
-  other output keys, shell commands, job outputs, or reusable workflows.
 - The publisher declares a `concurrency` block, so two overlapping pushes to
   `main` cannot race to write the baseline every pull request is then measured
   against, and the block queues rather than cancels: `cancel-in-progress` is
@@ -76,25 +54,13 @@ Every uploader names the token in exactly two places:
   because the command line reads the token from its environment: upload through
   the action.
 
-The token lives in a main-only environment:
-
-- The job holding the upload step declares `environment: codescene`, either
-  as that exact string or as a mapping whose `name` is `codescene`. No other
-  job declares it, and no job in a pull-request workflow does. An expression is
-  not a declaration, since it may resolve to anything.
-- `CS_ACCESS_TOKEN` is a secret of the `codescene` environment, not a
-  repository secret, and the environment's deployment branch policy admits
-  `main` alone. Anyone who can push can dispatch a branch copy of the
-  publisher, and a repository secret is readable from any branch; an
-  environment secret behind a main-only policy is not. The ref guard on the
-  upload step stays as defence in depth. The repository settings are outside a
-  checkout, so this rule cannot read them: the Concordat Auditor checks them as
-  CV-006.
-
-  A `workflow_dispatch` of the publisher from any branch but `main` is
-  therefore refused for the whole job, matrix legs that do not upload included,
-  rather than skipped at the upload step. That is intended: a branch proof of a
-  coverage change runs through the pull-request lane's coverage run instead.
+The token's environment is outside this rule. The `codescene` environment and
+its branch policy are repository settings, which a checkout cannot show; the
+Concordat Auditor checks them as CV-006. This rule does not judge whether the
+upload step carries a ref or credential guard, or whether its job declares
+`environment: codescene`: publisher shape is out of scope (user rulings of 6
+and 28 November), and the rule keeps the off-pull-request-CI and
+secret-handling clauses.
 
 The removed installer digest is gone:
 
@@ -102,9 +68,8 @@ The removed installer digest is gone:
   wherever it appears, whatever its value: the uploader rejects a non-empty
   value from shared-actions f68e8e2e onwards, which is why the input is being
   removed, and an empty one is a reader waiting to be filled in again.
-- No workflow references the `CODESCENE_CLI_SHA256` variable, and no workflow
-  refreshes the CodeScene installer digest. The uploader pins `cs-coverage`
-  through its own manifest; the variable has no remaining reader.
+- No workflow refreshes the CodeScene installer digest. The uploader pins
+  `cs-coverage` through its own manifest.
 
 Every ratcheting platform runs on the trunk:
 

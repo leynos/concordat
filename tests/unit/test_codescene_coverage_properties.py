@@ -2,10 +2,10 @@
 
 Each generated case is a set of semantic decisions about a repository's
 coverage topology: which trigger spellings it uses, where its token sits,
-which platform ratchets, whether the publisher is guarded. The case is
-rendered into workflow documents and evaluated by the real Conftest policy,
-then compared with expectations computed directly from the decisions. The
-expectations are deliberately written as independent predicates over the
+which platform ratchets, whether the publisher carries a credential-check
+step. The case is rendered into workflow documents and evaluated by the real
+Conftest policy, then compared with expectations computed directly from the
+decisions. The expectations are deliberately written as independent predicates over the
 case rather than as a second reading of the rendered document, so a defect
 in the policy's document reader cannot be mirrored here.
 
@@ -40,12 +40,6 @@ _AVAILABILITY_COMMAND: typ.Final = (
     'echo "available=${{ secrets.CS_ACCESS_TOKEN != \'\' }}" >> "$GITHUB_OUTPUT"'
 )
 
-_REF_GUARD_MESSAGE: typ.Final = (
-    "CodeScene upload step is not guarded on github.ref == 'refs/heads/main'"
-)
-_CREDENTIAL_GUARD_MESSAGE: typ.Final = (
-    "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential"
-)
 _STRAY_MESSAGE: typ.Final = (
     "CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command "
     "and the upload's access-token input, at {}"
@@ -69,7 +63,6 @@ class CoverageCase:
     pr_platform: str
     trunk_runs_pr_platform: bool
     publisher_dispatch: bool
-    publisher_ref_guard: bool
     publisher_token_guard: bool
     publisher_stray_site: str
     publisher_concurrency: bool
@@ -86,7 +79,6 @@ _CASES = st.builds(
     pr_platform=st.sampled_from(["Linux", "Windows", "macOS"]),
     trunk_runs_pr_platform=st.booleans(),
     publisher_dispatch=st.booleans(),
-    publisher_ref_guard=st.booleans(),
     publisher_token_guard=st.booleans(),
     publisher_stray_site=st.sampled_from(["none", "workflow", "job", "step", "run"]),
     publisher_concurrency=st.booleans(),
@@ -148,15 +140,10 @@ def _pr_workflow(case: CoverageCase) -> dict[str, object]:
 
 
 def _upload_condition(case: CoverageCase) -> str | None:
-    """Render the upload step's guard from the generated decisions."""
-    clauses = []
-    if case.publisher_ref_guard:
-        clauses.append("github.ref == 'refs/heads/main'")
-    if case.publisher_token_guard:
-        clauses.append("steps.codescene-token.outputs.available == 'true'")
-    if not clauses:
+    """Render the upload step's condition from the generated decisions."""
+    if not case.publisher_token_guard:
         return None
-    return "${{ " + " && ".join(clauses) + " }}"
+    return "${{ steps.codescene-token.outputs.available == 'true' }}"
 
 
 def _publisher_steps(case: CoverageCase) -> list[dict[str, object]]:
@@ -296,8 +283,6 @@ def _expected(case: CoverageCase) -> set[tuple[str, str, str]]:
             _PR_PATH,
             "pull-request coverage does not set publish-artefact false",
         ),
-        (not case.publisher_ref_guard, _MAIN_PATH, _REF_GUARD_MESSAGE),
-        (not case.publisher_token_guard, _MAIN_PATH, _CREDENTIAL_GUARD_MESSAGE),
         (
             not case.publisher_concurrency,
             _MAIN_PATH,
@@ -432,26 +417,11 @@ def _output_guard_main_workflow(case: OutputGuardCase) -> dict[str, object]:
 
 
 def _output_guard_expected(case: OutputGuardCase) -> set[tuple[str, str, str]]:
-    """Decide whether each guard holds from the generated decisions."""
-    has_token_guard = (
-        case.producer_before_upload
-        and case.producer_in_upload_job
-        and case.producer_id_matches
-        and case.output_name_matches
-        and case.producer_command != "altered"
-        and case.credential_source == "direct"
-        and not case.has_disjunction
-    )
-    findings: set[tuple[str, str, str]] = set()
-    if not has_token_guard:
-        findings.add(("noncompliant", _MAIN_PATH, _CREDENTIAL_GUARD_MESSAGE))
-    if case.has_disjunction:
-        findings.add(("noncompliant", _MAIN_PATH, _REF_GUARD_MESSAGE))
-    findings |= {
+    """Decide which stray token references the case must report."""
+    return {
         ("noncompliant", _MAIN_PATH, _STRAY_MESSAGE.format(site))
         for site in _output_guard_stray_sites(case)
     }
-    return findings
 
 
 def _output_guard_stray_sites(case: OutputGuardCase) -> set[str]:
@@ -486,10 +456,10 @@ def _output_guard_stray_sites(case: OutputGuardCase) -> set[str]:
 @settings(max_examples=8, deadline=None)
 @example(cases=[_OUTPUT_COMPLIANT_CASE] * _BATCH_SIZE)
 @given(cases=st.lists(_OUTPUT_GUARD_CASES, min_size=_BATCH_SIZE, max_size=_BATCH_SIZE))
-def test_step_output_guard_matches_generated_topology(
+def test_stray_token_sites_match_generated_topology(
     cases: list[OutputGuardCase],
 ) -> None:
-    """Varied step positions and provenance have the independent verdict."""
+    """Varied step positions and provenance report exactly the stray sites."""
     envelopes = [
         {
             **_envelope(_COMPLIANT_CASE),
@@ -513,7 +483,6 @@ _COMPLIANT_CASE: typ.Final = CoverageCase(
     pr_platform="Linux",
     trunk_runs_pr_platform=True,
     publisher_dispatch=True,
-    publisher_ref_guard=True,
     publisher_token_guard=True,
     publisher_stray_site="none",
     publisher_concurrency=True,
@@ -530,7 +499,6 @@ _NONCOMPLIANT_CASE: typ.Final = dataclasses.replace(
     pr_platform="Windows",
     trunk_runs_pr_platform=False,
     publisher_dispatch=False,
-    publisher_ref_guard=False,
     publisher_token_guard=False,
     publisher_stray_site="workflow",
     publisher_concurrency=False,
@@ -552,7 +520,7 @@ def test_a_fully_noncompliant_case_reports_every_clause() -> None:
     findings = _findings(_NONCOMPLIANT_CASE)
 
     assert findings == _expected(_NONCOMPLIANT_CASE), findings
-    assert len(findings) == 8, findings
+    assert len(findings) == 6, findings
 
 
 @settings(max_examples=4, deadline=None)
