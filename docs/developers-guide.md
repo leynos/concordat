@@ -1645,9 +1645,11 @@ conftest verify --policy platform-standards/canon/policies/rust \
 
 The policy reads its lint levels from `data.baseline`, the estate baseline that
 `rust-lint-tables` (LT-002) enforces, so the two cannot disagree; a baseline
-level weaker than `deny` also accepts a stricter one. Without the data it
-denies with "baseline data is not loaded" instead of passing. `make test` runs
-it alongside the discovered rule-package suites through
+level weaker than `deny` also accepts a stricter one, a table entry is read as
+its `level`, and `unsafe_code` at `deny` passes a `forbid` baseline because
+LT-004 lets a named boundary crate hold `deny`. Without the data it denies with
+"baseline data is not loaded" instead of passing. `make test` runs it alongside
+the discovered rule-package suites through
 `tests/unit/test_lint_rule_policies.py`, which gives each verification
 invocation a 120-second timeout. The root-policy batch helper in
 `tests/unit/rust_policy_batch_support.py` also uses a 120-second timeout.

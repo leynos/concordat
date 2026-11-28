@@ -452,6 +452,42 @@ test_unexpected_cfgs_below_the_baseline_is_rejected if {
   result[_] == "rust lint unexpected_cfgs must equal \"warn\""
 }
 
+with_rust(overrides) := {
+  "cargo": {"workspace": {
+    "members": ["a"],
+    "lints": object.union(canonical_lints, {"rust": object.union(canonical_lints.rust, overrides)}),
+  }},
+  "clippy": clippy_cfg,
+}
+
+test_a_table_form_lint_entry_is_read_as_its_level if {
+  result := data.canon.rust.lints.deny with input as with_rust({
+    "unexpected_cfgs": {"level": "warn", "check-cfg": ["cfg(coverage)"]},
+    "missing_docs": {"level": "deny", "priority": 0},
+  })
+  count(result) == 0
+}
+
+test_a_table_form_entry_below_the_baseline_is_rejected if {
+  result := data.canon.rust.lints.deny with input as with_rust({"missing_docs": {"level": "warn"}})
+  result[_] == "rust lint missing_docs must equal \"deny\""
+}
+
+test_a_table_without_a_level_is_rejected if {
+  result := data.canon.rust.lints.deny with input as with_rust({"unexpected_cfgs": {"check-cfg": []}})
+  count(result) > 0
+}
+
+test_a_boundary_crate_may_hold_unsafe_code_at_deny if {
+  result := data.canon.rust.lints.deny with input as with_rust({"unsafe_code": "deny"})
+  count(result) == 0
+}
+
+test_unsafe_code_below_deny_is_rejected if {
+  result := data.canon.rust.lints.deny with input as with_rust({"unsafe_code": "warn"})
+  result[_] == "rust lint unsafe_code must equal \"forbid\""
+}
+
 test_a_deny_baseline_lint_does_not_accept_a_different_level if {
   other := object.union(canonical_lints, {"rust": object.union(canonical_lints.rust, {"missing_docs": "forbid"})})
   result := data.canon.rust.lints.deny with input as {
@@ -462,11 +498,8 @@ test_a_deny_baseline_lint_does_not_accept_a_different_level if {
 }
 
 test_a_baseline_change_moves_the_required_level if {
-  result := data.canon.rust.lints.deny with input as {
-    "cargo": workspace_manifest,
-    "clippy": clippy_cfg,
-  } with data.baseline as object.union(data.baseline, {"rust": {"missing_docs": {"level": "forbid"}}})
-  result[_] == "rust lint missing_docs must equal \"forbid\""
+  result := data.canon.rust.lints.deny with input as with_rust({"missing_docs": "allow"}) with data.baseline as object.union(data.baseline, {"rust": {"missing_docs": {"level": "warn"}}})
+  result[_] == "rust lint missing_docs must equal \"warn\""
 }
 
 test_missing_baseline_data_is_denied_not_passed if {

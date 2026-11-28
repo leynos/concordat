@@ -31,12 +31,23 @@ rustdoc_required_lints := {key: spec.level | some key, spec in object.get(baseli
 # `deny` (`unexpected_cfgs` at `warn`) also accepts a stricter one.
 level_rank := {"allow": 0, "warn": 1, "deny": 2, "forbid": 3}
 
-meets_level(actual, required) if actual == required
+# A Cargo lint entry is a level string or a table with a `level` (and a priority,
+# or `check-cfg` for `unexpected_cfgs`); both are read as their level.
+entry_level(entry) := entry if is_string(entry)
+
+entry_level(entry) := entry.level if is_object(entry)
+
+meets_level(actual, required) if entry_level(actual) == required
 
 meets_level(actual, required) if {
   required != "deny"
-  level_rank[actual] > level_rank[required]
+  level_rank[entry_level(actual)] > level_rank[required]
 }
+
+# A `forbid` baseline (`unsafe_code`) also accepts `deny`: LT-004 lets a named
+# boundary crate hold `deny` through the allow-list, which this policy cannot
+# see, so no value would otherwise satisfy both.
+meets_level(actual, "forbid") if entry_level(actual) == "deny"
 
 clippy_thresholds := {
   "cognitive-complexity-threshold": object.get(object.get(baseline, "cognitive", {}), "threshold", 9),
