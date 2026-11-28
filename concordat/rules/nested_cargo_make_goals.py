@@ -63,30 +63,55 @@ def _is_quoted(text: str, offset: int) -> bool:
     return before.count('"') % 2 == 1 or before.count("'") % 2 == 1
 
 
+def _chain_goals(piece: str) -> list[str]:
+    """Return the leading `make` calls of one `;`-separated piece, in order.
+
+    A `&&` chain ends at its first part that is not a `make` call, because what
+    follows a command that may fail may be skipped.
+
+    Returns
+    -------
+    list[str]
+        The goals the piece always calls, in order.
+    """
+    goals: list[str] = []
+    for part in piece.split("&&"):
+        call = _MAKE_CALL.match(part)
+        if call is None:
+            break
+        goals.append(call.group("goal"))
+    return goals
+
+
 def _line_goals(text: str) -> list[str]:
     """Return the goals one recipe line always calls before its test command.
 
     Returns
     -------
     list[str]
-        The goals, in order. A piece after `||`, one inside quotes and one in a
-        shell branch contribute none, and a `&&` chain ends at its first part
-        that is not a `make` call, because what follows may be skipped.
+        The goals, in order. A piece after `||`, one inside quotes and a line
+        with a shell branch contribute none.
     """
     runs = _TEST_COMMAND.search(text)
     head = text[: runs.start()] if runs else text
     if _CONTROL_FLOW.search(head):
         return []
-    goals: list[str] = []
-    for piece in re.finditer(r"[^;]+", head):
-        if _is_quoted(head, piece.start()) or "||" in piece.group():
-            continue
-        for part in piece.group().split("&&"):
-            call = _MAKE_CALL.match(part)
-            if call is None:
-                break
-            goals.append(call.group("goal"))
-    return goals
+    pieces = [
+        piece.group()
+        for piece in re.finditer(r"[^;]+", head)
+        if not _is_quoted(head, piece.start()) and "||" not in piece.group()
+    ]
+    return [goal for piece in pieces for goal in _chain_goals(piece)]
+
+
+def _dependencies(rule: MakeRule) -> list[str]:
+    """Return the goals a rule depends on or calls through `make`, anywhere."""
+    calls = [
+        found.group("goal")
+        for recipe in rule["recipes"]
+        for found in _ANY_MAKE_CALL.finditer(recipe["text"])
+    ]
+    return [name for name in rule["prerequisites"] if "$" not in name] + calls
 
 
 def _starts_tests(goal: str, index: Index, seen: set[str]) -> bool:
@@ -101,17 +126,11 @@ def _starts_tests(goal: str, index: Index, seen: set[str]) -> bool:
     if goal in seen:
         return False
     seen.add(goal)
-    for rule in index.get(goal, []):
-        texts = [recipe["text"] for recipe in rule["recipes"]]
-        calls = [
-            m.group("goal") for text in texts for m in _ANY_MAKE_CALL.finditer(text)
-        ]
-        plain = [name for name in rule["prerequisites"] if "$" not in name]
-        if any(_TEST_COMMAND.search(text) for text in texts):
-            return True
-        if any(_starts_tests(name, index, seen) for name in [*plain, *calls]):
-            return True
-    return False
+    return any(
+        any(_TEST_COMMAND.search(recipe["text"]) for recipe in rule["recipes"])
+        or any(_starts_tests(name, index, seen) for name in _dependencies(rule))
+        for rule in index.get(goal, [])
+    )
 
 
 def _early_calls(rule: MakeRule, index: Index) -> list[str]:
@@ -145,7 +164,14 @@ def _next_goals(rule: MakeRule, index: Index) -> tuple[list[str], bool]:
     """
     plain = [name for name in rule["prerequisites"] if "$" not in name]
     hides = len(plain) != len(rule["prerequisites"])
-    return [*plain, *_early_calls(rule, index)], hides
+    found: list[str] = []
+    for name in plain:
+        found.append(name)
+        # Make runs prerequisites in order, then the recipe: nothing after one
+        # that starts the tests is early.
+        if _starts_tests(name, index, set()):
+            return found, hides
+    return [*found, *_early_calls(rule, index)], hides
 
 
 def _reachable_goals(index: Index) -> tuple[set[str], bool]:

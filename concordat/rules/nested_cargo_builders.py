@@ -31,7 +31,7 @@ if typ.TYPE_CHECKING:
     from .nested_cargo_spawns import RustEvidence, SpawnFact
 
 _METADATA: typ.Final = re.compile(r"\bMetadataCommand\b")
-_USE: typ.Final = re.compile(r"\s*(?:pub(?:\([^)]*\))?\s+)?use\b")
+_USE: typ.Final = re.compile(r"\buse\b")
 _SUITES: typ.Final = ("trybuild", "macrotest")
 
 
@@ -177,8 +177,8 @@ def _suite_builder(source: RustSource, line: int, form: str) -> BuilderFact:
 
 def _is_import(masked: str, offset: int) -> bool:
     """Report whether the token at *offset* sits in a `use` declaration."""
-    start = max(masked.rfind(mark, 0, offset) for mark in ";{}") + 1
-    return _USE.match(masked, start) is not None
+    uses = [found.start() for found in _USE.finditer(masked, 0, offset)]
+    return bool(uses) and ";" not in masked[uses[-1] : offset]
 
 
 def _metadata_builders(source: RustSource) -> list[BuilderFact]:

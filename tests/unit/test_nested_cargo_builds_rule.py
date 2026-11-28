@@ -11,6 +11,7 @@ from __future__ import annotations
 import typing as typ
 
 import pygit2
+import pytest
 
 from concordat.rules import packages, runner
 
@@ -151,6 +152,13 @@ fn writes_one_crate_and_builds_another() {
 }
 """
 
+GROUPED_IMPORT_TEST = """\
+#[test]
+fn only_imports() {
+    use cargo_metadata::{MetadataCommand};
+}
+"""
+
 PROBE_TEST = """\
 #[test]
 fn reports_a_version() {
@@ -260,22 +268,6 @@ def test_a_declaration_without_a_function_covers_the_file(
         'covered_by = "make:prepare-nested"',
     )
     assert profile(root) == set()
-
-
-def test_a_make_goal_that_test_does_not_run_is_nc013(tmp_path: pathlib.Path) -> None:
-    """A declared goal that exists but is not before `test` does not warm it."""
-    root = checkout(
-        tmp_path,
-        {
-            "tests/cli.rs": PLUGIN_TEST,
-            "Makefile": MAKEFILE + "\nunrelated:\n\techo hi\n",
-        },
-    )
-    declare(
-        root,
-        entry("tests/cli.rs", "make:unrelated"),
-    )
-    assert profile(root) == {("NC-013", "tests/cli.rs")}
 
 
 def test_a_nextest_setup_script_covers_a_declared_builder(
@@ -474,38 +466,6 @@ def test_a_metadata_import_outside_a_function_is_not_a_builder(
     assert profile(root) == set()
 
 
-def test_a_make_goal_called_after_the_tests_start_does_not_warm_them(
-    tmp_path: pathlib.Path,
-) -> None:
-    """Ordering matters: a goal `test` calls after its test line is too late."""
-    late = (
-        "test:\n\tcargo nextest run\n\t$(MAKE) prepare-nested\n\n"
-        "prepare-nested:\n\ttrue\n"
-    )
-    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": late})
-    declare(
-        root,
-        entry("tests/cli.rs", "make:prepare-nested"),
-    )
-    assert profile(root) == {("NC-013", "tests/cli.rs")}
-
-
-def test_a_goal_called_before_the_tests_start_warms_them(
-    tmp_path: pathlib.Path,
-) -> None:
-    """A `make` call earlier in the `test` recipe is ordered by the recipe."""
-    early = (
-        "test:\n\t$(MAKE) prepare-nested\n\tcargo nextest run\n\n"
-        "prepare-nested:\n\ttrue\n"
-    )
-    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": early})
-    declare(
-        root,
-        entry("tests/cli.rs", "make:prepare-nested"),
-    )
-    assert profile(root) == set()
-
-
 def test_a_variable_prerequisite_leaves_an_unfound_goal_unreadable(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -542,19 +502,6 @@ def test_a_shell_wrapped_rustdoc_is_indeterminate(tmp_path: pathlib.Path) -> Non
     assert profile(root) == {("EN-001", "tests/doc.rs")}
 
 
-def test_a_make_call_inside_a_quoted_echo_is_not_a_call(
-    tmp_path: pathlib.Path,
-) -> None:
-    """Text that mentions `make prepare-nested` is not a call to it."""
-    echoed = (
-        'test:\n\t@echo "make prepare-nested"\n\tcargo nextest run\n\n'
-        "prepare-nested:\n\ttrue\n"
-    )
-    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": echoed})
-    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
-    assert profile(root) == {("NC-013", "tests/cli.rs")}
-
-
 def test_a_test_target_name_selects_the_binary_not_the_file_name(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -576,17 +523,6 @@ def test_a_function_that_reads_a_manifest_is_not_a_scratch_crate(
     """NC-012 needs the manifest itself written, not an unrelated write."""
     root = checkout(tmp_path, {"tests/read.rs": READ_ONLY_TEST})
     assert profile(root) == {("NC-011", "tests/read.rs")}
-
-
-def test_a_make_call_after_a_failing_or_does_not_warm(tmp_path: pathlib.Path) -> None:
-    """`true || make prepare` never runs the goal, so it warms nothing."""
-    skipped = (
-        "test:\n\ttrue || $(MAKE) prepare-nested\n\tcargo nextest run\n\n"
-        "prepare-nested:\n\ttrue\n"
-    )
-    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": skipped})
-    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
-    assert profile(root) == {("NC-013", "tests/cli.rs")}
 
 
 def test_a_manifest_name_in_the_content_of_a_write_is_not_a_scratch_crate(
@@ -643,57 +579,87 @@ def test_a_manifest_and_a_build_in_different_directories_is_not_a_scratch_crate(
     assert profile(root) == {("NC-011", "tests/two.rs")}
 
 
-def test_a_make_call_behind_a_failing_and_does_not_warm(
-    tmp_path: pathlib.Path,
+def test_a_grouped_metadata_import_is_not_a_builder(tmp_path: pathlib.Path) -> None:
+    """`use cargo_metadata::{MetadataCommand};` owns no query either."""
+    root = checkout(tmp_path, {"tests/graph.rs": GROUPED_IMPORT_TEST})
+    assert profile(root) == set()
+
+
+WARM = "warmup:\n\ttrue\n"
+NONE = set[tuple[str, str]]()
+NC013 = {("NC-013", "tests/cli.rs")}
+
+
+@pytest.mark.parametrize(
+    ("makefile", "expected"),
+    [
+        pytest.param(
+            "test:\n\tcargo nextest run\n\nwarmup:\n\ttrue\n", NC013, id="never-called"
+        ),
+        pytest.param(
+            "test:\n\t$(MAKE) warmup\n\tcargo nextest run\n\n" + WARM,
+            NONE,
+            id="before-the-tests",
+        ),
+        pytest.param(
+            "test:\n\tcargo nextest run\n\t$(MAKE) warmup\n\n" + WARM,
+            NC013,
+            id="after-the-tests",
+        ),
+        pytest.param(
+            'test:\n\t@echo "make warmup"\n\tcargo nextest run\n\n' + WARM,
+            NC013,
+            id="quoted-echo",
+        ),
+        pytest.param(
+            "test:\n\ttrue || $(MAKE) warmup\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="after-or",
+        ),
+        pytest.param(
+            "test:\n\tfalse && $(MAKE) warmup; cargo nextest run\n\n" + WARM,
+            NC013,
+            id="behind-failing-and",
+        ),
+        pytest.param(
+            "test:\n\ttrue || ($(MAKE) warmup)\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="subshell",
+        ),
+        pytest.param(
+            "test:\n\t$(MAKE) one && $(MAKE) warmup && cargo nextest run\n\n"
+            "one:\n\ttrue\n\n" + WARM,
+            NONE,
+            id="chain",
+        ),
+        pytest.param(
+            "test:\n\t$(MAKE) run\n\t$(MAKE) warmup\n\nrun:\n\tcargo nextest run\n\n"
+            + WARM,
+            NC013,
+            id="after-a-goal-that-tests",
+        ),
+        pytest.param(
+            "test:\n\t$(MAKE) warmup\n\t$(MAKE) run\n\nrun:\n\tcargo nextest run\n\n"
+            + WARM,
+            NONE,
+            id="before-a-goal-that-tests",
+        ),
+        pytest.param(
+            "test: run\n\t$(MAKE) warmup\n\nrun:\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="after-a-prerequisite-that-tests",
+        ),
+        pytest.param(
+            "test: warmup run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
+            NONE,
+            id="prerequisite-before-one-that-tests",
+        ),
+    ],
+)
+def test_a_make_warm_up_counts_only_when_it_runs_before_the_tests(
+    tmp_path: pathlib.Path, makefile: str, expected: set[tuple[str, str]]
 ) -> None:
-    """`false && make prepare; cargo test` skips the goal."""
-    skipped = (
-        "test:\n\tfalse && $(MAKE) prepare-nested; cargo nextest run\n\n"
-        "prepare-nested:\n\ttrue\n"
-    )
-    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": skipped})
-    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
-    assert profile(root) == {("NC-013", "tests/cli.rs")}
-
-
-def test_a_make_call_in_a_conditional_subshell_does_not_warm(
-    tmp_path: pathlib.Path,
-) -> None:
-    """`true || (make prepare)` skips the goal."""
-    skipped = (
-        "test:\n\ttrue || ($(MAKE) prepare-nested)\n\tcargo nextest run\n\n"
-        "prepare-nested:\n\ttrue\n"
-    )
-    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": skipped})
-    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
-    assert profile(root) == {("NC-013", "tests/cli.rs")}
-
-
-def test_a_goal_called_after_a_goal_that_starts_the_tests_does_not_warm(
-    tmp_path: pathlib.Path,
-) -> None:
-    """Ordering holds across recursive `make`: `run` tests before `warmup`."""
-    late = (
-        "test:\n\t$(MAKE) run\n\t$(MAKE) warmup\n\n"
-        "run:\n\tcargo nextest run\n\n"
-        "warmup:\n\ttrue\n"
-    )
-    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": late})
+    """The Makefile's order decides whether `make:warmup` pays for the build."""
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": makefile})
     declare(root, entry("tests/cli.rs", "make:warmup"))
-    assert profile(root) == {("NC-013", "tests/cli.rs")}
-    early = late.replace(
-        "$(MAKE) run\n\t$(MAKE) warmup", "$(MAKE) warmup\n\t$(MAKE) run"
-    )
-    put(root, "Makefile", early)
-    assert profile(root) == set()
-
-
-def test_a_make_chain_of_calls_before_the_tests_warms(tmp_path: pathlib.Path) -> None:
-    """`make a && make b && cargo test` runs both goals first."""
-    chain = (
-        "test:\n\t$(MAKE) one && $(MAKE) prepare-nested && cargo nextest run\n\n"
-        "one:\n\ttrue\n\nprepare-nested:\n\ttrue\n"
-    )
-    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": chain})
-    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
-    assert profile(root) == set()
+    assert profile(root) == expected

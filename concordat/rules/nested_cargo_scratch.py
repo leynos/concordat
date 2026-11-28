@@ -82,6 +82,32 @@ def _bindings(masked: str, spans: list[Span]) -> dict[str, set[str]]:
     return uses
 
 
+def _roots(masked: str, spans: list[Span]) -> dict[str, Origins]:
+    """Return the names bound to a statement that creates a temporary directory.
+
+    Returns
+    -------
+    dict[str, Origins]
+        Each such name mapped to itself, as the root it stands for.
+    """
+    found: dict[str, Origins] = {}
+    for start, end in spans:
+        bound = _LET_NAME.match(masked, start)
+        if bound is not None and _TEMPORARY.search(masked, start, end):
+            found[bound.group("name")] = frozenset({bound.group("name")})
+    return found
+
+
+def _inherit(found: dict[str, Origins], uses: dict[str, set[str]]) -> None:
+    """Give each name the roots of every derived name its statement uses."""
+    for name, used in uses.items():
+        inherited: Origins = frozenset()
+        for word in used:
+            inherited |= found.get(word, frozenset())
+        if inherited:
+            found[name] = found.get(name, frozenset()) | inherited
+
+
 def _provenance(masked: str, spans: list[Span]) -> dict[str, Origins]:
     """Return, for each `let` name, the temporary directories it derives from.
 
@@ -95,18 +121,9 @@ def _provenance(masked: str, spans: list[Span]) -> dict[str, Origins]:
         The roots of each derived name; names with none are absent.
     """
     uses = _bindings(masked, spans)
-    found: dict[str, Origins] = {}
-    for start, end in spans:
-        bound = _LET_NAME.match(masked, start)
-        if bound is not None and _TEMPORARY.search(masked, start, end):
-            found[bound.group("name")] = frozenset({bound.group("name")})
+    found = _roots(masked, spans)
     for _ in range(_DERIVATION_DEPTH):
-        for name, used in uses.items():
-            inherited: Origins = frozenset()
-            for word in used:
-                inherited |= found.get(word, frozenset())
-            if inherited:
-                found[name] = found.get(name, frozenset()) | inherited
+        _inherit(found, uses)
     return found
 
 
@@ -137,6 +154,14 @@ def _first_argument(text: str, masked: str, call: re.Match[str]) -> tuple[str, s
     return (original[0], plain[0]) if original and plain else ("", "")
 
 
+def _is_manifest_path(
+    original: str, plain: str, words: set[str], manifests: set[str]
+) -> bool:
+    """Report whether a write's first argument is a manifest path."""
+    is_literal = _MANIFEST_NAME.search(original) is not None and '"' in plain
+    return is_literal or bool(words & manifests)
+
+
 def _destination_origins(function: _Function) -> list[Origins]:
     """Return the roots of each write whose destination is a manifest path.
 
@@ -152,8 +177,7 @@ def _destination_origins(function: _Function) -> list[Origins]:
         for call in _WRITE_CALL.finditer(function.masked, start, end):
             original, plain = _first_argument(function.text, function.masked, call)
             words = _words(plain)
-            is_literal = _MANIFEST_NAME.search(original) and '"' in plain
-            if is_literal or words & manifests:
+            if _is_manifest_path(original, plain, words, manifests):
                 found.append(function.origins(words))
     return found
 

@@ -1024,9 +1024,10 @@ covered_by = "nextest-setup"
   starts the tests is too late), a nextest setup script that selects every
   binary built from the file, or an existing function.
 
-A spawn the reader cannot see (another crate's helper, `sh -c`) is
-indeterminate, never guessed. The rule ships at `warning` severity;
-`severity: error` promotes it.
+A spawn the reader cannot see (`sh -c`, a spawn a macro generates, a helper
+that returns a `Command` whose call site is in another file) is indeterminate,
+never guessed; a helper that runs cargo itself is an undeclared builder. The
+rule ships at `warning` severity; `severity: error` promotes it.
 
 ### Auditing pull-request run cancellation
 
