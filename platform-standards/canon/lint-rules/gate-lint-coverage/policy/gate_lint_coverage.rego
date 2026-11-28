@@ -219,14 +219,27 @@ run_covers(surface, r, d) if {
 	not contains(f, "/")
 	endswith(d, concat("", ["/", f]))
 	selects_package(r, d)
-	shares_features(surface, r, d)
 }
 
-shares_features(surface, _, _) if surface.resolver != "1"
+# Resolver 1 applies `--features` and `--no-default-features` to the package the
+# command runs in, whatever it selects, so a surface of several packages under it
+# (or under a resolver the audit cannot tell) is not judged: it is indeterminate.
+feature_scoping_known(surface) if count(surface.packages) == 1
 
-shares_features(surface, r, d) if {
-	surface.resolver == "1"
-	r.selected == [split(d, "/")[0]]
+feature_scoping_known(surface) if surface.resolver in {"2", "3"}
+
+deny contains finding("EN-001", severity, "indeterminate", surface.manifest, msg) if {
+	audited
+	some surface in input.surfaces
+	some tool in judged_tools
+	runs := runs_for(surface, tool)
+	count(runs) > 0
+	not feature_scoping_known(surface)
+	count(surface.features) + count(surface.default_packages) > 0
+	msg := sprintf(
+		"%s: the workspace uses feature resolver %s, which applies command-line features to the package a command runs in, so the audit does not judge which features the %s commands check. Set `resolver = \"2\"` (or a root package of edition 2021 or later) to have them judged. Commands: %s",
+		[surface.manifest, surface.resolver, tool, list_sources(runs)],
+	)
 }
 
 # The envelope says which packages a run selects, as Cargo does (`-p`,
@@ -267,6 +280,7 @@ deny contains finding("LC-002", severity, "noncompliant", surface.manifest, msg)
 	runs := runs_for(surface, tool)
 	count(runs) > 0
 	tool_known(surface, tool)
+	feature_scoping_known(surface)
 	missing := uncovered_features(surface, tool)
 	default_missing := not_default_checked(surface, tool)
 	count(missing) + count(default_missing) > 0

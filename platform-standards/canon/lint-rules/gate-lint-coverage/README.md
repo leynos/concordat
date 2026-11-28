@@ -57,16 +57,18 @@ Clippy at all).
   the package must leave its default set on (`--features default` asks for it
   by name). In a workspace of several packages a feature is `package/feature`,
   and `-F a/fast` covers `a`'s `fast` only; a bare `-F fast` covers it in every
-  package that declares it, except under resolver 1 (a virtual workspace with no
-  `resolver`, or a root package before edition 2021), where it applies to the
-  one package the command runs in. In a surface of one package `-F pkg/fast` is
-  `fast`. A run covers the features of the packages Cargo selects for it:
-  `-p a` names them, `--workspace` takes every package less `--exclude`, a
-  command at a member's manifest selects that member (`-p` and `--exclude` take
-  glob patterns such as `b*`), and a bare command at the root selects the
-  `default-members` (the root package of a workspace that has one, every member
-  of a virtual workspace). A `default-members` pattern is not expanded, so a
-  bare run there is EN-001.
+  package that declares it. Under resolver 1 (a virtual workspace with no
+  `resolver`, or a root package before edition 2021, inherited editions
+  included) command-line features apply to the one package the command runs in,
+  which the audit does not model, so a workspace of several packages that
+  declares features is EN-001, not judged. In a surface of one package
+  `-F pkg/fast` is `fast`. A run covers the features of the packages Cargo
+  selects for it: `-p a` names them, `--workspace` takes every package less
+  `--exclude`, a command at a member's manifest selects that member (`-p` and
+  `--exclude` take glob patterns such as `b*`), and a bare command at the root
+  selects the `default-members` (the root package of a workspace that has one,
+  every member of a virtual workspace). A `default-members` pattern is not
+  expanded, so a bare run there is EN-001.
 - **Warnings** are denied by `-D warnings` in `RUSTFLAGS` on the command or
   exported by the Makefile, after `--` for Clippy, or in `.cargo/config.toml`
   `build.rustflags`; `cargo doc` needs `RUSTDOCFLAGS` (rustdoc does not read

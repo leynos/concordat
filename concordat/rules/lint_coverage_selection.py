@@ -72,6 +72,9 @@ def resolver_of(reader: Reader, key: str) -> str:
     if isinstance(declared, str):
         return declared
     edition = table(root.get("package")).get("edition")
+    if table(edition).get("workspace") is True:
+        # `edition.workspace = true`: the root package takes its own workspace's.
+        edition = table(table(root.get("workspace")).get("package")).get("edition")
     return _EDITION_RESOLVERS.get(edition, "1") if isinstance(edition, str) else "1"
 
 

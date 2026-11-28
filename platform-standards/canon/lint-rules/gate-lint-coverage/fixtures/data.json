@@ -2386,7 +2386,7 @@
             "Cargo.toml": "app",
             "crates/b/Cargo.toml": "b"
           },
-          "resolver": "1",
+          "resolver": "2",
           "default_selects": [
             "app"
           ],
@@ -4605,7 +4605,7 @@
             "Cargo.toml": "app",
             "crates/b/Cargo.toml": "b"
           },
-          "resolver": "1",
+          "resolver": "2",
           "default_selects": [
             "app"
           ],
@@ -4705,7 +4705,7 @@
             "Cargo.toml": "app",
             "crates/b/Cargo.toml": "b"
           },
-          "resolver": "1",
+          "resolver": "2",
           "default_selects": [
             "app"
           ],
@@ -4804,7 +4804,7 @@
             "Cargo.toml": "app",
             "crates/b/Cargo.toml": "b"
           },
-          "resolver": "1",
+          "resolver": "2",
           "default_selects": [
             "app"
           ],

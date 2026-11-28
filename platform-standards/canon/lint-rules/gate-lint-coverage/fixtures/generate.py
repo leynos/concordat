@@ -90,7 +90,7 @@ def designed(
 def grown(*lint: str) -> dict[str, str]:
     """Return a root package that gained a member, and a gate."""
     return {
-        "Cargo.toml": package("app", FEATURES)
+        "Cargo.toml": package("app", 'edition = "2021"\n' + FEATURES)
         + '\n[workspace]\nmembers = ["crates/*"]\n',
         "src/lib.rs": "",
         "crates/b/Cargo.toml": package("b"),

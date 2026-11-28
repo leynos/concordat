@@ -345,7 +345,7 @@ artifacts:
       feature, every lint command denying warnings, and `make lint` reaching
       `cargo doc --no-deps` with `RUSTDOCFLAGS` denying warnings, with lane
       lists built by a script and unreadable inputs indeterminate.
-    sha256: 7719bb800755c8c53cc2ef830064ae54068eed5578f44b81c44f06b3fe2807b7
+    sha256: fa8b3493a2304f45746a5952af6911a8e7e2702d3bccc5cc7a05eb755fdce5cf
   - id: lint-rule-gate-lint-coverage-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/gate-lint-coverage/rule.yaml

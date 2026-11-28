@@ -161,6 +161,15 @@ class TestSurfaces:
             (f'{APP}edition = "2021"\n[workspace]\nmembers = ["a"]\n', "2"),
             (f'{APP}edition = "2024"\n[workspace]\nmembers = ["a"]\n', "3"),
             (f'{APP}[workspace]\nmembers = ["a"]\n', "1"),
+            (
+                f'{APP}edition.workspace = true\n[workspace]\nmembers = ["a"]\n'
+                '[workspace.package]\nedition = "2021"\n',
+                "2",
+            ),
+            (
+                f'{APP}edition.workspace = true\n[workspace]\nmembers = ["a"]\n',
+                "1",
+            ),
         ],
     )
     def test_the_feature_resolver_is_read_from_the_root(

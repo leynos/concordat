@@ -164,12 +164,12 @@ test_naming_the_default_feature_asks_for_the_defaults if {
 	count(findings(data.fixtures.designed_explicit_default_feature_asks_for_the_defaults)) == 0
 }
 
-test_resolver_one_does_not_share_a_bare_feature_across_packages if {
+test_resolver_one_leaves_the_features_of_several_packages_indeterminate if {
 	fixture := data.fixtures.designed_resolver_one_applies_a_bare_feature_to_one_package
-	ids(fixture) == {"LC-002"}
-	[msg] := messages_of(fixture, "LC-002")
-	contains(msg, "feature a/fast")
-	contains(msg, "feature b/fast")
+	ids(fixture) == {"EN-001"}
+	[msg] := messages_of(fixture, "EN-001")
+	contains(msg, "feature resolver 1")
+	contains(msg, "resolver = \"2\"")
 }
 
 test_the_default_set_is_judged_for_each_package if {
