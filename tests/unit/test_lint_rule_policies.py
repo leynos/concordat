@@ -76,6 +76,8 @@ def test_the_root_rust_policy_suite_passes() -> None:
             "verify",
             "--policy",
             str(policy_dir),
+            "--data",
+            str(RULE_PACKAGES_DIR / "rust-lint-tables" / "data" / "baseline.json"),
         ],
         capture_output=True,
         text=True,

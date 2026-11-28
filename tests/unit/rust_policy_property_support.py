@@ -82,6 +82,8 @@ _CANONICAL_CARGO: typ.Final = {
                         "error_impl_error",
                         "result_large_err",
                         "disallowed_methods",
+                        "missing_assert_message",
+                        "missing_docs_in_private_items",
                     ),
                     "deny",
                 ),
@@ -90,6 +92,8 @@ _CANONICAL_CARGO: typ.Final = {
                 "unknown_lints": "deny",
                 "renamed_and_removed_lints": "deny",
                 "missing_docs": "deny",
+                "unsafe_code": "forbid",
+                "unexpected_cfgs": "warn",
             },
             "rustdoc": {
                 "missing_crate_level_docs": "deny",

@@ -27,6 +27,14 @@ _ROOT_POLICY_DIR: typ.Final = (
     / "policies"
     / "rust"
 )
+# The policy reads the estate baseline that `rust-lint-tables` enforces.
+_BASELINE_DATA: typ.Final = (
+    _ROOT_POLICY_DIR.parents[1]
+    / "lint-rules"
+    / "rust-lint-tables"
+    / "data"
+    / "baseline.json"
+)
 _CONFTEST_TIMEOUT: typ.Final = 120.0
 
 
@@ -206,6 +214,8 @@ def _run_conftest(
         "test",
         "--policy",
         str(_ROOT_POLICY_DIR),
+        "--data",
+        str(_BASELINE_DATA),
         "--namespace",
         _ROOT_POLICY_NAMESPACE,
         "--output",
