@@ -27,13 +27,11 @@ if typ.TYPE_CHECKING:
 type Index = dict[str, list[MakeRule]]
 
 # A command that runs tests: `cargo test`, `cargo nextest ...`, `nextest`, `pytest`.
-# A compile-only line (`--no-run`, `archive`) prepares and does not start them.
+# A compile-only command (`--no-run`, `nextest archive`) prepares and does not
+# start them; see `_is_compile_only`.
 _TEST_COMMAND: typ.Final = re.compile(
     r"\b(?:cargo(?:-\w+)?\s+(?:\S+\s+)*?(?:nextest|test|bench|llvm-cov|tarpaulin)"
     r"|nextest|pytest)\b"
-)
-_COMPILE_ONLY: typ.Final = re.compile(
-    r"--no-run\b|\bcargo(?:\s+nextest|-nextest(?:\s+nextest)?)\s+archive\b"
 )
 # A variable (other than `$(MAKE)`) anywhere on the line may expand to a test
 # command: `env $(RUNNER)`, `$(CARGO) test`.
@@ -62,6 +60,31 @@ def _has_opaque_call(text: str) -> bool:
     )
 
 
+def _is_compile_only(fragment: str) -> bool:
+    """Report whether one command is plainly a compile and runs no test.
+
+    Only two plain forms qualify: `cargo nextest archive`, and a `cargo`
+    command with `--no-run` before any `--`. A command with a quote, a variable
+    or a backtick is ambiguous (`--skip 'cargo nextest archive'` is a test
+    argument), so it does not qualify and is read as starting the tests.
+
+    Returns
+    -------
+    bool
+        True for one of the two plain forms.
+    """
+    if any(mark in fragment for mark in "'\"$`"):
+        return False
+    words = fragment.split()
+    if words:
+        words[0] = words[0].lstrip("@+-")
+    if words[:3] == ["cargo", "nextest", "archive"]:
+        return True
+    if words[:1] != ["cargo"] or "--no-run" not in words:
+        return False
+    return "--" not in words[: words.index("--no-run")]
+
+
 def _runs_test_command(text: str) -> bool:
     """Report whether any command on a line runs tests rather than only compiling.
 
@@ -75,7 +98,7 @@ def _runs_test_command(text: str) -> bool:
         True when some fragment of the line runs a test command.
     """
     return any(
-        _TEST_COMMAND.search(part) and not _COMPILE_ONLY.search(part)
+        _TEST_COMMAND.search(part) and not _is_compile_only(part)
         for part in re.split(r"&&|\|\||[;&|]", text)
     )
 

@@ -742,6 +742,17 @@ ORDERING_CASES = [
         id="a-nextest-archive-warm-up",
     ),
     pytest.param(
+        "test: warmup\n\ttrue\n\n"
+        "warmup:\n\tcargo test -- --skip 'cargo nextest archive'\n",
+        UNREADABLE,
+        id="a-quoted-archive-is-a-test-argument",
+    ),
+    pytest.param(
+        "test: warmup\n\ttrue\n\nwarmup:\n\tcargo test -- --no-run\n",
+        UNREADABLE,
+        id="no-run-after-the-separator",
+    ),
+    pytest.param(
         "test:: warmup\ntest::\n\tcargo nextest run\n\n" + WARM,
         UNREADABLE,
         id="a-double-colon-rule",
