@@ -706,3 +706,32 @@ test_a_pull_request_run_body_naming_the_token_is_noncompliant if {
   findings := policy.deny with input as data.fixtures.pr_token_in_a_run_body
   "pull-request workflow receives CS_ACCESS_TOKEN" in {f.msg | some f in findings}
 }
+
+# --------------------------------------------------------------------------
+# Matrix-switched runners: the platform that must also run on the trunk is the
+# one the ratcheting legs name.
+# --------------------------------------------------------------------------
+
+# The ratchet runs only on the Linux leg, whose runner is a fork fallback
+# between two Linux labels written with matrix references; the Windows leg
+# does not ratchet, so it owes the trunk nothing.
+test_the_ratcheting_leg_decides_the_matrix_platform if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_runner_follows_the_ratcheting_leg
+  count(findings) == 0
+}
+
+# Without a switch every leg ratchets, so Linux and Windows disagree.
+test_unswitched_mixed_matrix_platforms_stay_indeterminate if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_runner_mixed_platforms_unswitched
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
+# A reference no leg defines names no runner, so it is not guessed.
+test_a_matrix_reference_no_leg_defines_stays_indeterminate if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_runner_key_missing_from_legs
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
