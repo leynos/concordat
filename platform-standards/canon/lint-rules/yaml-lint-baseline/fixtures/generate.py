@@ -158,6 +158,10 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "conditional": Scenario(makefile="conditional"),
     "delegated_redirecting_flag": Scenario(makefile="delegated-redirecting-flag"),
     "split_lint_two_recipes": Scenario(makefile="split-lint-two-recipes"),
+    "overridden_prerequisite": Scenario(makefile="overridden-prerequisite"),
+    "delegated_ignored": Scenario(makefile="delegated-ignored"),
+    "delegated_makeflags": Scenario(makefile="delegated-makeflags"),
+    "delegated_option_target": Scenario(makefile="delegated-option-target"),
     "yaml_only_no_makefile": dataclasses.replace(YAML_ONLY, makefile=None),
     # -- YL-003: the yamllint configuration --------------------------------
     "base_missing": Scenario(base=None),

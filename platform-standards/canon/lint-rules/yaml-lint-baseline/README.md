@@ -80,10 +80,13 @@ decoded, each produce an `indeterminate` finding rather than a pass.
 Two shapes stay provable. A recursive `$(MAKE) [flags] target` is a proven edge
 when its flags are limited to `--no-print-directory`, `--silent`, `--quiet` and
 `-s`, which change only how the sub-make reports; any other flag (`-C`, `-f`,
-`-j`, `-k`, `-o`) leaves the closure unproven. A target split across plain rules
-(`lint: a b` and, further down, `lint: c`) is proven too, because Make merges
-their prerequisites; it is unproven only when more than one of the rules
-carries a recipe, since Make keeps the later recipe and warns.
+`-j`, `-k`, `-o`) leaves the closure unproven, as does an option-shaped token
+read as a target (`$(MAKE) --silent -n`), a leading `-` that ignores the
+sub-make's failure, and an assignment that changes the sub-make
+(`MAKEFLAGS=-n $(MAKE) ...`). A target split across plain rules (`lint: a b`
+and, further down, `lint: c`) is proven too, because Make merges their
+prerequisites; it is unproven when more than one rule for any target the
+closure reaches carries a recipe, since Make keeps the later recipe and warns.
 
 The checks that read the Makefile prove the shape of the lint path, not that
 the tools run to completion on the repository's YAML; that is what the lint

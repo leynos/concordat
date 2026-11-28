@@ -447,8 +447,45 @@ test_split_lint if {
 test_split_lint_two_recipes if {
   findings := policy.deny with input as data.fixtures.split_lint_two_recipes
   profile(findings) == {
-    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target has several rules with recipes or a double-colon definition"],
-    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target has several rules with recipes or a double-colon definition"],
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+  }
+}
+
+# The override test covers every target the closure reaches: a second recipe
+# for `yamllint` replaces the real one even though `lint` itself is clean.
+test_overridden_prerequisite if {
+  findings := policy.deny with input as data.fixtures.overridden_prerequisite
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+  }
+}
+
+# A leading `-` hides the sub-make's failure from Make, so the edge is unproven.
+test_delegated_ignored if {
+  findings := policy.deny with input as data.fixtures.delegated_ignored
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# `MAKEFLAGS=-n` changes what the sub-make does, so the edge is unproven.
+test_delegated_makeflags if {
+  findings := policy.deny with input as data.fixtures.delegated_makeflags
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# `-n` after a report-only flag is an option, not a target name.
+test_delegated_option_target if {
+  findings := policy.deny with input as data.fixtures.delegated_option_target
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
   }
 }
 

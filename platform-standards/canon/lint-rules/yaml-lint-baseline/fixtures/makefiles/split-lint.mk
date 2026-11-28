@@ -1,8 +1,8 @@
 YAMLLINT ?= yamllint
 ACTIONLINT ?= actionlint
-.PHONY: lint yamllint actionlint interrogate
+.PHONY: lint yamllint actionlint
 
-lint: yamllint actionlint
+lint: yamllint
 	@echo linted
 
 yamllint:
@@ -11,7 +11,4 @@ yamllint:
 actionlint:
 	$(ACTIONLINT)
 
-interrogate:
-	@echo interrogate
-
-lint: interrogate
+lint: actionlint

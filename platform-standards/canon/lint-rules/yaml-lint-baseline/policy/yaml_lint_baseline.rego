@@ -197,20 +197,35 @@ env_assignment_prefix := `[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)
 # `-W`, variable overrides) can redirect the closure, so it stays unproven.
 make_report_flags := `(?:(?:--no-print-directory|--silent|--quiet|-s)[[:space:]]+)*`
 
+# A target name never starts with `-`: `$(MAKE) --silent -n` passes an option,
+# not a target, so an option-shaped token is not an edge.
+make_target := `[A-Za-z0-9_.][A-Za-z0-9_.-]*`
+
 static_make_recipe_pattern := sprintf(
-	`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s[A-Za-z0-9_.-]+([[:space:]]*&&[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s[A-Za-z0-9_.-]+)*[[:space:]]*$`,
-	[env_assignment_prefix, make_report_flags, env_assignment_prefix, make_report_flags],
+	`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s%s([[:space:]]*&&[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s%s)*[[:space:]]*$`,
+	[
+		env_assignment_prefix, make_report_flags, make_target,
+		env_assignment_prefix, make_report_flags, make_target,
+	],
 )
 
+# Variables that change what a sub-make does: `MAKEFLAGS=-n $(MAKE) checks`
+# skips the checks while the recipe still reads as a delegation.
+make_altering_assignment := `(^|[[:space:]&;])(MAKEFLAGS|MFLAGS|MAKEOVERRIDES|GNUMAKEFLAGS|MAKEFILES|MAKELEVEL)=`
+
+# A leading `-` (ignore errors) hides the sub-make's failure from Make, so the
+# edge is not binding.
 static_make_recipe_is_binding(recipe) if {
+	recipe.ignore_errors == false
 	regex.match(static_make_recipe_pattern, recipe.text)
+	not regex.match(make_altering_assignment, recipe.text)
 }
 
 static_make_segment_target(segment) := target if {
 	matches := regex.find_all_string_submatch_n(
 		sprintf(
-			`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s([A-Za-z0-9_.-]+)[[:space:]]*$`,
-			[env_assignment_prefix, make_report_flags],
+			`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s(%s)[[:space:]]*$`,
+			[env_assignment_prefix, make_report_flags, make_target],
 		),
 		segment,
 		1,
@@ -284,18 +299,25 @@ unproven_make_delegation(root) if {
 
 # Make merges the prerequisites of every plain rule for a target, so a target
 # split across rules is provable while at most one of them carries recipes.
-# Two rules with recipes make Make keep the later one and warn.
-root_definitions_ambiguous(root) if {
+# Two rules with recipes make Make keep the later one and warn. The test runs
+# on every target the closure reaches, not only the root, because an
+# overridden recipe on a prerequisite would otherwise be credited.
+target_definitions_ambiguous(target) if {
 	recipe_rules := [rule |
-		some rule in rules_defining(root)
+		some rule in rules_defining(target)
 		count(rule.recipes) > 0
 	]
 	count(recipe_rules) > 1
 }
 
-root_definitions_ambiguous(root) if {
-	some rule in rules_defining(root)
+target_definitions_ambiguous(target) if {
+	some rule in rules_defining(target)
 	rule.double_colon == true
+}
+
+root_definitions_ambiguous(root) if {
+	some target in reachable_from(root)
+	target_definitions_ambiguous(target)
 }
 
 includes_present if count(input.makefile.includes) > 0
@@ -563,7 +585,7 @@ closure_indeterminate_reason(root) := "Makefile includes other files; the recipe
 	includes_present
 } else := "Makefile parse was recovered from syntax errors; facts may be incomplete" if {
 	parse_recovered
-} else := sprintf("the %q target has several rules with recipes or a double-colon definition", [root]) if {
+} else := sprintf("the %q target reaches a target with several rules with recipes or a double-colon definition", [root]) if {
 	root_definitions_ambiguous(root)
 } else := sprintf("the %q target reaches a conditional Make rule; its recipes cannot be proven", [root]) if {
 	conditional_path(root)
