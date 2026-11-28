@@ -455,7 +455,9 @@ concordat artefact rule run main-owned-codescene-coverage --repo /path/to/checko
 
 It requires that:
 
-- pull-request coverage uses the main-derived local ratchet, sets
+- pull-request coverage uses the main-derived local ratchet (one ratcheting
+  step per job, because the shared action keeps one baseline per job; a ratchet
+  switched by `matrix.<key>` counts when one leg sets the key true), sets
   `publish-artefact: 'false'`, and neither invokes CodeScene nor binds
   `CS_ACCESS_TOKEN` in an `env` block, a `run` body or an action input;
 - exactly one workflow triggered by a push to `main` (optionally alongside
@@ -483,9 +485,12 @@ repository, a missing file, a loop or a deeper chain) is reported by name,
 while the workflow's other jobs are still evaluated. A coverage job's runner
 platform is read from its literal labels; a label written as an expression is
 classified from the literals in value position (those after `&&`, `||` or the
-opening `${{`, never a comparison operand such as `'dependabot[bot]'`), and
-only when every such literal agrees; otherwise it is indeterminate. A
-repository that generates no coverage anywhere is not a subject of this rule.
+opening `${{`, never a comparison operand such as `'dependabot[bot]'`) and from
+the values of `matrix.<key>` references in value position, read from the
+matrix's `include` legs (only the ratcheting legs when the ratchet is switched
+by the matrix), and only when every such value agrees; otherwise it is
+indeterminate. A repository that generates no coverage anywhere is not a
+subject of this rule.
 
 Named exemptions (`exemptions` in the rule's parameters, each with a
 `repository`, an exact workflow `path`, a `rationale` and a `review_trigger`)

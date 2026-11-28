@@ -11,9 +11,14 @@ The rule requires all of the following.
 
 Pull-request lanes keep coverage local:
 
-- Every `generate-coverage` step in a pull-request workflow uses
-  `with-ratchet: true`, and its effective Rust and Python baseline paths match
-  a ratcheting generator in the main publisher.
+- Every pull-request job that generates coverage has one `generate-coverage`
+  step with `with-ratchet: true`, and that step's effective Rust and Python
+  baseline paths match a ratcheting generator in the main publisher. The shared
+  action keeps one baseline per job, so the job's other coverage steps need not
+  ratchet. A ratchet switched by the matrix (`with-ratchet: ${{ matrix.key }}`)
+  counts when at least one `include` leg sets that key true; the platform that
+  must also run on the trunk is then the one those legs name, read from
+  `matrix.<key>` references in `runs-on`.
 - Every `generate-coverage` step in a pull-request workflow sets
   `publish-artefact: 'false'`. The action defaults that input to `"true"`, so a
   lane that omits it publishes the report; the rule reads the effective value.
@@ -84,8 +89,9 @@ Every ratcheting platform runs on the trunk:
   only on a push to `main`. A Windows or macOS lane that ratchets on pull
   requests therefore needs the same platform running with the ratchet on the
   trunk push, or its baseline is never written and the pull-request ratchet
-  compares against an empty file. There are no unratcheted platform exceptions;
-  the fix is the trunk leg.
+  compares against an empty file. A platform that does not ratchet on pull
+  requests owes the trunk nothing (a matrix leg whose switch is false is one);
+  every platform that does ratchet needs the trunk leg.
 
 ## What the rule declines to judge
 
@@ -113,8 +119,13 @@ reports what it could not see rather than a verdict.
   classifies only when every such literal classifies and all of them agree,
   which is the case for the common fork fallback between two Linux labels. A
   mixed expression, one naming a label this rule does not recognize, or a
-  `matrix` reference with no literal, stays `indeterminate` rather than being
-  guessed.
+  `matrix.<key>` reference that no `include` leg defines, stays `indeterminate`
+  rather than being guessed. A `matrix.<key>` reference is read from the
+  `include` legs of a matrix made of `include` entries alone (an axis or an
+  `exclude` is not expanded, so it stays `indeterminate`). Only the ratcheting
+  legs count: every leg when a coverage step ratchets unconditionally,
+  otherwise each leg that sets some ratchet switch true. A relevant leg whose
+  value cannot be resolved, or legs that disagree, stay `indeterminate`.
 
 ### Named exemptions
 

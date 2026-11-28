@@ -459,6 +459,17 @@ has_ratcheting_coverage(workflow) if {
   ratcheting_coverage_step(step)
 }
 
+has_ratcheting_coverage(workflow) if {
+  jobs := workflow_jobs(workflow)
+  some name in object.keys(jobs)
+  job_has_ratcheting_coverage(jobs[name])
+}
+
+# A step whose ratchet is on, or switched by the matrix, carries a baseline.
+ratchet_candidate_step(step) if ratcheting_coverage_step(step)
+
+ratchet_candidate_step(step) if matrix_ratchet_key(step)
+
 ratcheting_coverage_step(step) if {
   inputs := object.get(step, "with", {})
   value := object.get(inputs, "with-ratchet", null)
@@ -470,10 +481,23 @@ ratcheting_coverage_step(step) if {
   object.get(inputs, "with-ratchet", null) == "true"
 }
 
-has_unratcheted_coverage(workflow) if {
-  some step in workflow_steps(workflow)
+# The shared action keeps one baseline per job, so a job with several coverage
+# steps ratchets on one of them. A pull-request job that generates coverage
+# without any ratcheting step lacks the ratchet; its sibling steps need none.
+job_has_coverage_step(job) if {
+  is_object(job)
+  steps := object.get(job, "steps", null)
+  is_array(steps)
+  some step in steps
+  is_object(step)
   is_coverage_step(step)
-  not ratcheting_coverage_step(step)
+}
+
+has_unratcheted_coverage(workflow) if {
+  jobs := workflow_jobs(workflow)
+  some name in object.keys(jobs)
+  job_has_coverage_step(jobs[name])
+  not job_has_ratcheting_coverage(jobs[name])
 }
 
 has_codescene_step(workflow) if {
@@ -595,13 +619,14 @@ coverage_identity_published(step) if {
   qualifying_main_coverage_publisher(workflow)
   some publisher_step in workflow_steps(workflow)
   is_coverage_step(publisher_step)
-  ratcheting_coverage_step(publisher_step)
+  ratchet_candidate_step(publisher_step)
   coverage_identity(publisher_step) == coverage_identity(step)
 }
 
 has_unmatched_pr_coverage_identity(workflow) if {
   some step in workflow_steps(workflow)
   is_coverage_step(step)
+  ratchet_candidate_step(step)
   not coverage_identity_published(step)
 }
 
@@ -847,16 +872,112 @@ expression_literals(text) := {literal |
   literal := lower(trim(raw, "'"))
 }
 
+# A `matrix.<key>` reference in value position names the runner each matrix
+# leg sets. When the job's ratchet is switched by the matrix, only the legs
+# that ratchet decide the platform that must also run on the trunk. A leg's
+# value may itself be an expression, read the same way.
+matrix_legs(job) := legs if {
+  strategy := object.get(job, "strategy", {})
+  is_object(strategy)
+  matrix := object.get(strategy, "matrix", {})
+  is_object(matrix)
+  # Only a matrix made of `include` entries is read; an axis or an `exclude`
+  # would need GitHub's full expansion and override rules, so it is left
+  # unresolved rather than guessed.
+  every key in object.keys(matrix) {
+    key == "include"
+  }
+  legs := object.get(matrix, "include", [])
+  is_array(legs)
+}
+
+ratchet_switch_keys(job) := {key |
+  some step in object.get(job, "steps", [])
+  is_object(step)
+  is_coverage_step(step)
+  key := matrix_ratchet_key(step)
+}
+
+job_has_literal_ratchet(job) if {
+  some step in object.get(job, "steps", [])
+  is_object(step)
+  is_coverage_step(step)
+  ratcheting_coverage_step(step)
+}
+
+# A leg ratchets when any coverage step does: an unconditional ratchet covers
+# every leg; otherwise a leg ratchets when it sets any switch key true.
+platform_legs(job) := [leg |
+  some leg in matrix_legs(job)
+  is_object(leg)
+  leg_ratchets(job, leg)
+]
+
+leg_ratchets(job, _) if job_has_literal_ratchet(job)
+
+leg_ratchets(job, leg) if {
+  not job_has_literal_ratchet(job)
+  some key in ratchet_switch_keys(job)
+  object.get(leg, key, null) in {true, "true"}
+}
+
+leg_ratchets(job, _) if {
+  not job_has_literal_ratchet(job)
+  count(ratchet_switch_keys(job)) == 0
+}
+
+matrix_value_literals(raw) := expression_literals(raw) if contains(raw, "${{")
+
+matrix_value_literals(raw) := {lower(raw)} if not contains(raw, "${{")
+
+matrix_refs(label) := {key |
+  some match in regex.find_all_string_submatch_n(`(?:&&|\|\||\$\{\{)\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)`, label, -1)
+  key := match[1]
+}
+
+matrix_values_for(job, key) := {value |
+  some leg in platform_legs(job)
+  raw := object.get(leg, key, null)
+  is_string(raw)
+  some value in matrix_value_literals(raw)
+}
+
+unresolved_matrix_ref(job) if {
+  some label in runner_labels(job)
+  some key in matrix_refs(label)
+  count(matrix_values_for(job, key)) == 0
+}
+
+# A relevant leg whose value is missing, not a string, or an expression with no
+# recognised literal leaves the platform undecided, so it is not discarded.
+unresolved_matrix_ref(job) if {
+  some label in runner_labels(job)
+  some key in matrix_refs(label)
+  some leg in platform_legs(job)
+  not leg_value_resolves(leg, key)
+}
+
+leg_value_resolves(leg, key) if {
+  raw := object.get(leg, key, null)
+  is_string(raw)
+  count(matrix_value_literals(raw)) > 0
+}
+
 expression_values(job) := values if {
   runner_is_expression(job)
   labels := runner_labels(job)
   values := {value |
     some label in labels
     some value in expression_literals(label)
+  } | {value |
+    some label in labels
+    some key in matrix_refs(label)
+    some value in matrix_values_for(job, key)
   }
 }
 
 job_platform(job) := platform if {
+  not unresolved_matrix_ref(job)
   values := expression_values(job)
   count(values) > 0
   classified := {value | some value in values; label_platform(value)}
@@ -874,6 +995,32 @@ job_has_ratcheting_coverage(job) if {
   is_object(step)
   is_coverage_step(step)
   ratcheting_coverage_step(step)
+}
+
+# A ratchet switched by the job's matrix (`with-ratchet: ${{ matrix.ratchet }}`)
+# ratchets on every leg whose entry sets that key true. The job ratchets when
+# at least one leg does.
+matrix_ratchet_key(step) := key if {
+  inputs := object.get(step, "with", {})
+  value := object.get(inputs, "with-ratchet", null)
+  is_string(value)
+  parts := regex.find_all_string_submatch_n(`^\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$`, value, 1)
+  key := parts[0][1]
+}
+
+job_has_ratcheting_coverage(job) if {
+  is_object(job)
+  steps := object.get(job, "steps", null)
+  is_array(steps)
+  some step in steps
+  is_object(step)
+  is_coverage_step(step)
+  key := matrix_ratchet_key(step)
+  legs := object.get(object.get(object.get(job, "strategy", {}), "matrix", {}), "include", [])
+  is_array(legs)
+  some leg in legs
+  is_object(leg)
+  object.get(leg, key, null) in {true, "true"}
 }
 
 ratcheting_coverage_jobs(workflow) := {name |

@@ -129,8 +129,31 @@ test_unrelated_reusable_workflow_is_ignored if {
   count(findings) == 0
 }
 
-test_all_pr_coverage_steps_require_ratcheting if {
+# The shared action keeps one baseline per job, so a job with two coverage
+# steps needs only one of them to ratchet.
+test_a_job_ratchets_on_one_of_its_coverage_steps if {
   findings := policy.deny with input as data.fixtures.multiple_pr_coverage_steps
+  count(findings) == 0
+}
+
+# Each job needs its own ratchet: a second job generating coverage without one
+# is still reported.
+test_a_second_job_without_a_ratchet_is_noncompliant if {
+  findings := policy.deny with input as data.fixtures.pr_second_job_without_ratchet
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/ci.yml", "pull-request workflow lacks ratcheting coverage generation"],
+  }
+}
+
+# `with-ratchet: ${{ matrix.ratchet }}` ratchets on the legs whose entry sets
+# the key true; one such leg is a ratcheting job.
+test_a_matrix_switched_ratchet_with_a_true_leg_ratchets if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_ratchet_with_a_true_leg
+  count(findings) == 0
+}
+
+test_a_matrix_switched_ratchet_with_no_true_leg_does_not if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_ratchet_with_no_true_leg
   profile(findings) == {
     ["noncompliant", ".github/workflows/ci.yml", "pull-request workflow lacks ratcheting coverage generation"],
   }
@@ -689,4 +712,64 @@ test_a_pull_request_run_body_naming_the_token_is_noncompliant if {
 test_a_lower_case_token_in_a_pull_request_run_body_is_noncompliant if {
   findings := policy.deny with input as data.fixtures.pr_lower_case_token_in_a_run_body
   "pull-request workflow receives CS_ACCESS_TOKEN" in {f.msg | some f in findings}
+}
+
+# --------------------------------------------------------------------------
+# Matrix-switched runners: the platform that must also run on the trunk is the
+# one the ratcheting legs name.
+# --------------------------------------------------------------------------
+
+# The ratchet runs only on the Linux leg, whose runner is a fork fallback
+# between two Linux labels written with matrix references; the Windows leg
+# does not ratchet, so it owes the trunk nothing.
+test_the_ratcheting_leg_decides_the_matrix_platform if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_runner_follows_the_ratcheting_leg
+  count(findings) == 0
+}
+
+# Without a switch every leg ratchets, so Linux and Windows disagree.
+test_unswitched_mixed_matrix_platforms_stay_indeterminate if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_runner_mixed_platforms_unswitched
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
+# A reference no leg defines names no runner, so it is not guessed.
+test_a_matrix_reference_no_leg_defines_stays_indeterminate if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_runner_key_missing_from_legs
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
+# A leg whose runner cannot be resolved is not discarded: the job's platform
+# stays undecided although the other leg names Linux.
+test_an_unresolvable_ratcheting_leg_keeps_the_platform_indeterminate if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_leg_value_is_unresolvable
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
+# Only an `include`-only matrix is read; an axis would need GitHub's full
+# expansion, so it is not guessed.
+test_a_matrix_axis_is_left_unresolved if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_axis_is_not_expanded
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
+# Two steps with complementary switches ratchet on every leg between them.
+test_complementary_switches_cover_every_leg if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_complementary_switches_cover_every_leg
+  count(findings) == 0
+}
+
+# A main publisher whose ratchet is switched by the matrix still writes the
+# baseline pull requests compare against.
+test_a_matrix_switched_main_publisher_is_recognized if {
+  findings := policy.deny with input as data.fixtures.main_publisher_ratchet_switched_by_the_matrix
+  count(findings) == 0
 }
