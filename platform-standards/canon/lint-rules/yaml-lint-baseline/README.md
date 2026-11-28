@@ -77,6 +77,29 @@ Makefile with includes, conditional rules on the lint path, dynamic recursive
 Make or a recovered parse, and a configuration or workflow that cannot be
 decoded, each produce an `indeterminate` finding rather than a pass.
 
+Two shapes stay provable. A recursive `$(MAKE) [flags] target` is a proven edge
+when its flags are limited to `--no-print-directory`, `--silent`, `--quiet` and
+`-s`, which change only how the sub-make reports; any other flag (`-C`, `-f`,
+`-j`, `-k`, `-o`) leaves the closure unproven, as does an option-shaped token
+read as a target (`$(MAKE) --silent -n`), a leading `-` that ignores the
+sub-make's failure, and any assignment before `$(MAKE)`, which reaches the
+sub-make as a variable or a flag (`MAKEFLAGS=-n $(MAKE) ...`,
+`YAMLLINT=echo $(MAKE) ...`), with or without a recipe prefix. A `.IGNORE`
+special target, global or naming a target the closure reaches, hides recipe
+failures from `lint` and leaves the path unproven. Both that check and the
+check for a recipe overridden by a second rule read target names after the
+policy's variable expansion, so `$(SPECIAL): ...` with
+`SPECIAL := .IGNORE other` is read as `.IGNORE`. A rule whose target names a
+variable the policy cannot resolve (one assigned twice or under a condition,
+such as a `$(TOOLS):` rule) leaves the closure unproven, because it could be
+either. The expansion substitutes the values the Makefile facts record; it does
+not model when Make reads a `:=` assignment, so a `:=` whose value names a
+variable assigned on a later line is outside what this audit proves. A target
+split across plain rules (`lint: a b` and, further down, `lint: c`) is proven
+too, because Make merges their prerequisites; it is unproven when more than one
+rule for any target the closure reaches carries a recipe, since Make keeps the
+later recipe and warns.
+
 The checks that read the Makefile prove the shape of the lint path, not that
 the tools run to completion on the repository's YAML; that is what the lint
 lane itself proves.

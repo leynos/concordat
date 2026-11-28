@@ -99,9 +99,22 @@ has_makefile if {
 	input.makefile != null
 }
 
+# A rule's target names after the policy's variable expansion, one token per
+# name: `$(SPECIAL): ...` with `SPECIAL := .IGNORE other` defines two targets.
+# A token that still carries a `$` could not be resolved. Only the two guards
+# that decide whether a recipe can be overridden or its failure hidden read
+# these names (ambiguous definitions and `.IGNORE`); the graph and the
+# conditional check keep the raw names, which is what Make's own fact model
+# reports for them.
+rule_names(rule) := {name |
+	some raw in rule.targets
+	some name in split(expand(raw), " ")
+	name != ""
+}
+
 rules_defining(target) := [rule |
 	some rule in input.makefile.rules
-	target in rule.targets
+	target in rule_names(rule)
 ]
 
 # -- Make variable expansion -------------------------------------------------
@@ -192,26 +205,42 @@ unresolved_references(text) := {name |
 
 env_assignment_prefix := `[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+`
 
+# Make options that only change how the sub-make reports, never which
+# Makefile or targets it reads. Anything else (`-C`, `-f`, `-j`, `-k`, `-o`,
+# `-W`, variable overrides) can redirect the closure, so it stays unproven.
+make_report_flags := `(?:(?:--no-print-directory|--silent|--quiet|-s)[[:space:]]+)*`
+
+# A target name never starts with `-`: `$(MAKE) --silent -n` passes an option,
+# not a target, so an option-shaped token is not an edge.
+make_target := `[A-Za-z0-9_.][A-Za-z0-9_.-]*`
+
+# No assignment may precede `$(MAKE)`: an environment assignment reaches the
+# sub-make as a Make variable (`YAMLLINT=echo $(MAKE) yamllint` turns the real
+# recipe into a print) or as a flag (`MAKEFLAGS=-n`), and the policy does not
+# model either, so such a recipe stays unproven. Recipe prefixes (`-`, `@`, `+`)
+# are read before the command; a `-` also hides the sub-make's failure from
+# Make, so the edge is then not binding.
 static_make_recipe_pattern := sprintf(
-	`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+[A-Za-z0-9_.-]+([[:space:]]*&&[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+[A-Za-z0-9_.-]+)*[[:space:]]*$`,
-	[env_assignment_prefix, env_assignment_prefix],
+	`^[[:space:]]*[-@+]*[[:space:]]*\$\(MAKE\)[[:space:]]+%s%s([[:space:]]*&&[[:space:]]*\$\(MAKE\)[[:space:]]+%s%s)*[[:space:]]*$`,
+	[make_report_flags, make_target, make_report_flags, make_target],
 )
 
 static_make_recipe_is_binding(recipe) if {
+	recipe.ignore_errors == false
 	regex.match(static_make_recipe_pattern, recipe.text)
 }
 
 static_make_segment_target(segment) := target if {
 	matches := regex.find_all_string_submatch_n(
 		sprintf(
-			`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+([A-Za-z0-9_.-]+)[[:space:]]*$`,
-			[env_assignment_prefix],
+			`^[[:space:]]*[-@+]*[[:space:]]*\$\(MAKE\)[[:space:]]+%s(%s)[[:space:]]*$`,
+			[make_report_flags, make_target],
 		),
 		segment,
 		1,
 	)
 	count(matches) == 1
-	target := matches[0][3]
+	target := matches[0][1]
 }
 
 static_make_targets(recipe) := {target |
@@ -266,6 +295,48 @@ conditional_path(root) if {
 	count(rule.conditions) > 0
 }
 
+# `.IGNORE` without prerequisites makes Make ignore every recipe failure, and
+# with prerequisites it does so for those targets. `recipe.ignore_errors` only
+# reflects a recipe's own `-` prefix, so the special target is read here: a
+# reachable target the special target covers, or a global one, leaves the path
+# unproven.
+ignored_errors_path(root) if {
+	some rule in ignore_rules
+	count(rule.prerequisites) == 0
+}
+
+ignored_errors_path(root) if {
+	some rule in ignore_rules
+	some target in rule.prerequisites
+	target in reachable_from(root)
+}
+
+# A prerequisite that still names a variable (`.IGNORE: $(IGNORED)`) cannot be
+# compared with the reachable targets, so it fails closed.
+ignored_errors_path(root) if {
+	some rule in ignore_rules
+	some target in rule.prerequisites
+	contains(target, "$")
+}
+
+# The rules that are, or may expand to, the special `.IGNORE` target. A target
+# name can be a variable (`$(SPECIAL): ...` with `SPECIAL := .IGNORE`): one the
+# policy resolves to `.IGNORE` counts, and one it cannot resolve counts when the
+# rule has no recipe, because a special target never has one.
+ignore_rules := {rule |
+	some rule in input.makefile.rules
+	".IGNORE" in rule_names(rule)
+}
+
+# A rule that names a target through a variable the policy cannot resolve may
+# be anything, `.IGNORE` or an override of a reachable recipe included, so the
+# closure is unproven while one exists.
+unresolved_target_rule if {
+	some rule in input.makefile.rules
+	some name in rule_names(rule)
+	contains(name, "$")
+}
+
 dynamic_make_delegation(root) if {
 	some recipe in path_recipes(root)
 	regex.match(`(\$\(MAKE\)|\$\{MAKE\})[[:space:]]+(\$\(|-C)`, recipe.text)
@@ -277,11 +348,27 @@ unproven_make_delegation(root) if {
 	not static_make_recipe_is_binding(recipe)
 }
 
-root_definitions_ambiguous(root) if count(rules_defining(root)) > 1
+# Make merges the prerequisites of every plain rule for a target, so a target
+# split across rules is provable while at most one of them carries recipes.
+# Two rules with recipes make Make keep the later one and warn. The test runs
+# on every target the closure reaches, not only the root, because an
+# overridden recipe on a prerequisite would otherwise be credited.
+target_definitions_ambiguous(target) if {
+	recipe_rules := [rule |
+		some rule in rules_defining(target)
+		count(rule.recipes) > 0
+	]
+	count(recipe_rules) > 1
+}
+
+target_definitions_ambiguous(target) if {
+	some rule in rules_defining(target)
+	rule.double_colon == true
+}
 
 root_definitions_ambiguous(root) if {
-	some rule in rules_defining(root)
-	rule.double_colon == true
+	some target in reachable_from(root)
+	target_definitions_ambiguous(target)
 }
 
 includes_present if count(input.makefile.includes) > 0
@@ -298,6 +385,8 @@ closure_provable(root) if {
 	not parse_recovered
 	not root_definitions_ambiguous(root)
 	not conditional_path(root)
+	not ignored_errors_path(root)
+	not unresolved_target_rule
 	not dynamic_make_delegation(root)
 	not unproven_make_delegation(root)
 }
@@ -549,10 +638,14 @@ closure_indeterminate_reason(root) := "Makefile includes other files; the recipe
 	includes_present
 } else := "Makefile parse was recovered from syntax errors; facts may be incomplete" if {
 	parse_recovered
-} else := sprintf("the %q target has multiple or double-colon definitions", [root]) if {
+} else := sprintf("the %q target reaches a target with several rules with recipes or a double-colon definition", [root]) if {
 	root_definitions_ambiguous(root)
 } else := sprintf("the %q target reaches a conditional Make rule; its recipes cannot be proven", [root]) if {
 	conditional_path(root)
+} else := sprintf("the %q target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven", [root]) if {
+	ignored_errors_path(root)
+} else := "a rule names its target through a variable the policy cannot resolve; the recipes cannot be proven" if {
+	unresolved_target_rule
 } else := sprintf("the %q target reaches dynamic recursive Make; its recipes cannot be proven", [root]) if {
 	dynamic_make_delegation(root)
 } else := sprintf("the %q target reaches an unproven recursive Make invocation; its recipes cannot be proven", [root]) if {

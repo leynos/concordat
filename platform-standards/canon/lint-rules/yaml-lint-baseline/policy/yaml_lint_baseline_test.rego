@@ -422,6 +422,153 @@ test_delegated if {
   count(findings) == 0
 }
 
+# Report-only Make options (`--no-print-directory`, `-s`) leave the edge proven.
+test_delegated_flags if {
+  findings := policy.deny with input as data.fixtures.delegated_flags
+  count(findings) == 0
+}
+
+# An option that can change what the sub-make reads (`-k` here) is not proven.
+test_delegated_redirecting_flag if {
+  findings := policy.deny with input as data.fixtures.delegated_redirecting_flag
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# Make merges the prerequisites of a target split across plain rules.
+test_split_lint if {
+  findings := policy.deny with input as data.fixtures.split_lint
+  count(findings) == 0
+}
+
+# Two rules with recipes for one target: Make keeps the later, so it is unproven.
+test_split_lint_two_recipes if {
+  findings := policy.deny with input as data.fixtures.split_lint_two_recipes
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+  }
+}
+
+# The override test covers every target the closure reaches: a second recipe
+# for `yamllint` replaces the real one even though `lint` itself is clean.
+test_overridden_prerequisite if {
+  findings := policy.deny with input as data.fixtures.overridden_prerequisite
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+  }
+}
+
+# A leading `-` hides the sub-make's failure from Make, so the edge is unproven.
+test_delegated_ignored if {
+  findings := policy.deny with input as data.fixtures.delegated_ignored
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# `MAKEFLAGS=-n` changes what the sub-make does, so the edge is unproven.
+test_delegated_makeflags if {
+  findings := policy.deny with input as data.fixtures.delegated_makeflags
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# `.IGNORE` hides every recipe failure, whether global or per target.
+test_ignore_global if {
+  findings := policy.deny with input as data.fixtures.ignore_global
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
+# A variable-expanded `.IGNORE` prerequisite cannot be matched, so it fails closed.
+test_ignore_variable if {
+  findings := policy.deny with input as data.fixtures.ignore_variable
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
+# A target name that expands to `.IGNORE` is the special target all the same.
+test_ignore_variable_target if {
+  findings := policy.deny with input as data.fixtures.ignore_variable_target
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
+# An expanded target list can carry `.IGNORE` beside other names.
+test_ignore_variable_list if {
+  findings := policy.deny with input as data.fixtures.ignore_variable_list
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
+# A variable-named rule that replaces a reachable recipe counts as a second recipe.
+test_overridden_by_variable if {
+  findings := policy.deny with input as data.fixtures.overridden_by_variable
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+  }
+}
+
+# A multi-assigned variable names a rule's target, so it could be anything.
+test_unresolved_target_variable if {
+  findings := policy.deny with input as data.fixtures.unresolved_target_variable
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "a rule names its target through a variable the policy cannot resolve; the recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "a rule names its target through a variable the policy cannot resolve; the recipes cannot be proven"],
+  }
+}
+
+test_ignore_targets if {
+  findings := policy.deny with input as data.fixtures.ignore_targets
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
+# A recipe prefix does not hide the assignment from the check.
+test_delegated_prefixed_makeflags if {
+  findings := policy.deny with input as data.fixtures.delegated_prefixed_makeflags
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# Any assignment that reaches the sub-make can change its recipes, so it is unproven.
+test_delegated_variable_override if {
+  findings := policy.deny with input as data.fixtures.delegated_variable_override
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# `-n` after a report-only flag is an option, not a target name.
+test_delegated_option_target if {
+  findings := policy.deny with input as data.fixtures.delegated_option_target
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
 # A `git ls-files` whose output is discarded lints one file by name.
 test_discarded_ls_files if {
   findings := policy.deny with input as data.fixtures.discarded_ls_files
