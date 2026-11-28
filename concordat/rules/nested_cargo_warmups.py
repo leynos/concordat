@@ -22,11 +22,19 @@ import dataclasses
 import re
 import typing as typ
 
+from .nested_cargo_gates import read_gates
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_preparation import includes_a_file, read_makefile
-from .nested_cargo_preparation import crate_directories, declared_tests, owning_crate
+from .nested_cargo_preparation import (
+    Preparation,
+    crate_directories,
+    declared_tests,
+    named_test_crates,
+    owning_crate,
+)
+from .nested_cargo_reach import UNSEEN
 from .nested_cargo_scripts import TEST_TARGET
-from .nested_cargo_setup_scripts import SetupRule, covers, read_setup_rules
+from .nested_cargo_setup_scripts import covers, read_setup_rules
 from .nested_cargo_source import RustSource, read_sources
 from .nested_cargo_spawns import fixture_directories
 
@@ -44,14 +52,18 @@ SETUP_FORM: typ.Final = "nextest-setup"
 MAKE_PREFIX: typ.Final = "make:"
 TEST_PREFIX: typ.Final = "test:"
 
-# A `make` call is a command word: first on the line (after the `@`, `-` and `+`
-# recipe prefixes) or after a control operator, never inside a quoted string.
+# A `make` call is a command word that always runs: first on the line (after the
+# `@`, `-` and `+` recipe prefixes) or after `&&`, `;` or `(`, never after `||`
+# (which runs only when the command before it failed) and never inside a quoted
+# string.
 _MAKE_CALL: typ.Final = re.compile(
-    r"(?:^[@+-]*|&&|\|\||;|\()\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[\w.-]+)"
+    r"(?:^[@+-]*|&&|;|\()\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[\w.-]+)"
 )
 _TEST_COMMAND: typ.Final = re.compile(r"\b(?:cargo|nextest|pytest)\b")
 _FUNCTION: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)")
-_TEST_BINARY: typ.Final = re.compile(r"(?:^|/)tests/(?P<name>[^/.]+)(?:\.rs|/)")
+_TEST_BINARY: typ.Final = re.compile(
+    r"(?:^|/)tests/(?P<name>[^/.]+)(?:\.rs|/main\.rs)$"
+)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -77,11 +89,10 @@ class MakeGoals:
 class Warmups:
     """Hold what the repository offers as warm-ups, read once."""
 
-    setup_rules: list[SetupRule]
     make: MakeGoals
     functions: frozenset[str]
-    crates: dict[str, str | None]
-    declared_tests: cabc.Mapping[str, frozenset[str]]
+    reached_by: cabc.Mapping[str, list[str]]
+    preparation: Preparation
 
 
 def _calls_before_tests(recipes: cabc.Iterable[MakeRecipe]) -> list[str]:
@@ -182,6 +193,7 @@ def _function_names(sources: cabc.Iterable[RustSource]) -> frozenset[str]:
 def read_warmups(
     checkout: pathlib.Path,
     manifests: cabc.Mapping[pathlib.Path, typ.Any],
+    reached_by: cabc.Mapping[str, list[str]],
     problems: list[str],
 ) -> Warmups:
     """Read every warm-up a declaration may name.
@@ -189,16 +201,23 @@ def read_warmups(
     Returns
     -------
     Warmups
-        The nextest setup rules, the Makefile goals, the declared functions and
-        the crate directories.
+        The Makefile goals, the declared functions, the reach of each file and
+        the preparation the setup rules belong to.
     """
     fixtures = fixture_directories(checkout, manifests)
-    return Warmups(
+    preparation = Preparation(
+        crate_directories(checkout, manifests),
         read_setup_rules(checkout, problems),
+        read_gates(None),
+        is_makefile_prepared=False,
+        named_test_crates=named_test_crates(checkout, manifests),
+        declared_tests=declared_tests(checkout, manifests),
+    )
+    return Warmups(
         _make_goals(checkout),
         _function_names(read_sources(checkout, fixtures, [])),
-        crate_directories(checkout, manifests),
-        declared_tests(checkout, manifests),
+        reached_by,
+        preparation,
     )
 
 
@@ -219,40 +238,60 @@ def _make_coverage(goal: str, make: MakeGoals) -> str:
     )
 
 
-def _binaries(path: str, warmups: Warmups) -> list[str | None]:
-    """Return the test binaries built from *path*.
+def _binary_names(root: str, preparation: Preparation) -> list[str | None]:
+    """Return the test binaries compiled from the target root *root*.
 
     A `[[test]]` table names its binary, and several tables may share a source,
-    so each name counts. Otherwise the binary is the first component under
-    `tests/`, which also owns a support module in a directory.
+    so each name counts. Otherwise Cargo names `tests/<name>.rs` and
+    `tests/<name>/main.rs` after `<name>`; any other root has no binary name.
 
     Returns
     -------
     list[str | None]
-        The binary names; a single None for a file no test target owns.
+        The binary names, or a single None for a root with no binary name.
     """
-    declared = warmups.declared_tests.get(path)
+    declared = preparation.declared_tests.get(root)
     if declared:
         return list[str | None](sorted(declared))
-    named = _TEST_BINARY.search(path)
+    named = _TEST_BINARY.search(root)
     return [named.group("name") if named else None]
 
 
+def _is_root_selected(root: str, preparation: Preparation) -> bool:
+    """Report whether the setup rules select every binary compiled from *root*.
+
+    An owner the resolver cannot see has no known package, so only a rule that
+    selects every test covers it.
+
+    Returns
+    -------
+    bool
+        True when each binary of the root, or its package, is selected.
+    """
+    if root.startswith(UNSEEN):
+        return covers(preparation.rules, None, None)
+    package = preparation.crates.get(owning_crate(root, preparation.crates))
+    return all(
+        covers(preparation.rules, name, package)
+        for name in _binary_names(root, preparation)
+    )
+
+
 def _setup_coverage(path: str, warmups: Warmups) -> str:
-    """Say whether nextest setup rules select every binary built from *path*.
+    """Say whether nextest setup rules run before every test that compiles *path*.
+
+    Every target whose module tree reaches the file must be selected, so a
+    support module two binaries include is covered only when both are. A file no
+    target reaches is judged as its own root.
 
     Returns
     -------
     str
-        `resolved` when each binary, or its owning package, is selected, else
-        `unresolved`.
+        `resolved` or `unresolved`.
     """
-    package = warmups.crates.get(owning_crate(path, warmups.crates))
-    selected = all(
-        covers(warmups.setup_rules, binary, package)
-        for binary in _binaries(path, warmups)
-    )
-    return COVERAGE_RESOLVED if selected else COVERAGE_UNRESOLVED
+    roots = warmups.reached_by.get(path) or [path]
+    is_covered = all(_is_root_selected(root, warmups.preparation) for root in roots)
+    return COVERAGE_RESOLVED if is_covered else COVERAGE_UNRESOLVED
 
 
 def coverage(path: str, covered_by: str, warmups: Warmups) -> str:

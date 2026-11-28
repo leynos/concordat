@@ -121,6 +121,18 @@ fn reads_a_manifest_and_writes_a_log() {
 }
 """
 
+CONTENT_ONLY_TEST = """\
+#[test]
+fn logs_a_name_and_builds_another_crate() {
+    let scratch = tempfile::tempdir().unwrap();
+    std::fs::write(scratch.path().join("log.txt"), "Cargo.toml").unwrap();
+    std::process::Command::new("cargo").current_dir("elsewhere").arg("build").status().unwrap();
+    let _ = nested_cargo::count_compiling(b"");
+}
+"""
+
+SUPPORT_USER_ONE = "mod support;\n"
+
 PROBE_TEST = """\
 #[test]
 fn reports_a_version() {
@@ -546,3 +558,45 @@ def test_a_function_that_reads_a_manifest_is_not_a_scratch_crate(
     """NC-012 needs the manifest itself written, not an unrelated write."""
     root = checkout(tmp_path, {"tests/read.rs": READ_ONLY_TEST})
     assert profile(root) == {("NC-011", "tests/read.rs")}
+
+
+def test_a_make_call_after_a_failing_or_does_not_warm(tmp_path: pathlib.Path) -> None:
+    """`true || make prepare` never runs the goal, so it warms nothing."""
+    skipped = (
+        "test:\n\ttrue || $(MAKE) prepare-nested\n\tcargo nextest run\n\n"
+        "prepare-nested:\n\ttrue\n"
+    )
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": skipped})
+    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
+    assert profile(root) == {("NC-013", "tests/cli.rs")}
+
+
+def test_a_manifest_name_in_the_content_of_a_write_is_not_a_scratch_crate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The write's destination must be the manifest, not its text."""
+    root = checkout(tmp_path, {"tests/content.rs": CONTENT_ONLY_TEST})
+    assert profile(root) == {("NC-011", "tests/content.rs")}
+
+
+def test_a_shared_support_file_needs_every_owning_binary_covered(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A builder in a module two binaries include is covered only if both are."""
+    root = checkout(
+        tmp_path,
+        {
+            "tests/cli.rs": SUPPORT_USER_ONE,
+            "tests/other.rs": SUPPORT_USER_ONE,
+            "tests/support/mod.rs": PLUGIN_TEST,
+        },
+    )
+    put(root, ".config/nextest.toml", SETUP_SCRIPT.replace("all()", "binary(=cli)"))
+    declare(root, entry("tests/support/mod.rs", "nextest-setup"))
+    assert ("NC-013", "tests/support/mod.rs") in profile(root)
+    put(
+        root,
+        ".config/nextest.toml",
+        SETUP_SCRIPT.replace("all()", "binary(=cli) | binary(=other)"),
+    )
+    assert profile(root) == set()

@@ -26,7 +26,8 @@ import typing as typ
 
 from .fs_probe import probe_file
 from .nested_cargo import load_manifests, origin_slug
-from .nested_cargo_builders import BuilderFact, collect_builders
+from .nested_cargo_builders import BuilderFact, Scan, collect_builders
+from .nested_cargo_spawns import collect_rust_evidence, fixture_directories
 from .nested_cargo_warmups import Warmups, coverage, read_warmups
 from .rust_sources import has_rust_sources
 
@@ -273,10 +274,12 @@ def build_nested_cargo_builds_envelope(
     manifests = load_manifests(checkout, problems)
     if _owns_no_rust(checkout, manifests, problems):
         return _envelope(checkout, _Facts("absent", [], [], []))
-    builders = collect_builders(
-        checkout, manifests, _harness_names(parameters), problems
+    evidence = collect_rust_evidence(
+        checkout, manifests, problems, cold_build=True, compilers=True
     )
+    scan = Scan(checkout, evidence, fixture_directories(checkout, manifests))
+    builders = collect_builders(scan, _harness_names(parameters), problems)
     reading = _read_declarations(checkout, problems)
-    warmups = read_warmups(checkout, manifests, problems)
+    warmups = read_warmups(checkout, manifests, evidence.reached_by, problems)
     declarations = _declarations(reading, warmups, problems)
     return _envelope(checkout, _Facts(reading.state, builders, declarations, problems))

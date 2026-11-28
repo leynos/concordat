@@ -6,13 +6,14 @@ that holds a trybuild or macrotest suite. The repository declares builders, not
 call sites, so a helper that many tests call is declared once.
 
 For each builder the reader also records two things the policy needs for NC-012:
-whether the function writes a scratch crate (a manifest literal, a write call
-and a temporary directory) and which of the configured harness names it uses.
+whether the function writes a scratch crate (a manifest written into a
+temporary directory and built there) and which of the configured harness names it uses.
 Comments and strings are masked first, so a name in either is not a use.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import operator
 import pathlib
 import re
@@ -21,28 +22,15 @@ import typing as typ
 from .nested_cargo_bindings import function_name, function_span
 from .nested_cargo_commands import COMMAND_NEW
 from .nested_cargo_compiles import COMPILES_NO, COMPILES_UNKNOWN
+from .nested_cargo_scratch import is_scratch_crate
 from .nested_cargo_source import RustSource, read_source, read_sources, whole_file_scope
-from .nested_cargo_spawns import (
-    RustEvidence,
-    SpawnFact,
-    collect_rust_evidence,
-    fixture_directories,
-)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from .nested_cargo_spawns import RustEvidence, SpawnFact
+
 _METADATA: typ.Final = re.compile(r"\bMetadataCommand\b")
-_MANIFEST_LITERAL: typ.Final = re.compile(
-    r'"[^"\n]*(?:Cargo\.toml|\[package\])[^"\n]*"'
-)
-_WRITE_CALL: typ.Final = re.compile(r"\b(?:write|write_all|create|create_new)\s*\(")
-_TEMPORARY: typ.Final = re.compile(r"\b(?:tempdir|tempdir_in|TempDir|tempfile)\b")
-_BUILD_LOCATION: typ.Final = re.compile(r"current_dir|manifest[-_]path")
-_READ_CALL: typ.Final = re.compile(r"\b(?:read\w*|open|exists)\s*\(")
-_STATEMENT: typ.Final = re.compile(r"[^;{}]*;")
-_LET_NAME: typ.Final = re.compile(r"\s*let\s+(?:mut\s+)?(?P<name>[A-Za-z_]\w*)")
-_WORD: typ.Final = re.compile(r"[A-Za-z_]\w*")
 _SUITES: typ.Final = ("trybuild", "macrotest")
 
 
@@ -133,62 +121,6 @@ def _spawn_offset(source: RustSource, line: int) -> int:
     return max(start, end - 1)
 
 
-def _manifest_names(text: str, masked: str) -> set[str]:
-    """Return the names bound, by a `let`, to a statement naming a manifest.
-
-    Returns
-    -------
-    set[str]
-        The bound names; a manifest literal counts only where it is code.
-    """
-    names: set[str] = set()
-    for statement in _STATEMENT.finditer(masked):
-        if not _names_manifest(text, masked, statement):
-            continue
-        if _READ_CALL.search(masked, statement.start(), statement.end()):
-            continue
-        bound = _LET_NAME.match(masked, statement.start())
-        if bound is not None:
-            names.add(bound.group("name"))
-    return names
-
-
-def _names_manifest(text: str, masked: str, statement: re.Match[str]) -> bool:
-    """Report whether a statement holds a manifest literal that is code."""
-    return any(
-        masked[found.start()] == '"'
-        for found in _MANIFEST_LITERAL.finditer(
-            text, statement.start(), statement.end()
-        )
-    )
-
-
-def _is_scratch_crate(text: str, masked: str) -> bool:
-    """Report whether a function writes a manifest into a temporary directory.
-
-    A manifest name in a comment, or in code that only reads one, is not a
-    write. The write must be one call that names a manifest literal, or a name
-    bound to one, in a function that also holds a temporary directory and points
-    its build somewhere (`current_dir` or a manifest path).
-
-    Returns
-    -------
-    bool
-        True when a write of a manifest, a temporary directory and a build
-        location are all visible in the function.
-    """
-    if _TEMPORARY.search(masked) is None or _BUILD_LOCATION.search(text) is None:
-        return False
-    bound = _manifest_names(text, masked)
-    for statement in _STATEMENT.finditer(masked):
-        if _WRITE_CALL.search(masked, statement.start(), statement.end()) is None:
-            continue
-        words = set(_WORD.findall(masked[statement.start() : statement.end()]))
-        if _names_manifest(text, masked, statement) or words & bound:
-            return True
-    return False
-
-
 def _references(masked: str, names: list[str]) -> list[str]:
     """Return the *names* the function body uses as whole words."""
     return [name for name in names if re.search(rf"\b{re.escape(name)}\b", masked)]
@@ -209,7 +141,7 @@ def _spawn_builder(
     scratch, references = False, []
     if span is not None:
         body, masked = source.text[span[0] : span[1]], source.masked[span[0] : span[1]]
-        scratch = _is_scratch_crate(body, masked)
+        scratch = is_scratch_crate(body, masked)
         references = _references(masked, names)
     return {
         "path": source.relative.as_posix(),
@@ -331,11 +263,27 @@ def _merged(builders: list[BuilderFact]) -> list[BuilderFact]:
     return sorted(merged.values(), key=operator.itemgetter("path", "line", "form"))
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class Scan:
+    """Hold what one read of a checkout's Rust sources produced.
+
+    Attributes
+    ----------
+    checkout:
+        The repository root.
+    evidence:
+        The spawn, trybuild and macrotest facts of the checkout's test scope.
+    fixtures:
+        The directories that hold a nested-build fixture package.
+    """
+
+    checkout: pathlib.Path
+    evidence: RustEvidence
+    fixtures: frozenset[str]
+
+
 def collect_builders(
-    checkout: pathlib.Path,
-    manifests: cabc.Mapping[pathlib.Path, typ.Any],
-    names: list[str],
-    problems: list[str],
+    scan: Scan, names: list[str], problems: list[str]
 ) -> list[BuilderFact]:
     """Return every builder in the checkout's test scope.
 
@@ -344,11 +292,8 @@ def collect_builders(
     list[BuilderFact]
         One fact per distinct file, function and form.
     """
-    evidence = collect_rust_evidence(
-        checkout, manifests, problems, cold_build=True, compilers=True
-    )
-    fixtures = fixture_directories(checkout, manifests)
-    sources = _Sources(checkout, read_sources(checkout, fixtures, []))
+    evidence = scan.evidence
+    sources = _Sources(scan.checkout, read_sources(scan.checkout, scan.fixtures, []))
     found = [
         *_spawn_builders(evidence, sources, names, problems),
         *_suite_builders(evidence, sources, problems),
