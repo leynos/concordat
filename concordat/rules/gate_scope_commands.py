@@ -173,8 +173,18 @@ def _hides_selection(arguments: list[str]) -> bool:
     return any(_is_unresolved(word) for word in arguments)
 
 
-def _cargo_subcommand(arguments: list[str]) -> tuple[str | None, list[str]]:
-    """Return the Cargo subcommand and the arguments after it."""
+def split_cargo_subcommand(arguments: list[str]) -> tuple[str | None, list[str]]:
+    """Return Cargo's subcommand and the arguments after it.
+
+    The subcommand is read past Cargo's global options, so
+    `cargo +nightly --color always doc -p a` gives `doc` and `["-p", "a"]`.
+
+    Returns
+    -------
+    tuple[str | None, list[str]]
+        The subcommand word, or ``None`` when only options were given, and the
+        words after it.
+    """
     iterator = iter(enumerate(arguments))
     for index, word in iterator:
         if word in _CARGO_VALUE_FLAGS:
@@ -196,7 +206,7 @@ def cargo_subcommand_word(arguments: list[str]) -> str | None:
     str | None
         The subcommand word, or ``None`` when only options were given.
     """
-    return _cargo_subcommand(arguments)[0]
+    return split_cargo_subcommand(arguments)[0]
 
 
 def _cargo_changes_directory(arguments: list[str], rest: list[str]) -> bool:
@@ -404,7 +414,7 @@ def _invocation_of(
     if head == "whitaker" and arguments:
         return _build("whitaker", arguments, where, moved=moved)
     if head == "cargo":
-        subcommand, rest = _cargo_subcommand(arguments)
+        subcommand, rest = split_cargo_subcommand(arguments)
         tool, own = _cargo_tool(subcommand, rest)
         # Cargo's global `-C <dir>` runs the command in another directory.
         in_directory = moved or _cargo_changes_directory(arguments, rest)

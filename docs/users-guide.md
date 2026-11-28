@@ -1641,6 +1641,34 @@ with a reason and a review trigger. The rule ships at `warning` severity. See
 the
 [rule reference](../platform-standards/canon/lint-rules/rust-lint-tables/README.md).
 
+### Auditing gate lint coverage
+
+The `gate-lint-coverage` package audits what a Rust repository's lint gate
+checks, per Cargo surface (a workspace root, or a package outside any workspace
+such as a PyO3 extension in `rust_extension/`). `gate-workspace-coverage` asks
+which packages the commands select; this asks the rest:
+
+```shell
+concordat artefact rule run gate-lint-coverage --repo /path/to/checkout
+```
+
+- **LC-001**: Clippy or Whitaker does not check all targets. Add
+  `--all-targets`.
+- **LC-002**: the features the tool's commands check do not cover the default
+  set and every declared feature. Add an `--all-features` run, or a lane for
+  each.
+- **LC-003**: a command does not deny warnings. Set `RUSTFLAGS="-D warnings"`
+  (or `RUSTDOCFLAGS` for `cargo doc`) on the command or export it.
+- **LC-004**: `make lint` does not reach `cargo doc --no-deps` over the whole
+  of a surface that holds a library, with `RUSTDOCFLAGS` denying warnings.
+- **EN-001** (indeterminate): a lane list built by a script, an unresolved word
+  among the arguments, a command the audit could not place, or a file it could
+  not read. The tool on that surface is not judged.
+
+A tool the gate does not run on a surface is not required. The rule ships at
+`warning` severity. See the
+[rule reference](../platform-standards/canon/lint-rules/gate-lint-coverage/README.md).
+
 ### Auditing documentation presence (Python and Rust)
 
 The `documentation-presence` package audits the interrogate gate that keeps

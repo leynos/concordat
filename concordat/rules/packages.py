@@ -62,6 +62,11 @@ from .envelope import (
 from .fs_probe import probe_file
 from .gate_scope_envelope import ENVELOPE_KIND as GATE_SCOPE_ENVELOPE_KIND
 from .gate_scope_envelope import build_gate_scope_envelope
+from .lint_coverage_envelope import ENVELOPE_KIND as LINT_COVERAGE_ENVELOPE_KIND
+from .lint_coverage_envelope import (
+    LintCoverageEnvelope,
+    build_lint_coverage_envelope,
+)
 from .lint_tables_envelope import ENVELOPE_KIND as LINT_TABLES_ENVELOPE_KIND
 from .lint_tables_envelope import LintTablesEnvelope, build_lint_tables_envelope
 from .makefile_observed import inspect_makefile_observed
@@ -164,6 +169,7 @@ type RuleEnvelope = (
     | PrRunCancellationEnvelope
     | GateScopeEnvelope
     | LintTablesEnvelope
+    | LintCoverageEnvelope
     | WhitakerExclusionsEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
@@ -579,6 +585,7 @@ _yaml_lint_envelope = _observed(build_yaml_lint_envelope)
 _prover_tooling_envelope = _observed(build_prover_tooling_envelope)
 _gate_scope_envelope = _observed(build_gate_scope_envelope)
 _lint_tables_envelope = _observed(build_lint_tables_envelope)
+_lint_coverage_envelope = _observed(build_lint_coverage_envelope)
 
 
 # The mapping is the complete list rather than the exceptions to a default: a
@@ -609,6 +616,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-test-environment": build_test_environment_envelope,
     "gate-workspace-coverage": _gate_scope_envelope,
     "rust-lint-tables": _lint_tables_envelope,
+    "gate-lint-coverage": _lint_coverage_envelope,
     "whitaker-exclusions": build_whitaker_exclusions_envelope,
 })
 
@@ -636,6 +644,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     TEST_ENVIRONMENT_ENVELOPE_KIND: build_test_environment_envelope,
     GATE_SCOPE_ENVELOPE_KIND: _gate_scope_envelope,
     LINT_TABLES_ENVELOPE_KIND: _lint_tables_envelope,
+    LINT_COVERAGE_ENVELOPE_KIND: _lint_coverage_envelope,
     WHITAKER_EXCLUSIONS_ENVELOPE_KIND: build_whitaker_exclusions_envelope,
 })
 
