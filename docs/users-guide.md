@@ -530,16 +530,19 @@ the credential-check guard, a job that does not declare
 `environment: codescene` (or a job that declares it without uploading, or a
 pull-request job that declares it), a direct `cs-coverage upload` command as
 such, or a reference to the `CODESCENE_CLI_SHA256` variable. A direct upload
-still breaks the token-placement clause, and the Concordat Auditor still checks
-the environment's settings (CV-006). The steps above remain good practice; they
-are no longer a condition of compliance. This follows the user rulings of 6 and
-28 November: publisher shape is out of scope, and the rule keeps the
-off-pull-request-CI and secret-handling clauses.
+breaks the token-placement clause when the command names the token, and the
+Concordat Auditor still checks the environment's settings (CV-006). The guard,
+environment-declaration and digest-variable steps above remain good practice;
+they are no longer conditions of compliance. The restrictions on where
+`CS_ACCESS_TOKEN` may be named, and the `installer-checksum` and digest-refresh
+clauses, still apply. This follows the user rulings of 6 and 28 November:
+publisher shape is out of scope, and the rule keeps the off-pull-request-CI and
+secret-handling clauses.
 
-With the environment declared, a `workflow_dispatch` of the publisher from any
-branch but `main` is refused for the whole job, matrix legs that do not upload
-included, rather than skipped at the upload step. A branch proof of a coverage
-change runs through the pull-request lane's coverage run instead.
+A publisher that declares the environment has a `workflow_dispatch` from any
+branch but `main` refused for the whole job by GitHub, matrix legs that do not
+upload included, rather than skipped at the upload step. A branch proof of a
+coverage change runs through the pull-request lane's coverage run instead.
 
 Options:
 

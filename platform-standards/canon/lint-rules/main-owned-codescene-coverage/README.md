@@ -24,13 +24,14 @@ One main-owned publisher writes the baseline and uploads:
 
 - Exactly one workflow with a `push` trigger restricted to `main`, optionally
   alongside `workflow_dispatch`, generates ratcheted coverage and invokes the
-  CodeScene action in upload mode. The action is the only route: a direct
-  `cs-coverage upload` command is noncompliant (see the token clause below).
-  The action defaults `mode` to `upload`, so a step that omits the input
-  uploads and satisfies this clause; `mode: check` and `mode: install` do not.
-  The rule reads the effective mode rather than the spelling, because reporting
-  correct wiring as broken only teaches people to edit a working workflow to
-  satisfy the audit.
+  CodeScene action in upload mode. The action is the intended route: a direct
+  `cs-coverage upload` command reads the token from its environment, so it
+  reaches the token clause below whenever it names the token. The action
+  defaults `mode` to `upload`, so a step that omits the input uploads and
+  satisfies this clause; `mode: check` and `mode: install` do not. The rule
+  reads the effective mode rather than the spelling, because reporting correct
+  wiring as broken only teaches people to edit a working workflow to satisfy
+  the audit.
 - The publisher declares a `concurrency` block, so two overlapping pushes to
   `main` cannot race to write the baseline every pull request is then measured
   against, and the block queues rather than cancels: `cancel-in-progress` is

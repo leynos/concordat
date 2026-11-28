@@ -224,20 +224,12 @@ test_boolean_trigger_key_pull_request_codescene_is_noncompliant if {
 }
 
 # --------------------------------------------------------------------------
-# Clause 2: the single publisher is guarded on the trunk ref and the
-# credential, and runs under a concurrency block.
+# Clause 2: the single publisher runs under a queueing concurrency block, and
+# the token is named only in the credential-check step and the upload's
+# access-token input. The guards on the upload step and the `codescene`
+# environment are no longer audited (rule 0.4.0).
 # --------------------------------------------------------------------------
 
-# The output is a guard only when an earlier step in the same job writes it
-# from the credential check, and the uploader receives that same credential.
-# The push filter restricts pushes, not dispatches: a `workflow_dispatch` runs
-# on whatever ref the dispatcher selects. A publisher reachable that way with
-# only the credential guard (netsuke's shape) uploads a feature branch as the
-# trunk, so the trigger-level `branches: [main]` is not an alternative guard.
-# A trailing disjunction contains the comparison while making it optional,
-# so a dispatch from any branch would upload. Both guards are refused.
-# The comparison must be a whole conjunct; inside a negation it guards the
-# opposite ref.
 test_publisher_cancelling_in_progress_is_noncompliant if {
   findings := policy.deny with input as data.fixtures.clause2_publisher_cancels_in_progress
   profile(findings) == {
@@ -493,7 +485,7 @@ test_lower_case_token_reference_is_stray if {
 }
 
 # A skipped check leaves the upload skipping forever, and its command is then unsanctioned.
-test_check_step_with_a_condition_is_not_a_guard if {
+test_check_step_with_a_condition_is_not_sanctioned if {
   fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
     {"op": "add", "path": "/workflows/1/parsed/jobs/coverage/steps/1/if", "value": "github.actor != 'x'"},
   ])
@@ -504,7 +496,7 @@ test_check_step_with_a_condition_is_not_a_guard if {
 }
 
 # The check step binds nothing; an env on it is refused with the token or without.
-test_check_step_with_env_is_not_a_guard if {
+test_check_step_with_env_is_not_sanctioned if {
   fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
     {"op": "add", "path": "/workflows/1/parsed/jobs/coverage/steps/1/env", "value": {"UNRELATED": "1"}},
   ])
@@ -556,13 +548,3 @@ test_defaulted_mode_upload_with_token_in_job_env_is_stray if {
     ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command and the upload's access-token input, at jobs.coverage-upload.env.CS_ACCESS_TOKEN"],
   }
 }
-
-# Without the environment, a branch copy of the publisher can read the token.
-# The mapping form names the environment as well as the string form does.
-# The name is exact: a near miss is a different environment with its own secrets.
-# An expression may resolve to anything, so it is not the declaration.
-# Any job declaring the environment can read the token, so only the upload job may.
-# A pull-request lane never needs the token, so it never declares its environment.
-# The clause is about the codescene environment, not about environments in general.
-# GitHub resolves environment names case-insensitively, so `CodeScene` on the
-# upload job is the declaration, and on any other job is the same environment.

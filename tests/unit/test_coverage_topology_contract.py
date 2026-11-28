@@ -30,9 +30,10 @@ inherit`. The readers live in `coverage_topology_support` and
 `test_coverage_credential_readers` drive them against synthetic documents,
 because a rule cannot be proved by the files that already comply with it.
 
-The full rule lives in the `main-owned-codescene-coverage` rule package and
-judges more than this: the clauses here are the ones this repository was
-missing.
+These are this repository's own requirements for its own workflows. The
+`main-owned-codescene-coverage` rule package (0.4.0) no longer audits the
+publisher's ref and credential guards or its `codescene` environment, so the
+guard requirements above bind this repository only, not the estate.
 """
 
 from __future__ import annotations

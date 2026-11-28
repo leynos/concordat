@@ -1,10 +1,10 @@
 """CV-006: the CodeScene token lives in a main-only `codescene` environment.
 
-CV-005 holds the publisher workflow to declaring `environment: codescene`
-on its upload job. Whether that environment exists, admits `main` alone,
-and holds `CS_ACCESS_TOKEN` is repository configuration, which no checkout
-carries, so the Auditor reads it through the API. Secret names are read,
-never values.
+The publisher workflow is expected to declare `environment: codescene` on its
+upload job; CV-005 no longer audits that. Whether that environment exists,
+admits `main` alone, and holds `CS_ACCESS_TOKEN` is repository configuration,
+which no checkout carries, so the Auditor reads it through the API. Secret
+names are read, never values.
 
 The check tolerates the estate's move in progress: an environment that is
 ready while the token is still a repository secret is reported as
@@ -266,7 +266,7 @@ def rule() -> CheckDefinition:
             "push can dispatch a branch copy of the publisher. The token therefore "
             "lives in the `codescene` environment, whose deployment branch policy "
             "is a custom policy admitting `main` alone, and is not a repository "
-            "secret. CV-005 requires the upload job to declare the environment."
+            "secret. The upload job is expected to declare the environment."
         ),
         level="error",
         help_uri=f"{DOC_URL}#coverage-pipeline-reach-cv-001-through-cv-005",
