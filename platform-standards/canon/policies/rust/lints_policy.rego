@@ -2,71 +2,44 @@ package canon.rust.lints
 
 import rego.v1
 
-clippy_scalar_lints := {
-  "allow_attributes": "deny",
-  "allow_attributes_without_reason": "deny",
-  "blanket_clippy_restriction_lints": "deny",
-  "cognitive_complexity": "deny",
-  "disallowed_methods": "deny",
-  "needless_pass_by_value": "deny",
-  "implicit_hasher": "deny",
-  "dbg_macro": "deny",
-  "print_stdout": "deny",
-  "print_stderr": "deny",
-  "unwrap_used": "deny",
-  "expect_used": "deny",
-  "indexing_slicing": "deny",
-  "string_slice": "deny",
-  "integer_division": "deny",
-  "integer_division_remainder_used": "deny",
-  "panic_in_result_fn": "deny",
-  "unreachable": "deny",
-  "host_endian_bytes": "deny",
-  "little_endian_bytes": "deny",
-  "big_endian_bytes": "deny",
-  "let_underscore_must_use": "deny",
-  "or_fun_call": "deny",
-  "option_if_let_else": "deny",
-  "self_named_module_files": "deny",
-  "shadow_reuse": "deny",
-  "shadow_same": "deny",
-  "shadow_unrelated": "deny",
-  "str_to_string": "deny",
-  "string_lit_as_bytes": "deny",
-  "try_err": "deny",
-  "unneeded_field_pattern": "deny",
-  "use_self": "deny",
-  "float_arithmetic": "deny",
-  "cast_possible_truncation": "deny",
-  "cast_possible_wrap": "deny",
-  "cast_precision_loss": "deny",
-  "lossy_float_literal": "deny",
-  "missing_const_for_fn": "deny",
-  "must_use_candidate": "deny",
-  "unused_async": "deny",
-  "missing_panics_doc": "deny",
-  "error_impl_error": "deny",
-  "result_large_err": "deny",
+# The lint levels are the estate baseline that `rust-lint-tables` (LT-002)
+# enforces, read from `data.baseline` (`rust-lint-tables/data/baseline.json`,
+# derived from `baseline.toml`), so the two policies cannot disagree. Run this
+# policy with `--data platform-standards/canon/lint-rules/rust-lint-tables/data/baseline.json`.
+# Without that data it denies instead of passing silently.
+default baseline := {}
+
+baseline := data.baseline
+
+baseline_loaded if count(baseline) > 0
+
+deny contains "baseline data is not loaded; pass --data .../rust-lint-tables/data/baseline.json" if {
+  not baseline_loaded
 }
 
-rust_required_lints := {
-  "unknown_lints": "deny",
-  "renamed_and_removed_lints": "deny",
-  "missing_docs": "deny",
+# `pedantic` is a group with its own level and priority, checked below.
+clippy_scalar_lints := {key: spec.level |
+  some key, spec in object.get(baseline, "clippy", {})
+  key != "pedantic"
 }
 
-rustdoc_required_lints := {
-  "missing_crate_level_docs": "deny",
-  "broken_intra_doc_links": "deny",
-  "private_intra_doc_links": "deny",
-  "bare_urls": "deny",
-  "invalid_html_tags": "deny",
-  "invalid_codeblock_attributes": "deny",
-  "unescaped_backticks": "deny",
+rust_required_lints := {key: spec.level | some key, spec in object.get(baseline, "rust", {})}
+
+rustdoc_required_lints := {key: spec.level | some key, spec in object.get(baseline, "rustdoc", {})}
+
+# A lint meets its baseline level when it equals it. A baseline level weaker than
+# `deny` (`unexpected_cfgs` at `warn`) also accepts a stricter one.
+level_rank := {"allow": 0, "warn": 1, "deny": 2, "forbid": 3}
+
+meets_level(actual, required) if actual == required
+
+meets_level(actual, required) if {
+  required != "deny"
+  level_rank[actual] > level_rank[required]
 }
 
 clippy_thresholds := {
-  "cognitive-complexity-threshold": 9,
+  "cognitive-complexity-threshold": object.get(object.get(baseline, "cognitive", {}), "threshold", 9),
   "too-many-arguments-threshold": 4,
   "too-many-lines-threshold": 70,
   "excessive-nesting-threshold": 4,
@@ -172,9 +145,9 @@ valid_disallowed_method(method) if {
 # Cognitive complexity is gated either by Clippy (deny plus a threshold of 9)
 # or by Whitaker's macro-aware lint opted in through dylint.toml with Clippy's
 # threshold removed, so only one gate owns the budget.
-macro_aware_lint := "macro_aware_cognitive_complexity"
+macro_aware_lint := object.get(object.get(baseline, "cognitive", {}), "macro_aware_lint", "macro_aware_cognitive_complexity")
 
-macro_aware_max_complexity_ceiling := 9
+macro_aware_max_complexity_ceiling := object.get(object.get(baseline, "cognitive", {}), "macro_aware_ceiling", 9)
 
 dylint_config := object.get(input, "dylint", {})
 
@@ -307,7 +280,7 @@ deny contains msg if {
   key != "disallowed_methods"
   not macro_aware_replaces_clippy_lint(key)
   actual := object.get(clippy, key, "")
-  actual != required
+  not meets_level(actual, required)
   msg := sprintf("clippy lint %s must equal %q", [key, required])
 }
 
@@ -356,7 +329,7 @@ deny contains msg if {
   rust := scope["rust"]
   required := rust_required_lints[key]
   actual := object.get(rust, key, "")
-  actual != required
+  not meets_level(actual, required)
   msg := sprintf("rust lint %s must equal %q", [key, required])
 }
 
@@ -367,7 +340,7 @@ deny contains msg if {
   rustdoc := scope["rustdoc"]
   required := rustdoc_required_lints[key]
   actual := object.get(rustdoc, key, "")
-  actual != required
+  not meets_level(actual, required)
   msg := sprintf("rustdoc lint %s must equal %q", [key, required])
 }
 

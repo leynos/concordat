@@ -79,7 +79,7 @@ artifacts:
     path: platform-standards/canon/policies/rust/lints_policy.rego
     description: >
       OPA policy enforcing the canonical clippy/rust/rustdoc lint baselines.
-    sha256: cb49f96a6affcde802c3af43c23e606cfc42607f29217e94c5fb667095c25029
+    sha256: af6f423a0736693cbfcfde0a4c712b5df200a62edeaba9246d96d17e83b6e61f
   - id: policy-opentofu-enrolment
     type: opa-policy
     path: platform-standards/canon/policies/opentofu/enrolment_policy.rego

@@ -95,6 +95,8 @@ def _expected_conftest_argv(scratch: pathlib.Path) -> list[str]:
         "test",
         "--policy",
         str(batch_support._ROOT_POLICY_DIR),
+        "--data",
+        str(batch_support._BASELINE_DATA),
         "--namespace",
         _ROOT_POLICY_NAMESPACE,
         "--output",

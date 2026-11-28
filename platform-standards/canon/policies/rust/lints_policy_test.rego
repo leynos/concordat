@@ -48,12 +48,16 @@ canonical_clippy_lints := {
   "missing_panics_doc": "deny",
   "error_impl_error": "deny",
   "result_large_err": "deny",
+  "missing_assert_message": "deny",
+  "missing_docs_in_private_items": "deny",
 }
 
 canonical_rust_lints := {
   "unknown_lints": "deny",
   "renamed_and_removed_lints": "deny",
   "missing_docs": "deny",
+  "unsafe_code": "forbid",
+  "unexpected_cfgs": "warn",
 }
 
 canonical_rustdoc_lints := {
@@ -401,4 +405,74 @@ test_duplicate_bare_and_table_method_path_is_rejected if {
     }),
   }
   result[_] == "clippy.toml disallowed-methods paths must be unique"
+}
+
+# -- the baseline is read from data.baseline (the rust-lint-tables baseline) ------
+
+without_lint(table, lint) := {"cargo": {
+  "workspace": {
+    "members": ["a"],
+    "lints": object.union(
+      {name: lints | some name, lints in canonical_lints; name != table},
+      {table: object.remove(canonical_lints[table], [lint])},
+    ),
+  },
+}}
+
+rejected_without(table, lint) if {
+  result := data.canon.rust.lints.deny with input as object.union(without_lint(table, lint), {"clippy": clippy_cfg})
+  count(result) > 0
+}
+
+test_a_missing_clippy_baseline_lint_is_rejected if {
+  rejected_without("clippy", "missing_assert_message")
+  rejected_without("clippy", "missing_docs_in_private_items")
+}
+
+test_a_missing_rust_baseline_lint_is_rejected if {
+  rejected_without("rust", "unsafe_code")
+  rejected_without("rust", "unexpected_cfgs")
+}
+
+test_unexpected_cfgs_accepts_a_stricter_level if {
+  stricter := object.union(canonical_lints, {"rust": object.union(canonical_lints.rust, {"unexpected_cfgs": "deny"})})
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": {"workspace": {"members": ["a"], "lints": stricter}},
+    "clippy": clippy_cfg,
+  }
+  count(result) == 0
+}
+
+test_unexpected_cfgs_below_the_baseline_is_rejected if {
+  weaker := object.union(canonical_lints, {"rust": object.union(canonical_lints.rust, {"unexpected_cfgs": "allow"})})
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": {"workspace": {"members": ["a"], "lints": weaker}},
+    "clippy": clippy_cfg,
+  }
+  result[_] == "rust lint unexpected_cfgs must equal \"warn\""
+}
+
+test_a_deny_baseline_lint_does_not_accept_a_different_level if {
+  other := object.union(canonical_lints, {"rust": object.union(canonical_lints.rust, {"missing_docs": "forbid"})})
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": {"workspace": {"members": ["a"], "lints": other}},
+    "clippy": clippy_cfg,
+  }
+  result[_] == "rust lint missing_docs must equal \"deny\""
+}
+
+test_a_baseline_change_moves_the_required_level if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": clippy_cfg,
+  } with data.baseline as object.union(data.baseline, {"rust": {"missing_docs": {"level": "forbid"}}})
+  result[_] == "rust lint missing_docs must equal \"forbid\""
+}
+
+test_missing_baseline_data_is_denied_not_passed if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": clippy_cfg,
+  } with data.baseline as {}
+  result[_] == "baseline data is not loaded; pass --data .../rust-lint-tables/data/baseline.json"
 }
