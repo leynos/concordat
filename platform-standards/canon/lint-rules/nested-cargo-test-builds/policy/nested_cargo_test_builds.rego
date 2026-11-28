@@ -150,13 +150,13 @@ deny contains finding("NC-011", severity, "noncompliant", builder.path, builder.
 	)
 }
 
-# What the reader cannot see it can neither accept nor accuse. An exemption does
-# not reach it.
+# What the reader cannot see it can neither accept nor accuse, and a declaration
+# does not make a spawn readable: the finding stands whether or not the builder
+# is declared. An exemption does not reach it.
 deny contains finding("EN-001", severity, "indeterminate", builder.path, builder.line, msg) if {
 	envelope_ok
 	some builder in input.builders
 	not builder.readable
-	not is_declared(builder)
 	msg := sprintf(
 		"%s:%d: a spawn in %s starts a program or subcommand the reader cannot see, so whether it compiles and what it is the test of is unknown",
 		[builder.path, builder.line, _describe(builder)],

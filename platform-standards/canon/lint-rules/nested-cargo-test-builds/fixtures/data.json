@@ -3,18 +3,29 @@
     "compliant": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/cli.rs", "line": 12, "function": "builds_the_plugin", "form": "spawn",
-          "readable": true, "scratch_crate": false, "harness_references": []
+          "path": "tests/cli.rs",
+          "line": 12,
+          "function": "builds_the_plugin",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": false,
+          "harness_references": []
         }
       ],
       "declarations": [
         {
-          "path": "tests/cli.rs", "function": "builds_the_plugin", "subject": "product-cli",
-          "covered_by": "make:prepare-nested", "coverage": "resolved"
+          "path": "tests/cli.rs",
+          "function": "builds_the_plugin",
+          "subject": "product-cli",
+          "covered_by": "make:prepare-nested",
+          "coverage": "resolved"
         }
       ],
       "problems": []
@@ -22,12 +33,20 @@
     "undeclared": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "absent",
       "builders": [
         {
-          "path": "tests/cli.rs", "line": 12, "function": "builds_the_plugin", "form": "spawn",
-          "readable": true, "scratch_crate": false, "harness_references": []
+          "path": "tests/cli.rs",
+          "line": 12,
+          "function": "builds_the_plugin",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": false,
+          "harness_references": []
         }
       ],
       "declarations": [],
@@ -36,18 +55,29 @@
     "trybuild_declared": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/ui.rs", "line": 8, "function": "", "form": "trybuild",
-          "readable": true, "scratch_crate": false, "harness_references": []
+          "path": "tests/ui.rs",
+          "line": 8,
+          "function": "",
+          "form": "trybuild",
+          "readable": true,
+          "scratch_crate": false,
+          "harness_references": []
         }
       ],
       "declarations": [
         {
-          "path": "tests/ui.rs", "function": "", "subject": "compiler-diagnostics",
-          "covered_by": "nextest-setup", "coverage": "resolved"
+          "path": "tests/ui.rs",
+          "function": "",
+          "subject": "compiler-diagnostics",
+          "covered_by": "nextest-setup",
+          "coverage": "resolved"
         }
       ],
       "problems": []
@@ -55,18 +85,29 @@
     "harness_declared": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/report.rs", "line": 75, "function": "counts_a_real_build", "form": "spawn",
-          "readable": true, "scratch_crate": false, "harness_references": []
+          "path": "tests/report.rs",
+          "line": 75,
+          "function": "counts_a_real_build",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": false,
+          "harness_references": []
         }
       ],
       "declarations": [
         {
-          "path": "tests/report.rs", "function": "counts_a_real_build", "subject": "compile-counter",
-          "covered_by": "nextest-setup", "coverage": "resolved"
+          "path": "tests/report.rs",
+          "function": "counts_a_real_build",
+          "subject": "compile-counter",
+          "covered_by": "nextest-setup",
+          "coverage": "resolved"
         }
       ],
       "problems": []
@@ -74,18 +115,32 @@
     "scratch_harness": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/report.rs", "line": 75, "function": "counts_a_real_build", "form": "spawn",
-          "readable": true, "scratch_crate": true, "harness_references": ["nested_cargo", "record_to"]
+          "path": "tests/report.rs",
+          "line": 75,
+          "function": "counts_a_real_build",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": true,
+          "harness_references": [
+            "nested_cargo",
+            "record_to"
+          ]
         }
       ],
       "declarations": [
         {
-          "path": "tests/report.rs", "function": "counts_a_real_build", "subject": "cargo-behaviour",
-          "covered_by": "nextest-setup", "coverage": "resolved"
+          "path": "tests/report.rs",
+          "function": "counts_a_real_build",
+          "subject": "cargo-behaviour",
+          "covered_by": "nextest-setup",
+          "coverage": "resolved"
         }
       ],
       "problems": []
@@ -93,18 +148,29 @@
     "scratch_only": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/generated.rs", "line": 20, "function": "builds_a_generated_crate", "form": "spawn",
-          "readable": true, "scratch_crate": true, "harness_references": []
+          "path": "tests/generated.rs",
+          "line": 20,
+          "function": "builds_a_generated_crate",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": true,
+          "harness_references": []
         }
       ],
       "declarations": [
         {
-          "path": "tests/generated.rs", "function": "builds_a_generated_crate", "subject": "cargo-behaviour",
-          "covered_by": "nextest-setup", "coverage": "resolved"
+          "path": "tests/generated.rs",
+          "function": "builds_a_generated_crate",
+          "subject": "cargo-behaviour",
+          "covered_by": "nextest-setup",
+          "coverage": "resolved"
         }
       ],
       "problems": []
@@ -112,18 +178,31 @@
     "harness_only": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/timeouts.rs", "line": 30, "function": "bounded_run", "form": "spawn",
-          "readable": true, "scratch_crate": false, "harness_references": ["run_bounded"]
+          "path": "tests/timeouts.rs",
+          "line": 30,
+          "function": "bounded_run",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": false,
+          "harness_references": [
+            "run_bounded"
+          ]
         }
       ],
       "declarations": [
         {
-          "path": "tests/timeouts.rs", "function": "bounded_run", "subject": "product-cli",
-          "covered_by": "nextest-setup", "coverage": "resolved"
+          "path": "tests/timeouts.rs",
+          "function": "bounded_run",
+          "subject": "product-cli",
+          "covered_by": "nextest-setup",
+          "coverage": "resolved"
         }
       ],
       "problems": []
@@ -131,12 +210,20 @@
     "unreadable_spawn": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "absent",
       "builders": [
         {
-          "path": "tests/shell.rs", "line": 5, "function": "runs_a_tool", "form": "spawn",
-          "readable": false, "scratch_crate": false, "harness_references": []
+          "path": "tests/shell.rs",
+          "line": 5,
+          "function": "runs_a_tool",
+          "form": "spawn",
+          "readable": false,
+          "scratch_crate": false,
+          "harness_references": []
         }
       ],
       "declarations": [],
@@ -145,13 +232,19 @@
     "stale_declaration": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [],
       "declarations": [
         {
-          "path": "tests/gone.rs", "function": "removed", "subject": "product-cli",
-          "covered_by": "nextest-setup", "coverage": "resolved"
+          "path": "tests/gone.rs",
+          "function": "removed",
+          "subject": "product-cli",
+          "covered_by": "nextest-setup",
+          "coverage": "resolved"
         }
       ],
       "problems": []
@@ -159,18 +252,29 @@
     "uncovered": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/cli.rs", "line": 12, "function": "builds_the_plugin", "form": "spawn",
-          "readable": true, "scratch_crate": false, "harness_references": []
+          "path": "tests/cli.rs",
+          "line": 12,
+          "function": "builds_the_plugin",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": false,
+          "harness_references": []
         }
       ],
       "declarations": [
         {
-          "path": "tests/cli.rs", "function": "builds_the_plugin", "subject": "product-cli",
-          "covered_by": "make:missing", "coverage": "unresolved"
+          "path": "tests/cli.rs",
+          "function": "builds_the_plugin",
+          "subject": "product-cli",
+          "covered_by": "make:missing",
+          "coverage": "unresolved"
         }
       ],
       "problems": []
@@ -178,18 +282,29 @@
     "unreadable_coverage": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/cli.rs", "line": 12, "function": "builds_the_plugin", "form": "spawn",
-          "readable": true, "scratch_crate": false, "harness_references": []
+          "path": "tests/cli.rs",
+          "line": 12,
+          "function": "builds_the_plugin",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": false,
+          "harness_references": []
         }
       ],
       "declarations": [
         {
-          "path": "tests/cli.rs", "function": "builds_the_plugin", "subject": "product-cli",
-          "covered_by": "somehow", "coverage": "unreadable"
+          "path": "tests/cli.rs",
+          "function": "builds_the_plugin",
+          "subject": "product-cli",
+          "covered_by": "somehow",
+          "coverage": "unreadable"
         }
       ],
       "problems": []
@@ -197,18 +312,29 @@
     "unknown_subject": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [
         {
-          "path": "tests/cli.rs", "line": 12, "function": "builds_the_plugin", "form": "spawn",
-          "readable": true, "scratch_crate": false, "harness_references": []
+          "path": "tests/cli.rs",
+          "line": 12,
+          "function": "builds_the_plugin",
+          "form": "spawn",
+          "readable": true,
+          "scratch_crate": false,
+          "harness_references": []
         }
       ],
       "declarations": [
         {
-          "path": "tests/cli.rs", "function": "builds_the_plugin", "subject": "because",
-          "covered_by": "nextest-setup", "coverage": "resolved"
+          "path": "tests/cli.rs",
+          "function": "builds_the_plugin",
+          "subject": "because",
+          "covered_by": "nextest-setup",
+          "coverage": "resolved"
         }
       ],
       "problems": []
@@ -216,28 +342,76 @@
     "problem": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "invalid",
       "builders": [],
       "declarations": [],
-      "problems": [".concordat/nested-builds.toml: Invalid value (at line 1, column 3)"]
+      "problems": [
+        ".concordat/nested-builds.toml: Invalid value (at line 1, column 3)"
+      ]
     },
     "malformed_builder": {
       "schema_version": 1,
       "kind": "policy-input/nested-cargo-test-builds",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
-      "builders": [{"path": "tests/cli.rs", "line": "12", "function": "x", "form": "spawn"}],
+      "builders": [
+        {
+          "path": "tests/cli.rs",
+          "line": "12",
+          "function": "x",
+          "form": "spawn"
+        }
+      ],
       "declarations": [],
       "problems": []
     },
     "wrong_kind": {
       "schema_version": 1,
       "kind": "policy-input/other",
-      "repository": {"path": ".", "name": "leynos/example"},
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
       "declarations_state": "read",
       "builders": [],
       "declarations": [],
+      "problems": []
+    },
+    "declared_unreadable_spawn": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-test-builds",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "declarations_state": "read",
+      "builders": [
+        {
+          "path": "tests/shell.rs",
+          "line": 5,
+          "function": "runs_a_tool",
+          "form": "spawn",
+          "readable": false,
+          "scratch_crate": false,
+          "harness_references": []
+        }
+      ],
+      "declarations": [
+        {
+          "path": "tests/shell.rs",
+          "function": "runs_a_tool",
+          "subject": "product-cli",
+          "covered_by": "nextest-setup",
+          "coverage": "resolved"
+        }
+      ],
       "problems": []
     }
   }

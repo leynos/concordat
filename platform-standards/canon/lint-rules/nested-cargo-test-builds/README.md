@@ -90,10 +90,13 @@ The reader is the one the other nested-cargo rules use, so test scope, fixture
 exclusion and `#[cfg(test)]` handling are theirs.
 
 - **Inventoried:** a test-scope `Command` that compiles (or may), whether it
-  names `cargo`, `rustc` or `env!("CARGO")`; a `trybuild` or `macrotest`
-  reference; and, in a whole-file test source, a
-  `cargo_metadata::MetadataCommand` use, which resolves the dependency graph
-  under the shared package-cache lock.
+  names `cargo`, `rustc`, `rustdoc` or `env!("CARGO")`; a shell (`sh -c`, `cmd`,
+  `powershell`) whose arguments name `cargo` or `rustc` or cannot be read,
+  which is indeterminate; a `trybuild` or `macrotest` reference; and, in a
+  whole-file test source, a `cargo_metadata::MetadataCommand` use inside a
+  function, which resolves the dependency graph under the shared package-cache
+  lock. A command whose program is a variable (`Command::new(binary)`) is not
+  inventoried: most such commands run the product binary.
 - **Not inventoried:** a version or help probe, `cargo fetch`,
   `cargo package --list`, `--unit-graph`, `assert_cmd`'s `cargo_bin` (it runs a
   binary the outer build already made), and the build inside a nested-build

@@ -15,7 +15,7 @@ import typing as typ
 
 from .nested_cargo_commands import ARGUMENT_METHODS, UNSEEN_ARGUMENTS
 from .nested_cargo_spawn import SUBCOMMANDS
-from .nested_cargo_text import argument_items
+from .nested_cargo_text import argument_items, string_literals
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -148,3 +148,40 @@ def _subcommand_state(subcommand: str, rest: list[str | None]) -> str:
     if subcommand == "package" and _LISTING_FLAGS.intersection(rest):
         return COMPILES_NO
     return COMPILES_YES
+
+
+_COMPILER_PROGRAMS: typ.Final = frozenset({"rustc", "rustdoc"})
+_SHELL_PROGRAMS: typ.Final = frozenset({
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "cmd",
+    "powershell",
+    "pwsh",
+})
+
+
+def program_compiles(program: str, calls: cabc.Iterable[tuple[str, str]]) -> str | None:
+    """Say whether a non-cargo program is a compiler, or a shell that may run one.
+
+    A shell is judged on its arguments: one the reader cannot read, or one that
+    names `cargo` or `rustc`, may start a compile, and what it starts is unknown.
+    A shell whose arguments are all readable and name neither compiles nothing.
+
+    Returns
+    -------
+    str | None
+        `yes` for `rustc` or `rustdoc`, `unknown` for such a shell, and None for
+        any other program, which the reader leaves alone.
+    """
+    literals = string_literals(program)
+    name = literals[0] if literals is not None and len(literals) == 1 else None
+    if name in _COMPILER_PROGRAMS:
+        return COMPILES_YES
+    if name not in _SHELL_PROGRAMS:
+        return None
+    words = _argument_words(calls)
+    if any(w is None or "cargo" in w or "rustc" in w for w in words):
+        return COMPILES_UNKNOWN
+    return None

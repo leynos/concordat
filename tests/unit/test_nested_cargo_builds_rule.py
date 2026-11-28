@@ -59,7 +59,44 @@ fn ui() {
 UNREADABLE_TEST = """\
 #[test]
 fn runs_a_tool() {
-    std::process::Command::new(tool_name()).arg(subcommand()).status().unwrap();
+    std::process::Command::new("cargo").arg(subcommand()).status().unwrap();
+}
+"""
+
+RUSTC_TEST = """\
+#[test]
+fn compiles_a_snippet() {
+    std::process::Command::new("rustc").arg("snippet.rs").status().unwrap();
+}
+"""
+
+SHELL_TEST = """\
+#[test]
+fn runs_a_script() {
+    std::process::Command::new("sh").args(["-c", "cargo build"]).status().unwrap();
+}
+"""
+
+ONE_LINE_TEST = """\
+pub fn builds() { std::process::Command::new("cargo").arg("build").status().unwrap(); }
+"""
+
+COMMENT_ONLY_TEST = """\
+#[test]
+fn a_test_that_mentions_the_harness() {
+    // Cargo.toml would live in a tempdir, and write it, but this only reads one.
+    let compiled = nested_cargo::count_compiling(b"");
+    std::process::Command::new("cargo").arg("build").status().unwrap();
+    assert_eq!(compiled, 0);
+}
+"""
+
+IMPORT_ONLY_TEST = """\
+use cargo_metadata::MetadataCommand;
+
+#[test]
+fn reads_the_graph() {
+    let _ = MetadataCommand::new().exec().unwrap();
 }
 """
 
@@ -117,6 +154,11 @@ def checkout(root: pathlib.Path, files: dict[str, str] | None = None) -> pathlib
     for relative, text in (files or {}).items():
         put(root, relative, text)
     return root
+
+
+def entry(path: str, covered_by: str, subject: str = "product-cli") -> str:
+    """Return a declaration body for *path*, with no function."""
+    return f'path = "{path}"\nsubject = "{subject}"\ncovered_by = "{covered_by}"'
 
 
 def declare(root: pathlib.Path, *entries: str) -> None:
@@ -180,7 +222,7 @@ def test_a_make_goal_that_test_does_not_run_is_nc013(tmp_path: pathlib.Path) -> 
     )
     declare(
         root,
-        'path = "tests/cli.rs"\nsubject = "product-cli"\ncovered_by = "make:unrelated"',
+        entry("tests/cli.rs", "make:unrelated"),
     )
     assert profile(root) == {("NC-013", "tests/cli.rs")}
 
@@ -193,7 +235,7 @@ def test_a_nextest_setup_script_covers_a_declared_builder(
     put(root, ".config/nextest.toml", SETUP_SCRIPT)
     declare(
         root,
-        'path = "tests/cli.rs"\nsubject = "product-cli"\ncovered_by = "nextest-setup"',
+        entry("tests/cli.rs", "nextest-setup"),
     )
     assert profile(root) == set()
 
@@ -203,7 +245,7 @@ def test_nextest_setup_without_a_script_is_nc013(tmp_path: pathlib.Path) -> None
     root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST})
     declare(
         root,
-        'path = "tests/cli.rs"\nsubject = "product-cli"\ncovered_by = "nextest-setup"',
+        entry("tests/cli.rs", "nextest-setup"),
     )
     assert profile(root) == {("NC-013", "tests/cli.rs")}
 
@@ -230,7 +272,7 @@ def test_an_unknown_warm_up_form_is_indeterminate(tmp_path: pathlib.Path) -> Non
     root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST})
     declare(
         root,
-        'path = "tests/cli.rs"\nsubject = "product-cli"\ncovered_by = "somehow"',
+        entry("tests/cli.rs", "somehow"),
     )
     assert profile(root) == {("EN-001", "tests/cli.rs")}
 
@@ -284,7 +326,7 @@ def test_a_metadata_query_in_a_test_file_is_inventoried(
 def test_an_unreadable_spawn_is_indeterminate(tmp_path: pathlib.Path) -> None:
     """A program the reader cannot see is neither accepted nor accused."""
     root = checkout(tmp_path, {"tests/shell.rs": UNREADABLE_TEST})
-    assert {rule for rule, _ in profile(root)} <= {"EN-001"}
+    assert profile(root) == {("EN-001", "tests/shell.rs")}
 
 
 def test_a_version_probe_is_not_inventoried(tmp_path: pathlib.Path) -> None:
@@ -298,8 +340,8 @@ def test_a_stale_declaration_is_nc011(tmp_path: pathlib.Path) -> None:
     root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST})
     declare(
         root,
-        'path = "tests/gone.rs"\nsubject = "product-cli"\ncovered_by = "nextest-setup"',
-        'path = "tests/cli.rs"\nsubject = "product-cli"\ncovered_by = "nextest-setup"',
+        entry("tests/gone.rs", "nextest-setup"),
+        entry("tests/cli.rs", "nextest-setup"),
     )
     assert ("NC-011", "tests/gone.rs") in profile(root)
 
@@ -321,3 +363,123 @@ def test_a_repository_without_rust_has_nothing_to_judge(
     repository.remotes.create("origin", "https://github.com/leynos/example.git")
     put(tmp_path, "README.md", "hello\n")
     assert profile(tmp_path) == set()
+
+
+def test_a_direct_rustc_spawn_is_inventoried(tmp_path: pathlib.Path) -> None:
+    """`rustc` compiles whether or not the test sets a Cargo target."""
+    root = checkout(tmp_path, {"tests/snippet.rs": RUSTC_TEST})
+    assert profile(root) == {("NC-011", "tests/snippet.rs")}
+
+
+def test_a_shell_that_may_run_cargo_is_indeterminate(tmp_path: pathlib.Path) -> None:
+    """`sh -c "cargo build"` hides what it builds, so it is EN-001."""
+    root = checkout(tmp_path, {"tests/script.rs": SHELL_TEST})
+    assert profile(root) == {("EN-001", "tests/script.rs")}
+
+
+def test_a_declaration_does_not_make_an_unreadable_spawn_readable(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A declared builder with an unreadable spawn is still indeterminate."""
+    root = checkout(tmp_path, {"tests/script.rs": SHELL_TEST})
+    declare(
+        root,
+        entry("tests/script.rs", "nextest-setup"),
+    )
+    put(root, ".config/nextest.toml", SETUP_SCRIPT)
+    assert ("EN-001", "tests/script.rs") in profile(root)
+
+
+def test_a_one_line_function_is_named_by_its_spawn(tmp_path: pathlib.Path) -> None:
+    """The function is found from the spawn, not from the start of its line."""
+    root = checkout(tmp_path, {"tests/support.rs": ONE_LINE_TEST, "Makefile": MAKEFILE})
+    declare(
+        root,
+        'path = "tests/support.rs"\nfunction = "builds"\nsubject = "product-cli"\n'
+        'covered_by = "make:prepare-nested"',
+    )
+    assert profile(root) == set()
+
+
+def test_a_manifest_name_in_a_comment_is_not_a_scratch_crate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """NC-012 needs a real write of a manifest, not a mention of one."""
+    root = checkout(tmp_path, {"tests/mention.rs": COMMENT_ONLY_TEST})
+    assert profile(root) == {("NC-011", "tests/mention.rs")}
+
+
+def test_a_metadata_import_outside_a_function_is_not_a_builder(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Only the function that uses `MetadataCommand` is declared."""
+    root = checkout(tmp_path, {"tests/graph.rs": IMPORT_ONLY_TEST})
+    declare(
+        root,
+        'path = "tests/graph.rs"\nfunction = "reads_the_graph"\n'
+        'subject = "dependency-graph"\ncovered_by = "nextest-setup"',
+    )
+    put(root, ".config/nextest.toml", SETUP_SCRIPT)
+    assert profile(root) == set()
+
+
+def test_a_make_goal_called_after_the_tests_start_does_not_warm_them(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Ordering matters: a goal `test` calls after its test line is too late."""
+    late = (
+        "test:\n\tcargo nextest run\n\t$(MAKE) prepare-nested\n\n"
+        "prepare-nested:\n\ttrue\n"
+    )
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": late})
+    declare(
+        root,
+        entry("tests/cli.rs", "make:prepare-nested"),
+    )
+    assert profile(root) == {("NC-013", "tests/cli.rs")}
+
+
+def test_a_goal_called_before_the_tests_start_warms_them(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `make` call earlier in the `test` recipe is ordered by the recipe."""
+    early = (
+        "test:\n\t$(MAKE) prepare-nested\n\tcargo nextest run\n\n"
+        "prepare-nested:\n\ttrue\n"
+    )
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": early})
+    declare(
+        root,
+        entry("tests/cli.rs", "make:prepare-nested"),
+    )
+    assert profile(root) == set()
+
+
+def test_a_variable_prerequisite_leaves_an_unfound_goal_unreadable(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A prerequisite the reader cannot expand may be the declared goal."""
+    opaque = "test: $(PREPARE)\n\tcargo nextest run\n"
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": opaque})
+    declare(
+        root,
+        entry("tests/cli.rs", "make:warm"),
+    )
+    assert profile(root) == {("EN-001", "tests/cli.rs")}
+
+
+def test_a_package_selector_covers_a_test_binary_of_that_package(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The owning package is passed to nextest's `package(..)` selector."""
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST})
+    put(
+        root,
+        ".config/nextest.toml",
+        SETUP_SCRIPT.replace('filter = "all()"', 'filter = "package(=example)"'),
+    )
+    declare(
+        root,
+        entry("tests/cli.rs", "nextest-setup"),
+    )
+    assert profile(root) == set()

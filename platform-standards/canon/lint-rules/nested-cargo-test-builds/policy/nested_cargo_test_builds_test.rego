@@ -78,6 +78,10 @@ test_an_unreadable_spawn_is_indeterminate_not_nc011 if {
 	profile(data.fixtures.unreadable_spawn) == {["EN-001", "indeterminate", "tests/shell.rs"]}
 }
 
+test_a_declaration_does_not_make_an_unreadable_spawn_readable if {
+	profile(data.fixtures.declared_unreadable_spawn) == {["EN-001", "indeterminate", "tests/shell.rs"]}
+}
+
 test_a_stale_declaration_is_nc011 if {
 	profile(data.fixtures.stale_declaration) == {["NC-011", "noncompliant", "tests/gone.rs"]}
 }

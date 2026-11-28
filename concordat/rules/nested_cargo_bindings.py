@@ -77,6 +77,21 @@ def _after_parameters(masked: str, function: re.Match[str]) -> int:
     return function.end() if close is None else close
 
 
+def function_span(source: RustSource, offset: int) -> tuple[int, int] | None:
+    """Return the `(start, end)` of the innermost function containing *offset*.
+
+    Returns
+    -------
+    tuple[int, int] | None
+        The span from the `fn` keyword to the closing brace, or None for an
+        offset outside any function.
+    """
+    containing = [
+        span for span in _function_spans(source.masked) if span[0] <= offset < span[1]
+    ]
+    return max(containing) if containing else None
+
+
 def function_name(source: RustSource, offset: int) -> str:
     """Return the name of the innermost function that contains *offset*.
 
@@ -85,13 +100,10 @@ def function_name(source: RustSource, offset: int) -> str:
     str
         The name, or an empty string for an offset outside any function.
     """
-    containing = [
-        span for span in _function_spans(source.masked) if span[0] <= offset < span[1]
-    ]
-    if not containing:
+    span = function_span(source, offset)
+    if span is None:
         return ""
-    start, _end = max(containing)
-    named = _FUNCTION.match(source.masked, start)
+    named = _FUNCTION.match(source.masked, span[0])
     return named.group().split()[-1] if named else ""
 
 
@@ -109,13 +121,8 @@ def function_text(source: RustSource, offset: int) -> str:
     str
         The function's source text from its `fn` keyword to its closing brace.
     """
-    containing = [
-        span for span in _function_spans(source.masked) if span[0] <= offset < span[1]
-    ]
-    if not containing:
-        return source.text
-    start, end = max(containing)
-    return source.text[start:end]
+    span = function_span(source, offset)
+    return source.text if span is None else source.text[span[0] : span[1]]
 
 
 def _signature(text: str) -> str | None:
