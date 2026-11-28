@@ -234,13 +234,8 @@ def _mask_char(source: str, index: int) -> Masked | None:
     return "'" + _blank(literal.group()[1:-1]) + "'", literal.end()
 
 
-_MASKS: typ.Final = (
-    _mask_line_comment,
-    _mask_block_comment,
-    _mask_raw_string,
-    _mask_string,
-    _mask_char,
-)
+_LITERAL_MASKS: typ.Final = (_mask_raw_string, _mask_string, _mask_char)
+_MASKS: typ.Final = (_mask_line_comment, _mask_block_comment, *_LITERAL_MASKS)
 
 
 def mask_literals(source: str) -> str:
@@ -267,6 +262,42 @@ def mask_literals(source: str) -> str:
         text, end = masked or (source[index], index + 1)
         out.append(text)
         index = end
+    return "".join(out)
+
+
+def blank_comments(source: str) -> str:
+    """Return *source* with its comments blanked and its literals as written.
+
+    :func:`mask_literals` blanks both, which is right when the question is
+    whether text merely looks like an attribute. A caller that has to read a
+    value out of the source (a command argument, say) needs the opposite: a
+    `//` inside a string is content, so it must not swallow the rest of the
+    line, while a real comment must not be read as code.
+
+    Returns
+    -------
+    str
+        A string of the same length and line structure as *source*.
+    """
+    out: list[str] = []
+    index = 0
+    while index < len(source):
+        literal = next(
+            (found for mask in _LITERAL_MASKS if (found := mask(source, index))), None
+        )
+        if literal is not None:
+            out.append(source[index : literal[1]])
+            index = literal[1]
+            continue
+        comment = _mask_line_comment(source, index) or _mask_block_comment(
+            source, index
+        )
+        if comment is not None:
+            out.append(comment[0])
+            index = comment[1]
+            continue
+        out.append(source[index])
+        index += 1
     return "".join(out)
 
 

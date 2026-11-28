@@ -13,8 +13,8 @@ from __future__ import annotations
 import re
 import typing as typ
 
+from .nested_cargo_arguments import SUBCOMMANDS
 from .nested_cargo_commands import ARGUMENT_METHODS, UNSEEN_ARGUMENTS
-from .nested_cargo_spawn import SUBCOMMANDS
 from .nested_cargo_text import argument_items
 
 if typ.TYPE_CHECKING:

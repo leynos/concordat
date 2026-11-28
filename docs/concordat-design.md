@@ -3069,28 +3069,288 @@ four narrowings: test code only, compiling subcommands only (`cargo metadata`
 is not compilation), a `Command` in the file, and no Python (pytest bounds
 those). Test code is a test directory's whole file, or the braces of an item
 marked `#[cfg(test)]` (read from the masked source, so a marker in a comment or
-a brace in a string moves nothing); production code after a closed `mod tests`
-is not test code. A compiling argument counts only when it belongs to the same
-command as the spawn: it is read from the spawn to the next `Command::new` or
-the next function item, and a command bound to a name and handed to a function
-defined in the same file is also read against that function's body, because the
-callee adds the arguments. A callee in another file is not seen, which errs
-towards not demanding configuration. The configuration facts are the ones
-netsuke and rstest-bdd converged on: a serial group, an override that uses it,
-an explicit `slow-timeout` (profile or override) and a `global-timeout` (any
-profile, since netsuke sets it on `ci`). A top-level test binary must also be
-named by a grouped override's filter, by binary or by one of its functions,
-which is how ortho-config's BDD suite is told apart from netsuke's. The package
-does not evaluate nextest filtersets: a name appearing in a grouped filter is
-the evidence, which is cheap and errs towards acceptance. The name must be a
-whole word inside a `binary()`, `binary_id()` or `test()` predicate, so
-`binary(ui_extra)` does not name `ui`, and a regex argument such as
-`/^name($|::)/` is read whole. Exemptions name a test source and follow the
-NC-001 convention: repository, path, rationale and review trigger, where a
-blank rationale or trigger suppresses nothing. The package ships at `warning`
-severity through a `severity` parameter, as `nested-cargo-offline-tests` does,
-because the estate survey found configuration gaps in a dozen repositories;
-promotion to `error` follows once they are clean.
+a brace in a string moves nothing). The marked item's first `{` or `;` is read
+at bracket depth zero, so a `;` inside a signature does not end it early, and
+production code after a closed `mod tests` is not test code. A `>>` in an array
+length is a shift rather than a generic closer, so it does not unbalance the
+signature. A compiling argument counts only when it belongs to the same command
+as the spawn: it is read from the spawn to the next `Command::new` or the next
+function item, and only before that command's first launch on the path being
+read: a launch written in a block of its own ends only the branch that holds
+it, while a later launch of a reused `Command` on the path that ran the first
+is missed, so an empty audit is no proof that a test starts no compiler. A
+`CARGO` lookup passed to the constructor
+(`Command::new(env::var_os("CARGO").unwrap())`) is that constructor's argument
+rather than a window of its own, so the chain's `.arg` and `.status` calls are
+still read. Arguments are read with comments blanked and literal contents kept,
+so a flag in a comment is not an argument while a `//` in a string does not
+hide the rest of the line, and a constructor written in a comment or inside a
+string is not a spawn however the file names `Command`, because only the code
+before its literal argument survives masking. Each argument and launch is
+attributed to the receiver it is called on, so another command's `.arg(..)`, or
+one built inside an argument, is not this command's; a receiver reached through
+a field or a path is declined, however much whitespace sits around the
+separator. A name called as a namespace (`command::factory()`) is declined too,
+because the path root is a type or module rather than the binding, while a
+single colon is a field initializer, so `Settings { status: command }` still
+passes the command as a value. A bare `Command` receiver is an ordinary name
+the caller may have bound (`fn probe(Command: &mut Command)`), so only a
+`Command` reached through `::` is the constructor's namespace, and a path
+before it (`std::process::Command::new(..)`) is part of the type rather than
+another value; that bare name counts when it is the binding under study, as it
+is for `let mut Command = Command::new(..)`. A binding is read when its
+constructor starts on the next line, because the name ends at the `=`, and the
+name is found in the masked source, so a comment between the `=` and the
+constructor is whitespace as Rust treats it. A launch may be spaced on either
+side of its dot or before its parenthesis (`command . status ()`). A command
+bound to a name and handed to a helper defined once in the same file is also
+read against that helper's body, because the helper adds the arguments. The
+call may span lines, and only statements on the parameter that receives the
+command count, so another command built in the helper does not contribute.
+Those statements are read at the call site with every use of the parameter's
+name taken to be the caller's binding, so a launch in the helper or the caller
+ends the arguments in the order they run, and a version flag added through a
+renamed parameter still probes the caller's command. A helper read that stops
+inside a block is closed before it is spliced, so a block the helper leaves
+open cannot hide a later unconditional flag, and a spliced fragment with no
+call on the command keeps its braces in the order they were written, with the
+`else` between them, so the arms still pair rather than reading as code that
+runs one after the other, and a `return` stays inside the block it was written
+in, because moved after that block it would end every path. A call that is the
+`return`'s own expression (`return target.arg("--help")`) runs before control
+leaves, so it is not guarded with the tail. The expression ends only at a `;`
+at its own level or at a closer that ends a bracket opened before the `return`,
+so brackets around the call (`return (target.arg("--help"));`) do not make it a
+statement after the return. A block-level `return` also marks the statements
+that follow it as the code of the path that skipped it; when the helper is
+spliced, that tail is wrapped in a block of its own and the keyword is blanked
+in the masked form, so the tail stays conditional and the caller's own
+statements after the call stay in the run the early-return path reached. A
+helper's statements are split at a `;` only at bracket depth zero, so a `;`
+inside a block argument (`target.arg({ let flag = "--quiet"; flag }).status()`)
+keeps the launch chained after it on the same statement. A parameter list is
+split on its own commas, so a struct pattern
+(`fn configure(Pair { first, command: other }: Pair, target: ..)`) keeps its
+field comma and a comparison inside a const block
+(`fn run(flag: Flag<{ 1 < 2 }>, (configure,): ..)`) is not a generic that
+swallows the parameters after it. A helper defined more than once, one defined
+`async` (its body runs when awaited, not at the call), or one whose receiving
+parameter is not a plain `name: Type` binding, is declined rather than guessed;
+so is a call that a binding in the caller's own function shadows (a parameter
+included, even one after a method's receiver, a name bound by a parameter
+pattern such as `fn run((configure,): ..)` or
+`fn run(Callbacks { setup: configure }: ..)`, a name bound by a destructuring
+pattern such as `let (configure,) = ..` or `let Hook(configure) = ..`, a name
+bound by a `for` loop's pattern such as `for (configure, other) in ..`, which
+hides it inside the loop's own body only, not in a block written after the loop
+or in the iterator expression's own block
+(`for configure in { [configure] } { .. }`, whose body the loop binds), a
+closure parameter in any position such as
+`|_: (), configure: fn(&mut Command)|`, a name bound by a `match` arm's pattern
+such as `match callback { configure => configure(&mut command) }`, which hides
+it through the whole arm expression, so a later arm's call is not hidden by an
+earlier arm's binding while a call after an earlier call in the same arm has
+closed (`configure => noop() + configure(..)`) still reaches the bound value,
+and the arm's guard is inside that scope as well, so
+`configure if { configure(&mut command); false } => {}` reaches the bound
+value, a `const` or `static` item of that name, mutable or not, in the caller's
+block or a block enclosing it, since an item is in scope for its whole block
+even when it is declared after the call, while a `let` counts only from the end
+of its own statement and only while its block is open at the call, so a call in
+its initializer (`let configure = configure(command);`) still reaches the free
+function, one declared in an inner block that has closed is out of scope, and a
+sibling block's item is not in scope at the call; an `if let` or `while let`
+binds only inside the block it guards, so a call after that block reaches the
+free function again), and a borrowed binding such as `let ref configure = ..`),
+a call written as a path or method (`support::configure(..)`, however it is
+spaced around the separator), a name a `use` item could import, or a helper
+that reassigns the parameter, redeclares its name, or rebinds it with a loop
+pattern (`for (target,) in [(other,)] { .. }`, whose body is another
+command's). The parameters read are those of the innermost function whose body
+holds the call, so a function item declared inside the caller is not mistaken
+for its scope. A helper whose body also names the caller's binding is declined
+too: rewriting its receiving parameter to that name would make the helper's own
+uses of it read as the caller's. So is a helper whose receiving parameter a
+closure rebinds in its own `|..|` list
+(`|_: (), target: &mut Command| target.arg(..)`), because that `target` is the
+closure's argument, not the command handed in. A call written inside a closure
+body is declined as well (`let deferred = |_| configure(&mut command);`): the
+body runs when the closure is called, not where it is written, so its
+statements are not the call site's. The same holds for a helper's own
+parameter: a use of it inside a closure body or inside a `match` arm whose
+pattern binds the parameter's name is not the caller's command, so the helper
+is declined at the statement that holds it, and an arm's binding holds through
+the whole arm expression, so a closed call earlier in it does not end the arm.
+The scan does not resolve imports, and a `use` may name an inline module in the
+same file (`use self::support::configure`) as readily as a helper in another
+file, so an imported name is declined either way. A function item ends the
+arguments however it is qualified (`unsafe fn`, `default fn`, `extern "C" fn`),
+because the qualifiers do not move where the next scope begins, and it does so
+even when it begins on the line that ends the previous item (`} fn later(..)`):
+the boundary is the `fn` keyword, not the start of a line, and the name may
+begin on the following line (`fn` then `run(..)`), which still opens the
+function's scope. A glob import spells no name but could bring any in, so it
+declines every handoff in the file, whether it is written `use support::*` or
+with the glob inside a group (`use support::{*}`). A callee in another file is
+not seen either. These declinations err towards not demanding configuration and
+can miss compiler work.
+
+A launch is read per path. A launch reached with no block open ends the read,
+because everything after it is a reuse of the command; a launch that a `&&` or
+`||` before it may skip is the exception, since the path that skips it goes on
+to the next statement, which gives the next run its arguments. That exception
+holds only within the operand the short circuit governs, so a comma at the
+launch's own level between the operator and the launch ends the operand: in
+`(first || second, command.arg("metadata").status())` the second element runs
+whether or not the left side short-circuits, and the launch ends the read. A
+launch inside a block ends only that branch, so the statements after the block
+and the `else` arm beside it are the first arguments of the next run, while an
+`else` that closes an inner `if` the launch is not in is code after the run. A
+`return` inside a block ends its path in the same way, wherever it is written,
+so a helper that returns early does not hide the caller's later run, and each
+run that leaves a branch inherits the arguments given before it, because they
+are on every path that reaches it -- including those a branch condition adds,
+since the condition runs before either arm
+(`if command.arg("--version").get_args().next().is_some() { .. }`). The arm a
+statement opens itself keeps the blocks the launch was reached with, so a block
+the statement closed before the branch (the arm beside `} else {`) is not left
+open at the arm while the branch's own brace is. Each run is asked its own
+questions: a probe flag must be present on every run of a `rustc` command that
+launches, while any run of a cargo command that compiles is enough. A run that
+never reaches a launch starts no child process, so it compiles nothing and
+spawns nothing, for `cargo` and `rustc` alike, and a `rustc` command with no
+launch at all is not a probe; a launch beyond the read is declined rather than
+guessed at. A flag reached only on some paths, behind a `&&`/`||` short circuit
+or inside a block that may not run, does not make a run a probe -- except when
+one fully paired `if`/`else` chain gives a probe in every arm, whether that
+choice is written across statements or on one line, since then no path reaches
+the launch without one. Each arm is read with the words given before the
+branch, so a `--print` in one arm is completed by a `cfg` after the choice, as
+`rustc` would see them; a short circuit inside an arm
+(`query && command.arg("-V").get_args().next().is_some()`) can still skip that
+arm's word, so the arm does not cover its path. A word is unconditional when
+every block open at it is also open at the run's launch, so the branch that
+launches contributes its flags while a sibling block that has already closed
+does not. An option given in a block of its own
+(`if verbose { command.arg("-v") }`) cannot change the subcommand, so it does
+not stop a paired choice beside it being read arm by arm; an option that takes
+a value (`--color`, `--manifest-path`, `--config`, `-C`, `-Z`) is the
+exception, because the next word on that path is its value, so a following
+`["always", "build"]` leaves `build` the subcommand when the block runs. A
+later declaration of the command's name shadows it inside that block only,
+whether the declaration writes the name after `let` or binds it in a
+destructuring pattern (`let (mut command,) = (other,)`), while an assignment to
+it ends the read wherever it sits, because the block that ran it may have been
+entered; a `let` that rebinds the name counts only after its own initializer, so
+`let command = command.arg("build").status().unwrap();` still launches the old
+command; a closure parameter's scope is the closure itself, so
+`let _noop = |command: &mut Command| {};` does not hide the command from the
+statements after it, and a launch written beside the closure in the same
+statement (`(|command: &mut Command| {}, command.arg("build").status())`) is
+still the caller's, with the closure's braces leaving no block open, so the
+launch beside it sits at the outer depth and ends the read. The whole body is
+deferred work, whether it names a parameter or captures the command
+(`let deferred = || command.arg("build").status();`), and an `async` qualifier
+before the pipes opens a header just as `move` does, and so does a `return` or
+`break` that introduces the expression, so a launch inside it is not the
+caller's either. A closure's expression body runs to its `;`, but the commas of
+a call's type arguments (`consume::<u8, u16>(..)`) separate types rather than
+statements and do not end it, and a shift in an array return type
+(`-> [u8; 4 >> 1]`) does not close the type before its body because a return
+type's brackets are matched by kind, so a comparison inside a const block
+(`-> Flag<{ 1 < 2 }>`) is an operator rather than a generic and a shift inside
+a turbofish's type argument (`consume::<[u8; 4 >> 1]>(..)`) closes the array's
+generic rather than the turbofish; a launch written after a closure that has
+ended is the caller's own. A `;` inside the closure body splits the statement
+rather than the closure's scope, so the body stays hidden to its closing brace,
+and a statement that begins by closing a block (`} command.arg("-v")`) is read
+at the depth it is reached at, so its argument runs on every path that reaches
+it. A `;` inside a block argument of the command's own call does not end the
+statement, so `command.arg({ let flag = "--quiet"; flag }).status()` keeps its
+launch. When a `return` ends one arm of an `if`/`else`, the other arm is the
+only path that reaches the launch, so its words are read as given on every
+path; both arms reaching the launch keeps them conditional, and a chain of
+returning arms narrows to the one arm that does not return, wherever in the
+chain it sits, while an `else if` supplies a condition of its own, so an arm is
+not promoted merely because the arm beside it returns. A cargo subcommand is
+the first word the arguments give that is neither an option nor an option's
+value (`--color always nextest` runs `nextest`, while `cargo help build` prints
+help), so an option's value is not mistaken for the subcommand, and a value the
+reader cannot see fills its option's slot rather than ending the read. A
+conditional word never fills an option's value slot, because the path that
+skips its block gives the next word as the value: `--color`, a conditional
+`never`, then `always` is `--color always` on the path that skips the block. A
+conditional word likewise cannot hide the subcommand on the path that skips its
+block, so a `help` inside an `if` leaves an unconditional `build` still
+compiling, and each arm of a fully paired chain is read for its own subcommand,
+so a `metadata` in the `if` arm does not hide the `build` in its `else` arm. On
+the path that runs its block a conditional word keeps its position, so
+`if show { command.args(["help", "build"]); }` gives `help` before `build` when
+the block runs and `build` is its topic rather than the subcommand. A run with
+no unconditional subcommand at all is compiled when any path names one, so a
+`metadata` in one block beside a `build` in another still compiles when only
+the build's block runs, and two conditional words before a topic are each read
+as a possible subcommand. A `-h` or `--help` given on every path makes cargo
+print help whatever the subcommand is, while one added inside a block does not
+excuse the build on the path that skips it. A help flag given in the block that
+also holds a conditional subcommand travels with it, so
+`if show { command.args(["build", "--help"]); }` compiles nothing, unless a
+short circuit may skip the flag (`query && command.arg("--help")`), which
+leaves the word without help on the path that takes the left side. Each path is
+read from the words it gives and not from one flattened list, so a `build` in a
+block that a path skips is not that path's subcommand and a later `metadata` is
+still read on its own. A help flag in one arm excuses only the path through
+that arm, so a `build --help` in the `if` arm does not excuse the `check` its
+`else` arm runs, while a help flag in every arm excuses the whole run, and an
+arm holding only options is still a path when the choice is fully paired. A
+word after a `--` belongs to the program the command runs, not to cargo, and a
+`--` given only on some path is still a separator on that path, so a help flag
+written after it is passed to the program and does not excuse the build,
+whether the separator is unconditional or given in a conditional block beside
+the flag (`if show { command.args(["test", "--", "--help"]); }`). A word is the
+text its string literal has at run time, so an escape (`\x64`, `\u{64}`) is
+decoded and cannot hide `build` or `--version` from the read, and an escaped
+quote does not end the literal early. A Unicode escape's digits may be
+separated by underscores, which are not part of the number, and an escape
+longer than the six digits Rust allows is not decoded. A word the reader cannot
+see leaves the subcommand open, and then any compiling argument before the
+launch is enough. A `--print` query is read across the command's ordered
+arguments, so `.arg("--print").arg("cfg")` is the same probe as
+`.args(["--print", "cfg"])`, but its two halves must be adjacent: an unreadable
+word between them, or one given only inside a block, may be `link-args`, which
+builds the crate, so the query is not a probe. `--print=file-names` is a query
+too, and a kind may name an output file after a second `=`, in the joined form
+(`--print=cfg=out.txt`) or the two-word one (`--print`, `cfg=out.txt`), which
+writes the answer there and still compiles nothing. The configuration facts are
+the ones netsuke and rstest-bdd converged on: a serial group, an override that
+uses it, an explicit `slow-timeout` (profile or override) and a
+`global-timeout` (any profile, since netsuke sets it on `ci`). A top-level test
+binary must also be named by a grouped override's filter, by binary or by one
+of its functions, which is how ortho-config's BDD suite is told apart from
+netsuke's. The package does not evaluate nextest filtersets: a name appearing
+in a grouped filter is the evidence, which is cheap and errs towards
+acceptance. The name must be a whole word inside a `binary()`, `binary_id()` or
+`test()` predicate, so `binary(ui_extra)` does not name `ui`, and a regex
+argument such as `/^name($|::)/` is read whole. A predicate the filter negates
+(`not(binary(ui))`, `!test(compiles)`) excludes that name rather than selecting
+it, so it names nothing, and a group of predicates inside one negation
+(`!(binary(ui) | binary(other))`) excludes every name it holds. Negations nest
+and cancel in pairs, so `not(not(binary(ui)))` names `ui` again, and a
+difference (`binary(ui) - test(compiles)`, `binary(ui) and not test(compiles)`)
+excludes its right operand as a negation does, leaving `ui` selected. The
+parentheses are balanced rather than matched lazily, and a backslash escapes
+the next character wherever it sits, so a `\(` or `\)` in a matcher neither
+opens nor closes a group, while a matcher's `/regex/` text is skipped as they
+are counted, because a regex holds brackets of its own
+(`!(test(/foo[)]/) | binary(ui))`). A `/` opens a regex only at the first
+non-space character of a matcher's argument, so a slash in a `~contains`
+argument (`test(~src/foo)`) stays data and hides no bracket or name beside it.
+Exemptions name a test source and follow the NC-001 convention: repository,
+path, rationale and review trigger, where a blank rationale or trigger
+suppresses nothing. The package ships at `warning` severity through a
+`severity` parameter, as `nested-cargo-offline-tests` does, because the estate
+survey found configuration gaps in a dozen repositories; promotion to `error`
+follows once they are clean.
 
 ##### Nested cargo cold build
 
