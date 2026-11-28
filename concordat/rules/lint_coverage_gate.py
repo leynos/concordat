@@ -38,7 +38,13 @@ from .lint_coverage_commands import (
     script_run,
 )
 from .make_commands import blank_references
-from .makefile_expansion import expand, joined, single_assignments
+from .makefile_expansion import (
+    SHELL_DOLLAR,
+    UNRESOLVED_MARK,
+    expand,
+    joined,
+    single_assignments,
+)
 from .makefile_reach import reachable, rules_by_target
 from .markdown_envelope import (
     is_symlink,
@@ -376,9 +382,14 @@ def _step_directory(step: StepRun) -> str | None:
         The normalised directory, or None when the audit cannot follow it.
     """
     given = step.directory
-    if given is None or "$" in given:
+    # An expression survives as a mark or a `$`, and normalising a path would
+    # drop a mark before `/..`, so refuse it first. A padded value is a path
+    # with spaces in it, not the trimmed one.
+    if given is None or given != given.strip():
         return None
-    directory = posixpath.normpath(given.strip())
+    if any(mark in given for mark in (UNRESOLVED_MARK, SHELL_DOLLAR, "$")):
+        return None
+    directory = posixpath.normpath(given)
     if posixpath.isabs(directory) or directory.split("/")[0] == "..":
         return None
     return "" if directory == "." else directory

@@ -331,6 +331,12 @@ class TestRuns:
             ("", "        working-directory: .\n", [("clippy", "Cargo.toml")]),
             ("", "        working-directory: ${{ matrix.dir }}\n", [("clippy", None)]),
             ("", "        working-directory: ../out\n", [("clippy", None)]),
+            (
+                "",
+                "        working-directory: ${{ env.BASE }}/..\n",
+                [("clippy", None)],
+            ),
+            ("", "        working-directory: ' ext '\n", [("clippy", None)]),
             ("", "        working-directory: /abs\n", [("clippy", None)]),
         ],
     )
@@ -354,6 +360,23 @@ class TestRuns:
             },
         )
         assert _runs(tmp_path) == expected
+
+    def test_a_cd_in_a_step_moves_from_its_working_directory(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cd ..` from `ext` is the root, so the run is on the root surface."""
+        _app(
+            tmp_path,
+            {
+                "ext/Cargo.toml": MANIFEST.format(name="ext", extra=""),
+                ".github/workflows/ci.yml": (
+                    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+                    "    steps:\n      - run: cd .. && cargo clippy\n"
+                    "        working-directory: ext\n"
+                ),
+            },
+        )
+        assert _runs(tmp_path) == [("clippy", "Cargo.toml")]
 
     def test_a_step_that_runs_for_some_matrix_entries_only_is_unresolved(
         self, tmp_path: pathlib.Path
