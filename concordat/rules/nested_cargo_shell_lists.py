@@ -55,9 +55,14 @@ class _List:
 
 def _tokens(text: str) -> list[str] | None:
     """Return a recipe line's shell tokens, or None when it cannot be read."""
+    # Not POSIX mode: a quoted word keeps its quotes, so a quoted `;` is never
+    # taken for the operator. A backslash escape is not modelled, so a line
+    # holding one cannot be read.
+    if "\\" in text:
+        return None
     lexer = shlex.shlex(
         text.replace("$(MAKE)", "make").replace("${MAKE}", "make"),
-        posix=True,
+        posix=False,
         punctuation_chars=True,
     )
     lexer.whitespace_split = True
@@ -76,20 +81,18 @@ def _lists(tokens: list[str]) -> list[_List]:
     list[_List]
         The lists in order. An operator other than `&&` ends the current list.
     """
-    lists: list[_List] = []
-    current, words = _List(), list[str]()
+    lists = [_List()]
+    words: list[str] = []
     for word in tokens:
         if _OPERATOR.fullmatch(word) is None:
             words.append(word)
             continue
-        current.commands.append(words)
+        lists[-1].commands.append(words)
         words = []
         if word != "&&":
-            current.end = word
-            lists.append(current)
-            current = _List(follows_or=word == "||")
-    current.commands.append(words)
-    lists.append(current)
+            lists[-1].end = word
+            lists.append(_List(follows_or=word == "||"))
+    lists[-1].commands.append(words)
     return lists
 
 
@@ -119,6 +122,16 @@ def _leading_goals(commands: list[list[str]]) -> list[str]:
     return goals
 
 
+def _is_unreadable(tokens: list[str]) -> bool:
+    """Report whether a line holds a subshell or a shell branch."""
+    return "(" in tokens or bool(_CONTROL_WORDS & set(tokens))
+
+
+def _always_runs(each: _List) -> bool:
+    """Report whether a list runs in the foreground and is not skipped."""
+    return each.end in _SEQUENCE_ENDS and not each.follows_or
+
+
 def leading_make_goals(text: str) -> list[str]:
     """Return the goals one recipe line always calls before its tests can start.
 
@@ -129,14 +142,12 @@ def leading_make_goals(text: str) -> list[str]:
         subshell or a shell branch, contributes none.
     """
     tokens = _tokens(text)
-    if tokens is None or "(" in tokens or _CONTROL_WORDS & set(tokens):
+    if tokens is None or _is_unreadable(tokens):
         return []
     found: list[str] = []
     for each in _lists(tokens):
-        if any(_starts_tests(words) for words in each.commands):
-            if each.end in _SEQUENCE_ENDS and not each.follows_or:
-                found.extend(_leading_goals(each.commands))
-            return found
-        if each.end in _SEQUENCE_ENDS and not each.follows_or:
+        if _always_runs(each):
             found.extend(_leading_goals(each.commands))
+        if any(_starts_tests(words) for words in each.commands):
+            break
     return found

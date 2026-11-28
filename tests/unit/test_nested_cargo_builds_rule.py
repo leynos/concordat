@@ -712,6 +712,11 @@ UNREADABLE = {("EN-001", "tests/cli.rs")}
             id="a-quoted-semicolon-in-a-backgrounded-list",
         ),
         pytest.param(
+            "test:\n\tprintf ';' $(MAKE) warmup; cargo nextest run\n\n" + WARM,
+            NC013,
+            id="a-quoted-operator-is-an-argument",
+        ),
+        pytest.param(
             "test: warmup\ntest: run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
             NC013,
             id="separate-rules-for-one-target",
