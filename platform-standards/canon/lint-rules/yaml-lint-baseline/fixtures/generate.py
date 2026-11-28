@@ -164,6 +164,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "delegated_option_target": Scenario(makefile="delegated-option-target"),
     "ignore_global": Scenario(makefile="ignore-global"),
     "ignore_targets": Scenario(makefile="ignore-targets"),
+    "ignore_variable": Scenario(makefile="ignore-variable"),
     "delegated_prefixed_makeflags": Scenario(makefile="delegated-prefixed-makeflags"),
     "delegated_variable_override": Scenario(makefile="delegated-variable-override"),
     "yaml_only_no_makefile": dataclasses.replace(YAML_ONLY, makefile=None),

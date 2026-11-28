@@ -300,6 +300,15 @@ ignored_errors_path(root) if {
 	target in reachable_from(root)
 }
 
+# A prerequisite that still names a variable (`.IGNORE: $(IGNORED)`) cannot be
+# compared with the reachable targets, so it fails closed.
+ignored_errors_path(root) if {
+	some rule in input.makefile.rules
+	".IGNORE" in rule.targets
+	some target in rule.prerequisites
+	contains(target, "$")
+}
+
 dynamic_make_delegation(root) if {
 	some recipe in path_recipes(root)
 	regex.match(`(\$\(MAKE\)|\$\{MAKE\})[[:space:]]+(\$\(|-C)`, recipe.text)

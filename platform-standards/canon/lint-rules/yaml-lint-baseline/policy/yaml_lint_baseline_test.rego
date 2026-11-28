@@ -489,6 +489,15 @@ test_ignore_global if {
   }
 }
 
+# A variable-expanded `.IGNORE` prerequisite cannot be matched, so it fails closed.
+test_ignore_variable if {
+  findings := policy.deny with input as data.fixtures.ignore_variable
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
 test_ignore_targets if {
   findings := policy.deny with input as data.fixtures.ignore_targets
   profile(findings) == {
