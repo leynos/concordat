@@ -126,6 +126,27 @@ class _Reader:
     runs: list[Run] = dataclasses.field(default_factory=list)
     unreadable: list[str] = dataclasses.field(default_factory=list)
 
+    def is_climbing_a_link(self, directory: str, words: list[str]) -> bool:
+        """Return whether a `cd` climbs out of a directory that has a link in it.
+
+        `cd ..` from `link` goes to the parent of the link's target, so the
+        string path no longer says where the shell is.
+
+        Returns
+        -------
+        bool
+            Whether the `cd` climbs and a component of *directory* is a link.
+        """
+        target = words[1] if len(words) > 1 else ""
+        if ".." not in target.split("/"):
+            return False
+        current = self.checkout
+        for part in directory.split("/"):
+            current /= part
+            if is_symlink(current, OPERATION_READ_SCRIPT):
+                return True
+        return False
+
     def script_tools(self, relative: str) -> set[str]:
         """Return the tools a script's text names beside `cargo`, or none."""
         path = self.checkout / relative
@@ -233,7 +254,15 @@ def _read_command(
         The directory the next command runs in.
     """
     if words and words[0].lstrip("@-+") == "cd":
-        return _next_directory(directory, words)
+        moved = _next_directory(directory, words)
+        # `cd ..` from a symbolic link leaves its parent, not the link's own.
+        if (
+            moved is not None
+            and directory
+            and reader.is_climbing_a_link(directory, words)
+        ):
+            return None
+        return moved
     reader.runs.extend(_command_runs(reader, words, source, directory))
     return directory
 

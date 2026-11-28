@@ -395,6 +395,24 @@ class TestRuns:
         )
         assert _runs(tmp_path) == [("clippy", expected)]
 
+    def test_a_cd_up_from_a_symbolic_link_is_unplaced(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cd ..` from `link` leaves the link target's parent, not the root."""
+        _app(
+            tmp_path,
+            {
+                "nested/deep/placeholder": "",
+                ".github/workflows/ci.yml": (
+                    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+                    "    steps:\n      - run: cd .. && cargo clippy\n"
+                    "        working-directory: link\n"
+                ),
+            },
+        )
+        (tmp_path / "link").symlink_to("nested/deep")
+        assert _runs(tmp_path) == [("clippy", None)]
+
     def test_a_step_that_runs_for_some_matrix_entries_only_is_unresolved(
         self, tmp_path: pathlib.Path
     ) -> None:
