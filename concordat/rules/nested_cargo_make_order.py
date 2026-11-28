@@ -99,27 +99,17 @@ def dependencies(rule: MakeRule) -> list[str]:
     return _plain_prerequisites(rule) + calls
 
 
-def proven_dependencies(rule: MakeRule) -> list[str]:
-    """Return the goals a rule certainly depends on or calls.
-
-    A prerequisite is an edge, and so is a `make` call that is a command word on
-    a line with no shell branch: a quoted mention, a call in a subshell or one in
-    a branch proves no ordering.
+def _proven(rule: MakeRule, index: Index) -> list[str]:
+    """Return the goals a rule certainly finishes before its tests can start.
 
     Returns
     -------
     list[str]
-        The prerequisites, then the goals called as command words.
+        Its prerequisites, then the `make` calls that always run ahead of any
+        test command; a call that may be skipped, or that follows the tests,
+        proves no ordering.
     """
-    calls = [
-        call.group("goal")
-        for recipe in rule["recipes"]
-        if not _CONTROL_FLOW.search(recipe["text"])
-        for piece in re.finditer(r"[^;&|]+", recipe["text"])
-        if not _is_quoted(recipe["text"], piece.start())
-        and (call := _MAKE_CALL.match(piece.group())) is not None
-    ]
-    return _plain_prerequisites(rule) + calls
+    return _plain_prerequisites(rule) + early_calls(rule, index)
 
 
 def reaches(source: str, target: str, index: Index, seen: set[str]) -> bool:
@@ -127,9 +117,7 @@ def reaches(source: str, target: str, index: Index, seen: set[str]) -> bool:
     if source in seen:
         return False
     seen.add(source)
-    names = [
-        name for rule in index.get(source, []) for name in proven_dependencies(rule)
-    ]
+    names = [name for rule in index.get(source, []) for name in _proven(rule, index)]
     return target in names or any(reaches(n, target, index, seen) for n in names)
 
 
