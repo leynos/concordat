@@ -677,6 +677,24 @@ UNREADABLE = {("EN-001", "tests/cli.rs")}
             id="a-call-with-a-variable-assignment",
         ),
         pytest.param(
+            "test: warmup run\n\ttrue\n\nrun:\n\t$(MAKE) -f Makefile run-tests\n\n"
+            "run-tests:\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="a-sibling-recurses-with-an-option",
+        ),
+        pytest.param(
+            "test: warmup run\n\ttrue\n\nrun:\n\t$(MAKE) FLAG=1 run-tests\n\n"
+            "run-tests:\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="a-sibling-recurses-with-an-assignment",
+        ),
+        pytest.param(
+            "test: warmup run\n\ttrue\n\nrun:\n\t$(MAKE) $(GOAL)\n\n"
+            "run-tests:\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="a-sibling-recurses-into-a-variable-goal",
+        ),
+        pytest.param(
             "test: warmup\ntest: run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
             NC013,
             id="separate-rules-for-one-target",

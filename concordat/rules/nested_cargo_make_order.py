@@ -27,6 +27,9 @@ type Index = dict[str, list[MakeRule]]
 _MAKE_CALL: typ.Final = re.compile(
     r"\s*[@+-]*\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[A-Za-z_.][\w.-]*)\s*$"
 )
+# A recursive call with an option, an assignment or a variable goal runs a goal
+# this reader cannot name, so it may start the tests.
+_OPAQUE_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?:-|\S+=|\$)")
 _ANY_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?P<goal>[\w.-]+)")
 _BACKGROUND: typ.Final = re.compile(r"(?<!&)&(?!&)")
 _TEST_COMMAND: typ.Final = re.compile(r"\b(?:cargo|nextest|pytest)\b")
@@ -108,6 +111,11 @@ def dependencies(rule: MakeRule) -> list[str]:
     return plain_prerequisites(rule) + calls
 
 
+def _may_run_tests(text: str) -> bool:
+    """Report whether one recipe line runs a test command or an unreadable goal."""
+    return bool(_TEST_COMMAND.search(text) or _OPAQUE_MAKE_CALL.search(text))
+
+
 def starts_tests(goal: str, index: Index, seen: set[str]) -> bool:
     """Report whether running *goal* may start the tests.
 
@@ -121,7 +129,7 @@ def starts_tests(goal: str, index: Index, seen: set[str]) -> bool:
         return False
     seen.add(goal)
     return any(
-        any(_TEST_COMMAND.search(recipe["text"]) for recipe in rule["recipes"])
+        any(_may_run_tests(recipe["text"]) for recipe in rule["recipes"])
         or any(starts_tests(name, index, seen) for name in dependencies(rule))
         for rule in index.get(goal, [])
     )
