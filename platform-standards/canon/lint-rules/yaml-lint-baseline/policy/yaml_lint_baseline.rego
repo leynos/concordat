@@ -288,14 +288,12 @@ conditional_path(root) if {
 # reachable target the special target covers, or a global one, leaves the path
 # unproven.
 ignored_errors_path(root) if {
-	some rule in input.makefile.rules
-	".IGNORE" in rule.targets
+	some rule in ignore_rules
 	count(rule.prerequisites) == 0
 }
 
 ignored_errors_path(root) if {
-	some rule in input.makefile.rules
-	".IGNORE" in rule.targets
+	some rule in ignore_rules
 	some target in rule.prerequisites
 	target in reachable_from(root)
 }
@@ -303,10 +301,28 @@ ignored_errors_path(root) if {
 # A prerequisite that still names a variable (`.IGNORE: $(IGNORED)`) cannot be
 # compared with the reachable targets, so it fails closed.
 ignored_errors_path(root) if {
-	some rule in input.makefile.rules
-	".IGNORE" in rule.targets
+	some rule in ignore_rules
 	some target in rule.prerequisites
 	contains(target, "$")
+}
+
+# The rules that are, or may expand to, the special `.IGNORE` target. A target
+# name can be a variable (`$(SPECIAL): ...` with `SPECIAL := .IGNORE`): one the
+# policy resolves to `.IGNORE` counts, and one it cannot resolve counts when the
+# rule has no recipe, because a special target never has one.
+ignore_rules := {rule |
+	some rule in input.makefile.rules
+	some target in rule.targets
+	target_is_ignore(rule, target)
+}
+
+target_is_ignore(_, target) if target == ".IGNORE"
+
+target_is_ignore(_, target) if expand(target) == ".IGNORE"
+
+target_is_ignore(rule, target) if {
+	contains(expand(target), "$")
+	count(rule.recipes) == 0
 }
 
 dynamic_make_delegation(root) if {

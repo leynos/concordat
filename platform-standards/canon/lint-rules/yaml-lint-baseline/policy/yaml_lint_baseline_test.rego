@@ -498,6 +498,15 @@ test_ignore_variable if {
   }
 }
 
+# A target name that expands to `.IGNORE` is the special target all the same.
+test_ignore_variable_target if {
+  findings := policy.deny with input as data.fixtures.ignore_variable_target
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
 test_ignore_targets if {
   findings := policy.deny with input as data.fixtures.ignore_targets
   profile(findings) == {
