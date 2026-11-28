@@ -3,9 +3,10 @@
 A call to `make <goal>` warms the tests only if it always runs, and runs before
 anything starts them:
 
-- it must be first on its line, or joined to the calls before it by `&&`; a
-  piece after `||`, in a quoted string, inside a subshell or in a shell branch
-  may be skipped;
+- it must be first on its line, or joined to the calls before it by `&&`, as the
+  shell reads the line (see `nested_cargo_shell_lists`); a piece after `||`, in
+  a quoted string, in the background, inside a subshell or in a branch may be
+  skipped;
 - a line that runs a test command, and any goal that itself starts the tests,
   ends the early calls.
 """
@@ -15,78 +16,19 @@ from __future__ import annotations
 import re
 import typing as typ
 
+from .nested_cargo_shell_lists import leading_make_goals
+
 if typ.TYPE_CHECKING:
     from .makefile_facts import MakeRecipe, MakeRule
 
 type Index = dict[str, list[MakeRule]]
 
 
-# One plain goal and nothing else: an option (`-C dir`, `-f file`, `-n`, `-j 4`)
-# or a variable assignment (`FOO=1`) changes what runs, so such a call is not
-# read as a call to its goal.
-_MAKE_CALL: typ.Final = re.compile(
-    r"\s*[@+-]*\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[A-Za-z_.][\w.-]*)\s*$"
-)
 # A recursive call with an option, an assignment or a variable goal runs a goal
 # this reader cannot name, so it may start the tests.
 _OPAQUE_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?:-|\S+=|\$)")
 _ANY_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?P<goal>[\w.-]+)")
-_BACKGROUND: typ.Final = re.compile(r"(?<!&)&(?!&)")
 _TEST_COMMAND: typ.Final = re.compile(r"\b(?:cargo|nextest|pytest)\b")
-_CONTROL_FLOW: typ.Final = re.compile(r"\b(?:if|then|else|elif|case|while|for|until)\b")
-
-
-def _is_quoted(text: str, offset: int) -> bool:
-    """Report whether *offset* lies inside a quoted string of a recipe line."""
-    before = text[:offset]
-    return before.count('"') % 2 == 1 or before.count("'") % 2 == 1
-
-
-def _chain_goals(piece: str, head: str) -> list[str]:
-    """Return the leading `make` calls of one `;`-separated piece, in order.
-
-    A `&&` chain ends at its first part that is not a `make` call, because what
-    follows a command that may fail may be skipped. A lone `&` anywhere in the
-    whole piece, even past the point where a test command starts, backgrounds
-    the list it ends, so none of its calls is done before what follows.
-
-    Returns
-    -------
-    list[str]
-        The goals the piece always calls before *head* ends, in order.
-    """
-    if _BACKGROUND.search(piece):
-        return []
-    goals: list[str] = []
-    for part in head.split("&&"):
-        call = _MAKE_CALL.match(part)
-        if call is None:
-            break
-        goals.append(call.group("goal"))
-    return goals
-
-
-def line_goals(text: str) -> list[str]:
-    """Return the goals one recipe line always calls before its test command.
-
-    Returns
-    -------
-    list[str]
-        The goals, in order. A piece after `||`, one inside quotes and a line
-        with a shell branch contribute none.
-    """
-    limit = _first_start(text)
-    if _CONTROL_FLOW.search(text[:limit]):
-        return []
-    found: list[str] = []
-    for piece in re.finditer(r"[^;]+", text):
-        if piece.start() >= limit:
-            break
-        if _is_quoted(text, piece.start()) or "||" in piece.group():
-            continue
-        head = text[piece.start() : min(piece.end(), limit)]
-        found.extend(_chain_goals(piece.group(), head))
-    return found
 
 
 def plain_prerequisites(rule: MakeRule) -> list[str]:
@@ -111,16 +53,6 @@ def dependencies(rule: MakeRule) -> list[str]:
         for found in _ANY_MAKE_CALL.finditer(recipe["text"])
     ]
     return plain_prerequisites(rule) + calls
-
-
-def _first_start(text: str) -> int:
-    """Return where a line first runs a test command or an unreadable goal."""
-    starts = [
-        found.start()
-        for found in (_TEST_COMMAND.search(text), _OPAQUE_MAKE_CALL.search(text))
-        if found is not None
-    ]
-    return min(starts, default=len(text))
 
 
 def _may_run_tests(text: str) -> bool:
@@ -158,7 +90,7 @@ def early_calls(recipes: list[MakeRecipe], index: Index) -> list[str]:
     """
     found: list[str] = []
     for recipe in recipes:
-        for goal in line_goals(recipe["text"]):
+        for goal in leading_make_goals(recipe["text"]):
             found.append(goal)
             if starts_tests(goal, index, set()):
                 return found
