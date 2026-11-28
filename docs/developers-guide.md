@@ -712,6 +712,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   builder reads the `preparation_gates` and `compiling_calls` parameters
   because they decide which facts exist; exemptions and severity stay with the
   policy.
+- `policy-input/nested-cargo-test-builds` —
+  `nested_cargo_builds_envelope.build_nested_cargo_builds_envelope`. It reuses
+  the cold-build spawn reader and adds the builder (the function that owns a
+  spawn, found with `function_name`), a `MetadataCommand` scan of whole-file
+  test sources, the scratch-crate shape (a manifest literal and a temporary
+  directory in the builder's function) and the `harness_paths` names the
+  function mentions. It reads `.concordat/nested-builds.toml` and resolves each
+  `covered_by` against the Makefile's `test` goals, the nextest setup rules and
+  the functions the checkout defines. The policy owns the subject vocabulary.
 - `policy-input/nested-cargo-offline-tests` —
   `nested_cargo_offline_envelope.build_nested_cargo_offline_envelope`. It joins
   two readers: `nested_cargo_spawns` classifies every `cargo` a test scope

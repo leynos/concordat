@@ -575,6 +575,17 @@ actuators that remediate them. Each check ships as a lint rule package under
   them), the ortho-config per-scenario target before its fix (reported as
   indeterminate, because the value comes from another file), netsuke after #913
   and #939 and a clean repository give the expected result for every case.
+- [x] Ship the test-builds check (NC-011, NC-012, NC-013,
+  `nested-cargo-test-builds`, DF12-109) at `warning` severity: every function
+  in test scope that owns a real compile is declared in
+  `.concordat/nested-builds.toml` with what the build is the test of and the
+  warm-up that pays for it (NC-011); a build of the test infrastructure itself
+  is never acceptable and cannot be exempted (NC-012); a declared warm-up must
+  resolve to a Makefile goal before `test`, a nextest setup script or an
+  existing function (NC-013). Acceptance: the package's Rego suite and the
+  reader's unit tests cover a declared builder, an undeclared spawn, a
+  harness-only builder, a scratch crate that uses the harness, a trybuild
+  suite, an unreadable spawn and a stale declaration.
 - [x] Ship the pull-request run cancellation rule (RC-001, RC-002,
   `pr-run-cancellation`, leynos/concordat#388): every workflow triggered by
   `pull_request` or `pull_request_target` has a cancelling `concurrency` block,

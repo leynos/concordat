@@ -77,6 +77,24 @@ def _after_parameters(masked: str, function: re.Match[str]) -> int:
     return function.end() if close is None else close
 
 
+def function_name(source: RustSource, offset: int) -> str:
+    """Return the name of the innermost function that contains *offset*.
+
+    Returns
+    -------
+    str
+        The name, or an empty string for an offset outside any function.
+    """
+    containing = [
+        span for span in _function_spans(source.masked) if span[0] <= offset < span[1]
+    ]
+    if not containing:
+        return ""
+    start, _end = max(containing)
+    named = _FUNCTION.match(source.masked, start)
+    return named.group().split()[-1] if named else ""
+
+
 def function_text(source: RustSource, offset: int) -> str:
     """Return the text of the innermost function that contains *offset*.
 

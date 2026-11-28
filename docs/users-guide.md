@@ -981,6 +981,51 @@ before the rule blocks; `severity: error` promotes them. An exemption names a
 repository, an exact file, a rationale and a review trigger, and suppresses
 NC-009 and NC-010 for that file only.
 
+### Auditing why a test spends a real compile
+
+The `nested-cargo-test-builds` rule asks a question the other nested-cargo
+rules leave open: should the test compile at all?
+
+```shell
+concordat artefact rule run nested-cargo-test-builds --repo /path/to/checkout
+```
+
+A real compile is worth its cost when the build is the thing under test. It is
+not when it only feeds test machinery: leynos/rstest-bdd had a test that built
+a scratch crate with `cargo` just to show that its compile counter and report
+writer handled a real count, and it failed under load (pull request 989 deleted
+it). A repository with real compiles in its tests lists each builder in
+`.concordat/nested-builds.toml`:
+
+```toml
+[[builder]]
+path = "tests/ui.rs"
+subject = "compiler-diagnostics"
+covered_by = "nextest-setup"
+```
+
+`function` is optional; leave it out to cover every builder in the file. The
+`subject` is one of a closed list (`compiler-diagnostics`, `macro-expansion`,
+`generated-code`, `cargo-behaviour`, `packaging`, `build-script`, `product-cli`,
+`dependency-graph`), and `covered_by` is `make:<goal>`, `nextest-setup` or
+`test:<name>`. The rule reports:
+
+- **NC-011**: a builder in test scope (a `cargo` or `rustc` spawn, a trybuild or
+  macrotest suite, a `cargo_metadata::MetadataCommand`) with no declaration, or
+  a declaration that matches no builder.
+- **NC-012**: a declaration whose subject is the test infrastructure
+  (`test-harness`, `evidence-writer`, `timeout-machinery`, `preparation-stamp`,
+  `compile-counter`), or a function that writes a scratch manifest into a
+  temporary directory, builds it and uses a name in `harness_paths`. No
+  exemption reaches it; give the harness a synthetic input.
+- **NC-013**: a declared warm-up that does not resolve to a Makefile goal that
+  `test` depends on or calls, a nextest setup script that selects the binary,
+  or an existing function.
+
+A spawn the reader cannot see (another crate's helper, `sh -c`) is
+indeterminate, never guessed. The rule ships at `warning` severity;
+`severity: error` promotes it.
+
 ### Auditing pull-request run cancellation
 
 The `pr-run-cancellation` rule keeps a pull request from paying for superseded

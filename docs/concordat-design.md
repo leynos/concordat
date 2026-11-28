@@ -3210,6 +3210,44 @@ Decisions the design rests on:
 Both checks are `warning` in the shipped parameters and an envelope defect stays
 `error`, as in the offline package.
 
+##### Nested cargo test builds
+
+The audit-only `nested-cargo-test-builds` package owns NC-011 to NC-013. The
+other nested-cargo packages judge how a test's nested build behaves; this one
+asks why the test compiles at all. leynos/rstest-bdd had a test that ran a real
+`cargo build` of a scratch crate only to prove that its compile counter, report
+writer and workflow judgement handled a real count (deleted in
+leynos/rstest-bdd#989, on the user's ruling that concordat should enforce this).
+
+The decisions the design rests on:
+
+- **The unit is the builder, not the call site.** The function that owns a
+  spawn, or the file holding a trybuild or macrotest suite, is declared once
+  and its callers inherit it. Declarations stay few and do not drift with line
+  numbers. A declaration may omit `function` to cover a file, which is the only
+  practical form where the spawn sits in a helper reported at its call sites.
+- **The subject is a closed vocabulary, not free text.** A rationale can argue
+  its way past a rule; a list cannot. The prohibited subjects (harness,
+  evidence writer, timeout machinery, preparation stamp, compile counter) are
+  the user's ruling, so NC-012 has no exemption.
+- **The declared warm-up must resolve.** `covered_by` is one of three forms the
+  reader can check without running anything. A Makefile it cannot parse, or an
+  unknown form, is indeterminate.
+- **NC-012's undeclared form needs both halves.** A function that writes a
+  scratch manifest into a temporary directory and mentions a configured harness
+  name is a test of the harness. Either half alone is not evidence, so the rule
+  asks no one to defend a scratch crate that tests the product.
+- **What a text reader cannot do stays indeterminate.** Whether a build is warm
+  is a run-time fact; whether it is the thing under test is semantic, which is
+  why the repository declares it. A spawn in another crate's helper, a
+  macro-generated spawn and `sh -c` are EN-001, never guessed.
+- **Coverage per builder is NC-013's seam.** A deadline that fits the queue
+  (ortho-config's proposal) is a later parameter read against NC-005's
+  `slow-timeout`; it is not part of this package yet.
+
+The package ships at `warning`; promotion to `error` is the one-line parameter
+change recorded in the roadmap (DF12-109).
+
 ##### Nested cargo CI wiring
 
 NC-006 (`nested-cargo-ci-wiring`) reads the CI side of the same problem. The
