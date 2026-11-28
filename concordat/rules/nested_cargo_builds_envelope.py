@@ -8,7 +8,7 @@ compile at all. Its envelope carries three kinds of evidence:
   trybuild or macrotest suite, or a `cargo_metadata` query, with whether the
   reader could see what it spawns and whether it has the shape of a harness test
   (it writes a scratch crate and names the repository's own harness code);
-- the repository's *declarations*: the entries of `.concordat/nested-builds.toml`,
+- the repository's *declarations*: the entries of `.concordat-nested-builds.toml`,
   each with the subject the build is the test of and the warm-up that pays for
   it, and whether that warm-up resolves to something that runs before the tests;
 - the *problems*: everything the reader could not establish, so an unreadable
@@ -39,7 +39,7 @@ if typ.TYPE_CHECKING:
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/nested-cargo-test-builds"
-DECLARATIONS: typ.Final = ".concordat/nested-builds.toml"
+DECLARATIONS: typ.Final = ".concordat-nested-builds.toml"
 _REQUIRED: typ.Final = ("path", "subject", "covered_by")
 
 

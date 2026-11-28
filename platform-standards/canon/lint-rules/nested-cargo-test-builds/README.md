@@ -30,7 +30,8 @@ promotion to `error` is the one-line parameter change recorded in
 ## The declaration file
 
 A repository with real compiles in its tests lists them in
-`.concordat/nested-builds.toml`, one `[[builder]]` table each:
+`.concordat-nested-builds.toml` at the repository root (`.concordat` is itself
+the enrolment file, so it cannot be a directory), one `[[builder]]` table each:
 
 ```toml
 [[builder]]

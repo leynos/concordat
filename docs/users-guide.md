@@ -1013,7 +1013,8 @@ not when it only feeds test machinery: leynos/rstest-bdd had a test that built
 a scratch crate with `cargo` just to show that its compile counter and report
 writer handled a real count, and it failed under load (pull request 989 deleted
 it). A repository with real compiles in its tests lists each builder in
-`.concordat/nested-builds.toml`:
+`.concordat-nested-builds.toml` (a file at the repository root, because
+`.concordat` is itself the enrolment file):
 
 ```toml
 [[builder]]

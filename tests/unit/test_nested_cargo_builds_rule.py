@@ -19,7 +19,7 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 RULE_ID = "nested-cargo-test-builds"
-DECLARATIONS = ".concordat/nested-builds.toml"
+DECLARATIONS = ".concordat-nested-builds.toml"
 
 CARGO_TOML = '[package]\nname = "example"\nversion = "0.1.0"\nedition = "2021"\n'
 
@@ -269,6 +269,26 @@ def test_a_declared_spawn_with_a_resolved_make_warm_up_is_clean(
 ) -> None:
     """A declaration by file and function, warmed by a prerequisite of `test`."""
     root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": MAKEFILE})
+    declare(
+        root,
+        'path = "tests/cli.rs"\nfunction = "builds_the_plugin"\n'
+        'subject = "product-cli"\ncovered_by = "make:prepare-nested"',
+    )
+    assert profile(root) == set()
+
+
+def test_the_enrolment_file_does_not_hide_the_declaration_file(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`.concordat` is a file when enrolled; the declarations sit beside it."""
+    root = checkout(
+        tmp_path,
+        {
+            "tests/cli.rs": PLUGIN_TEST,
+            "Makefile": MAKEFILE,
+            ".concordat": "%YAML 1.2\n---\nenrolled: true\n",
+        },
+    )
     declare(
         root,
         'path = "tests/cli.rs"\nfunction = "builds_the_plugin"\n'

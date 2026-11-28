@@ -718,7 +718,7 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   spawn, found with `function_name`), a `MetadataCommand` scan of whole-file
   test sources, the scratch-crate shape (a manifest literal and a temporary
   directory in the builder's function) and the `harness_paths` names the
-  function mentions. It reads `.concordat/nested-builds.toml` and resolves each
+  function mentions. It reads `.concordat-nested-builds.toml` and resolves each
   `covered_by` against the Makefile's `test` goals, the nextest setup rules and
   the functions the checkout defines. The policy owns the subject vocabulary.
 - `policy-input/nested-cargo-offline-tests` —
