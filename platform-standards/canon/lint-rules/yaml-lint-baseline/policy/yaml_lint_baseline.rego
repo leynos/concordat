@@ -99,9 +99,22 @@ has_makefile if {
 	input.makefile != null
 }
 
+# A rule's target names after the policy's variable expansion, one token per
+# name: `$(SPECIAL): ...` with `SPECIAL := .IGNORE other` defines two targets.
+# A token that still carries a `$` could not be resolved. Only the two guards
+# that decide whether a recipe can be overridden or its failure hidden read
+# these names (ambiguous definitions and `.IGNORE`); the graph and the
+# conditional check keep the raw names, which is what Make's own fact model
+# reports for them.
+rule_names(rule) := {name |
+	some raw in rule.targets
+	some name in split(expand(raw), " ")
+	name != ""
+}
+
 rules_defining(target) := [rule |
 	some rule in input.makefile.rules
-	target in rule.targets
+	target in rule_names(rule)
 ]
 
 # -- Make variable expansion -------------------------------------------------
@@ -312,17 +325,16 @@ ignored_errors_path(root) if {
 # rule has no recipe, because a special target never has one.
 ignore_rules := {rule |
 	some rule in input.makefile.rules
-	some target in rule.targets
-	target_is_ignore(rule, target)
+	".IGNORE" in rule_names(rule)
 }
 
-target_is_ignore(_, target) if target == ".IGNORE"
-
-target_is_ignore(_, target) if expand(target) == ".IGNORE"
-
-target_is_ignore(rule, target) if {
-	contains(expand(target), "$")
-	count(rule.recipes) == 0
+# A rule that names a target through a variable the policy cannot resolve may
+# be anything, `.IGNORE` or an override of a reachable recipe included, so the
+# closure is unproven while one exists.
+unresolved_target_rule if {
+	some rule in input.makefile.rules
+	some name in rule_names(rule)
+	contains(name, "$")
 }
 
 dynamic_make_delegation(root) if {
@@ -374,6 +386,7 @@ closure_provable(root) if {
 	not root_definitions_ambiguous(root)
 	not conditional_path(root)
 	not ignored_errors_path(root)
+	not unresolved_target_rule
 	not dynamic_make_delegation(root)
 	not unproven_make_delegation(root)
 }
@@ -631,6 +644,8 @@ closure_indeterminate_reason(root) := "Makefile includes other files; the recipe
 	conditional_path(root)
 } else := sprintf("the %q target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven", [root]) if {
 	ignored_errors_path(root)
+} else := "a rule names its target through a variable the policy cannot resolve; the recipes cannot be proven" if {
+	unresolved_target_rule
 } else := sprintf("the %q target reaches dynamic recursive Make; its recipes cannot be proven", [root]) if {
 	dynamic_make_delegation(root)
 } else := sprintf("the %q target reaches an unproven recursive Make invocation; its recipes cannot be proven", [root]) if {

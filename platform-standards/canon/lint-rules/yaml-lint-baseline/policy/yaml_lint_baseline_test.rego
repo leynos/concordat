@@ -507,6 +507,24 @@ test_ignore_variable_target if {
   }
 }
 
+# An expanded target list can carry `.IGNORE` beside other names.
+test_ignore_variable_list if {
+  findings := policy.deny with input as data.fixtures.ignore_variable_list
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
+# A variable-named rule that replaces a reachable recipe counts as a second recipe.
+test_overridden_by_variable if {
+  findings := policy.deny with input as data.fixtures.overridden_by_variable
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a target with several rules with recipes or a double-colon definition"],
+  }
+}
+
 test_ignore_targets if {
   findings := policy.deny with input as data.fixtures.ignore_targets
   profile(findings) == {
