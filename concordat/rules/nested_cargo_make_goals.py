@@ -19,7 +19,13 @@ import dataclasses
 import typing as typ
 
 from .nested_cargo_make_models import is_modelled
-from .nested_cargo_make_order import Index, dependencies, starts_tests
+from .nested_cargo_make_order import (
+    Index,
+    dependencies,
+    plain_prerequisites,
+    runs_tests_itself,
+    starts_tests,
+)
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_names import UNSAFE_SPECIAL_TARGETS
 from .nested_cargo_makefile_preparation import includes_a_file, read_makefile
@@ -27,8 +33,6 @@ from .nested_cargo_scripts import TEST_TARGET
 
 if typ.TYPE_CHECKING:
     import pathlib
-
-_DEPTH: typ.Final = 8
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -53,42 +57,42 @@ class MakeGoals:
     is_absent: bool
 
 
-def _prerequisites(goal: str, index: Index) -> list[str]:
-    """Return the prerequisites Make joins from every single-colon rule of *goal*."""
-    names = (name for rule in index.get(goal, []) for name in rule["prerequisites"])
-    return [name for name in dict.fromkeys(names) if "$" not in name]
+def _prerequisite_closure(goal: str, index: Index) -> set[str]:
+    """Return every goal *goal* depends on through prerequisites, at any depth."""
+    pending, seen = [goal], set[str]()
+    while pending:
+        current = pending.pop()
+        for rule in index.get(current, []):
+            for name in plain_prerequisites(rule):
+                if name not in seen:
+                    seen.add(name)
+                    pending.append(name)
+    return seen
 
 
-def _early(goal: str, index: Index, depth: int = _DEPTH) -> set[str]:
-    """Return the goals *goal* certainly finishes before its own tests start.
+def _early(goal: str, index: Index) -> set[str]:
+    """Return the goals *goal* certainly finishes before its tests start.
 
-    A prerequisite is early only if every sibling that may start the tests
-    finishes it first, at any depth.
+    A goal under `test` finishes before the tests start when every goal that
+    runs them in its own recipe depends on it (Make does not order siblings, so
+    `make -j` would otherwise start them together), and when it cannot run the
+    tests itself, because it has not finished when they start. What a test
+    runner depends on counts even though the runner does not.
 
     Returns
     -------
     set[str]
-        The early prerequisites and what they finish early in turn; empty past
-        the depth limit, which stops a cyclic Makefile.
+        The early goals; the target itself is never one.
     """
-    if depth <= 0:
-        return set()
-    plain = _prerequisites(goal, index)
-    starters = [name for name in plain if starts_tests(name, index, set())]
-    found: set[str] = set()
-    for name in plain:
-        is_ordered = all(
-            name == s or name in _early(s, index, depth - 1) for s in starters
-        )
-        if not is_ordered:
-            continue
-        # What a prerequisite depends on finishes before it starts, whatever it
-        # runs; the prerequisite itself is a warm-up only if it may not run the
-        # tests, because it has not finished when they start.
-        found |= _early(name, index, depth - 1)
-        if not starts_tests(name, index, set()):
-            found.add(name)
-    return found
+    closure = _prerequisite_closure(goal, index) - {goal}
+    runners = [name for name in closure if runs_tests_itself(name, index)]
+    needed = [_prerequisite_closure(name, index) for name in runners]
+    return {
+        name
+        for name in closure
+        if not starts_tests(name, index, set())
+        and all(name in depends_on for depends_on in needed)
+    }
 
 
 def _closure(index: Index) -> set[str]:

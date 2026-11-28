@@ -32,7 +32,7 @@ _TEST_COMMAND: typ.Final = re.compile(
     r"\b(?:cargo(?:-\w+)?\s+(?:\S+\s+)*?(?:nextest|test|bench|llvm-cov|tarpaulin)"
     r"|nextest|pytest)\b"
 )
-_COMPILE_ONLY: typ.Final = re.compile(r"--no-run\b|\barchive\b")
+_COMPILE_ONLY: typ.Final = re.compile(r"--no-run\b|\bnextest\s+archive\b")
 # A variable (other than `$(MAKE)`) anywhere on the line may expand to a test
 # command: `env $(RUNNER)`, `$(CARGO) test`.
 _VARIABLE: typ.Final = re.compile(r"\$[({](?!MAKE[)}])|\$[A-Za-z_]")
@@ -95,6 +95,34 @@ def may_run_tests(text: str) -> bool:
     )
 
 
+def _called_goals(rule: MakeRule) -> list[str]:
+    """Return the plain goals a rule's recipes mention through `make`."""
+    return [
+        word
+        for recipe in rule["recipes"]
+        for words in _make_arguments(recipe["text"])
+        for word in words
+        if _PLAIN_GOAL.fullmatch(word)
+    ]
+
+
+def runs_tests_itself(goal: str, index: Index) -> bool:
+    """Report whether *goal*'s own recipes may run the tests, directly or by a call.
+
+    Prerequisites are left out: they finish before the recipe runs.
+
+    Returns
+    -------
+    bool
+        True when a recipe line may run tests, or calls a goal that may.
+    """
+    return any(
+        any(may_run_tests(recipe["text"]) for recipe in rule["recipes"])
+        or any(starts_tests(name, index, set()) for name in _called_goals(rule))
+        for rule in index.get(goal, [])
+    )
+
+
 def plain_prerequisites(rule: MakeRule) -> list[str]:
     """Return a rule's prerequisites that name no variable."""
     return [name for name in rule["prerequisites"] if "$" not in name]
@@ -111,14 +139,7 @@ def dependencies(rule: MakeRule) -> list[str]:
     list[str]
         The prerequisites, then every plain goal each `make` call mentions.
     """
-    called = [
-        word
-        for recipe in rule["recipes"]
-        for words in _make_arguments(recipe["text"])
-        for word in words
-        if _PLAIN_GOAL.fullmatch(word)
-    ]
-    return plain_prerequisites(rule) + called
+    return plain_prerequisites(rule) + _called_goals(rule)
 
 
 def starts_tests(goal: str, index: Index, seen: set[str]) -> bool:

@@ -715,6 +715,23 @@ ORDERING_CASES = [
         id="a-warm-up-below-a-test-starting-prerequisite",
     ),
     pytest.param(
+        "test: warmup\n\ttrue\n\nwarmup:\n\tcargo test --test archive\n",
+        UNREADABLE,
+        id="a-test-target-named-archive",
+    ),
+    pytest.param(
+        "test: a b\n\ttrue\n\na: warmup\n\tcargo test --test a\n\n"
+        "b: warmup\n\tcargo test --test b\n\nwarmup:\n\tcargo test --no-run\n",
+        NONE,
+        id="a-warm-up-shared-below-two-test-runners",
+    ),
+    pytest.param(
+        "test: a b\n\ttrue\n\na: warmup\n\tcargo test --test a\n\n"
+        "b:\n\tcargo test --test b\n\nwarmup:\n\tcargo test --no-run\n",
+        UNREADABLE,
+        id="a-warm-up-below-only-one-test-runner",
+    ),
+    pytest.param(
         "test:: warmup\ntest::\n\tcargo nextest run\n\n" + WARM,
         UNREADABLE,
         id="a-double-colon-rule",
