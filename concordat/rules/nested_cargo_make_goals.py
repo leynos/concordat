@@ -18,6 +18,7 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
+from .nested_cargo_make_models import is_modelled
 from .nested_cargo_make_order import Index, dependencies, starts_tests
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_names import UNSAFE_SPECIAL_TARGETS
@@ -79,11 +80,14 @@ def _early(goal: str, index: Index, depth: int = _DEPTH) -> set[str]:
         is_ordered = all(
             name == s or name in _early(s, index, depth - 1) for s in starters
         )
-        # A prerequisite that may itself run the tests is not a warm-up: it has
-        # not finished when they start.
-        if is_ordered and not starts_tests(name, index, set()):
+        if not is_ordered:
+            continue
+        # What a prerequisite depends on finishes before it starts, whatever it
+        # runs; the prerequisite itself is a warm-up only if it may not run the
+        # tests, because it has not finished when they start.
+        found |= _early(name, index, depth - 1)
+        if not starts_tests(name, index, set()):
             found.add(name)
-            found |= _early(name, index, depth - 1)
     return found
 
 
@@ -97,37 +101,6 @@ def _closure(index: Index) -> set[str]:
         seen.add(goal)
         pending.extend(n for rule in index.get(goal, []) for n in dependencies(rule))
     return seen
-
-
-def _phony(index: Index) -> set[str]:
-    """Return the goals declared `.PHONY`."""
-    return {name for rule in index.get(".PHONY", []) for name in rule["prerequisites"]}
-
-
-def _has_implicit_recipe(goal: str, index: Index) -> bool:
-    """Report whether a goal with no recipe may get one from a pattern rule."""
-    has_recipe = any(rule["recipes"] for rule in index.get(goal, []))
-    has_pattern = any("%" in target for target in index)
-    return has_pattern and not has_recipe and goal not in _phony(index)
-
-
-def _models(goal: str, index: Index) -> bool:
-    """Report whether the reader models every rule of *goal*.
-
-    Returns
-    -------
-    bool
-        False for a rule written with a variable prerequisite, a double colon, a
-        condition, a second recipe, or one whose recipe may come from a pattern
-        rule.
-    """
-    rules = index.get(goal, [])
-    with_recipe = [rule for rule in rules if rule["recipes"]]
-    has_hidden = any("$" in name for rule in rules for name in rule["prerequisites"])
-    has_double = any(rule["double_colon"] for rule in rules)
-    has_condition = any(rule["conditions"] for rule in rules)
-    is_plain = not (has_hidden or has_double or has_condition)
-    return is_plain and len(with_recipe) <= 1 and not _has_implicit_recipe(goal, index)
 
 
 def read_make_goals(checkout: pathlib.Path) -> MakeGoals:
@@ -149,7 +122,7 @@ def read_make_goals(checkout: pathlib.Path) -> MakeGoals:
     is_opaque = (
         includes_a_file(report, text)
         or bool(UNSAFE_SPECIAL_TARGETS & index.keys())
-        or not all(_models(goal, index) for goal in closure)
+        or not all(is_modelled(goal, index) for goal in closure)
     )
     goals = _early(TEST_TARGET, index)
     return MakeGoals(

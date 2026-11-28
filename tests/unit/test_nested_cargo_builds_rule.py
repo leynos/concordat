@@ -704,6 +704,17 @@ ORDERING_CASES = [
         id="a-compile-only-warm-up",
     ),
     pytest.param(
+        "test: warmup\n\ttrue\n\nwarmup:\n\tcargo nextest run && cargo test --no-run\n",
+        UNREADABLE,
+        id="a-compile-only-marker-beside-a-test-command",
+    ),
+    pytest.param(
+        "test: run\n\ttrue\n\nrun: warmup\n\tcargo nextest run\n\n"
+        "warmup:\n\tcargo test --no-run\n",
+        NONE,
+        id="a-warm-up-below-a-test-starting-prerequisite",
+    ),
+    pytest.param(
         "test:: warmup\ntest::\n\tcargo nextest run\n\n" + WARM,
         UNREADABLE,
         id="a-double-colon-rule",

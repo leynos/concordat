@@ -60,6 +60,24 @@ def _has_opaque_call(text: str) -> bool:
     )
 
 
+def _runs_test_command(text: str) -> bool:
+    """Report whether any command on a line runs tests rather than only compiling.
+
+    The line is split at every shell operator, quoted or not: a fragment that
+    holds a test command and is not marked compile-only counts, so a compound
+    line is test-starting unless each of its commands is known to be a compile.
+
+    Returns
+    -------
+    bool
+        True when some fragment of the line runs a test command.
+    """
+    return any(
+        _TEST_COMMAND.search(part) and not _COMPILE_ONLY.search(part)
+        for part in re.split(r"&&|\|\||[;&|]", text)
+    )
+
+
 def may_run_tests(text: str) -> bool:
     """Report whether one recipe line may run the tests, or something unreadable.
 
@@ -69,9 +87,8 @@ def may_run_tests(text: str) -> bool:
         True for a test command, a variable command word, a line the reader
         cannot model, or a recursive `make` it cannot name.
     """
-    is_test = _TEST_COMMAND.search(text) and not _COMPILE_ONLY.search(text)
     return bool(
-        is_test
+        _runs_test_command(text)
         or _VARIABLE.search(text)
         or _is_unreadable(text)
         or _has_opaque_call(text)
