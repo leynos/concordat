@@ -151,6 +151,7 @@ def _subcommand_state(subcommand: str, rest: list[str | None]) -> str:
 
 
 _COMPILER_PROGRAMS: typ.Final = frozenset({"rustc", "rustdoc"})
+_COMPILER_WORD: typ.Final = re.compile(r"\b(?:cargo|rustc|rustdoc)\b")
 _SHELL_PROGRAMS: typ.Final = frozenset({
     "sh",
     "bash",
@@ -162,11 +163,17 @@ _SHELL_PROGRAMS: typ.Final = frozenset({
 })
 
 
+def _may_run_compiler(words: list[str | None]) -> bool:
+    """Report whether shell arguments are unreadable or name a compiler."""
+    return any(w is None or _COMPILER_WORD.search(w) for w in words)
+
+
 def program_compiles(program: str, calls: cabc.Iterable[tuple[str, str]]) -> str | None:
     """Say whether a non-cargo program is a compiler, or a shell that may run one.
 
     A shell is judged on its arguments: one the reader cannot read, or one that
-    names `cargo` or `rustc`, may start a compile, and what it starts is unknown.
+    names `cargo`, `rustc` or `rustdoc`, may start a compile, and what it
+    starts is unknown.
     A shell whose arguments are all readable and name neither compiles nothing.
 
     Returns
@@ -181,7 +188,4 @@ def program_compiles(program: str, calls: cabc.Iterable[tuple[str, str]]) -> str
         return COMPILES_YES
     if name not in _SHELL_PROGRAMS:
         return None
-    words = _argument_words(calls)
-    if any(w is None or "cargo" in w or "rustc" in w for w in words):
-        return COMPILES_UNKNOWN
-    return None
+    return COMPILES_UNKNOWN if _may_run_compiler(_argument_words(calls)) else None

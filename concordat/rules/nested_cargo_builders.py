@@ -38,6 +38,11 @@ _MANIFEST_LITERAL: typ.Final = re.compile(
 )
 _WRITE_CALL: typ.Final = re.compile(r"\b(?:write|write_all|create|create_new)\s*\(")
 _TEMPORARY: typ.Final = re.compile(r"\b(?:tempdir|tempdir_in|TempDir|tempfile)\b")
+_BUILD_LOCATION: typ.Final = re.compile(r"current_dir|manifest[-_]path")
+_READ_CALL: typ.Final = re.compile(r"\b(?:read\w*|open|exists)\s*\(")
+_STATEMENT: typ.Final = re.compile(r"[^;{}]*;")
+_LET_NAME: typ.Final = re.compile(r"\s*let\s+(?:mut\s+)?(?P<name>[A-Za-z_]\w*)")
+_WORD: typ.Final = re.compile(r"[A-Za-z_]\w*")
 _SUITES: typ.Final = ("trybuild", "macrotest")
 
 
@@ -128,26 +133,60 @@ def _spawn_offset(source: RustSource, line: int) -> int:
     return max(start, end - 1)
 
 
+def _manifest_names(text: str, masked: str) -> set[str]:
+    """Return the names bound, by a `let`, to a statement naming a manifest.
+
+    Returns
+    -------
+    set[str]
+        The bound names; a manifest literal counts only where it is code.
+    """
+    names: set[str] = set()
+    for statement in _STATEMENT.finditer(masked):
+        if not _names_manifest(text, masked, statement):
+            continue
+        if _READ_CALL.search(masked, statement.start(), statement.end()):
+            continue
+        bound = _LET_NAME.match(masked, statement.start())
+        if bound is not None:
+            names.add(bound.group("name"))
+    return names
+
+
+def _names_manifest(text: str, masked: str, statement: re.Match[str]) -> bool:
+    """Report whether a statement holds a manifest literal that is code."""
+    return any(
+        masked[found.start()] == '"'
+        for found in _MANIFEST_LITERAL.finditer(
+            text, statement.start(), statement.end()
+        )
+    )
+
+
 def _is_scratch_crate(text: str, masked: str) -> bool:
     """Report whether a function writes a manifest into a temporary directory.
 
     A manifest name in a comment, or in code that only reads one, is not a
-    write: the literal must survive masking, so it is code, and a write call and
-    a temporary directory must both be present.
+    write. The write must be one call that names a manifest literal, or a name
+    bound to one, in a function that also holds a temporary directory and points
+    its build somewhere (`current_dir` or a manifest path).
 
     Returns
     -------
     bool
-        True when all three are visible in the function.
+        True when a write of a manifest, a temporary directory and a build
+        location are all visible in the function.
     """
-    has_literal = any(
-        masked[found.start()] == '"' for found in _MANIFEST_LITERAL.finditer(text)
-    )
-    return (
-        has_literal
-        and _WRITE_CALL.search(masked) is not None
-        and _TEMPORARY.search(masked) is not None
-    )
+    if _TEMPORARY.search(masked) is None or _BUILD_LOCATION.search(text) is None:
+        return False
+    bound = _manifest_names(text, masked)
+    for statement in _STATEMENT.finditer(masked):
+        if _WRITE_CALL.search(masked, statement.start(), statement.end()) is None:
+            continue
+        words = set(_WORD.findall(masked[statement.start() : statement.end()]))
+        if _names_manifest(text, masked, statement) or words & bound:
+            return True
+    return False
 
 
 def _references(masked: str, names: list[str]) -> list[str]:

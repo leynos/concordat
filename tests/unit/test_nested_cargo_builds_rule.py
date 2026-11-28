@@ -100,6 +100,27 @@ fn reads_the_graph() {
 }
 """
 
+RUSTDOC_SHELL_TEST = """\
+#[test]
+fn documents_through_a_shell() {
+    std::process::Command::new("sh")
+        .args(["-c", "rustdoc src/lib.rs"])
+        .status()
+        .unwrap();
+}
+"""
+
+READ_ONLY_TEST = """\
+#[test]
+fn reads_a_manifest_and_writes_a_log() {
+    let scratch = tempfile::tempdir().unwrap();
+    let text = std::fs::read_to_string(scratch.path().join("Cargo.toml")).unwrap();
+    std::fs::write(scratch.path().join("log.txt"), text).unwrap();
+    std::process::Command::new("cargo").current_dir(scratch.path()).arg("build").status().unwrap();
+    let _ = nested_cargo::count_compiling(b"");
+}
+"""
+
 PROBE_TEST = """\
 #[test]
 fn reports_a_version() {
@@ -483,3 +504,45 @@ def test_a_package_selector_covers_a_test_binary_of_that_package(
         entry("tests/cli.rs", "nextest-setup"),
     )
     assert profile(root) == set()
+
+
+def test_a_shell_wrapped_rustdoc_is_indeterminate(tmp_path: pathlib.Path) -> None:
+    """`sh -c "rustdoc ..."` hides a compile as `sh -c "rustc ..."` does."""
+    root = checkout(tmp_path, {"tests/doc.rs": RUSTDOC_SHELL_TEST})
+    assert profile(root) == {("EN-001", "tests/doc.rs")}
+
+
+def test_a_make_call_inside_a_quoted_echo_is_not_a_call(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Text that mentions `make prepare-nested` is not a call to it."""
+    echoed = (
+        'test:\n\t@echo "make prepare-nested"\n\tcargo nextest run\n\n'
+        "prepare-nested:\n\ttrue\n"
+    )
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": echoed})
+    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
+    assert profile(root) == {("NC-013", "tests/cli.rs")}
+
+
+def test_a_test_target_name_selects_the_binary_not_the_file_name(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `[[test]]` table renames the binary, and nextest selects that name."""
+    manifest = CARGO_TOML + '\n[[test]]\nname = "current"\npath = "tests/old.rs"\n'
+    setup = SETUP_SCRIPT.replace("all()", "binary(=current)")
+    root = checkout(tmp_path, {"tests/old.rs": PLUGIN_TEST})
+    put(root, "Cargo.toml", manifest)
+    put(root, ".config/nextest.toml", setup)
+    declare(root, entry("tests/old.rs", "nextest-setup"))
+    assert profile(root) == set()
+    put(root, ".config/nextest.toml", SETUP_SCRIPT.replace("all()", "binary(=old)"))
+    assert profile(root) == {("NC-013", "tests/old.rs")}
+
+
+def test_a_function_that_reads_a_manifest_is_not_a_scratch_crate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """NC-012 needs the manifest itself written, not an unrelated write."""
+    root = checkout(tmp_path, {"tests/read.rs": READ_ONLY_TEST})
+    assert profile(root) == {("NC-011", "tests/read.rs")}

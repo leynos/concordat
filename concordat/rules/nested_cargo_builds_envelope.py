@@ -211,13 +211,17 @@ def _declarations(
     return [fact for fact in facts if fact is not None]
 
 
-def _envelope(
-    checkout: pathlib.Path,
-    state: str,
-    builders: list[BuilderFact],
-    declarations: list[DeclarationFact],
-    problems: list[str],
-) -> NestedCargoBuildsEnvelope:
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Facts:
+    """Hold the facts one envelope carries."""
+
+    state: str
+    builders: list[BuilderFact]
+    declarations: list[DeclarationFact]
+    problems: list[str]
+
+
+def _envelope(checkout: pathlib.Path, facts: _Facts) -> NestedCargoBuildsEnvelope:
     """Return the envelope document for *checkout*.
 
     Returns
@@ -229,11 +233,22 @@ def _envelope(
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
         "repository": {"path": ".", "name": origin_slug(checkout)},
-        "declarations_state": state,
-        "builders": builders,
-        "declarations": declarations,
-        "problems": sorted(set(problems)),
+        "declarations_state": facts.state,
+        "builders": facts.builders,
+        "declarations": facts.declarations,
+        "problems": sorted(set(facts.problems)),
     }
+
+
+def _owns_no_rust(
+    checkout: pathlib.Path,
+    manifests: cabc.Mapping[pathlib.Path, object],
+    problems: list[str],
+) -> bool:
+    """Return whether the checkout has no manifest, no problem and no Rust."""
+    if manifests or problems:
+        return False
+    return not has_rust_sources(checkout)
 
 
 def build_nested_cargo_builds_envelope(
@@ -256,12 +271,12 @@ def build_nested_cargo_builds_envelope(
     """
     problems: list[str] = []
     manifests = load_manifests(checkout, problems)
-    if not (manifests or problems or has_rust_sources(checkout)):
-        return _envelope(checkout, "absent", [], [], [])
+    if _owns_no_rust(checkout, manifests, problems):
+        return _envelope(checkout, _Facts("absent", [], [], []))
     builders = collect_builders(
         checkout, manifests, _harness_names(parameters), problems
     )
     reading = _read_declarations(checkout, problems)
     warmups = read_warmups(checkout, manifests, problems)
     declarations = _declarations(reading, warmups, problems)
-    return _envelope(checkout, reading.state, builders, declarations, problems)
+    return _envelope(checkout, _Facts(reading.state, builders, declarations, problems))

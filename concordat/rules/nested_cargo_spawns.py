@@ -261,15 +261,26 @@ def _direct_commands(
         command = construction(
             source, match, pairs, any_program=cold_build or compilers
         )
-        if command is None:
-            continue
-        if command.form == PROGRAM_FORM and not (
-            _is_target_program(command, source)
-            or (compilers and program_compiles(command.program, command.calls))
-        ):
-            continue
-        found.append(command)
+        if command is not None and _is_reported(command, source, compilers=compilers):
+            found.append(command)
     return found
+
+
+def _is_reported(command: CargoCommand, source: RustSource, *, compilers: bool) -> bool:
+    """Report whether a construction belongs in the facts.
+
+    A cargo command always does. A program that is not cargo does when it sets a
+    cargo target, or, for the test-builds rule, when it is a compiler or a shell
+    that may run one.
+
+    Returns
+    -------
+    bool
+        True when the command is read.
+    """
+    if command.form != PROGRAM_FORM or _is_target_program(command, source):
+        return True
+    return compilers and program_compiles(command.program, command.calls) is not None
 
 
 def _is_target_program(command: CargoCommand, source: RustSource) -> bool:

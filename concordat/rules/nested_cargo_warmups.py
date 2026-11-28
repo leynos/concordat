@@ -24,7 +24,7 @@ import typing as typ
 
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_preparation import includes_a_file, read_makefile
-from .nested_cargo_preparation import crate_directories, owning_crate
+from .nested_cargo_preparation import crate_directories, declared_tests, owning_crate
 from .nested_cargo_scripts import TEST_TARGET
 from .nested_cargo_setup_scripts import SetupRule, covers, read_setup_rules
 from .nested_cargo_source import RustSource, read_sources
@@ -44,7 +44,11 @@ SETUP_FORM: typ.Final = "nextest-setup"
 MAKE_PREFIX: typ.Final = "make:"
 TEST_PREFIX: typ.Final = "test:"
 
-_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?P<goal>[\w.-]+)")
+# A `make` call is a command word: first on the line (after the `@`, `-` and `+`
+# recipe prefixes) or after a control operator, never inside a quoted string.
+_MAKE_CALL: typ.Final = re.compile(
+    r"(?:^[@+-]*|&&|\|\||;|\()\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[\w.-]+)"
+)
 _TEST_COMMAND: typ.Final = re.compile(r"\b(?:cargo|nextest|pytest)\b")
 _FUNCTION: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)")
 _TEST_BINARY: typ.Final = re.compile(r"(?:^|/)tests/(?P<name>[^/.]+)(?:\.rs|/)")
@@ -77,6 +81,7 @@ class Warmups:
     make: MakeGoals
     functions: frozenset[str]
     crates: dict[str, str | None]
+    declared_tests: cabc.Mapping[str, frozenset[str]]
 
 
 def _calls_before_tests(recipes: cabc.Iterable[MakeRecipe]) -> list[str]:
@@ -93,10 +98,20 @@ def _calls_before_tests(recipes: cabc.Iterable[MakeRecipe]) -> list[str]:
         text = recipe["text"]
         runs = _TEST_COMMAND.search(text)
         limit = runs.start() if runs else len(text)
-        found.extend(call.group("goal") for call in _MAKE_CALL.finditer(text[:limit]))
+        found.extend(
+            call.group("goal")
+            for call in _MAKE_CALL.finditer(text[:limit])
+            if not _is_quoted(text, call.start())
+        )
         if runs:
             break
     return found
+
+
+def _is_quoted(text: str, offset: int) -> bool:
+    """Report whether *offset* lies inside a quoted string of a recipe line."""
+    before = text[:offset]
+    return before.count('"') % 2 == 1 or before.count("'") % 2 == 1
 
 
 def _next_goals(rule: MakeRule) -> tuple[list[str], bool]:
@@ -183,6 +198,7 @@ def read_warmups(
         _make_goals(checkout),
         _function_names(read_sources(checkout, fixtures, [])),
         crate_directories(checkout, manifests),
+        declared_tests(checkout, manifests),
     )
 
 
@@ -203,22 +219,40 @@ def _make_coverage(goal: str, make: MakeGoals) -> str:
     )
 
 
+def _binaries(path: str, warmups: Warmups) -> list[str | None]:
+    """Return the test binaries built from *path*.
+
+    A `[[test]]` table names its binary, and several tables may share a source,
+    so each name counts. Otherwise the binary is the first component under
+    `tests/`, which also owns a support module in a directory.
+
+    Returns
+    -------
+    list[str | None]
+        The binary names; a single None for a file no test target owns.
+    """
+    declared = warmups.declared_tests.get(path)
+    if declared:
+        return list[str | None](sorted(declared))
+    named = _TEST_BINARY.search(path)
+    return [named.group("name") if named else None]
+
+
 def _setup_coverage(path: str, warmups: Warmups) -> str:
-    """Say whether a nextest setup rule selects the binary or package of *path*.
+    """Say whether nextest setup rules select every binary built from *path*.
 
     Returns
     -------
     str
-        `resolved` or `unresolved`.
+        `resolved` when each binary, or its owning package, is selected, else
+        `unresolved`.
     """
-    named = _TEST_BINARY.search(path)
-    binary = named.group("name") if named else None
     package = warmups.crates.get(owning_crate(path, warmups.crates))
-    return (
-        COVERAGE_RESOLVED
-        if covers(warmups.setup_rules, binary, package)
-        else COVERAGE_UNRESOLVED
+    selected = all(
+        covers(warmups.setup_rules, binary, package)
+        for binary in _binaries(path, warmups)
     )
+    return COVERAGE_RESOLVED if selected else COVERAGE_UNRESOLVED
 
 
 def coverage(path: str, covered_by: str, warmups: Warmups) -> str:
