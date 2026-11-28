@@ -525,6 +525,15 @@ test_overridden_by_variable if {
   }
 }
 
+# A multi-assigned variable names a rule's target, so it could be anything.
+test_unresolved_target_variable if {
+  findings := policy.deny with input as data.fixtures.unresolved_target_variable
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "a rule names its target through a variable the policy cannot resolve; the recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "a rule names its target through a variable the policy cannot resolve; the recipes cannot be proven"],
+  }
+}
+
 test_ignore_targets if {
   findings := policy.deny with input as data.fixtures.ignore_targets
   profile(findings) == {

@@ -168,6 +168,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "ignore_variable_target": Scenario(makefile="ignore-variable-target"),
     "ignore_variable_list": Scenario(makefile="ignore-variable-list"),
     "overridden_by_variable": Scenario(makefile="overridden-by-variable"),
+    "unresolved_target_variable": Scenario(makefile="unresolved-target-variable"),
     "delegated_prefixed_makeflags": Scenario(makefile="delegated-prefixed-makeflags"),
     "delegated_variable_override": Scenario(makefile="delegated-variable-override"),
     "yaml_only_no_makefile": dataclasses.replace(YAML_ONLY, makefile=None),
