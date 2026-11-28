@@ -63,8 +63,8 @@ test_pr_shell_check_is_noncompliant if {
   }
 }
 
-# A direct command-line upload needs the token in its environment, so it
-# cannot keep the token to the sanctioned places; the action is the route.
+# A direct command-line upload that names the token outside the sanctioned
+# places is reported by the token clause; the action is the intended route.
 test_main_shell_upload_is_noncompliant if {
   findings := policy.deny with input as data.fixtures.main_shell_upload
   profile(findings) == {

@@ -24,14 +24,13 @@ One main-owned publisher writes the baseline and uploads:
 
 - Exactly one workflow with a `push` trigger restricted to `main`, optionally
   alongside `workflow_dispatch`, generates ratcheted coverage and invokes the
-  CodeScene action in upload mode. The action is the intended route: a direct
-  `cs-coverage upload` command reads the token from its environment, so it
-  reaches the token clause below whenever it names the token. The action
-  defaults `mode` to `upload`, so a step that omits the input uploads and
-  satisfies this clause; `mode: check` and `mode: install` do not. The rule
-  reads the effective mode rather than the spelling, because reporting correct
-  wiring as broken only teaches people to edit a working workflow to satisfy
-  the audit.
+  CodeScene action in upload mode. The action is the intended route; a direct
+  `cs-coverage upload` command is not that route and is reported by the token
+  clause below when it names the token. The action defaults `mode` to `upload`,
+  so a step that omits the input uploads and satisfies this clause;
+  `mode: check` and `mode: install` do not. The rule reads the effective mode
+  rather than the spelling, because reporting correct wiring as broken only
+  teaches people to edit a working workflow to satisfy the audit.
 - The publisher declares a `concurrency` block, so two overlapping pushes to
   `main` cannot race to write the baseline every pull request is then measured
   against, and the block queues rather than cancels: `cancel-in-progress` is
@@ -51,9 +50,9 @@ Every uploader names the token in exactly two places:
   code can read. An `env` binding reaches every step beneath it, and another
   action's input hands the secret across a boundary nobody approved.
   Static-analysis tools flagged the token in `env` repeatedly, which is what
-  this clause settles. A direct `cs-coverage upload` command cannot meet it,
-  because the command line reads the token from its environment: upload through
-  the action.
+  this clause settles. A direct `cs-coverage upload` command that names the
+  token fails it, because the command line reads the token from its
+  environment; upload through the action.
 
 The token's environment is outside this rule. The `codescene` environment and
 its branch policy are repository settings, which a checkout cannot show; the
