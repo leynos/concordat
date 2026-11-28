@@ -1,0 +1,749 @@
+"""Unit tests for the `policy-input/whitaker-exclusions` envelope builder.
+
+The Rego suite proves what the policy makes of each envelope; these tests prove
+what the builder records: where each exclusion is, whether a comment states its
+reason, how a crate name resolves, and what it refuses to guess.
+"""
+
+from __future__ import annotations
+
+import typing as typ
+
+import pytest
+
+from concordat.errors import OperationalRuleError
+from concordat.rules import whitaker_exclusions_envelope
+from concordat.rules.whitaker_exclusions_envelope import (
+    ENVELOPE_KIND,
+    build_whitaker_exclusions_envelope,
+)
+from concordat.rules.whitaker_exclusions_text import locate_exclusions
+
+if typ.TYPE_CHECKING:
+    import pathlib
+
+MANIFEST: typ.Final = '[package]\nname = "{name}"\nversion = "0.1.0"\n{extra}'
+
+
+class LinkCase(typ.NamedTuple):
+    """A symbolic link to lay in a checkout, and the note it must raise."""
+
+    files: dict[str, str]
+    link: str
+    target: str
+    note: str
+
+
+def _write(checkout: pathlib.Path, files: dict[str, str]) -> None:
+    """Write *files* under *checkout*, creating directories."""
+    for relative, text in files.items():
+        path = checkout / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+
+def _exclusions(
+    checkout: pathlib.Path, files: dict[str, str]
+) -> list[dict[str, typ.Any]]:
+    """Build the envelope for *files* and return its exclusions."""
+    _write(checkout, files)
+    envelope = build_whitaker_exclusions_envelope(checkout)
+    return typ.cast("list[dict[str, typ.Any]]", envelope["exclusions"])
+
+
+class TestEnvelope:
+    """What the builder records for a checkout."""
+
+    def test_a_repeated_table_header_leaves_its_key_not_located(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Two `[[rule]]` tables each with the key: the line is ambiguous."""
+        found = _exclusions(
+            tmp_path,
+            {
+                "dylint.toml": (
+                    '[[rule]]\n# why\nexcluded_paths = ["a"]\n\n'
+                    '[[rule]]\nexcluded_paths = ["b"]\n'
+                )
+            },
+        )
+        assert [(x["table"], x["line"]) for x in found] == [
+            ("rule", None),
+            ("rule", None),
+        ]
+
+    def test_a_bare_and_a_quoted_spelling_of_one_key_share_no_reason(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The parser sees one key twice; the text cannot tie either to a place."""
+        found = _exclusions(
+            tmp_path,
+            {
+                "dylint.toml": (
+                    '[[rule]]\n# why\nexcluded_paths = ["a"]\n\n'
+                    '[[rule]]\n"excluded_paths" = ["b"]\n'
+                )
+            },
+        )
+        assert [(x["line"], x["has_reason"]) for x in found] == [
+            (None, False),
+            (None, False),
+        ]
+
+    def test_a_unicode_line_separator_in_a_string_does_not_move_a_line(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`str.splitlines` splits at U+2028; TOML does not, so the scans agree."""
+        text = (
+            '[t]\nnote = """a # fake reason\nexcluded_paths = ["bogus"]\n"""\n'  # noqa: RUF001 - U+2028 is the point
+            'excluded_paths = ["real"]\n'
+        )
+        [found] = locate_exclusions(text)
+        assert (found.line, found.has_reason) == (5, False)
+
+    def test_a_symlinked_dylint_config_is_recorded_not_followed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Its exclusions are unknown, which is not the same as none."""
+        _write(tmp_path, {"real.toml": '[l]\n# why\nexcluded_paths = ["a"]\n'})
+        (tmp_path / "dylint.toml").symlink_to("real.toml")
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert envelope["exclusions"] == []
+        [note] = envelope["unreadable"]
+        assert note.startswith("dylint.toml: is a symbolic link")
+
+    def test_a_dylint_config_that_cannot_be_opened_is_recorded(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A read failure inside the checkout is EN-001, not a failed audit."""
+        _write(tmp_path, {"dylint.toml": '[l]\nexcluded_paths = ["a"]\n'})
+
+        def refuse(_path: pathlib.Path, operation: str) -> str:
+            """Fail the way a file that cannot be opened does."""
+            message = "permission denied"
+            raise OperationalRuleError(message, operation=operation)
+
+        monkeypatch.setattr(whitaker_exclusions_envelope, "read_text", refuse)
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert envelope["exclusions"] == []
+        assert envelope["unreadable"][0].startswith("dylint.toml: ")
+        assert "permission denied" in envelope["unreadable"][0]
+
+    def test_a_checkout_without_a_dylint_config_has_no_exclusions(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Nothing to judge."""
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert envelope["kind"] == ENVELOPE_KIND
+        assert envelope["exclusions"] == []
+
+    def test_an_exclusion_records_its_place_reason_and_entries(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The facts the policy reads."""
+        found = _exclusions(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "dylint.toml": '[lint]\n# because\nexcluded_paths = ["loader"]\n',
+            },
+        )
+        assert found == [
+            {
+                "file": "dylint.toml",
+                "table": "lint",
+                "key": "excluded_paths",
+                "kind": "paths",
+                "line": 3,
+                "has_reason": True,
+                "entries": [{"name": "loader", "resolved": "unknown"}],
+            }
+        ]
+
+    def test_a_dylint_config_in_a_fixture_tree_is_not_read(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Test data is not the repository's configuration."""
+        found = _exclusions(
+            tmp_path,
+            {"tests/fixtures/x/dylint.toml": '[l]\nexcluded_paths = ["a"]\n'},
+        )
+        assert found == []
+
+
+class TestCrateNames:
+    """How an excluded crate name resolves."""
+
+    def _resolved(
+        self, checkout: pathlib.Path, files: dict[str, str]
+    ) -> dict[str, str]:
+        """Return each crate name of the sole exclusion, with its resolution."""
+        [exclusion] = _exclusions(checkout, files)
+        return {entry["name"]: entry["resolved"] for entry in exclusion["entries"]}
+
+    def test_names_resolve_to_governed_fixture_or_unknown(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Packages and test targets are governed, fixture trees are not."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="my-app", extra=""),
+                "src/lib.rs": "",
+                "tests/handler_tests.rs": "",
+                "tests/heavy/main.rs": "",
+                "src/bin/tool.rs": "",
+                "tests/fixtures/bad/Cargo.toml": MANIFEST.format(name="bad", extra=""),
+                "tests/fixtures/bad/src/lib.rs": "",
+                "vendor/harness/Cargo.toml": MANIFEST.format(name="harness", extra=""),
+                "vendor/harness/src/lib.rs": "",
+                "dylint.toml": (
+                    "[l]\n# r\nexcluded_crates = [\n"
+                    '"my_app", "my-app", "handler_tests", "heavy", "tool", "bad",\n'
+                    '"harness", "ghost"]\n'
+                ),
+            },
+        )
+        assert resolved == {
+            "my_app": "governed",
+            "my-app": "governed",
+            "handler_tests": "governed",
+            "heavy": "governed",
+            "tool": "governed",
+            "bad": "fixture",
+            "harness": "fixture",
+            "ghost": "unknown",
+        }
+
+    def test_a_path_dependency_alias_is_a_crate_but_a_registry_dependency_is_not(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Femtologging's `_femtologging_rs` is a renamed path dependency."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="femto",
+                    extra=(
+                        "\n[dev-dependencies]\n"
+                        '_femto = { path = ".", package = "femto" }\nserde = "1"\n'
+                    ),
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["_femto", "serde"]\n',
+            },
+        )
+        assert resolved == {"_femto": "governed", "serde": "unknown"}
+
+    def test_target_specific_and_workspace_inherited_path_aliases_count(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A path dependency is local wherever it is declared."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": (
+                    MANIFEST.format(
+                        name="app",
+                        extra=(
+                            "\n[target.'cfg(unix)'.dev-dependencies]\n"
+                            '_app = { path = ".", package = "app" }\n'
+                            "[dependencies]\nshared_alias = { workspace = true }\n"
+                            "registry = { workspace = true }\n\n[workspace]\n"
+                            "[workspace.dependencies]\n"
+                            'shared_alias = { path = "shared", package = "shared" }\n'
+                            'registry = "1"\n'
+                        ),
+                    )
+                ),
+                "shared/Cargo.toml": MANIFEST.format(name="shared", extra=""),
+                "dylint.toml": (
+                    '[l]\n# r\nexcluded_crates = ["_app", "shared_alias", "registry"]\n'
+                ),
+            },
+        )
+        assert resolved == {
+            "_app": "governed",
+            "shared_alias": "governed",
+            "registry": "unknown",
+        }
+
+    @pytest.mark.parametrize(
+        ("switch", "folder"),
+        [
+            ("autotests", "tests"),
+            ("autobenches", "benches"),
+            ("autoexamples", "examples"),
+            ("autobins", "src/bin"),
+        ],
+    )
+    def test_a_switched_off_discovery_leaves_only_declared_targets(
+        self, tmp_path: pathlib.Path, switch: str, folder: str
+    ) -> None:
+        """`autotests = false` and its siblings turn that folder's discovery off."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=f"{switch} = false\n"),
+                f"{folder}/old.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["old"]\n',
+            },
+        )
+        assert resolved == {"old": "unknown"}
+
+    def test_a_workspace_root_the_scan_cannot_inspect_leaves_the_aliases_unknown(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A named root outside the checkout is not guessed from an ancestor."""
+        checkout = tmp_path / "checkout"
+        _write(
+            checkout,
+            {
+                "Cargo.toml": '[workspace]\nmembers = ["app"]\n'
+                '[workspace.dependencies]\nshared_alias = { path = "shared" }\n',
+                "shared/Cargo.toml": MANIFEST.format(name="shared", extra=""),
+                "app/Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'workspace = "../../elsewhere"\n\n[dependencies]\n'
+                        "shared_alias = { workspace = true }\n"
+                    ),
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["shared_alias"]\n',
+            },
+        )
+        envelope = build_whitaker_exclusions_envelope(checkout)
+        [exclusion] = envelope["exclusions"]
+        assert exclusion["entries"] == [{"name": "shared_alias", "resolved": "unknown"}]
+        assert any("cannot inspect" in note for note in envelope["unreadable"])
+
+    def test_a_file_a_declared_target_names_by_path_infers_no_second_target(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Cargo merges targets by path: `current` owns `tests/old.rs`, so no `old`."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'edition = "2021"\n\n[[test]]\nname = "current"\n'
+                        'path = "tests/old.rs"\n'
+                    ),
+                ),
+                "tests/old.rs": "",
+                "tests/other.rs": "",
+                "dylint.toml": (
+                    '[l]\n# r\nexcluded_crates = ["current", "old", "other"]\n'
+                ),
+            },
+        )
+        assert resolved == {
+            "current": "governed",
+            "old": "unknown",
+            "other": "governed",
+        }
+
+    def test_edition_2015_turns_discovery_off_for_a_kind_with_a_declared_target(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Without an edition (2015), a declared `[[test]]` ends test discovery."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app", extra='[[test]]\nname = "kept"\npath = "tests/k.rs"\n'
+                ),
+                "tests/k.rs": "",
+                "tests/other.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["kept", "other"]\n',
+            },
+        )
+        assert resolved == {"kept": "governed", "other": "unknown"}
+
+    def test_a_path_declared_by_another_kind_claims_nothing(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An explicit binary at `tests/scenario.rs` leaves the test `scenario`."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'edition = "2021"\n\n[[bin]]\nname = "runner"\n'
+                        'path = "tests/scenario.rs"\n'
+                    ),
+                ),
+                "tests/scenario.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["runner", "scenario"]\n',
+            },
+        )
+        assert resolved == {"runner": "governed", "scenario": "governed"}
+
+    @pytest.mark.parametrize(
+        ("files", "expected"),
+        [
+            ({"src/lib.rs": ""}, "governed"),
+            ({"src/main.rs": ""}, "governed"),
+            ({}, "unknown"),
+            ({"src/other.rs": ""}, "unknown"),
+        ],
+    )
+    def test_the_package_name_is_a_crate_only_through_a_default_target(
+        self, tmp_path: pathlib.Path, files: dict[str, str], expected: str
+    ) -> None:
+        """A package with no `src/lib.rs` or `src/main.rs` has no crate of its name."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["app"]\n',
+                **files,
+            },
+        )
+        assert resolved == {"app": expected}
+
+    @pytest.mark.parametrize(
+        ("manifest_extra", "files", "expected"),
+        [
+            # A renamed library leaves the package name to nothing.
+            ('\n[lib]\nname = "other"\n', {"src/lib.rs": ""}, ("app", "unknown")),
+            ('\n[lib]\nname = "other"\n', {"src/lib.rs": ""}, ("other", "governed")),
+            # A library at a custom path with no name is named after the package.
+            ('\n[lib]\npath = "core/l.rs"\n', {"core/l.rs": ""}, ("app", "governed")),
+            # A binary that claims src/main.rs takes its own name, not the package's.
+            (
+                '\n[[bin]]\nname = "runner"\npath = "src/main.rs"\n',
+                {"src/main.rs": ""},
+                ("app", "unknown"),
+            ),
+            (
+                '\n[[bin]]\nname = "runner"\npath = "src/main.rs"\n',
+                {"src/main.rs": ""},
+                ("runner", "governed"),
+            ),
+        ],
+    )
+    def test_default_targets_take_declared_names_and_paths(
+        self,
+        tmp_path: pathlib.Path,
+        manifest_extra: str,
+        files: dict[str, str],
+        expected: tuple[str, str],
+    ) -> None:
+        """A `[lib]` or `[[bin]]` table decides the crate name of a default file."""
+        name, kind = expected
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app", extra=f'edition = "2021"\n{manifest_extra}'
+                ),
+                "dylint.toml": f'[l]\n# r\nexcluded_crates = ["{name}"]\n',
+                **files,
+            },
+        )
+        assert resolved == {name: kind}
+
+    @pytest.mark.parametrize(
+        ("workspace_edition", "expected"),
+        [('edition = "2015"\n', "unknown"), ('edition = "2021"\n', "governed")],
+    )
+    def test_an_inherited_edition_decides_whether_a_kind_is_discovered(
+        self, tmp_path: pathlib.Path, workspace_edition: str, expected: str
+    ) -> None:
+        """`edition.workspace = true` is the workspace's edition, not a table."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": (
+                    '[workspace]\nmembers = ["crates/app"]\n'
+                    f"[workspace.package]\n{workspace_edition}"
+                ),
+                "crates/app/Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'edition.workspace = true\n\n[[test]]\nname = "kept"\n'
+                        'path = "tests/k.rs"\n'
+                    ),
+                ),
+                "crates/app/tests/k.rs": "",
+                "crates/app/tests/other.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["other"]\n',
+            },
+        )
+        assert resolved == {"other": expected}
+
+    def test_an_inherited_edition_the_workspace_lacks_is_recorded(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Nothing is guessed: the package's targets are unknown, so EN-001."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": '[workspace]\nmembers = ["crates/app"]\n',
+                "crates/app/Cargo.toml": MANIFEST.format(
+                    name="app", extra="edition.workspace = true\n"
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["x"]\n',
+            },
+        )
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any("inherits its edition" in n for n in envelope["unreadable"])
+
+    def test_a_virtual_workspace_root_has_no_targets(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`tests/old.rs` beside a virtual workspace root belongs to no package."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": "[workspace]\nmembers = []\n",
+                "tests/old.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["old"]\n',
+            },
+        )
+        assert resolved == {"old": "unknown"}
+
+    def test_a_test_directory_is_named_after_itself_not_its_main(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`tests/group/main.rs` is the target `group`; `main` is nothing."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "tests/group/main.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["group", "main"]\n',
+            },
+        )
+        assert resolved == {"group": "governed", "main": "unknown"}
+
+    def test_a_declared_target_counts_even_when_discovery_is_off(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Only auto-discovery is switched off."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        "autotests = false\n[[test]]\n"
+                        'name = "kept"\npath = "tests/k.rs"\n'
+                    ),
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["kept"]\n',
+            },
+        )
+        assert resolved == {"kept": "governed"}
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            LinkCase({}, "tests", "../host", "tests: is a symbolic link"),
+            LinkCase({}, "src", "../host", "src: is a symbolic link"),
+            LinkCase({}, "tests", "nowhere", "tests: is a symbolic link"),
+            LinkCase(
+                {"src/bin/secret/placeholder": ""},
+                "src/bin/secret/main.rs",
+                "../../../../host/secret.rs",
+                "main.rs: is a symbolic",
+            ),
+            LinkCase(
+                {"real/sub/dylint.toml": ""}, "linked", "real", "linked: is a symbolic"
+            ),
+            # A regular src/lib.rs must not hide a linked src/main.rs, nor a
+            # [lib] table a linked src/lib.rs.
+            LinkCase(
+                {"src/lib.rs": ""},
+                "src/main.rs",
+                "../../host/secret.rs",
+                "main.rs: is a symbolic",
+            ),
+            LinkCase(
+                {"Cargo.toml": '[package]\nname = "app"\n[lib]\nname = "app"\n'},
+                "src/lib.rs",
+                "../../host/secret.rs",
+                "lib.rs: is a symbolic",
+            ),
+        ],
+    )
+    def test_a_link_anywhere_a_name_could_come_from_is_recorded_not_followed(
+        self, tmp_path: pathlib.Path, case: LinkCase
+    ) -> None:
+        """A link to the host, to nothing, or to a probe is never read as absence.
+
+        The name `secret` is only on the far side of a link; it must stay
+        unresolved, and the link must be reported.
+        """
+        (tmp_path / "host" / "bin").mkdir(parents=True)
+        (tmp_path / "host" / "secret.rs").write_text("", encoding="utf-8")
+        (tmp_path / "host" / "bin" / "secret.rs").write_text("", encoding="utf-8")
+        checkout = tmp_path / "checkout"
+        _write(
+            checkout,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["secret"]\n',
+                **case.files,
+            },
+        )
+        (checkout / case.link).parent.mkdir(parents=True, exist_ok=True)
+        (checkout / case.link).symlink_to(case.target)
+        envelope = build_whitaker_exclusions_envelope(checkout)
+        [exclusion] = envelope["exclusions"]
+        assert exclusion["entries"] == [{"name": "secret", "resolved": "unknown"}]
+        assert any(case.note in n for n in envelope["unreadable"]), envelope[
+            "unreadable"
+        ]
+
+    @pytest.mark.parametrize(
+        ("other_workspace", "expected"),
+        [
+            # Workspace `b` declares `shared` as a path dependency and a member
+            # uses it, so the name is a crate of the repository.
+            ("used", "governed"),
+            # `b` declares it but no member uses it: the declaration is not a
+            # crate, and must not be attributed to `a`'s registry dependency.
+            ("unused", "unknown"),
+            # Alone, workspace `a` says registry, so the name is not a crate.
+            ("absent", "unknown"),
+        ],
+    )
+    def test_an_inherited_dependency_is_resolved_in_the_workspace_that_owns_it(
+        self, tmp_path: pathlib.Path, other_workspace: str, expected: str
+    ) -> None:
+        """One workspace's registry dependency is not made local by another's."""
+        inherit = "[dependencies]\nshared = { workspace = true }\n"
+        files = {
+            "a/Cargo.toml": "[workspace]\nmembers = ['m']\n"
+            '[workspace.dependencies]\nshared = "1"\n',
+            "a/m/Cargo.toml": MANIFEST.format(name="m", extra=inherit),
+            "dylint.toml": '[l]\n# r\nexcluded_crates = ["shared"]\n',
+        }
+        if other_workspace != "absent":
+            files["b/Cargo.toml"] = (
+                '[workspace]\nmembers = ["n"]\n'
+                '[workspace.dependencies]\nshared = { path = "n" }\n'
+            )
+            files["b/n/Cargo.toml"] = MANIFEST.format(
+                name="n", extra=inherit if other_workspace == "used" else ""
+            )
+        _write(tmp_path, files)
+        [exclusion] = build_whitaker_exclusions_envelope(tmp_path)["exclusions"]
+        assert exclusion["entries"] == [{"name": "shared", "resolved": expected}]
+
+    def test_a_package_that_names_a_workspace_that_is_not_an_ancestor_inherits_from_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`package.workspace = "../ws"` selects the owner, wherever it is."""
+        _write(
+            tmp_path,
+            {
+                "ws/Cargo.toml": "[workspace]\nmembers = []\n"
+                '[workspace.dependencies]\nshared_alias = { path = "../shared" }\n',
+                "shared/Cargo.toml": MANIFEST.format(name="shared", extra=""),
+                "app/Cargo.toml": MANIFEST.format(
+                    name="app",
+                    extra=(
+                        'workspace = "../ws"\n\n[dependencies]\n'
+                        "shared_alias = { workspace = true }\n"
+                    ),
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["shared_alias"]\n',
+            },
+        )
+        [exclusion] = build_whitaker_exclusions_envelope(tmp_path)["exclusions"]
+        assert exclusion["entries"] == [
+            {"name": "shared_alias", "resolved": "governed"}
+        ]
+
+    def test_a_symlinked_entry_in_a_target_folder_is_not_followed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """One linked file hides one name; the others still count."""
+        checkout = tmp_path / "checkout"
+        _write(
+            checkout,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "tests/real.rs": "",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["real", "linked"]\n',
+            },
+        )
+        (checkout / "tests" / "linked.rs").symlink_to("real.rs")
+        envelope = build_whitaker_exclusions_envelope(checkout)
+        [exclusion] = envelope["exclusions"]
+        assert {e["name"]: e["resolved"] for e in exclusion["entries"]} == {
+            "real": "governed",
+            "linked": "unknown",
+        }
+        assert any("linked.rs" in n for n in envelope["unreadable"])
+
+    def test_a_symlinked_manifest_is_recorded(self, tmp_path: pathlib.Path) -> None:
+        """A manifest that is a link would hide its crate names."""
+        _write(
+            tmp_path,
+            {
+                "real/Cargo.toml": MANIFEST.format(name="real", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["real"]\n',
+            },
+        )
+        (tmp_path / "Cargo.toml").symlink_to("real/Cargo.toml")
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any(
+            n.startswith("Cargo.toml: is a symbolic link")
+            for n in envelope["unreadable"]
+        )
+
+    def test_an_explicit_target_name_counts(self, tmp_path: pathlib.Path) -> None:
+        """`[[test]] name` need not match a file."""
+        resolved = self._resolved(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(
+                    name="app", extra='\n[[test]]\nname = "e2e"\npath = "t/e2e.rs"\n'
+                ),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["e2e"]\n',
+            },
+        )
+        assert resolved == {"e2e": "governed"}
+
+
+class TestUnreadable:
+    """Nothing is guessed."""
+
+    def test_an_invalid_dylint_config_is_recorded(self, tmp_path: pathlib.Path) -> None:
+        """The policy reports it as indeterminate."""
+        _write(tmp_path, {"dylint.toml": "[l\nexcluded_crates = \n"})
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert envelope["exclusions"] == []
+        assert len(envelope["unreadable"]) == 1
+        assert envelope["unreadable"][0].startswith("dylint.toml: invalid TOML")
+
+    def test_an_exclusion_that_is_not_a_list_of_strings_is_recorded(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Its entries cannot be read, so the audit says so."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": MANIFEST.format(name="app", extra=""),
+                "dylint.toml": '[l]\n# r\nexcluded_crates = "app"\n',
+            },
+        )
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any("not a list of strings" in item for item in envelope["unreadable"])
+
+    def test_an_unreadable_manifest_is_recorded(self, tmp_path: pathlib.Path) -> None:
+        """Crate names cannot be resolved against a manifest that did not parse."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": "[package\nname = \n",
+                "dylint.toml": '[l]\n# r\nexcluded_crates = ["x"]\n',
+            },
+        )
+        envelope = build_whitaker_exclusions_envelope(tmp_path)
+        assert any(item.startswith("Cargo.toml") for item in envelope["unreadable"])

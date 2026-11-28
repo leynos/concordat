@@ -99,5 +99,31 @@ parameters:
           entry suppresses RC-001 and RC-002 only.
   defaults:
     severity: warning
-    exemptions: []
+    exemptions:
+      - repository: leynos/combobulate
+        path: .github/workflows/profile-measurements.yml
+        rationale: >-
+          Profile measurements run once per applied label, in a group per pull
+          request and label name, and each run must finish: cancelling a
+          superseded run would discard a measurement that someone asked for by
+          labelling. The workflow queues on purpose (`cancel-in-progress:
+          false`).
+        review_trigger: >-
+          Revisit when profile-measurements.yml stops queueing per label, or
+          when a measurement run becomes cheap enough to repeat after a
+          cancellation.
+      - repository: leynos/cuprum
+        path: .github/workflows/ci.yml
+        rationale: >-
+          The group is `ci-${{ github.ref }}` so that runs on main queue per
+          ref and are never cancelled once started: each republishes the
+          `benchmark-ratchet-main-baseline` artefact that pull-request runs
+          compare against, and a half-finished run would leave the baseline
+          behind head. A per-run group would let two main runs publish
+          concurrently. Pull-request runs are cancelled by the event test in
+          `cancel-in-progress`.
+        review_trigger: >-
+          Revisit when the benchmark baseline is published by a serialised
+          main-only workflow rather than by ci.yml, or when cuprum's CI stops
+          publishing the baseline.
     repository_exemptions: []

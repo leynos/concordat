@@ -1,0 +1,67 @@
+schema_version: 1
+id: whitaker-exclusions
+name: Whitaker exclusions carry a reason and are not leftovers
+description: >-
+  Audits every Whitaker exclusion in a repository's `dylint.toml` files:
+  `excluded_crates`, `excluded_paths` and any other `excluded_*` key. Each must
+  carry a reason, a comment block directly above the key or above its table
+  header (WX-001). A whole-crate exclusion (`excluded_crates`) of a library,
+  binary or test crate the repository governs is a finding unless the rule's
+  `crate_exclusions` parameter names it with a reason and a review trigger
+  (WX-002); fixture and vendored crates, which break their own lints on purpose
+  or are not the repository's, need no entry. An exclusion that names no crate
+  the repository has is stale (WX-003). A file or key the audit cannot read or
+  locate is indeterminate (EN-001), never guessed. The rule ships at `warning`
+  severity so the estate can be surveyed before it blocks. Audit-only: this
+  rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/whitaker-exclusions
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every WX finding and of the indeterminate findings
+          that report evidence the reader could not establish. An envelope
+          defect is always `error`. A `warning` finding is reported but does
+          not block; promotion to `error` is the intended end state once the
+          estate survey is clean.
+      crate_exclusions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, crate, reason, review_trigger]
+          properties:
+            repository:
+              type: string
+            crate:
+              type: string
+            reason:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Whole-crate exclusions the repository may keep: its repository
+          (`owner/name`, read from the `origin` remote), the crate name as
+          Whitaker spells it (hyphens read as underscores), the reason and the
+          review trigger (the event after which the exclusion is revisited).
+          Both text fields must be non-blank; the policy ignores an entry that
+          leaves either blank, because an exclusion nobody must revisit is not
+          a record.
+  defaults:
+    severity: warning
+    crate_exclusions: []
