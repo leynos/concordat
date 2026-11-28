@@ -209,6 +209,32 @@ SCENARIOS: dict[str, dict[str, str]] = {
         DOC,
         extra={"crates/b/Cargo.toml": package("b", FEATURES)},
     ),
+    "designed_package_selected_features": designed(
+        f"{DENY} cargo clippy -p a --all-targets --all-features",
+        f"{DENY} cargo clippy -p b --all-targets --features fast",
+        DOC,
+        extra={"crates/b/Cargo.toml": package("b", FEATURES)},
+    ),
+    "designed_conditional_cd_unplaces_what_follows": designed(
+        'if [ -n "$$X" ]; then cd crates/a; fi; '
+        f"{DENY} cargo clippy --all-targets --all-features",
+        DOC,
+    ),
+    "designed_exported_flags_end_with_warn": designed(
+        "cargo clippy --workspace --all-targets --all-features",
+        DOC,
+        preamble="export RUSTFLAGS := -D warnings -W warnings\n",
+    ),
+    "designed_config_denies_but_a_workflow_run_may_override": designed(
+        CLIPPY,
+        DOC,
+        extra={
+            ".cargo/config.toml": '[build]\nrustflags = ["-D", "warnings"]\n',
+            ".github/workflows/ci.yml": workflow(
+                "cargo clippy --workspace --all-targets --all-features"
+            ),
+        },
+    ),
     "designed_doc_excludes_a_package": designed(
         CLIPPY, f"{DENY_DOC} cargo doc --workspace --no-deps --exclude b"
     ),

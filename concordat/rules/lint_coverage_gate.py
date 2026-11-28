@@ -71,6 +71,7 @@ _NAMES_TOOL: typ.Final = re.compile(
 _MAY_LINT: typ.Final = re.compile(
     r"\b(?:make|bash|sh|zsh|python3?|uv|node|npm|pnpm|yarn|just|task|lint)\b"
     r"|\./|\.(?:sh|py|bash|js|ts)\b"
+    r"|(?:^|[\s;&|(])[\w.-]+/[\w./-]+"
 )
 # What a lane-building script's text must show to stand for a tool: the command
 # itself, as a shell line or as the words of a subprocess list.
@@ -201,12 +202,15 @@ def _read_kept(
     """
     words, frames = command
     start = len(reader.runs)
-    directory = _read_command(reader, words, source, directory)
-    if frames:
-        _mark_unresolved(
-            reader.runs[start:], "it runs under a shell conditional it could not settle"
-        )
-    return directory
+    moved = _read_command(reader, words, source, directory)
+    if not frames:
+        return moved
+    _mark_unresolved(
+        reader.runs[start:], "it runs under a shell conditional it could not settle"
+    )
+    # A `cd` inside an undecided `if` may or may not have happened, so the
+    # commands after it cannot be placed.
+    return None if moved != directory else moved
 
 
 def _read_command(
@@ -321,6 +325,30 @@ def _place_runs(reader: _Reader, path: str, place: Place) -> None:
         _step_runs(reader, f"{path} {step.source}", step)
 
 
+def _commands_text(steps: object) -> str:
+    """Return the text of a job's commands: its `run` steps and local actions.
+
+    A third-party action (`actions/checkout@v4`) is not a command the job runs
+    in the repository, so it is left out.
+
+    Returns
+    -------
+    str
+        The `run` texts and local `uses` paths, one per line.
+    """
+    if not isinstance(steps, list):
+        return ""
+    found: list[str] = []
+    for step in steps:
+        fields = step if isinstance(step, dict) else {}
+        run, uses = fields.get("run"), fields.get("uses")
+        found.extend((
+            run if isinstance(run, str) else "",
+            uses if isinstance(uses, str) and uses.startswith(".") else "",
+        ))
+    return "\n".join(found)
+
+
 def _note_computed_matrix(reader: _Reader, path: str, place: Place) -> None:
     """Record a job whose matrix is computed, if it may run a lint.
 
@@ -328,7 +356,7 @@ def _note_computed_matrix(reader: _Reader, path: str, place: Place) -> None:
     by a script, so any of these leaves the job indeterminate.
     """
     steps = repr(place.steps)
-    if _NAMES_TOOL.search(steps) or _MAY_LINT.search(steps):
+    if _NAMES_TOOL.search(steps) or _MAY_LINT.search(_commands_text(place.steps)):
         reader.unreadable.append(
             f"{path} ({place.label}): matrix is computed by an expression, so "
             "its commands cannot be filled in"

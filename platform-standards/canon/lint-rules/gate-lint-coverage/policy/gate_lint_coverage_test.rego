@@ -127,6 +127,27 @@ test_a_shell_conditional_lane_is_indeterminate_not_a_combined_lane if {
 	not "LC-002" in ids(fixture)
 }
 
+test_a_package_selection_limits_the_features_a_run_covers if {
+	fixture := data.fixtures.designed_package_selected_features
+	ids(fixture) == {"LC-002"}
+	[msg] := messages_of(fixture, "LC-002")
+	contains(msg, "feature b/slow")
+	not contains(msg, "feature a/")
+	not contains(msg, "b/fast")
+}
+
+test_a_conditional_cd_leaves_the_commands_after_it_unplaced if {
+	ids(data.fixtures.designed_conditional_cd_unplaces_what_follows) == {"EN-001"}
+}
+
+test_exported_flags_that_end_with_warn_do_not_deny if {
+	ids(data.fixtures.designed_exported_flags_end_with_warn) == {"LC-003"}
+}
+
+test_a_workflow_run_is_not_settled_by_a_denying_cargo_config if {
+	ids(data.fixtures.designed_config_denies_but_a_workflow_run_may_override) == {"EN-001"}
+}
+
 test_a_later_warn_flag_undoes_an_earlier_deny if {
 	ids(data.fixtures.designed_later_warn_undoes_the_deny) == {"LC-003"}
 }

@@ -191,25 +191,40 @@ deny contains finding("LC-001", severity, "noncompliant", surface.manifest, msg)
 
 declared(surface) := {f | some f in surface.features}
 
-all_features_run(surface, tool) if {
-	some r in runs_for(surface, tool)
-	r.all_features == true
-}
-
-covered(surface, tool) := declared(surface) if all_features_run(surface, tool)
-
-# A declared feature is covered by a run that names it as written (`a/fast`), or by
-# its bare name, which enables it in every selected package that has it.
+# A declared feature is covered by a run that selects its package and either
+# enables every feature or names it: as written (`a/fast`), or by its bare name,
+# which enables it in every selected package that has it. A `-p a` run therefore
+# covers `a`'s features only.
 covered(surface, tool) := {d |
 	some d in declared(surface)
 	some r in runs_for(surface, tool)
+	run_covers(r, d)
+}
+
+run_covers(r, d) if {
+	r.all_features == true
+	selects_package(r, d)
+}
+
+run_covers(r, d) if {
 	some f in r.features
 	feature_named(d, f)
-} if not all_features_run(surface, tool)
+	selects_package(r, d)
+}
 
 feature_named(declared_name, given) if declared_name == given
 
 feature_named(declared_name, given) if endswith(declared_name, concat("", ["/", given]))
+
+# Cargo's package selection: no `-p` or `--workspace` selects every package. A
+# feature of a one-package surface is unqualified and always selected.
+selects_package(r, _) if count(r.packages) == 0
+
+selects_package(r, _) if r.workspace == true
+
+selects_package(r, d) if not contains(d, "/")
+
+selects_package(r, d) if split(d, "/")[0] in r.packages
 
 # The default feature set is checked by a command that does not switch it off.
 default_checked(surface, tool) if {
@@ -278,21 +293,27 @@ exported_flags(run) := input.make_environment.rustflags if run.tool != "doc"
 
 is_make_run(run) if startswith(run.source, "Makefile:")
 
-denies_text(text) := true if regex.match(`(^|\s)(-D\s*warnings|--deny[\s=]warnings)\b`, text)
+# The last level flag for `warnings` decides, so `-D warnings -W warnings` does
+# not deny.
+warnings_levels(text) := regex.find_all_string_submatch_n(`(?:^|\s)(-[DWAF]|--(?:deny|warn|allow|forbid))(?:\s|=)*warnings\b`, text, -1)
 
-denies_text(text) := false if not regex.match(`(^|\s)(-D\s*warnings|--deny[\s=]warnings)\b`, text)
+denying_flags := {"-D", "-F", "--deny", "--forbid"}
+
+denies_text(text) := true if denies_last(text)
+
+denies_text(text) := false if not denies_last(text)
+
+denies_last(text) if {
+	levels := warnings_levels(text)
+	count(levels) > 0
+	levels[count(levels) - 1][1] in denying_flags
+}
 
 # What a Makefile exports reaches the commands its recipes run, not a workflow
 # step that runs `cargo` directly: that step's own `env` is not read.
-environment_state(run) := "denied" if {
-	not is_make_run(run)
-	config_denies(run)
-}
-
-environment_state(run) := "unknown" if {
-	not is_make_run(run)
-	not config_denies(run)
-}
+# A workflow step's own `RUSTFLAGS` (not read) overrides `.cargo/config.toml`, so
+# even a configuration that denies warnings does not settle it.
+environment_state(run) := "unknown" if not is_make_run(run)
 
 environment_state(run) := "unknown" if {
 	is_make_run(run)

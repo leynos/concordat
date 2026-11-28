@@ -97,6 +97,17 @@ class TestSurfaces:
         [run] = build_lint_coverage_envelope(tmp_path)["runs"]
         assert run["features"] == ["fast", "other/fast"]
 
+    def test_a_cd_inside_a_shell_conditional_unplaces_the_commands_after_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The `cd` may not have happened, so a later run has no known surface."""
+        _app(
+            tmp_path,
+            {"Makefile": _gate('if [ -n "$$X" ]; then cd sub; fi; cargo clippy')},
+        )
+        [run] = build_lint_coverage_envelope(tmp_path)["runs"]
+        assert (run["is_placed"], run["surface"]) == (False, None)
+
     def test_a_lane_inside_a_shell_conditional_is_unresolved(
         self, tmp_path: pathlib.Path
     ) -> None:
@@ -235,6 +246,7 @@ class TestRuns:
             "./scripts/lint.sh",
             "python tools/gate.py",
             "bash scripts/check",
+            "scripts/check",
             "uv run lanes",
         ],
     )
