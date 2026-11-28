@@ -47,10 +47,11 @@ An uploader names the token only in two kinds of place:
 
 - A workflow that uploads to CodeScene may name `CS_ACCESS_TOKEN` only in the
   check step's command and in the `access-token` input of a CodeScene action
-  step (in upload, `check` or `install` mode, when the value is exactly the
-  secret; an upload step may itself be the workflow's explicit upload). Every
-  key and scalar of the document is read, case-folded, and each other reference
-  is reported by its document path. That covers `env` at workflow, job or step
+  step (any mode is accepted, as the policy does not read the mode, when the
+  value is exactly the secret; an upload step may itself be the workflow's
+  explicit upload). Secret names are read without regard to case. Every key and
+  scalar of the document is read, case-folded, and each other reference is
+  reported by its document path. That covers `env` at workflow, job or step
   level, any other `run` body, another action's input, and a condition. A `run`
   body interpolating the secret puts it in a shell process that checked-out
   code can read. An `env` binding reaches every step beneath it, and another

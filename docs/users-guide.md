@@ -465,9 +465,10 @@ It requires that:
   `install` do not;
 - a workflow that uploads to CodeScene names `CS_ACCESS_TOKEN` only in a
   credential-check step's command and in the `access-token` input of a
-  CodeScene action step, which may be an upload, `check` or `install` step (an
-  upload step may itself be the workflow's explicit upload): never in an `env`
-  block at any level, another `run` body, another action's input or a condition;
+  CodeScene action step in any mode, when its value is exactly
+  `${{ secrets.CS_ACCESS_TOKEN }}` (an upload step may itself be the workflow's
+  explicit upload): never in an `env` block at any level, another `run` body,
+  another action's input or a condition;
 - no workflow passes `installer-checksum` or refreshes the CodeScene installer
   digest;
 - every platform that ratchets coverage on pull requests also ratchets on the

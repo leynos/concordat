@@ -683,3 +683,10 @@ test_a_pull_request_run_body_naming_the_token_is_noncompliant if {
   findings := policy.deny with input as data.fixtures.pr_token_in_a_run_body
   "pull-request workflow receives CS_ACCESS_TOKEN" in {f.msg | some f in findings}
 }
+
+# GitHub reads secret names without regard to case, so a lower-case reference
+# in a pull-request run body receives the token just the same.
+test_a_lower_case_token_in_a_pull_request_run_body_is_noncompliant if {
+  findings := policy.deny with input as data.fixtures.pr_lower_case_token_in_a_run_body
+  "pull-request workflow receives CS_ACCESS_TOKEN" in {f.msg | some f in findings}
+}

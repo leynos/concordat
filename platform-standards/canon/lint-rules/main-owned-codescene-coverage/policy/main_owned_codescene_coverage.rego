@@ -517,7 +517,8 @@ has_explicit_upload(workflow) if {
 has_token_reference(value) if {
   some _, descendant in walk(value)
   is_string(descendant)
-  contains(descendant, "CS_ACCESS_TOKEN")
+  # GitHub reads secret names without regard to case.
+  contains(upper(descendant), "CS_ACCESS_TOKEN")
 }
 
 has_token(environment) if {
