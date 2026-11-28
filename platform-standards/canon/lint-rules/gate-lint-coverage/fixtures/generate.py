@@ -224,6 +224,19 @@ SCENARIOS: dict[str, dict[str, str]] = {
         DOC,
         extra={"crates/b/Cargo.toml": package("b", FEATURES)},
     ),
+    "designed_explicit_default_feature_asks_for_the_defaults": designed(
+        f"{DENY} cargo clippy --workspace --all-targets --no-default-features "
+        "--features default,fast,slow",
+        DOC,
+    ),
+    "designed_resolver_one_applies_a_bare_feature_to_one_package": designed(
+        f"{DENY} cargo clippy --workspace --all-targets --features fast,slow",
+        DOC,
+        extra={
+            "Cargo.toml": '[workspace]\nmembers = ["crates/*"]\n',
+            "crates/b/Cargo.toml": package("b", FEATURES),
+        },
+    ),
     "designed_workspace_run_excludes_a_pattern": designed(
         f"{DENY} cargo clippy --workspace --exclude 'b*' --all-targets --all-features",
         DOC,

@@ -152,6 +152,28 @@ class TestSurfaces:
         [run] = build_lint_coverage_envelope(tmp_path)["runs"]
         assert run["selected"] == expected
 
+    @pytest.mark.parametrize(
+        ("root", "expected"),
+        [
+            ('[workspace]\nmembers = ["a"]\n', "1"),
+            ('[workspace]\nmembers = ["a"]\nresolver = "2"\n', "2"),
+            ('[workspace]\nmembers = ["a"]\nresolver = "3"\n', "3"),
+            (f'{APP}edition = "2021"\n[workspace]\nmembers = ["a"]\n', "2"),
+            (f'{APP}edition = "2024"\n[workspace]\nmembers = ["a"]\n', "3"),
+            (f'{APP}[workspace]\nmembers = ["a"]\n', "1"),
+        ],
+    )
+    def test_the_feature_resolver_is_read_from_the_root(
+        self, tmp_path: pathlib.Path, root: str, expected: str
+    ) -> None:
+        """`resolver` says so, else a root package's edition, else resolver 1."""
+        _write(
+            tmp_path,
+            {"Cargo.toml": root, "a/Cargo.toml": MANIFEST.format(name="a", extra="")},
+        )
+        [surface] = build_lint_coverage_envelope(tmp_path)["surfaces"]
+        assert surface["resolver"] == expected
+
     def test_a_virtual_workspace_selects_every_member_and_default_members_narrow_it(
         self, tmp_path: pathlib.Path
     ) -> None:

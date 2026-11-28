@@ -34,6 +34,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -158,6 +159,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -258,6 +260,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -358,6 +361,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -486,6 +490,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -588,6 +593,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -691,6 +697,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -794,6 +801,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -894,6 +902,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -994,6 +1003,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1094,6 +1104,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1194,6 +1205,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1294,6 +1306,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1394,6 +1407,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1494,6 +1508,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1570,6 +1585,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1670,6 +1686,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1771,6 +1788,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1874,6 +1892,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -1974,6 +1993,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -2050,6 +2070,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -2126,6 +2147,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -2232,6 +2254,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -2363,6 +2386,7 @@
             "Cargo.toml": "app",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "1",
           "default_selects": [
             "app"
           ],
@@ -2464,6 +2488,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -2555,6 +2580,218 @@
       },
       "unreadable": []
     },
+    "designed_explicit_default_feature_asks_for_the_defaults": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "resolver": "3",
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "a/fast",
+            "a/slow"
+          ],
+          "has_default": true,
+          "default_packages": [
+            "a"
+          ],
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": true,
+          "features": [
+            "default",
+            "fast",
+            "slow"
+          ],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_resolver_one_applies_a_bare_feature_to_one_package": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "resolver": "1",
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "a/fast",
+            "a/slow",
+            "b/fast",
+            "b/slow"
+          ],
+          "has_default": true,
+          "default_packages": [
+            "a",
+            "b"
+          ],
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [
+            "fast",
+            "slow"
+          ],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
     "designed_workspace_run_excludes_a_pattern": {
       "schema_version": 1,
       "kind": "policy-input/gate-lint-coverage",
@@ -2568,6 +2805,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -2672,6 +2910,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -2807,6 +3046,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -2907,6 +3147,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3004,6 +3245,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3104,6 +3346,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3228,6 +3471,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3329,6 +3573,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3429,6 +3674,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3529,6 +3775,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3657,6 +3904,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3804,6 +4052,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -3928,6 +4177,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -4052,6 +4302,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -4152,6 +4403,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -4252,6 +4504,7 @@
             "crates/a/Cargo.toml": "a",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "3",
           "default_selects": [
             "a",
             "b"
@@ -4352,6 +4605,7 @@
             "Cargo.toml": "app",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "1",
           "default_selects": [
             "app"
           ],
@@ -4451,6 +4705,7 @@
             "Cargo.toml": "app",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "1",
           "default_selects": [
             "app"
           ],
@@ -4549,6 +4804,7 @@
             "Cargo.toml": "app",
             "crates/b/Cargo.toml": "b"
           },
+          "resolver": "1",
           "default_selects": [
             "app"
           ],
@@ -4649,6 +4905,7 @@
           "by_manifest": {
             "rust_extension/Cargo.toml": "ext"
           },
+          "resolver": "1",
           "default_selects": [
             "ext"
           ],
@@ -4744,6 +5001,7 @@
           "by_manifest": {
             "rust_extension/Cargo.toml": "ext"
           },
+          "resolver": "1",
           "default_selects": [
             "ext"
           ],
@@ -4839,6 +5097,7 @@
           "by_manifest": {
             "rust_extension/Cargo.toml": "ext"
           },
+          "resolver": "1",
           "default_selects": [
             "ext"
           ],
@@ -4936,6 +5195,7 @@
           "by_manifest": {
             "rust_extension/Cargo.toml": "ext"
           },
+          "resolver": "1",
           "default_selects": [
             "ext"
           ],
@@ -5008,6 +5268,7 @@
           "by_manifest": {
             "rust_extension/Cargo.toml": "ext"
           },
+          "resolver": "1",
           "default_selects": [
             "ext"
           ],
@@ -5080,6 +5341,7 @@
           "by_manifest": {
             "rust_extension/Cargo.toml": "ext"
           },
+          "resolver": "1",
           "default_selects": [
             "ext"
           ],
@@ -5173,6 +5435,7 @@
           "by_manifest": {
             "rust_extension/Cargo.toml": "ext"
           },
+          "resolver": "1",
           "default_selects": [
             "ext"
           ],
@@ -5291,6 +5554,7 @@
           "by_manifest": {
             "rust_extension/Cargo.toml": "ext"
           },
+          "resolver": "1",
           "default_selects": [
             "ext"
           ],
@@ -5409,6 +5673,7 @@
           "by_manifest": {
             "crates/a/Cargo.toml": "a"
           },
+          "resolver": "3",
           "default_selects": [
             "a"
           ],

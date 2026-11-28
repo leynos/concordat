@@ -160,6 +160,18 @@ test_an_exclude_pattern_leaves_out_every_package_it_matches if {
 	not contains(msg, "feature a/")
 }
 
+test_naming_the_default_feature_asks_for_the_defaults if {
+	count(findings(data.fixtures.designed_explicit_default_feature_asks_for_the_defaults)) == 0
+}
+
+test_resolver_one_does_not_share_a_bare_feature_across_packages if {
+	fixture := data.fixtures.designed_resolver_one_applies_a_bare_feature_to_one_package
+	ids(fixture) == {"LC-002"}
+	[msg] := messages_of(fixture, "LC-002")
+	contains(msg, "feature a/fast")
+	contains(msg, "feature b/fast")
+}
+
 test_the_default_set_is_judged_for_each_package if {
 	fixture := data.fixtures.designed_default_set_checked_for_one_package_only
 	ids(fixture) == {"LC-002"}

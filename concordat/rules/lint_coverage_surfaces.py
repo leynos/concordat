@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import typing as typ
 
-from .lint_coverage_selection import default_selection
+from .lint_coverage_selection import default_selection, resolver_of
 from .lint_tables_manifests import PackageFacts, read_packages
 from .test_environment_types import table
 
@@ -35,7 +35,9 @@ class Surface(typ.TypedDict):
     package has a library target. `default_packages` names the packages that
     declare `default`, whose default feature sets a gate must check.
     `by_manifest` names the package each manifest declares, since a command run
-    at a member's manifest selects that member.
+    at a member's manifest selects that member. `resolver` is the feature
+    resolver (`1`, `2` or `3`), since under `1` a bare `--features fast` applies
+    to the package the command runs in only.
     `default_selects` lists the packages a command with no `-p` or `--workspace`
     selects at the surface's own manifest, and `is_default_known` is false when
     `default-members` holds a pattern the audit does not expand.
@@ -49,6 +51,7 @@ class Surface(typ.TypedDict):
     default_packages: list[str]
     has_library: bool
     by_manifest: dict[str, str]
+    resolver: str
     default_selects: list[str]
     is_default_known: bool
 
@@ -106,6 +109,7 @@ def _surface(reader: Reader, key: str, packages: list[PackageFacts]) -> Surface:
     selected, is_known = default_selection(reader, key, packages)
     return {
         "by_manifest": {p["manifest"]: p["name"] for p in packages},
+        "resolver": resolver_of(reader, key),
         "default_selects": selected,
         "is_default_known": is_known,
         "manifest": key,

@@ -198,23 +198,36 @@ declared(surface) := {f | some f in surface.features}
 covered(surface, tool) := {d |
 	some d in declared(surface)
 	some r in runs_for(surface, tool)
-	run_covers(r, d)
+	run_covers(surface, r, d)
 }
 
-run_covers(r, d) if {
+run_covers(_, r, d) if {
 	r.all_features == true
 	selects_package(r, d)
 }
 
-run_covers(r, d) if {
+run_covers(_, r, d) if {
 	some f in r.features
-	feature_named(d, f)
+	d == f
 	selects_package(r, d)
 }
 
-feature_named(declared_name, given) if declared_name == given
+# A bare name enables the feature in every selected package that has it, except
+# under resolver 1, where it applies to the one package the command runs in.
+run_covers(surface, r, d) if {
+	some f in r.features
+	not contains(f, "/")
+	endswith(d, concat("", ["/", f]))
+	selects_package(r, d)
+	shares_features(surface, r, d)
+}
 
-feature_named(declared_name, given) if endswith(declared_name, concat("", ["/", given]))
+shares_features(surface, _, _) if surface.resolver != "1"
+
+shares_features(surface, r, d) if {
+	surface.resolver == "1"
+	r.selected == [split(d, "/")[0]]
+}
 
 # The envelope says which packages a run selects, as Cargo does (`-p`,
 # `--workspace` less `--exclude`, a member's manifest, or the default members). A
@@ -234,6 +247,14 @@ default_checked(surface, tool, name) if {
 default_checked(surface, tool, name) if {
 	some r in runs_for(surface, tool)
 	r.all_features == true
+	name in r.selected
+}
+
+# `--no-default-features --features default` asks for the defaults by name.
+default_checked(surface, tool, name) if {
+	some r in runs_for(surface, tool)
+	some f in r.features
+	f in {"default", concat("", [name, "/default"])}
 	name in r.selected
 }
 

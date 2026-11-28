@@ -22,7 +22,7 @@ if typ.TYPE_CHECKING:
     from .lint_tables_manifests import PackageFacts
     from .test_environment_types import Reader
 
-__all__ = ["default_selection"]
+__all__ = ["default_selection", "resolver_of"]
 
 _GLOB_CHARACTERS: typ.Final = frozenset("*?[]")
 
@@ -48,6 +48,31 @@ def default_selection(
     if isinstance(root_name, str):
         return [root_name], True
     return sorted(p["name"] for p in packages), True
+
+
+_EDITION_RESOLVERS: typ.Final = {"2021": "2", "2024": "3"}
+
+
+def resolver_of(reader: Reader, key: str) -> str:
+    """Return the feature resolver of the workspace (or package) at *key*.
+
+    `[workspace] resolver` says so; without it a root package's edition does
+    (2021 is resolver 2, 2024 resolver 3), and anything else is resolver 1, the
+    default of a virtual workspace.
+
+    Returns
+    -------
+    str
+        `1`, `2` or `3`, as written or implied.
+    """
+    root = reader.toml(reader.checkout / key) or {}
+    declared = table(root.get("workspace")).get("resolver")
+    if not isinstance(declared, str):
+        declared = table(root.get("package")).get("resolver")
+    if isinstance(declared, str):
+        return declared
+    edition = table(root.get("package")).get("edition")
+    return _EDITION_RESOLVERS.get(edition, "1") if isinstance(edition, str) else "1"
 
 
 def _listed_members(
