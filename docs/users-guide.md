@@ -1571,6 +1571,35 @@ as a command. GC-001 ships at `error` severity (the `severity` parameter) and
 EN-001 at `warning` (the `indeterminate_severity` parameter). See the
 [rule reference](../platform-standards/canon/lint-rules/gate-workspace-coverage/README.md).
 
+### Auditing Whitaker exclusions
+
+The `whitaker-exclusions` package audits every exclusion in a repository's
+`dylint.toml` files (`excluded_crates`, `excluded_paths` and any other
+`excluded_*` key):
+
+```shell
+concordat artefact rule run whitaker-exclusions --repo /path/to/checkout
+```
+
+- **WX-001**: an exclusion has no reason. Put a comment block directly above the
+  key, or above its table header; a blank line ends the block.
+- **WX-002**: a whole-crate exclusion names a library, binary or test crate the
+  repository governs. Prefer `excluded_paths` for the module that needs it, or
+  name the crate in the rule's `crate_exclusions` parameter with a reason and a
+  review trigger. A crate whose package sits under a fixture or vendored tree
+  needs no entry.
+- **WX-003**: an exclusion names no crate the repository has, so it does
+  nothing. Remove it or correct the name (Whitaker matches rustc crate names:
+  hyphens are underscores; a test target is named after its file, or after its
+  directory for `tests/group/main.rs`, or by its `[[test]] name`).
+- **EN-001** (indeterminate): a file or key the audit could not read or locate.
+
+The audit does not read `dylint.toml` files under `fixtures`, `vendor`,
+`third_party`, `patches`, `templates`, `examples` or `target`, so a clean
+report does not cover exclusions kept there. The rule ships at `warning`
+severity. See the
+[rule reference](../platform-standards/canon/lint-rules/whitaker-exclusions/README.md).
+
 ### Auditing Rust lint tables
 
 The `rust-lint-tables` package audits that every Cargo package a repository

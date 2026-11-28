@@ -120,6 +120,13 @@ from .uv_gate_envelope import (
 from .uv_gate_envelope import (
     build_uv_gate_envelope,
 )
+from .whitaker_exclusions_envelope import (
+    ENVELOPE_KIND as WHITAKER_EXCLUSIONS_ENVELOPE_KIND,
+)
+from .whitaker_exclusions_envelope import (
+    WhitakerExclusionsEnvelope,
+    build_whitaker_exclusions_envelope,
+)
 from .whitaker_provisioning_envelope import (
     ENVELOPE_KIND as PROVISIONING_ENVELOPE_KIND,
 )
@@ -157,6 +164,7 @@ type RuleEnvelope = (
     | PrRunCancellationEnvelope
     | GateScopeEnvelope
     | LintTablesEnvelope
+    | WhitakerExclusionsEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -601,6 +609,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-test-environment": build_test_environment_envelope,
     "gate-workspace-coverage": _gate_scope_envelope,
     "rust-lint-tables": _lint_tables_envelope,
+    "whitaker-exclusions": build_whitaker_exclusions_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -627,6 +636,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     TEST_ENVIRONMENT_ENVELOPE_KIND: build_test_environment_envelope,
     GATE_SCOPE_ENVELOPE_KIND: _gate_scope_envelope,
     LINT_TABLES_ENVELOPE_KIND: _lint_tables_envelope,
+    WHITAKER_EXCLUSIONS_ENVELOPE_KIND: build_whitaker_exclusions_envelope,
 })
 
 

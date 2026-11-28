@@ -788,6 +788,13 @@ the Section 2.1.2 format.
   command in a root-package workspace, a `-p` list that misses a member,
   `default-members` narrowing, Whitaker's own `--all` and a CI matrix whose
   every entry narrows as noncompliant.
+- [x] Ship the Whitaker exclusions rule (WX-001 to WX-003; DF12-121): the
+  `whitaker-exclusions` package holds every `excluded_*` key in a `dylint.toml`
+  to carrying a reason, keeps a whole-crate exclusion of a governed crate to a
+  named decision with a reason and a review trigger, and reports an exclusion
+  that names nothing as stale. It ships at `warning` severity. Acceptance: the
+  audit reads a path exclusion with a comment as compliant, and an uncommented
+  one, femtologging's three whole-crate exclusions and a stale crate name as
 - [x] Ship the Rust lint tables rule (LT-001 to LT-004; DF12-121): the
   `rust-lint-tables` package holds every Cargo package a repository owns,
   whether a workspace designed as one, one grown from a single crate, or a

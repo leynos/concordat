@@ -336,6 +336,21 @@ artifacts:
     description: >-
       Rule package manifest for the gate-workspace-coverage audit.
     sha256: 148c6aeb4f981b535a68df710707de1e6eb504cd1b4fbd301bae30e9ed73edfd
+  - id: lint-rule-whitaker-exclusions
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/whitaker-exclusions/policy/whitaker_exclusions.rego
+    description: >-
+      Audit-only WX-001 to WX-003 policy holding every Whitaker exclusion in a
+      `dylint.toml` to carrying a reason, whole-crate exclusions of governed
+      crates to a named decision with a reason and a review trigger, and stale
+      exclusions reported, with unreadable inputs indeterminate.
+    sha256: 3751bbcd314c008d9c61d67ffde7b9855dfef4465d58eee46ff15ad57aeea9a8
+  - id: lint-rule-whitaker-exclusions-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/whitaker-exclusions/rule.yaml
+    description: >-
+      Rule package manifest for the whitaker-exclusions audit.
+    sha256: e267f1b2c5c1e9824ac718540c0369cceab080d66f364e33c08b5427a87cf1b1
   - id: lint-rule-rust-lint-tables
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-lint-tables/policy/rust_lint_tables.rego
