@@ -753,6 +753,16 @@ ORDERING_CASES = [
         id="no-run-after-the-separator",
     ),
     pytest.param(
+        "test: warmup\n\ttrue\n\nwarmup:\n\tcargo test > --no-run\n",
+        UNREADABLE,
+        id="no-run-is-a-redirection-target",
+    ),
+    pytest.param(
+        "test: warmup\n\ttrue\n\nwarmup:\n\tcargo test # --no-run\n",
+        UNREADABLE,
+        id="no-run-is-in-a-comment",
+    ),
+    pytest.param(
         "test:: warmup\ntest::\n\tcargo nextest run\n\n" + WARM,
         UNREADABLE,
         id="a-double-colon-rule",

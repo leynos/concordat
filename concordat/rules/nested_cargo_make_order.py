@@ -35,6 +35,9 @@ _TEST_COMMAND: typ.Final = re.compile(
 )
 # A variable (other than `$(MAKE)`) anywhere on the line may expand to a test
 # command: `env $(RUNNER)`, `$(CARGO) test`.
+# Characters that make a command ambiguous to a plain word reading: quoting,
+# expansion, redirection, comments, escapes, grouping.
+_AMBIGUOUS_MARKS: typ.Final = "'\"$`<>#\\(){}"
 _VARIABLE: typ.Final = re.compile(r"\$[({](?!MAKE[)}])|\$[A-Za-z_]")
 _MAKE_CALL: typ.Final = re.compile(
     r"(?:\$\(MAKE\)|\$\{MAKE\}|\bmake)(?P<args>[^;&|()]*)"
@@ -66,14 +69,15 @@ def _is_compile_only(fragment: str) -> bool:
     Only two plain forms qualify: `cargo nextest archive`, and a `cargo`
     command with `--no-run` before any `--`. A command with a quote, a variable
     or a backtick is ambiguous (`--skip 'cargo nextest archive'` is a test
-    argument), so it does not qualify and is read as starting the tests.
+    argument), and so is a redirection or a comment (`> --no-run` names a file),
+    so none qualifies and each is read as starting the tests.
 
     Returns
     -------
     bool
         True for one of the two plain forms.
     """
-    if any(mark in fragment for mark in "'\"$`"):
+    if any(mark in fragment for mark in _AMBIGUOUS_MARKS):
         return False
     words = fragment.split()
     if words:
