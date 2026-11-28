@@ -107,6 +107,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     # -- clean checkouts ---------------------------------------------------
     "compliant": Scenario(),
     "delegated": Scenario(makefile="delegated"),
+    "delegated_flags": Scenario(makefile="delegated-flags"),
+    "split_lint": Scenario(makefile="split-lint"),
     "xargs_options": Scenario(makefile="xargs-options"),
     "literal_tools": Scenario(makefile="literal-tools"),
     "local_ignore": Scenario(local="with-ignore"),
@@ -154,6 +156,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "hidden_tool": Scenario(makefile="hidden-tool"),
     "with_include": Scenario(makefile="with-include"),
     "conditional": Scenario(makefile="conditional"),
+    "delegated_redirecting_flag": Scenario(makefile="delegated-redirecting-flag"),
+    "split_lint_two_recipes": Scenario(makefile="split-lint-two-recipes"),
     "yaml_only_no_makefile": dataclasses.replace(YAML_ONLY, makefile=None),
     # -- YL-003: the yamllint configuration --------------------------------
     "base_missing": Scenario(base=None),

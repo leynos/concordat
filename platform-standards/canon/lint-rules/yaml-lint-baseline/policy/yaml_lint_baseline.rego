@@ -192,9 +192,14 @@ unresolved_references(text) := {name |
 
 env_assignment_prefix := `[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+`
 
+# Make options that only change how the sub-make reports, never which
+# Makefile or targets it reads. Anything else (`-C`, `-f`, `-j`, `-k`, `-o`,
+# `-W`, variable overrides) can redirect the closure, so it stays unproven.
+make_report_flags := `(?:(?:--no-print-directory|--silent|--quiet|-s)[[:space:]]+)*`
+
 static_make_recipe_pattern := sprintf(
-	`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+[A-Za-z0-9_.-]+([[:space:]]*&&[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+[A-Za-z0-9_.-]+)*[[:space:]]*$`,
-	[env_assignment_prefix, env_assignment_prefix],
+	`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s[A-Za-z0-9_.-]+([[:space:]]*&&[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s[A-Za-z0-9_.-]+)*[[:space:]]*$`,
+	[env_assignment_prefix, make_report_flags, env_assignment_prefix, make_report_flags],
 )
 
 static_make_recipe_is_binding(recipe) if {
@@ -204,8 +209,8 @@ static_make_recipe_is_binding(recipe) if {
 static_make_segment_target(segment) := target if {
 	matches := regex.find_all_string_submatch_n(
 		sprintf(
-			`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+([A-Za-z0-9_.-]+)[[:space:]]*$`,
-			[env_assignment_prefix],
+			`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s([A-Za-z0-9_.-]+)[[:space:]]*$`,
+			[env_assignment_prefix, make_report_flags],
 		),
 		segment,
 		1,
@@ -277,7 +282,16 @@ unproven_make_delegation(root) if {
 	not static_make_recipe_is_binding(recipe)
 }
 
-root_definitions_ambiguous(root) if count(rules_defining(root)) > 1
+# Make merges the prerequisites of every plain rule for a target, so a target
+# split across rules is provable while at most one of them carries recipes.
+# Two rules with recipes make Make keep the later one and warn.
+root_definitions_ambiguous(root) if {
+	recipe_rules := [rule |
+		some rule in rules_defining(root)
+		count(rule.recipes) > 0
+	]
+	count(recipe_rules) > 1
+}
 
 root_definitions_ambiguous(root) if {
 	some rule in rules_defining(root)
@@ -549,7 +563,7 @@ closure_indeterminate_reason(root) := "Makefile includes other files; the recipe
 	includes_present
 } else := "Makefile parse was recovered from syntax errors; facts may be incomplete" if {
 	parse_recovered
-} else := sprintf("the %q target has multiple or double-colon definitions", [root]) if {
+} else := sprintf("the %q target has several rules with recipes or a double-colon definition", [root]) if {
 	root_definitions_ambiguous(root)
 } else := sprintf("the %q target reaches a conditional Make rule; its recipes cannot be proven", [root]) if {
 	conditional_path(root)

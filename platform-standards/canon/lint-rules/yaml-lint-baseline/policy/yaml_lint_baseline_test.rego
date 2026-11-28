@@ -422,6 +422,36 @@ test_delegated if {
   count(findings) == 0
 }
 
+# Report-only Make options (`--no-print-directory`, `-s`) leave the edge proven.
+test_delegated_flags if {
+  findings := policy.deny with input as data.fixtures.delegated_flags
+  count(findings) == 0
+}
+
+# An option that can change what the sub-make reads (`-k` here) is not proven.
+test_delegated_redirecting_flag if {
+  findings := policy.deny with input as data.fixtures.delegated_redirecting_flag
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# Make merges the prerequisites of a target split across plain rules.
+test_split_lint if {
+  findings := policy.deny with input as data.fixtures.split_lint
+  count(findings) == 0
+}
+
+# Two rules with recipes for one target: Make keeps the later, so it is unproven.
+test_split_lint_two_recipes if {
+  findings := policy.deny with input as data.fixtures.split_lint_two_recipes
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target has several rules with recipes or a double-colon definition"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target has several rules with recipes or a double-colon definition"],
+  }
+}
+
 # A `git ls-files` whose output is discarded lints one file by name.
 test_discarded_ls_files if {
   findings := policy.deny with input as data.fixtures.discarded_ls_files
