@@ -30,6 +30,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -63,8 +72,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -82,8 +96,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -101,8 +120,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -127,6 +151,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -160,8 +193,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -179,8 +217,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -205,6 +248,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -238,8 +290,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": true,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -257,8 +314,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -283,6 +345,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -318,8 +389,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -339,8 +415,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -358,8 +439,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -384,6 +470,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -419,8 +514,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -438,8 +538,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -464,6 +569,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -500,8 +614,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -519,8 +638,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -545,6 +669,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -581,8 +714,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -600,8 +738,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -626,6 +769,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -659,8 +811,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -678,8 +835,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -704,6 +866,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -737,8 +908,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -756,8 +932,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -782,6 +963,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -815,8 +1005,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": false,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -834,8 +1029,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -860,6 +1060,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -893,8 +1102,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -912,8 +1126,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -938,6 +1157,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -971,8 +1199,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -990,8 +1223,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1016,6 +1254,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1049,8 +1296,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1068,8 +1320,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1094,6 +1351,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1127,8 +1393,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1146,8 +1417,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1172,6 +1448,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1205,8 +1490,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1231,6 +1521,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1264,8 +1563,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1283,8 +1587,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1309,6 +1618,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1342,8 +1660,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1363,8 +1686,12 @@
           ],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1389,6 +1716,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1422,8 +1758,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1444,8 +1785,13 @@
           ],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1470,6 +1816,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1503,8 +1858,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1522,8 +1882,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1548,6 +1913,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1581,8 +1955,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1607,6 +1986,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1640,8 +2028,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1666,6 +2059,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1704,8 +2106,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1723,8 +2130,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1749,6 +2161,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1786,8 +2207,12 @@
           ],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1809,8 +2234,12 @@
           ],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1828,8 +2257,307 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "grown_bare_command_selects_only_the_root_package": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "by_manifest": {
+            "Cargo.toml": "app",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "app"
+          ],
+          "is_default_known": true,
+          "manifest": "Cargo.toml",
+          "packages": [
+            "app",
+            "b"
+          ],
+          "manifests": [
+            "Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "app/fast",
+            "app/slow",
+            "b/fast",
+            "b/slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "app"
+          ],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "app",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_workspace_run_excludes_a_member": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "a/fast",
+            "a/slow",
+            "b/fast",
+            "b/slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": false,
+          "narrows": true,
+          "excludes": [
+            "b"
+          ],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a"
+          ],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        }
+      ],
+      "makefile_resolved": true,
+      "make_environment": {
+        "rustflags": null,
+        "rustdocflags": null,
+        "is_resolved": true
+      },
+      "cargo_config": {
+        "denies_warnings": false,
+        "is_readable": true
+      },
+      "unreadable": []
+    },
+    "designed_default_members_glob_is_not_expanded": {
+      "schema_version": 1,
+      "kind": "policy-input/gate-lint-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "surfaces": [
+        {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": false,
+          "manifest": "Cargo.toml",
+          "packages": [
+            "a",
+            "b"
+          ],
+          "manifests": [
+            "crates/a/Cargo.toml",
+            "crates/b/Cargo.toml"
+          ],
+          "features": [
+            "a/fast",
+            "a/slow"
+          ],
+          "has_default": true,
+          "has_library": true
+        }
+      ],
+      "runs": [
+        {
+          "tool": "clippy",
+          "source": "Makefile:4 (lint)",
+          "is_placed": true,
+          "is_resolved": false,
+          "why": "the workspace's default-members hold a pattern it cannot expand",
+          "manifest": null,
+          "all_targets": true,
+          "all_features": true,
+          "no_default_features": false,
+          "features": [],
+          "workspace": false,
+          "packages": [],
+          "no_deps": false,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
+          "surface": "Cargo.toml"
+        },
+        {
+          "tool": "doc",
+          "source": "Makefile:5 (lint)",
+          "is_placed": true,
+          "is_resolved": true,
+          "why": "",
+          "manifest": null,
+          "all_targets": false,
+          "all_features": false,
+          "no_default_features": false,
+          "features": [],
+          "workspace": true,
+          "packages": [],
+          "no_deps": true,
+          "narrows": false,
+          "excludes": [],
+          "deny_warnings": true,
+          "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1854,6 +2582,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1887,8 +2624,10 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [],
           "surface": null
         },
         {
@@ -1906,8 +2645,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -1932,6 +2676,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -1965,8 +2718,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -1984,8 +2742,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2010,6 +2773,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2043,8 +2815,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2062,8 +2839,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2081,8 +2863,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2107,6 +2894,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2140,8 +2936,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2159,8 +2960,14 @@
           "packages": [],
           "no_deps": true,
           "narrows": true,
+          "excludes": [
+            "b"
+          ],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2185,6 +2992,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2218,8 +3034,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2237,8 +3058,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": true,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2263,6 +3089,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2296,8 +3131,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": false,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2315,8 +3155,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2341,6 +3186,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2376,8 +3230,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2397,8 +3256,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2416,8 +3280,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2442,6 +3311,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2475,8 +3353,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2494,8 +3377,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2513,8 +3401,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2562,6 +3455,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2595,8 +3497,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2614,8 +3521,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2633,8 +3545,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2659,6 +3576,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2692,8 +3618,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2711,8 +3642,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2730,8 +3666,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2756,6 +3697,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2789,8 +3739,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2808,8 +3763,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2834,6 +3794,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2867,8 +3836,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2886,8 +3860,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2912,6 +3891,15 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "a",
+            "b"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a",
@@ -2945,8 +3933,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -2964,8 +3957,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -2990,6 +3988,14 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "Cargo.toml": "app",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "app"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "app",
@@ -3023,8 +4029,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "app",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -3042,8 +4053,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "app",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -3068,6 +4084,14 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "Cargo.toml": "app",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "app"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "app",
@@ -3101,8 +4125,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "app",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -3120,8 +4149,12 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "app"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -3146,6 +4179,14 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "Cargo.toml": "app",
+            "crates/b/Cargo.toml": "b"
+          },
+          "default_selects": [
+            "app"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "app",
@@ -3181,8 +4222,13 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "app",
+            "b"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -3200,8 +4246,13 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "app",
+            "b"
+          ],
           "surface": "Cargo.toml"
         }
       ],
@@ -3226,6 +4277,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "rust_extension/Cargo.toml": "ext"
+          },
+          "default_selects": [
+            "ext"
+          ],
+          "is_default_known": true,
           "manifest": "rust_extension/Cargo.toml",
           "packages": [
             "ext"
@@ -3258,8 +4316,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         },
         {
@@ -3277,8 +4339,12 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         }
       ],
@@ -3303,6 +4369,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "rust_extension/Cargo.toml": "ext"
+          },
+          "default_selects": [
+            "ext"
+          ],
+          "is_default_known": true,
           "manifest": "rust_extension/Cargo.toml",
           "packages": [
             "ext"
@@ -3335,8 +4408,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         },
         {
@@ -3354,8 +4431,12 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         }
       ],
@@ -3380,6 +4461,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "rust_extension/Cargo.toml": "ext"
+          },
+          "default_selects": [
+            "ext"
+          ],
+          "is_default_known": true,
           "manifest": "rust_extension/Cargo.toml",
           "packages": [
             "ext"
@@ -3414,8 +4502,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         },
         {
@@ -3433,8 +4525,12 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         }
       ],
@@ -3459,6 +4555,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "rust_extension/Cargo.toml": "ext"
+          },
+          "default_selects": [
+            "ext"
+          ],
+          "is_default_known": true,
           "manifest": "rust_extension/Cargo.toml",
           "packages": [
             "ext"
@@ -3491,8 +4594,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         }
       ],
@@ -3517,6 +4624,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "rust_extension/Cargo.toml": "ext"
+          },
+          "default_selects": [
+            "ext"
+          ],
+          "is_default_known": true,
           "manifest": "rust_extension/Cargo.toml",
           "packages": [
             "ext"
@@ -3549,10 +4663,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": null,
           "lanes": [
             "INPUT_LANES=none python test-util default all"
           ],
+          "selected": [],
           "surface": null
         }
       ],
@@ -3577,6 +4693,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "rust_extension/Cargo.toml": "ext"
+          },
+          "default_selects": [
+            "ext"
+          ],
+          "is_default_known": true,
           "manifest": "rust_extension/Cargo.toml",
           "packages": [
             "ext"
@@ -3609,8 +4732,10 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [],
           "surface": null
         },
         {
@@ -3628,8 +4753,12 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         }
       ],
@@ -3654,6 +4783,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "rust_extension/Cargo.toml": "ext"
+          },
+          "default_selects": [
+            "ext"
+          ],
+          "is_default_known": true,
           "manifest": "rust_extension/Cargo.toml",
           "packages": [
             "ext"
@@ -3686,8 +4822,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         },
         {
@@ -3705,8 +4845,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         },
         {
@@ -3724,8 +4868,12 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         }
       ],
@@ -3750,6 +4898,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "rust_extension/Cargo.toml": "ext"
+          },
+          "default_selects": [
+            "ext"
+          ],
+          "is_default_known": true,
           "manifest": "rust_extension/Cargo.toml",
           "packages": [
             "ext"
@@ -3782,8 +4937,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         },
         {
@@ -3801,8 +4960,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         },
         {
@@ -3820,8 +4983,12 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "ext"
+          ],
           "surface": "rust_extension/Cargo.toml"
         }
       ],
@@ -3846,6 +5013,13 @@
       },
       "surfaces": [
         {
+          "by_manifest": {
+            "crates/a/Cargo.toml": "a"
+          },
+          "default_selects": [
+            "a"
+          ],
+          "is_default_known": true,
           "manifest": "Cargo.toml",
           "packages": [
             "a"
@@ -3877,8 +5051,12 @@
           "packages": [],
           "no_deps": false,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a"
+          ],
           "surface": "Cargo.toml"
         },
         {
@@ -3896,8 +5074,12 @@
           "packages": [],
           "no_deps": true,
           "narrows": false,
+          "excludes": [],
           "deny_warnings": true,
           "lanes": [],
+          "selected": [
+            "a"
+          ],
           "surface": "Cargo.toml"
         }
       ],

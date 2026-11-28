@@ -14,6 +14,7 @@ The same member rules decide membership as in `gate-workspace-coverage` and
 
 from __future__ import annotations
 
+import posixpath
 import typing as typ
 
 from .lint_tables_manifests import PackageFacts, read_packages
@@ -31,7 +32,11 @@ class Surface(typ.TypedDict):
     `manifest` is the workspace root's manifest, or the package's own when it is
     in no workspace. `features` holds every declared feature name except
     `default`; `has_default` says `default` is declared; `has_library` says some
-    package has a library target.
+    package has a library target. `by_manifest` names the package each manifest
+    declares, since a command run at a member's manifest selects that member.
+    `default_selects` lists the packages a command with no `-p` or `--workspace`
+    selects at the surface's own manifest, and `is_default_known` is false when
+    `default-members` holds a pattern the audit does not expand.
     """
 
     manifest: str
@@ -40,6 +45,9 @@ class Surface(typ.TypedDict):
     features: list[str]
     has_default: bool
     has_library: bool
+    by_manifest: dict[str, str]
+    default_selects: list[str]
+    is_default_known: bool
 
 
 def _surface_key(package: PackageFacts) -> str:
@@ -83,6 +91,42 @@ def _surface_features(reader: Reader, packages: list[PackageFacts]) -> set[str]:
     return found
 
 
+_GLOB_CHARACTERS: typ.Final = frozenset("*?[]")
+
+
+def _default_selection(
+    reader: Reader, key: str, packages: list[PackageFacts]
+) -> tuple[list[str], bool]:
+    """Return the packages a bare command at the surface's manifest selects.
+
+    Cargo selects the `default-members` of a workspace; with none, a virtual
+    workspace selects every member and a workspace with a root package selects
+    only that package.
+
+    Returns
+    -------
+    tuple[list[str], bool]
+        The selected package names, and whether the selection is known (it is
+        not when `default-members` holds a glob).
+    """
+    root = reader.toml(reader.checkout / key) or {}
+    workspace = table(root.get("workspace"))
+    names = sorted(p["name"] for p in packages)
+    default_members = workspace.get("default-members")
+    if isinstance(default_members, list):
+        entries = [m for m in default_members if isinstance(m, str)]
+        if any(_GLOB_CHARACTERS & set(entry) for entry in entries):
+            return names, False
+        base = posixpath.dirname(key)
+        joined = (posixpath.normpath(posixpath.join(base, entry)) for entry in entries)
+        wanted = {"" if path == "." else path for path in joined}
+        return sorted(p["name"] for p in packages if p["directory"] in wanted), True
+    root_name = table(root.get("package")).get("name")
+    if isinstance(root_name, str):
+        return [root_name], True
+    return names, True
+
+
 def read_surfaces(reader: Reader) -> list[Surface]:
     """Return the checkout's Cargo surfaces, sorted by manifest path.
 
@@ -103,7 +147,11 @@ def read_surfaces(reader: Reader) -> list[Surface]:
     surfaces: list[Surface] = []
     for key, packages in sorted(grouped.items()):
         features = _surface_features(reader, packages)
+        selected, is_known = _default_selection(reader, key, packages)
         surfaces.append({
+            "by_manifest": {p["manifest"]: p["name"] for p in packages},
+            "default_selects": selected,
+            "is_default_known": is_known,
             "manifest": key,
             "packages": sorted(p["name"] for p in packages),
             "manifests": sorted(p["manifest"] for p in packages),

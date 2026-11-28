@@ -216,15 +216,12 @@ feature_named(declared_name, given) if declared_name == given
 
 feature_named(declared_name, given) if endswith(declared_name, concat("", ["/", given]))
 
-# Cargo's package selection: no `-p` or `--workspace` selects every package. A
+# The envelope says which packages a run selects, as Cargo does (`-p`,
+# `--workspace` less `--exclude`, a member's manifest, or the default members). A
 # feature of a one-package surface is unqualified and always selected.
-selects_package(r, _) if count(r.packages) == 0
+selects_package(_, d) if not contains(d, "/")
 
-selects_package(r, _) if r.workspace == true
-
-selects_package(r, d) if not contains(d, "/")
-
-selects_package(r, d) if split(d, "/")[0] in r.packages
+selects_package(r, d) if split(d, "/")[0] in r.selected
 
 # The default feature set is checked by a command that does not switch it off.
 default_checked(surface, tool) if {

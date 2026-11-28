@@ -215,6 +215,23 @@ SCENARIOS: dict[str, dict[str, str]] = {
         DOC,
         extra={"crates/b/Cargo.toml": package("b", FEATURES)},
     ),
+    "grown_bare_command_selects_only_the_root_package": {
+        **grown(f"{DENY} cargo clippy --all-targets --all-features", DOC),
+        "crates/b/Cargo.toml": package("b", FEATURES),
+    },
+    "designed_workspace_run_excludes_a_member": designed(
+        f"{DENY} cargo clippy --workspace --exclude b --all-targets --all-features",
+        DOC,
+        extra={"crates/b/Cargo.toml": package("b", FEATURES)},
+    ),
+    "designed_default_members_glob_is_not_expanded": designed(
+        f"{DENY} cargo clippy --all-targets --all-features",
+        DOC,
+        extra={
+            "Cargo.toml": '[workspace]\nmembers = ["crates/*"]\n'
+            'default-members = ["crates/*"]\nresolver = "3"\n'
+        },
+    ),
     "designed_conditional_cd_unplaces_what_follows": designed(
         'if [ -n "$$X" ]; then cd crates/a; fi; '
         f"{DENY} cargo clippy --all-targets --all-features",

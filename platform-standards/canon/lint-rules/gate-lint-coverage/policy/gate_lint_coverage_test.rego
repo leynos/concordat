@@ -136,6 +136,26 @@ test_a_package_selection_limits_the_features_a_run_covers if {
 	not contains(msg, "b/fast")
 }
 
+test_a_bare_command_in_a_grown_workspace_selects_only_the_root_package if {
+	fixture := data.fixtures.grown_bare_command_selects_only_the_root_package
+	ids(fixture) == {"LC-002"}
+	[msg] := messages_of(fixture, "LC-002")
+	contains(msg, "feature b/fast")
+	not contains(msg, "feature app/")
+}
+
+test_an_excluded_member_is_not_covered_by_a_workspace_run if {
+	fixture := data.fixtures.designed_workspace_run_excludes_a_member
+	ids(fixture) == {"LC-002"}
+	[msg] := messages_of(fixture, "LC-002")
+	contains(msg, "feature b/fast")
+	not contains(msg, "feature a/")
+}
+
+test_default_members_with_a_glob_leave_a_bare_run_indeterminate if {
+	ids(data.fixtures.designed_default_members_glob_is_not_expanded) == {"EN-001"}
+}
+
 test_a_conditional_cd_leaves_the_commands_after_it_unplaced if {
 	ids(data.fixtures.designed_conditional_cd_unplaces_what_follows) == {"EN-001"}
 }

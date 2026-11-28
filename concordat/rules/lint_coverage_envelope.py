@@ -52,8 +52,12 @@ ENVELOPE_KIND: typ.Final = "policy-input/gate-lint-coverage"
 
 
 class PlacedRun(Run):
-    """A lint run, with the surface it targets (None when unplaced)."""
+    """A lint run, with the surface it targets (None when unplaced).
 
+    `selected` names the packages of that surface the command selects.
+    """
+
+    selected: list[str]
     surface: str | None
 
 
@@ -93,11 +97,56 @@ def _placed(run: Run, surfaces: list[Surface]) -> PlacedRun:
     """
     manifest = run["manifest"] if run["manifest"] is not None else "Cargo.toml"
     surface = surface_of(manifest, surfaces) if run["is_placed"] else None
-    return {
+    held = next((s for s in surfaces if s["manifest"] == surface), None)
+    placed: PlacedRun = {
         **run,
         "features": _local_features(run, surface, surfaces),
+        "selected": [] if held is None else _selected(run, manifest, held),
         "surface": surface,
     }
+    if held is not None and _is_unknown_default(run, manifest, held):
+        placed["is_resolved"] = False
+        placed["why"] = (
+            "the workspace's default-members hold a pattern it cannot expand"
+        )
+    return placed
+
+
+def _is_bare(run: Run) -> bool:
+    """Return whether a command names no package selection of its own."""
+    return not run["packages"] and not run["workspace"]
+
+
+def _is_unknown_default(run: Run, manifest: str, surface: Surface) -> bool:
+    """Return whether a bare run at the surface's manifest has an unknown selection."""
+    return (
+        _is_bare(run)
+        and manifest == surface["manifest"]
+        and not surface["is_default_known"]
+    )
+
+
+def _selected(run: Run, manifest: str, surface: Surface) -> list[str]:
+    """Return the packages of the surface a run selects, as Cargo does.
+
+    `--workspace` takes every package but the `--exclude`d ones; `-p` names
+    them; a command at a member's manifest selects that member; otherwise the
+    surface's default members apply (the root package of a workspace that has
+    one, every member of a virtual workspace).
+
+    Returns
+    -------
+    list[str]
+        The names of the selected packages.
+    """
+    if run["workspace"]:
+        return [p for p in surface["packages"] if p not in run["excludes"]]
+    if run["packages"]:
+        return sorted(run["packages"])
+    member = surface["by_manifest"].get(manifest)
+    if member is not None and manifest != surface["manifest"]:
+        return [member]
+    return surface["default_selects"]
 
 
 def _local_features(

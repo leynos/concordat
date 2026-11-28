@@ -73,6 +73,7 @@ class Run(typ.TypedDict):
     packages: list[str]
     no_deps: bool
     narrows: bool
+    excludes: list[str]
     deny_warnings: bool | None
     lanes: list[str]
 
@@ -293,6 +294,7 @@ def _describe(command: _Command, source: str, directory: str | None) -> Run:
         "packages": _values(arguments, frozenset({"-p", "--package"})),
         "no_deps": "--no-deps" in arguments,
         "narrows": _narrows(arguments),
+        "excludes": _values(arguments, frozenset({"--exclude"})),
         "deny_warnings": _warning_state(
             command.environment, variable, command.lint_flags
         ),
@@ -479,6 +481,7 @@ def _script_fact(tool: str, source: str, path: str, lanes: list[str]) -> Run:
         "packages": [],
         "no_deps": False,
         "narrows": False,
+        "excludes": [],
         "deny_warnings": None,
         "lanes": lanes,
     }

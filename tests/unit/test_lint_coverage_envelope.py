@@ -125,6 +125,70 @@ class TestSurfaces:
         assert all(run["is_resolved"] is False for run in runs)
         assert all("conditional" in run["why"] for run in runs)
 
+    @pytest.mark.parametrize(
+        ("command", "expected"),
+        [
+            ("cargo clippy", ["app"]),
+            ("cargo clippy --workspace", ["app", "b"]),
+            ("cargo clippy --workspace --exclude b", ["app"]),
+            ("cargo clippy -p b", ["b"]),
+            ("cargo clippy --manifest-path b/Cargo.toml", ["b"]),
+        ],
+    )
+    def test_a_run_selects_the_packages_cargo_would_in_a_grown_workspace(
+        self, tmp_path: pathlib.Path, command: str, expected: list[str]
+    ) -> None:
+        """A bare command at a root package selects that package, not the members."""
+        _write(
+            tmp_path,
+            {
+                "Cargo.toml": f'{APP}\n[workspace]\nmembers = ["b"]\n',
+                "b/Cargo.toml": MANIFEST.format(name="b", extra=""),
+                "Makefile": _gate(command),
+            },
+        )
+        [run] = build_lint_coverage_envelope(tmp_path)["runs"]
+        assert run["selected"] == expected
+
+    def test_a_virtual_workspace_selects_every_member_and_default_members_narrow_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`default-members` names a bare command's packages; a glob is unresolved."""
+        files = {
+            "a/Cargo.toml": MANIFEST.format(name="a", extra=""),
+            "b/Cargo.toml": MANIFEST.format(name="b", extra=""),
+            "Makefile": _gate("cargo clippy"),
+        }
+        _write(
+            tmp_path / "plain",
+            {**files, "Cargo.toml": '[workspace]\nmembers = ["a", "b"]\n'},
+        )
+        _write(
+            tmp_path / "narrow",
+            {
+                **files,
+                "Cargo.toml": (
+                    '[workspace]\nmembers = ["a", "b"]\ndefault-members = ["a"]\n'
+                ),
+            },
+        )
+        _write(
+            tmp_path / "glob",
+            {
+                **files,
+                "Cargo.toml": (
+                    '[workspace]\nmembers = ["a", "b"]\ndefault-members = ["*"]\n'
+                ),
+            },
+        )
+        selected = {
+            name: build_lint_coverage_envelope(tmp_path / name)["runs"][0]
+            for name in ("plain", "narrow", "glob")
+        }
+        assert selected["plain"]["selected"] == ["a", "b"]
+        assert selected["narrow"]["selected"] == ["a"]
+        assert selected["glob"]["is_resolved"] is False
+
     def test_a_package_outside_every_workspace_is_its_own_surface(
         self, tmp_path: pathlib.Path
     ) -> None:
