@@ -121,8 +121,11 @@ reports what it could not see rather than a verdict.
   mixed expression, one naming a label this rule does not recognize, or a
   `matrix.<key>` reference that no `include` leg defines, stays `indeterminate`
   rather than being guessed. A `matrix.<key>` reference is read from the
-  `include` legs (only the ratcheting legs when the ratchet is switched by the
-  matrix); legs that disagree without such a switch stay `indeterminate`.
+  `include` legs of a matrix made of `include` entries alone (an axis or an
+  `exclude` is not expanded, so it stays `indeterminate`). Only the ratcheting
+  legs count: every leg when a coverage step ratchets unconditionally,
+  otherwise each leg that sets some ratchet switch true. A relevant leg whose
+  value cannot be resolved, or legs that disagree, stay `indeterminate`.
 
 ### Named exemptions
 

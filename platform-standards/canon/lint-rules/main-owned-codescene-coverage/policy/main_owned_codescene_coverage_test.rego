@@ -742,3 +742,34 @@ test_a_matrix_reference_no_leg_defines_stays_indeterminate if {
     ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
   }
 }
+
+# A leg whose runner cannot be resolved is not discarded: the job's platform
+# stays undecided although the other leg names Linux.
+test_an_unresolvable_ratcheting_leg_keeps_the_platform_indeterminate if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_leg_value_is_unresolvable
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
+# Only an `include`-only matrix is read; an axis would need GitHub's full
+# expansion, so it is not guessed.
+test_a_matrix_axis_is_left_unresolved if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_axis_is_not_expanded
+  profile(findings) == {
+    ["indeterminate", ".github/workflows/ci.yml", "coverage job coverage has no recognized runner platform"],
+  }
+}
+
+# Two steps with complementary switches ratchet on every leg between them.
+test_complementary_switches_cover_every_leg if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_complementary_switches_cover_every_leg
+  count(findings) == 0
+}
+
+# A main publisher whose ratchet is switched by the matrix still writes the
+# baseline pull requests compare against.
+test_a_matrix_switched_main_publisher_is_recognized if {
+  findings := policy.deny with input as data.fixtures.main_publisher_ratchet_switched_by_the_matrix
+  count(findings) == 0
+}

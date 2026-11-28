@@ -459,6 +459,17 @@ has_ratcheting_coverage(workflow) if {
   ratcheting_coverage_step(step)
 }
 
+has_ratcheting_coverage(workflow) if {
+  jobs := workflow_jobs(workflow)
+  some name in object.keys(jobs)
+  job_has_ratcheting_coverage(jobs[name])
+}
+
+# A step whose ratchet is on, or switched by the matrix, carries a baseline.
+ratchet_candidate_step(step) if ratcheting_coverage_step(step)
+
+ratchet_candidate_step(step) if matrix_ratchet_key(step)
+
 ratcheting_coverage_step(step) if {
   inputs := object.get(step, "with", {})
   value := object.get(inputs, "with-ratchet", null)
@@ -608,13 +619,14 @@ coverage_identity_published(step) if {
   qualifying_main_coverage_publisher(workflow)
   some publisher_step in workflow_steps(workflow)
   is_coverage_step(publisher_step)
-  ratcheting_coverage_step(publisher_step)
+  ratchet_candidate_step(publisher_step)
   coverage_identity(publisher_step) == coverage_identity(step)
 }
 
 has_unmatched_pr_coverage_identity(workflow) if {
   some step in workflow_steps(workflow)
   is_coverage_step(step)
+  ratchet_candidate_step(step)
   not coverage_identity_published(step)
 }
 
@@ -869,6 +881,12 @@ matrix_legs(job) := legs if {
   is_object(strategy)
   matrix := object.get(strategy, "matrix", {})
   is_object(matrix)
+  # Only a matrix made of `include` entries is read; an axis or an `exclude`
+  # would need GitHub's full expansion and override rules, so it is left
+  # unresolved rather than guessed.
+  every key in object.keys(matrix) {
+    key == "include"
+  }
   legs := object.get(matrix, "include", [])
   is_array(legs)
 }
@@ -880,13 +898,33 @@ ratchet_switch_keys(job) := {key |
   key := matrix_ratchet_key(step)
 }
 
+job_has_literal_ratchet(job) if {
+  some step in object.get(job, "steps", [])
+  is_object(step)
+  is_coverage_step(step)
+  ratcheting_coverage_step(step)
+}
+
+# A leg ratchets when any coverage step does: an unconditional ratchet covers
+# every leg; otherwise a leg ratchets when it sets any switch key true.
 platform_legs(job) := [leg |
   some leg in matrix_legs(job)
   is_object(leg)
-  every key in ratchet_switch_keys(job) {
-    object.get(leg, key, null) in {true, "true"}
-  }
+  leg_ratchets(job, leg)
 ]
+
+leg_ratchets(job, _) if job_has_literal_ratchet(job)
+
+leg_ratchets(job, leg) if {
+  not job_has_literal_ratchet(job)
+  some key in ratchet_switch_keys(job)
+  object.get(leg, key, null) in {true, "true"}
+}
+
+leg_ratchets(job, _) if {
+  not job_has_literal_ratchet(job)
+  count(ratchet_switch_keys(job)) == 0
+}
 
 matrix_value_literals(raw) := expression_literals(raw) if contains(raw, "${{")
 
@@ -908,6 +946,21 @@ unresolved_matrix_ref(job) if {
   some label in runner_labels(job)
   some key in matrix_refs(label)
   count(matrix_values_for(job, key)) == 0
+}
+
+# A relevant leg whose value is missing, not a string, or an expression with no
+# recognised literal leaves the platform undecided, so it is not discarded.
+unresolved_matrix_ref(job) if {
+  some label in runner_labels(job)
+  some key in matrix_refs(label)
+  some leg in platform_legs(job)
+  not leg_value_resolves(leg, key)
+}
+
+leg_value_resolves(leg, key) if {
+  raw := object.get(leg, key, null)
+  is_string(raw)
+  count(matrix_value_literals(raw)) > 0
 }
 
 expression_values(job) := values if {

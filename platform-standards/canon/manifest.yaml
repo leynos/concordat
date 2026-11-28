@@ -403,7 +403,7 @@ artifacts:
       platform-standards/canon/lint-rules/main-owned-codescene-coverage/policy/main_owned_codescene_coverage.rego
     description: >
       Audit-only CV-005 policy keeping CodeScene coverage publication on main.
-    sha256: 8979eae51c5cefddfbfe9644d90feaaa1d853d22538ba43f32d0c0e5a3d7338f
+    sha256: c3e46461995c43603dceba97ef7ffe10f1187ae3a234e1bf087ce255f4a6cdbe
   - id: lint-rule-main-owned-codescene-coverage-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/main-owned-codescene-coverage/rule.yaml
