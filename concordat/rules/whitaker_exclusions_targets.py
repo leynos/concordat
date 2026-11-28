@@ -179,34 +179,32 @@ def default_targets(
     source = _target_folder(directory, "src", reader)
     if not isinstance(name, str):
         return set()
-    is_named = _library_gives_package_name(manifest, source, reader)
-    return (
-        {name}
-        if is_named or _binary_gives_package_name(manifest, source, reader)
-        else set()
-    )
+    # Both files are probed whatever the manifest says, so a link among them is
+    # always recorded and never hidden by a name that is already settled.
+    has_lib_file = source is not None and _has_file(source / "lib.rs", reader)
+    has_main_file = source is not None and _has_file(source / "main.rs", reader)
+    is_named = _library_gives_package_name(manifest, has_lib_file=has_lib_file)
+    is_main = _binary_gives_package_name(manifest, has_main_file=has_main_file)
+    return {name} if is_named or is_main else set()
 
 
 def _library_gives_package_name(
-    manifest: dict[str, object], source: pathlib.Path | None, reader: Reader
+    manifest: dict[str, object], *, has_lib_file: bool
 ) -> bool:
     """Return whether the library exists and is not renamed by `[lib] name`."""
     library = manifest.get("lib")
-    has_library = isinstance(library, dict) or (
-        source is not None and _has_file(source / "lib.rs", reader)
-    )
+    has_library = isinstance(library, dict) or has_lib_file
     return has_library and not isinstance(table(library).get("name"), str)
 
 
 def _binary_gives_package_name(
-    manifest: dict[str, object], source: pathlib.Path | None, reader: Reader
+    manifest: dict[str, object], *, has_main_file: bool
 ) -> bool:
     """Return whether `src/main.rs` is discovered and no `[[bin]]` claims it."""
     return (
-        source is not None
+        has_main_file
         and _is_discovered(manifest, _TARGET_FOLDERS[3])
         and "src/main.rs" not in _claimed_paths(manifest, "bin")
-        and _has_file(source / "main.rs", reader)
     )
 
 

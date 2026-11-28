@@ -553,6 +553,20 @@ class TestCrateNames:
             LinkCase(
                 {"real/sub/dylint.toml": ""}, "linked", "real", "linked: is a symbolic"
             ),
+            # A regular src/lib.rs must not hide a linked src/main.rs, nor a
+            # [lib] table a linked src/lib.rs.
+            LinkCase(
+                {"src/lib.rs": ""},
+                "src/main.rs",
+                "../../host/secret.rs",
+                "main.rs: is a symbolic",
+            ),
+            LinkCase(
+                {"Cargo.toml": '[package]\nname = "app"\n[lib]\nname = "app"\n'},
+                "src/lib.rs",
+                "../../host/secret.rs",
+                "lib.rs: is a symbolic",
+            ),
         ],
     )
     def test_a_link_anywhere_a_name_could_come_from_is_recorded_not_followed(
