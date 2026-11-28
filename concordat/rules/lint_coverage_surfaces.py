@@ -14,9 +14,9 @@ The same member rules decide membership as in `gate-workspace-coverage` and
 
 from __future__ import annotations
 
-import posixpath
 import typing as typ
 
+from .lint_coverage_selection import default_selection
 from .lint_tables_manifests import PackageFacts, read_packages
 from .test_environment_types import table
 
@@ -94,56 +94,6 @@ def _surface_features(reader: Reader, packages: list[PackageFacts]) -> set[str]:
     return found
 
 
-_GLOB_CHARACTERS: typ.Final = frozenset("*?[]")
-
-
-def _default_selection(
-    reader: Reader, key: str, packages: list[PackageFacts]
-) -> tuple[list[str], bool]:
-    """Return the packages a bare command at the surface's manifest selects.
-
-    Cargo selects the `default-members` of a workspace; with none, a virtual
-    workspace selects every member and a workspace with a root package selects
-    only that package.
-
-    Returns
-    -------
-    tuple[list[str], bool]
-        The selected package names, and whether the selection is known (it is
-        not when `default-members` holds a glob).
-    """
-    root = reader.toml(reader.checkout / key) or {}
-    default_members = table(root.get("workspace")).get("default-members")
-    if isinstance(default_members, list):
-        return _listed_members(
-            key, list(typ.cast("list[object]", default_members)), packages
-        )
-    root_name = table(root.get("package")).get("name")
-    if isinstance(root_name, str):
-        return [root_name], True
-    return sorted(p["name"] for p in packages), True
-
-
-def _listed_members(
-    key: str, default_members: list[object], packages: list[PackageFacts]
-) -> tuple[list[str], bool]:
-    """Return the packages a `default-members` list names, and whether it is known.
-
-    Returns
-    -------
-    tuple[list[str], bool]
-        The named packages, and False when an entry is a glob (every package is
-        then returned, for the caller to treat as unknown).
-    """
-    entries = [m for m in default_members if isinstance(m, str)]
-    if any(_GLOB_CHARACTERS & set(entry) for entry in entries):
-        return sorted(p["name"] for p in packages), False
-    base = posixpath.dirname(key)
-    joined = (posixpath.normpath(posixpath.join(base, entry)) for entry in entries)
-    wanted = {"" if path == "." else path for path in joined}
-    return sorted(p["name"] for p in packages if p["directory"] in wanted), True
-
-
 def _surface(reader: Reader, key: str, packages: list[PackageFacts]) -> Surface:
     """Return the surface a set of packages makes under *key*.
 
@@ -153,7 +103,7 @@ def _surface(reader: Reader, key: str, packages: list[PackageFacts]) -> Surface:
         What a lint gate must cover there.
     """
     features = _surface_features(reader, packages)
-    selected, is_known = _default_selection(reader, key, packages)
+    selected, is_known = default_selection(reader, key, packages)
     return {
         "by_manifest": {p["manifest"]: p["name"] for p in packages},
         "default_selects": selected,
