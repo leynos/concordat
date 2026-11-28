@@ -546,7 +546,7 @@ passes_token_secret(step) if {
   object.get(inputs, "access-token", "") == token_secret_input
 }
 
-# Clause 5: an uploader names the token in exactly two places, the check
+# Clause 5: an uploader names the token in at most two places, the check
 # step's command and the upload action's `access-token` input. A `run` body
 # interpolating it puts the secret in a shell process that checked-out code
 # can read, an `env` binding at any level reaches every step beneath it, and

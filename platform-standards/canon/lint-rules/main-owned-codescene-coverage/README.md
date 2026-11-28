@@ -24,13 +24,14 @@ One main-owned publisher writes the baseline and uploads:
 
 - Exactly one workflow with a `push` trigger restricted to `main`, optionally
   alongside `workflow_dispatch`, generates ratcheted coverage and invokes the
-  CodeScene action in upload mode. The action is the intended route; a direct
-  `cs-coverage upload` command is not that route and is reported by the token
-  clause below when it names the token. The action defaults `mode` to `upload`,
-  so a step that omits the input uploads and satisfies this clause;
-  `mode: check` and `mode: install` do not. The rule reads the effective mode
-  rather than the spelling, because reporting correct wiring as broken only
-  teaches people to edit a working workflow to satisfy the audit.
+  CodeScene action in upload mode (or runs a direct `cs-coverage upload`
+  command, which the policy also recognizes as an upload). The action is the
+  intended route; a direct command is reported by the token clause below when
+  it names the token. The action defaults `mode` to `upload`, so a step that
+  omits the input uploads and satisfies this clause; `mode: check` and
+  `mode: install` do not. The rule reads the effective mode rather than the
+  spelling, because reporting correct wiring as broken only teaches people to
+  edit a working workflow to satisfy the audit.
 - The publisher declares a `concurrency` block, so two overlapping pushes to
   `main` cannot race to write the baseline every pull request is then measured
   against, and the block queues rather than cancels: `cancel-in-progress` is
@@ -39,7 +40,7 @@ One main-owned publisher writes the baseline and uploads:
   baseline wins. An expression is refused too, because it may evaluate true on
   the very push it matters for.
 
-Every uploader names the token in exactly two places:
+Every uploader names the token in at most two places:
 
 - A workflow that uploads to CodeScene may name `CS_ACCESS_TOKEN` only in the
   check step's command and in the upload action's `access-token` input. Every

@@ -2083,15 +2083,15 @@ coverage generated after a merge on `main`.
   ratcheting generator against the baseline written by `main`, without a
   CodeScene action, direct `cs-coverage` command, or access token. A workflow
   with a push trigger restricted to `main` (optionally alongside
-  `workflow_dispatch`) must exist, and its final coverage step must upload
-  through the action in upload mode, which is its default; a direct
-  `cs-coverage upload` command is not that route, and is reported when it names
-  the token outside the sanctioned places, because the command line reads the
-  token from its environment; the coverage-action pin is at or after the
-  shared-actions revision that preserves line records; and exactly one
-  `with-ratchet` invocation exists per job. The audit-only
-  `main-owned-codescene-coverage` package evaluates those facts from a
-  decoded-workflow envelope; malformed YAML is indeterminate rather than
+  `workflow_dispatch`) must exist and upload, through the action in upload mode
+  (its default) or a direct `cs-coverage upload` command, which the policy also
+  recognizes as an upload; the action is the intended route, and a direct
+  command is reported when it names the token outside the sanctioned places,
+  because the command line reads the token from its environment; the
+  coverage-action pin is at or after the shared-actions revision that preserves
+  line records; and exactly one `with-ratchet` invocation exists per job. The
+  audit-only `main-owned-codescene-coverage` package evaluates those facts from
+  a decoded-workflow envelope; malformed YAML is indeterminate rather than
   guessed compliant or non-compliant, a job delegating to a reusable workflow
   is reported by name while the workflow's other jobs are still evaluated, and
   a runner label written as an expression is classified only when every literal
