@@ -21,8 +21,11 @@ if typ.TYPE_CHECKING:
 type Index = dict[str, list[MakeRule]]
 
 
+# One plain goal and nothing else: an option (`-C dir`, `-f file`, `-n`, `-j 4`)
+# or a variable assignment (`FOO=1`) changes what runs, so such a call is not
+# read as a call to its goal.
 _MAKE_CALL: typ.Final = re.compile(
-    r"\s*[@+-]*\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[\w.-]+)"
+    r"\s*[@+-]*\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[A-Za-z_.][\w.-]*)\s*$"
 )
 _ANY_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?P<goal>[\w.-]+)")
 _BACKGROUND: typ.Final = re.compile(r"(?<!&)&(?!&)")
@@ -47,11 +50,14 @@ def _chain_goals(piece: str) -> list[str]:
     list[str]
         The goals the piece always calls, in order.
     """
+    # A lone `&` backgrounds the whole list it ends, so nothing in it is done
+    # before what follows.
+    if _BACKGROUND.search(piece):
+        return []
     goals: list[str] = []
     for part in piece.split("&&"):
         call = _MAKE_CALL.match(part)
-        # A backgrounded call (a lone `&`) does not finish before what follows.
-        if call is None or _BACKGROUND.search(part):
+        if call is None:
             break
         goals.append(call.group("goal"))
     return goals

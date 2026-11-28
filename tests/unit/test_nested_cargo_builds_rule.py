@@ -661,6 +661,22 @@ UNREADABLE = {("EN-001", "tests/cli.rs")}
             id="a-backgrounded-call",
         ),
         pytest.param(
+            "test:\n\t$(MAKE) warmup && $(MAKE) other & cargo nextest run\n\n"
+            "other:\n\ttrue\n\n" + WARM,
+            NC013,
+            id="a-backgrounded-list",
+        ),
+        pytest.param(
+            "test:\n\t$(MAKE) -C sub warmup\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="a-call-into-another-directory",
+        ),
+        pytest.param(
+            "test:\n\t$(MAKE) FLAG=1 warmup\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="a-call-with-a-variable-assignment",
+        ),
+        pytest.param(
             "test: warmup\ntest: run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
             NC013,
             id="separate-rules-for-one-target",
