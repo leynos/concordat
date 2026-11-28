@@ -69,12 +69,17 @@ class Place:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class StepRun:
-    """One `run` step: where it is, its lines, and what is known about running it."""
+    """One `run` step: where it is, its lines, and what is known about running it.
+
+    `directory` is the step's `working-directory` (or its job's or workflow's
+    default) as written after the matrix is filled in, or None when none is set.
+    """
 
     source: str
     lines: list[str]
     is_elsewhere: bool
     is_matrix_conditional: bool
+    directory: str | None = None
 
 
 def _depends_on_matrix(condition: object) -> bool:
@@ -186,6 +191,7 @@ def step_runs(place: Place, combination: dict[str, object]) -> list[StepRun]:
                 _is_elsewhere(directory),
                 _depends_on_matrix(step.get("if"))
                 or _depends_on_matrix(place.condition),
+                fill(directory, combination) if isinstance(directory, str) else None,
             )
         )
     return found

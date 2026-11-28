@@ -363,10 +363,31 @@ def _note_computed_matrix(reader: _Reader, path: str, place: Place) -> None:
         )
 
 
+def _step_directory(step: StepRun) -> str | None:
+    """Return where a step with a `working-directory` runs, relative to the root.
+
+    A plain relative path inside the checkout is followed. An expression, an
+    absolute path or one that climbs out of the checkout is not, so the step's
+    commands are unplaced.
+
+    Returns
+    -------
+    str | None
+        The normalised directory, or None when the audit cannot follow it.
+    """
+    given = step.directory
+    if given is None or "$" in given or posixpath.isabs(given):
+        return None
+    directory = posixpath.normpath(given.strip())
+    if directory == ".." or directory.startswith("../"):
+        return None
+    return "" if directory == "." else directory
+
+
 def _step_runs(reader: _Reader, source: str, step: StepRun) -> None:
     """Read the lines of one workflow step as one shell."""
     start = len(reader.runs)
-    where = None if step.is_elsewhere else ""
+    where = _step_directory(step) if step.is_elsewhere else ""
     state: tuple[ShellState, str | None] = (FRESH_SHELL, where)
     for line in step.lines:
         state = _line_runs(reader, line, source, state)

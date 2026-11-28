@@ -318,6 +318,43 @@ class TestRuns:
         )
         assert _runs(tmp_path) == [("clippy", "Cargo.toml")]
 
+    @pytest.mark.parametrize(
+        ("head", "step_directory", "expected"),
+        [
+            ("", "        working-directory: ext\n", [("clippy", "ext/Cargo.toml")]),
+            ("", "        working-directory: ./ext/\n", [("clippy", "ext/Cargo.toml")]),
+            (
+                "defaults:\n  run:\n    working-directory: ext\n",
+                "",
+                [("clippy", "ext/Cargo.toml")],
+            ),
+            ("", "        working-directory: .\n", [("clippy", "Cargo.toml")]),
+            ("", "        working-directory: ${{ matrix.dir }}\n", [("clippy", None)]),
+            ("", "        working-directory: ../out\n", [("clippy", None)]),
+            ("", "        working-directory: /abs\n", [("clippy", None)]),
+        ],
+    )
+    def test_a_working_directory_places_a_workflow_step_on_its_surface(
+        self,
+        tmp_path: pathlib.Path,
+        head: str,
+        step_directory: str,
+        expected: list[tuple[str, str | None]],
+    ) -> None:
+        """A plain relative `working-directory` is followed; anything else is not."""
+        _app(
+            tmp_path,
+            {
+                "ext/Cargo.toml": MANIFEST.format(name="ext", extra=""),
+                ".github/workflows/ci.yml": (
+                    f"name: ci\non: push\n{head}jobs:\n  lint:\n"
+                    "    runs-on: ubuntu-latest\n    steps:\n"
+                    f"      - run: cargo clippy\n{step_directory}"
+                ),
+            },
+        )
+        assert _runs(tmp_path) == expected
+
     def test_a_step_that_runs_for_some_matrix_entries_only_is_unresolved(
         self, tmp_path: pathlib.Path
     ) -> None:
