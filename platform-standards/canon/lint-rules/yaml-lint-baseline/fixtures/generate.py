@@ -134,10 +134,64 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "not_in_lint": Scenario(makefile="not-in-lint"),
     "no_strict": Scenario(makefile="no-strict"),
     "no_ls_files": Scenario(makefile="no-ls-files"),
+    # These two also lack --strict and, for the second, carry an unresolved
+    # flag variable: the missing-enumeration finding must still be reported.
+    "unfed_no_strict": Scenario(makefile="unfed-no-strict"),
+    "unfed_unresolved": Scenario(makefile="unfed-unresolved"),
     "one_pathspec": Scenario(makefile="one-pathspec"),
     "config_data": Scenario(makefile="config-data"),
     "no_warnings": Scenario(makefile="no-warnings"),
     "discarded_ls_files": Scenario(makefile="discarded-ls-files"),
+    # The guarded form buffers the Git listing in a temporary file so the
+    # linter runs only after enumeration succeeds.
+    "guarded": Scenario(makefile="guarded"),
+    "guarded_no_trap": Scenario(makefile="guarded-no-trap"),
+    "guarded_after_failure": Scenario(makefile="guarded-after-failure"),
+    "guarded_different_file": Scenario(makefile="guarded-different-file"),
+    "guarded_discarded": Scenario(makefile="guarded-discarded"),
+    "guarded_missing_pathspec": Scenario(makefile="guarded-missing-pathspec"),
+    "guarded_no_nul": Scenario(makefile="guarded-no-nul"),
+    "guarded_not_strict": Scenario(makefile="guarded-not-strict"),
+    "guarded_soft_skip": Scenario(makefile="guarded-soft-skip"),
+    "guarded_unresolved": Scenario(makefile="guarded-unresolved"),
+    "guarded_trap_masks": Scenario(makefile="guarded-trap-masks"),
+    # Options that change what Git enumerates, or where xargs reads, must not
+    # count as coverage of the tracked YAML.
+    "guarded_pathspec_suffix": Scenario(makefile="guarded-pathspec-suffix"),
+    "guarded_untracked": Scenario(makefile="guarded-untracked"),
+    "guarded_xargs_arg_file": Scenario(makefile="guarded-xargs-arg-file"),
+    "xargs_arg_file": Scenario(makefile="xargs-arg-file"),
+    "untracked_ls_files": Scenario(makefile="untracked-ls-files"),
+    # Long xargs options, informational modes and unquoted globs are further
+    # ways to claim enumeration evidence without reading the listing.
+    "guarded_xargs_help": Scenario(makefile="guarded-xargs-help"),
+    "guarded_xargs_long_arg_file": Scenario(makefile="guarded-xargs-long-arg-file"),
+    "xargs_long_arg_file": Scenario(makefile="xargs-long-arg-file"),
+    "guarded_unquoted_pathspec": Scenario(makefile="guarded-unquoted-pathspec"),
+    "unquoted_pathspec": Scenario(makefile="unquoted-pathspec"),
+    # Grouped short options, quoted long options, replacement modes and a
+    # compound mktemp substitution are further ways to hide an unsafe xargs
+    # option or to point the temporary file somewhere else.
+    "guarded_xargs_cluster": Scenario(makefile="guarded-xargs-cluster"),
+    "xargs_cluster": Scenario(makefile="xargs-cluster"),
+    "guarded_mktemp_extra": Scenario(makefile="guarded-mktemp-extra"),
+    "guarded_xargs_replace": Scenario(makefile="guarded-xargs-replace"),
+    "xargs_replace": Scenario(makefile="xargs-replace"),
+    "guarded_xargs_quoted_help": Scenario(makefile="guarded-xargs-quoted-help"),
+    "xargs_quoted_help": Scenario(makefile="xargs-quoted-help"),
+    # A strict flag in a second yamllint invocation does not make the fed
+    # invocation strict.
+    "strict_elsewhere": Scenario(makefile="strict-elsewhere"),
+    # One outer quote pair is all the shell removes, so nested quotes reach Git
+    # literally; arithmetic expansion can reassign the temporary-file variable;
+    # and a fed invocation whose status is masked is not the binding one.
+    "nested_quoted_pathspec": Scenario(makefile="nested-quoted-pathspec"),
+    "guarded_nested_quoted_pathspec": Scenario(
+        makefile="guarded-nested-quoted-pathspec"
+    ),
+    "guarded_arithmetic_argument": Scenario(makefile="guarded-arithmetic-argument"),
+    "pipeline_evidence_elsewhere": Scenario(makefile="pipeline-evidence-elsewhere"),
+    "pipeline_no_null": Scenario(makefile="pipeline-no-null"),
     "config_file_other": Scenario(makefile="config-file-other"),
     "config_file_attached": Scenario(makefile="config-file-attached"),
     "config_short_attached": Scenario(makefile="config-short-attached"),
