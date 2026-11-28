@@ -318,6 +318,121 @@ class TestRuns:
         )
         assert _runs(tmp_path) == [("clippy", "Cargo.toml")]
 
+    @pytest.mark.parametrize(
+        ("head", "step_directory", "expected"),
+        [
+            ("", "        working-directory: ext\n", [("clippy", "ext/Cargo.toml")]),
+            ("", "        working-directory: ./ext/\n", [("clippy", "ext/Cargo.toml")]),
+            (
+                "defaults:\n  run:\n    working-directory: ext\n",
+                "",
+                [("clippy", "ext/Cargo.toml")],
+            ),
+            ("", "        working-directory: .\n", [("clippy", "Cargo.toml")]),
+            ("", "        working-directory: ${{ matrix.dir }}\n", [("clippy", None)]),
+            ("", "        working-directory: ../out\n", [("clippy", None)]),
+            (
+                "",
+                "        working-directory: ${{ env.BASE }}/..\n",
+                [("clippy", None)],
+            ),
+            ("", "        working-directory: ' ext '\n", [("clippy", None)]),
+            ("", "        working-directory: ' . '\n", [("clippy", None)]),
+            ("", "        working-directory: link/../ext\n", [("clippy", None)]),
+            ("", "        working-directory: ext/..\n", [("clippy", None)]),
+            ("", "        working-directory: ''\n", [("clippy", "Cargo.toml")]),
+            ("", "        working-directory: /abs\n", [("clippy", None)]),
+        ],
+    )
+    def test_a_working_directory_places_a_workflow_step_on_its_surface(
+        self,
+        tmp_path: pathlib.Path,
+        head: str,
+        step_directory: str,
+        expected: list[tuple[str, str | None]],
+    ) -> None:
+        """A plain relative `working-directory` is followed; anything else is not."""
+        _app(
+            tmp_path,
+            {
+                "ext/Cargo.toml": MANIFEST.format(name="ext", extra=""),
+                ".github/workflows/ci.yml": (
+                    f"name: ci\non: push\n{head}jobs:\n  lint:\n"
+                    "    runs-on: ubuntu-latest\n    steps:\n"
+                    f"      - run: cargo clippy\n{step_directory}"
+                ),
+            },
+        )
+        assert _runs(tmp_path) == expected
+
+    @pytest.mark.parametrize(
+        ("directory", "command", "expected"),
+        [
+            ("ext", "cd .. && cargo clippy", "Cargo.toml"),
+            ("${{ env.BASE }}", "cd .. && cargo clippy", None),
+            ("ext", "cd ${{ env.BASE }}/.. && cargo clippy", None),
+            ("ext", "cd $BASE/.. && cargo clippy", None),
+        ],
+    )
+    def test_a_cd_in_a_step_moves_from_its_working_directory(
+        self,
+        tmp_path: pathlib.Path,
+        directory: str,
+        command: str,
+        expected: str | None,
+    ) -> None:
+        """`cd ..` from `ext` is the root; an unknown start or target is unknown."""
+        _app(
+            tmp_path,
+            {
+                "ext/Cargo.toml": MANIFEST.format(name="ext", extra=""),
+                ".github/workflows/ci.yml": (
+                    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+                    f"    steps:\n      - run: {command}\n"
+                    f"        working-directory: {directory}\n"
+                ),
+            },
+        )
+        assert _runs(tmp_path) == [("clippy", expected)]
+
+    def test_a_cd_up_from_a_symbolic_link_is_unplaced(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`cd ..` from `link` leaves the link target's parent, not the root."""
+        _app(
+            tmp_path,
+            {
+                "nested/deep/placeholder": "",
+                ".github/workflows/ci.yml": (
+                    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+                    "    steps:\n      - run: cd .. && cargo clippy\n"
+                    "        working-directory: link\n"
+                ),
+            },
+        )
+        (tmp_path / "link").symlink_to("nested/deep")
+        assert _runs(tmp_path) == [("clippy", None)]
+
+    def test_a_climbing_manifest_path_from_a_symbolic_link_is_unplaced(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`--manifest-path ../Cargo.toml` from `link` is not the root manifest."""
+        _app(
+            tmp_path,
+            {
+                "nested/deep/placeholder": "",
+                "nested/Cargo.toml": MANIFEST.format(name="nested", extra=""),
+                ".github/workflows/ci.yml": (
+                    "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+                    "    steps:\n"
+                    "      - run: cargo clippy --manifest-path ../Cargo.toml\n"
+                    "        working-directory: link\n"
+                ),
+            },
+        )
+        (tmp_path / "link").symlink_to("nested/deep")
+        assert _runs(tmp_path) == [("clippy", None)]
+
     def test_a_step_that_runs_for_some_matrix_entries_only_is_unresolved(
         self, tmp_path: pathlib.Path
     ) -> None:

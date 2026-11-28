@@ -31,7 +31,10 @@ The Makefile's `lint` target followed through its prerequisites and `make name`
 commands, and every `run` step of every workflow and composite action (each
 matrix entry read as a command of its own). The shell is read as
 `gate-workspace-coverage` reads it: a command in a branch that cannot run is
-not a command, a `cd` in the same shell moves the directory, and `.ONESHELL`
+not a command, a `cd` in the same shell moves the directory (so does a workflow
+step's `working-directory`, or its job's or workflow's default, when it is a
+plain relative path inside the checkout that never climbs with `..`, since a
+symbolic link could make the climb leave the named directory), and `.ONESHELL`
 makes a rule's lines one shell. A command is a lint run when it is
 `cargo clippy`, `cargo doc`, `whitaker` or `cargo dylint`. A tool the gate does
 not run on a surface is not required (DG-004 asks that `make lint` reaches

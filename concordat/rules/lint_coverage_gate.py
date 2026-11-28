@@ -38,7 +38,13 @@ from .lint_coverage_commands import (
     script_run,
 )
 from .make_commands import blank_references
-from .makefile_expansion import expand, joined, single_assignments
+from .makefile_expansion import (
+    SHELL_DOLLAR,
+    UNRESOLVED_MARK,
+    expand,
+    joined,
+    single_assignments,
+)
 from .makefile_reach import reachable, rules_by_target
 from .markdown_envelope import (
     is_symlink,
@@ -120,6 +126,27 @@ class _Reader:
     runs: list[Run] = dataclasses.field(default_factory=list)
     unreadable: list[str] = dataclasses.field(default_factory=list)
 
+    def is_climbing_a_link(self, directory: str, words: list[str]) -> bool:
+        """Return whether a `cd` climbs out of a directory that has a link in it.
+
+        `cd ..` from `link` goes to the parent of the link's target, so the
+        string path no longer says where the shell is.
+
+        Returns
+        -------
+        bool
+            Whether the `cd` climbs and a component of *directory* is a link.
+        """
+        target = words[1] if len(words) > 1 else ""
+        if ".." not in target.split("/"):
+            return False
+        current = self.checkout
+        for part in directory.split("/"):
+            current /= part
+            if is_symlink(current, OPERATION_READ_SCRIPT):
+                return True
+        return False
+
     def script_tools(self, relative: str) -> set[str]:
         """Return the tools a script's text names beside `cargo`, or none."""
         path = self.checkout / relative
@@ -140,7 +167,10 @@ def _next_directory(directory: str | None, words: list[str]) -> str | None:
     target = words[1] if len(words) > 1 else None
     if directory is None or target is None:
         return None
-    if target.startswith(("/", "~", "-")) or any(c in target for c in "$*?"):
+    if target.startswith(("/", "~", "-")):
+        return None
+    # An unresolved reference (a mark or a `$`) must not be normalised away.
+    if any(mark in target for mark in (UNRESOLVED_MARK, SHELL_DOLLAR, "$", "*", "?")):
         return None
     moved = posixpath.normpath(posixpath.join(directory or ".", target))
     return "" if moved == "." else moved
@@ -213,6 +243,23 @@ def _read_kept(
     return None if moved != directory else moved
 
 
+def _cd(reader: _Reader, directory: str | None, words: list[str]) -> str | None:
+    """Return the directory after a `cd`, or None when it cannot be followed.
+
+    `cd ..` from a symbolic link leaves the link target's parent, not the
+    link's own, so that is not followed either.
+
+    Returns
+    -------
+    str | None
+        The directory the next command runs in.
+    """
+    moved = _next_directory(directory, words)
+    if moved is None or not directory:
+        return moved
+    return None if reader.is_climbing_a_link(directory, words) else moved
+
+
 def _read_command(
     reader: _Reader, words: list[str], source: str, directory: str | None
 ) -> str | None:
@@ -224,7 +271,7 @@ def _read_command(
         The directory the next command runs in.
     """
     if words and words[0].lstrip("@-+") == "cd":
-        return _next_directory(directory, words)
+        return _cd(reader, directory, words)
     reader.runs.extend(_command_runs(reader, words, source, directory))
     return directory
 
@@ -363,10 +410,41 @@ def _note_computed_matrix(reader: _Reader, path: str, place: Place) -> None:
         )
 
 
+def _step_directory(step: StepRun) -> str | None:
+    """Return where a step with a `working-directory` runs, relative to the root.
+
+    A plain relative path inside the checkout is followed. An expression, an
+    absolute path or one that climbs out of the checkout is not, so the step's
+    commands are unplaced.
+
+    Returns
+    -------
+    str | None
+        The normalised directory (`""` at the root, including a step that sets
+        none), or None when the audit cannot follow it.
+    """
+    given = step.directory
+    if given is None:
+        return ""
+    # An expression survives as a mark or a `$`, and normalising a path would
+    # drop a mark before `/..`, so refuse it first. A padded value is a path
+    # with spaces in it, not the trimmed one, whatever it looks like.
+    if given != given.strip():
+        return None
+    if any(mark in given for mark in (UNRESOLVED_MARK, SHELL_DOLLAR, "$")):
+        return None
+    # A `..` after a name may step back out of a symbolic link to somewhere else,
+    # so the path is only followed when it never climbs.
+    if posixpath.isabs(given) or ".." in given.split("/"):
+        return None
+    directory = posixpath.normpath(given)
+    return "" if directory == "." else directory
+
+
 def _step_runs(reader: _Reader, source: str, step: StepRun) -> None:
     """Read the lines of one workflow step as one shell."""
     start = len(reader.runs)
-    where = None if step.is_elsewhere else ""
+    where = _step_directory(step)
     state: tuple[ShellState, str | None] = (FRESH_SHELL, where)
     for line in step.lines:
         state = _line_runs(reader, line, source, state)

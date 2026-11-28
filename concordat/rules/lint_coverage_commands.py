@@ -256,6 +256,10 @@ def _manifest_of(
     if named:
         if _is_unresolved(named[-1]) or directory is None:
             return None, False
+        # From a directory a `..` may step out of a symbolic link to somewhere
+        # the string path does not name, so it is not followed.
+        if directory and ".." in named[-1].split("/"):
+            return None, False
         return posixpath.normpath(posixpath.join(directory, named[-1])), True
     if directory is None:
         return None, False
