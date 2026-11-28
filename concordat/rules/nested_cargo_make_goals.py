@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
-from .nested_cargo_make_order import Index, early_calls, reaches, starts_tests
+from .nested_cargo_make_order import Index, next_goals
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_preparation import includes_a_file, read_makefile
 from .nested_cargo_scripts import TEST_TARGET
@@ -49,28 +49,16 @@ class MakeGoals:
 
 
 def _next_goals(rule: MakeRule, index: Index) -> tuple[list[str], bool]:
-    """Return the goals one rule leads to, and whether a prerequisite hid.
+    """Return the goals one rule certainly finishes early, and whether one hid.
 
     Returns
     -------
     tuple[list[str], bool]
-        The plain prerequisites and the goals the recipe calls early, then
-        whether a prerequisite names a variable the reader cannot resolve.
+        The early goals, then whether a prerequisite names a variable the reader
+        cannot resolve.
     """
-    plain = [name for name in rule["prerequisites"] if "$" not in name]
-    hides = len(plain) != len(rule["prerequisites"])
-    starters = [name for name in plain if starts_tests(name, index, set())]
-    # Make does not order sibling prerequisites (`make -j` runs them together),
-    # so a prerequisite is early only if every sibling that starts the tests
-    # itself depends on it. The recipe runs after all of them.
-    counted = [
-        name
-        for name in plain
-        if all(name == s or reaches(s, name, index, set()) for s in starters)
-    ]
-    if starters:
-        return counted, hides
-    return [*counted, *early_calls(rule, index)], hides
+    hides = any("$" in name for name in rule["prerequisites"])
+    return next_goals(rule, index), hides
 
 
 def _reachable_goals(index: Index) -> tuple[set[str], bool]:

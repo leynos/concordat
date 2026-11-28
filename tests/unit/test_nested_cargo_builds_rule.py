@@ -655,6 +655,18 @@ NC013 = {("NC-013", "tests/cli.rs")}
             id="unordered-sibling-prerequisites",
         ),
         pytest.param(
+            "test: warmup run\n\ttrue\n\nrun: warmup run-tests\n\ttrue\n\n"
+            "run-tests:\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="unordered-siblings-one-level-down",
+        ),
+        pytest.param(
+            "test: warmup run\n\ttrue\n\nrun: warmup run-tests\n\ttrue\n\n"
+            "run-tests: warmup\n\tcargo nextest run\n\n" + WARM,
+            NONE,
+            id="ordered-siblings-one-level-down",
+        ),
+        pytest.param(
             "test: warmup run\n\ttrue\n\nrun:\n\ttrue || $(MAKE) warmup\n\t"
             "cargo nextest run\n\n" + WARM,
             NC013,

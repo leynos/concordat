@@ -20,6 +20,8 @@ if typ.TYPE_CHECKING:
 
 type Index = dict[str, list[MakeRule]]
 
+_DEPTH: typ.Final = 8
+
 _MAKE_CALL: typ.Final = re.compile(
     r"\s*[@+-]*\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[\w.-]+)"
 )
@@ -99,28 +101,6 @@ def dependencies(rule: MakeRule) -> list[str]:
     return _plain_prerequisites(rule) + calls
 
 
-def _proven(rule: MakeRule, index: Index) -> list[str]:
-    """Return the goals a rule certainly finishes before its tests can start.
-
-    Returns
-    -------
-    list[str]
-        Its prerequisites, then the `make` calls that always run ahead of any
-        test command; a call that may be skipped, or that follows the tests,
-        proves no ordering.
-    """
-    return _plain_prerequisites(rule) + early_calls(rule, index)
-
-
-def reaches(source: str, target: str, index: Index, seen: set[str]) -> bool:
-    """Report whether goal *source* certainly depends on, or calls, goal *target*."""
-    if source in seen:
-        return False
-    seen.add(source)
-    names = [name for rule in index.get(source, []) for name in _proven(rule, index)]
-    return target in names or any(reaches(n, target, index, seen) for n in names)
-
-
 def starts_tests(goal: str, index: Index, seen: set[str]) -> bool:
     """Report whether running *goal* may start the tests.
 
@@ -157,4 +137,46 @@ def early_calls(rule: MakeRule, index: Index) -> list[str]:
                 return found
         if _TEST_COMMAND.search(recipe["text"]):
             break
+    return found
+
+
+def next_goals(rule: MakeRule, index: Index, depth: int = _DEPTH) -> list[str]:
+    """Return the goals one rule certainly finishes before its tests can start.
+
+    Make does not order sibling prerequisites (`make -j` runs them together), so
+    a prerequisite is early only if every sibling that starts the tests itself
+    finishes it first, at any depth. The recipe runs after all prerequisites, so
+    its calls count only when no prerequisite starts the tests.
+
+    Returns
+    -------
+    list[str]
+        The early prerequisites, then the early `make` calls of the recipe.
+    """
+    plain = _plain_prerequisites(rule)
+    starters = [name for name in plain if starts_tests(name, index, set())]
+    counted = [
+        name
+        for name in plain
+        if all(name == s or name in early_set(s, index, depth - 1) for s in starters)
+    ]
+    return counted if starters else [*counted, *early_calls(rule, index)]
+
+
+def early_set(goal: str, index: Index, depth: int = _DEPTH) -> set[str]:
+    """Return every goal that *goal* certainly finishes before its tests start.
+
+    Returns
+    -------
+    set[str]
+        The goals its rules finish early, and those they finish early in turn;
+        empty past the depth limit, which stops a cyclic Makefile.
+    """
+    found: set[str] = set()
+    if depth <= 0:
+        return found
+    for rule in index.get(goal, []):
+        for name in next_goals(rule, index, depth):
+            found.add(name)
+            found |= early_set(name, index, depth - 1)
     return found
