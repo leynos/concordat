@@ -860,16 +860,71 @@ expression_literals(text) := {literal |
   literal := lower(trim(raw, "'"))
 }
 
+# A `matrix.<key>` reference in value position names the runner each matrix
+# leg sets. When the job's ratchet is switched by the matrix, only the legs
+# that ratchet decide the platform that must also run on the trunk. A leg's
+# value may itself be an expression, read the same way.
+matrix_legs(job) := legs if {
+  strategy := object.get(job, "strategy", {})
+  is_object(strategy)
+  matrix := object.get(strategy, "matrix", {})
+  is_object(matrix)
+  legs := object.get(matrix, "include", [])
+  is_array(legs)
+}
+
+ratchet_switch_keys(job) := {key |
+  some step in object.get(job, "steps", [])
+  is_object(step)
+  is_coverage_step(step)
+  key := matrix_ratchet_key(step)
+}
+
+platform_legs(job) := [leg |
+  some leg in matrix_legs(job)
+  is_object(leg)
+  every key in ratchet_switch_keys(job) {
+    object.get(leg, key, null) in {true, "true"}
+  }
+]
+
+matrix_value_literals(raw) := expression_literals(raw) if contains(raw, "${{")
+
+matrix_value_literals(raw) := {lower(raw)} if not contains(raw, "${{")
+
+matrix_refs(label) := {key |
+  some match in regex.find_all_string_submatch_n(`(?:&&|\|\||\$\{\{)\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)`, label, -1)
+  key := match[1]
+}
+
+matrix_values_for(job, key) := {value |
+  some leg in platform_legs(job)
+  raw := object.get(leg, key, null)
+  is_string(raw)
+  some value in matrix_value_literals(raw)
+}
+
+unresolved_matrix_ref(job) if {
+  some label in runner_labels(job)
+  some key in matrix_refs(label)
+  count(matrix_values_for(job, key)) == 0
+}
+
 expression_values(job) := values if {
   runner_is_expression(job)
   labels := runner_labels(job)
   values := {value |
     some label in labels
     some value in expression_literals(label)
+  } | {value |
+    some label in labels
+    some key in matrix_refs(label)
+    some value in matrix_values_for(job, key)
   }
 }
 
 job_platform(job) := platform if {
+  not unresolved_matrix_ref(job)
   values := expression_values(job)
   count(values) > 0
   classified := {value | some value in values; label_platform(value)}

@@ -455,7 +455,9 @@ concordat artefact rule run main-owned-codescene-coverage --repo /path/to/checko
 
 It requires that:
 
-- pull-request coverage uses the main-derived local ratchet, sets
+- pull-request coverage uses the main-derived local ratchet (one ratcheting
+  step per job, because the shared action keeps one baseline per job; a ratchet
+  switched by `matrix.<key>` counts when one leg sets the key true), sets
   `publish-artefact: 'false'`, and neither invokes CodeScene nor binds
   `CS_ACCESS_TOKEN` in an `env` block, a `run` body or an action input;
 - exactly one workflow triggered by a push to `main` (optionally alongside

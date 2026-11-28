@@ -11,9 +11,14 @@ The rule requires all of the following.
 
 Pull-request lanes keep coverage local:
 
-- Every `generate-coverage` step in a pull-request workflow uses
-  `with-ratchet: true`, and its effective Rust and Python baseline paths match
-  a ratcheting generator in the main publisher.
+- Every pull-request job that generates coverage has one `generate-coverage`
+  step with `with-ratchet: true`, and that step's effective Rust and Python
+  baseline paths match a ratcheting generator in the main publisher. The shared
+  action keeps one baseline per job, so the job's other coverage steps need not
+  ratchet. A ratchet switched by the matrix (`with-ratchet: ${{ matrix.key }}`)
+  counts when at least one `include` leg sets that key true; the platform that
+  must also run on the trunk is then the one those legs name, read from
+  `matrix.<key>` references in `runs-on`.
 - Every `generate-coverage` step in a pull-request workflow sets
   `publish-artefact: 'false'`. The action defaults that input to `"true"`, so a
   lane that omits it publishes the report; the rule reads the effective value.
