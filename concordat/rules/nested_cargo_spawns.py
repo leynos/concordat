@@ -43,7 +43,7 @@ from .nested_cargo_commands import (
     helper_body,
     unreached_helper,
 )
-from .nested_cargo_compiles import COMPILES_UNKNOWN, compiles_state
+from .nested_cargo_compiles import COMPILES_UNKNOWN, compiles_state, program_compiles
 from .nested_cargo_helpers import helper_call_sites, helper_definition
 from .nested_cargo_reach import reached_by, unseen_owners
 from .nested_cargo_scope import discover_scope
@@ -158,8 +158,23 @@ TRYBUILD_PACKAGE: typ.Final = "trybuild"
 _HELPER: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)\s*\(")
 
 
-def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
-    """Return the policy fact for one classified command."""
+def _fact(
+    source: RustSource,
+    command: CargoCommand,
+    state: str,
+    *,
+    compilers: bool = False,
+) -> SpawnFact:
+    """Return the policy fact for one classified command.
+
+    With *compilers*, a program that is a compiler or a shell that may run one
+    is read for what it compiles; any other program stays `unknown`.
+
+    Returns
+    -------
+    SpawnFact
+        The fact for the command at its source line.
+    """
     target = read_target(command.calls, function_text(source, command.start))
     return {
         "path": source.relative.as_posix(),
@@ -174,14 +189,24 @@ def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
         "environment": list(command.environment),
         # A program other than cargo builds through its own cargo, and nothing
         # in its argument list says which subcommand that is.
-        "compiles": (
-            COMPILES_UNKNOWN
-            if command.form == PROGRAM_FORM
-            else compiles_state(command.calls)
-        ),
+        "compiles": _compiles(command, compilers=compilers),
         "target_state": target.state,
         "target_source": target.source,
     }
+
+
+def _compiles(command: CargoCommand, *, compilers: bool) -> str:
+    """Return whether a command's program and arguments start a compile.
+
+    Returns
+    -------
+    str
+        `yes`, `no` or `unknown`.
+    """
+    if command.form != PROGRAM_FORM:
+        return compiles_state(command.calls)
+    known = program_compiles(command.program, command.calls) if compilers else None
+    return known or COMPILES_UNKNOWN
 
 
 def _helper_names(source: RustSource) -> dict[str, tuple[int, int]]:
@@ -214,6 +239,7 @@ def _direct_commands(
     pairs: list[tuple[int, int]],
     *,
     cold_build: bool = False,
+    compilers: bool = False,
 ) -> list[CargoCommand]:
     """Return the cargo commands this source builds outside a helper body.
 
@@ -232,13 +258,29 @@ def _direct_commands(
     for match in COMMAND_NEW.finditer(source.masked):
         if _in_ranges(match.start(), bodies):
             continue
-        command = construction(source, match, pairs, any_program=cold_build)
-        if command is None:
-            continue
-        if command.form == PROGRAM_FORM and not _is_target_program(command, source):
-            continue
-        found.append(command)
+        command = construction(
+            source, match, pairs, any_program=cold_build or compilers
+        )
+        if command is not None and _is_reported(command, source, compilers=compilers):
+            found.append(command)
     return found
+
+
+def _is_reported(command: CargoCommand, source: RustSource, *, compilers: bool) -> bool:
+    """Report whether a construction belongs in the facts.
+
+    A cargo command always does. A program that is not cargo does when it sets a
+    cargo target, or, for the test-builds rule, when it is a compiler or a shell
+    that may run one.
+
+    Returns
+    -------
+    bool
+        True when the command is read.
+    """
+    if command.form != PROGRAM_FORM or _is_target_program(command, source):
+        return True
+    return compilers and program_compiles(command.program, command.calls) is not None
 
 
 def _is_target_program(command: CargoCommand, source: RustSource) -> bool:
@@ -278,12 +320,18 @@ def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
         contributes none.
     """
     found: list[tuple[CargoCommand, str]] = []
-    seen: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
+    seen: set[tuple[str, tuple[tuple[str, str], ...], str]] = set()
     for execution in command.executions or [command]:
         state = command_state(execution)
         # Two online runs that build in different places are two facts: the
         # cold-build rule judges where each one builds.
-        key = (state or "", target_signature(execution.calls))
+        # A run that compiles is not the same fact as one that does not, so a
+        # later `build` added to a command that ran offline is kept.
+        key = (
+            state or "",
+            target_signature(execution.calls),
+            compiles_state(execution.calls),
+        )
         if state is None or key in seen:
             continue
         seen.add(key)
@@ -347,7 +395,11 @@ def _helper_commands(
 
 
 def _source_facts(
-    source: RustSource, scope: TestScope, *, cold_build: bool = False
+    source: RustSource,
+    scope: TestScope,
+    *,
+    cold_build: bool = False,
+    compilers: bool = False,
 ) -> list[SpawnFact]:
     """Return the spawn facts of one source.
 
@@ -378,17 +430,19 @@ def _source_facts(
     helpers = _helper_names(source)
     direct = [
         command
-        for command in _direct_commands(source, helpers, pairs, cold_build=cold_build)
+        for command in _direct_commands(
+            source, helpers, pairs, cold_build=cold_build, compilers=compilers
+        )
         if scope.contains(command.start)
     ]
     sites = _helper_commands(source, helpers, scope, pairs, cold_build=cold_build)
     direct_facts = [
-        _fact(source, ledger, state)
+        _fact(source, ledger, state, compilers=compilers)
         for command in direct
         for ledger, state in _reads(command)
     ]
     site_facts = [
-        _fact(source, ledger, state)
+        _fact(source, ledger, state, compilers=compilers)
         for command in sites
         for ledger, state in _reads(command)
         if cold_build or state != "offline"
@@ -605,6 +659,7 @@ def collect_rust_evidence(
     problems: list[str],
     *,
     cold_build: bool = False,
+    compilers: bool = False,
 ) -> RustEvidence:
     """Return the spawn and trybuild evidence for one checkout.
 
@@ -616,6 +671,9 @@ def collect_rust_evidence(
         Each decoded `Cargo.toml` below and at the root, by absolute path.
     problems:
         The fact list; an unreadable source appends one sentence each.
+    compilers:
+        Also report a direct `rustc` or `rustdoc` command, and a shell command
+        that may run a compiler, for the test-builds rule.
     cold_build:
         Read the facts for the cold-build rule: also report a command that
         starts another program but sets the build's target directory, and keep
@@ -635,7 +693,7 @@ def collect_rust_evidence(
         fact
         for source in sources
         for fact in _source_facts(
-            source, scopes[source.relative], cold_build=cold_build
+            source, scopes[source.relative], cold_build=cold_build, compilers=compilers
         )
     ]
     aliases = _aliases_by_directory(checkout, manifests)

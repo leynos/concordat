@@ -15,7 +15,7 @@ import typing as typ
 
 from .nested_cargo_commands import ARGUMENT_METHODS, UNSEEN_ARGUMENTS
 from .nested_cargo_spawn import SUBCOMMANDS
-from .nested_cargo_text import argument_items
+from .nested_cargo_text import argument_items, string_literals
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -148,3 +148,50 @@ def _subcommand_state(subcommand: str, rest: list[str | None]) -> str:
     if subcommand == "package" and _LISTING_FLAGS.intersection(rest):
         return COMPILES_NO
     return COMPILES_YES
+
+
+_COMPILER_PROGRAMS: typ.Final = frozenset({"rustc", "rustdoc"})
+_COMPILER_WORD: typ.Final = re.compile(r"\b(?:cargo|rustc|rustdoc)\b")
+_SHELL_PROGRAMS: typ.Final = frozenset({
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "cmd",
+    "powershell",
+    "pwsh",
+})
+
+
+def _program_name(path: str) -> str:
+    """Return a program's file name without its directories or `.exe` suffix."""
+    return path.replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
+
+
+def _may_run_compiler(words: list[str | None]) -> bool:
+    """Report whether shell arguments are unreadable or name a compiler."""
+    return any(w is None or _COMPILER_WORD.search(w) for w in words)
+
+
+def program_compiles(program: str, calls: cabc.Iterable[tuple[str, str]]) -> str | None:
+    """Say whether a non-cargo program is a compiler, or a shell that may run one.
+
+    A shell is judged on its arguments: one the reader cannot read, or one that
+    names `cargo`, `rustc` or `rustdoc`, may start a compile, and what it
+    starts is unknown.
+    A shell whose arguments are all readable and name neither compiles nothing.
+
+    Returns
+    -------
+    str | None
+        `yes` for `rustc` or `rustdoc`, `unknown` for such a shell, and None for
+        any other program, which the reader leaves alone.
+    """
+    literals = string_literals(program)
+    named = literals[0] if literals is not None and len(literals) == 1 else None
+    name = _program_name(named) if named is not None else None
+    if name in _COMPILER_PROGRAMS:
+        return COMPILES_YES
+    if name not in _SHELL_PROGRAMS:
+        return None
+    return COMPILES_UNKNOWN if _may_run_compiler(_argument_words(calls)) else None
