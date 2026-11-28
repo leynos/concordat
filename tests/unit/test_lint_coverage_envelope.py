@@ -338,6 +338,8 @@ class TestRuns:
             ),
             ("", "        working-directory: ' ext '\n", [("clippy", None)]),
             ("", "        working-directory: ' . '\n", [("clippy", None)]),
+            ("", "        working-directory: link/../ext\n", [("clippy", None)]),
+            ("", "        working-directory: ext/..\n", [("clippy", None)]),
             ("", "        working-directory: ''\n", [("clippy", "Cargo.toml")]),
             ("", "        working-directory: /abs\n", [("clippy", None)]),
         ],
@@ -364,20 +366,29 @@ class TestRuns:
         assert _runs(tmp_path) == expected
 
     @pytest.mark.parametrize(
-        ("directory", "expected"),
-        [("ext", "Cargo.toml"), ("${{ env.BASE }}", None)],
+        ("directory", "command", "expected"),
+        [
+            ("ext", "cd .. && cargo clippy", "Cargo.toml"),
+            ("${{ env.BASE }}", "cd .. && cargo clippy", None),
+            ("ext", "cd ${{ env.BASE }}/.. && cargo clippy", None),
+            ("ext", "cd $BASE/.. && cargo clippy", None),
+        ],
     )
     def test_a_cd_in_a_step_moves_from_its_working_directory(
-        self, tmp_path: pathlib.Path, directory: str, expected: str | None
+        self,
+        tmp_path: pathlib.Path,
+        directory: str,
+        command: str,
+        expected: str | None,
     ) -> None:
-        """`cd ..` from `ext` is the root; from an unknown directory it is unknown."""
+        """`cd ..` from `ext` is the root; an unknown start or target is unknown."""
         _app(
             tmp_path,
             {
                 "ext/Cargo.toml": MANIFEST.format(name="ext", extra=""),
                 ".github/workflows/ci.yml": (
                     "name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
-                    "    steps:\n      - run: cd .. && cargo clippy\n"
+                    f"    steps:\n      - run: {command}\n"
                     f"        working-directory: {directory}\n"
                 ),
             },

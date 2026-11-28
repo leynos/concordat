@@ -146,7 +146,10 @@ def _next_directory(directory: str | None, words: list[str]) -> str | None:
     target = words[1] if len(words) > 1 else None
     if directory is None or target is None:
         return None
-    if target.startswith(("/", "~", "-")) or any(c in target for c in "$*?"):
+    if target.startswith(("/", "~", "-")):
+        return None
+    # An unresolved reference (a mark or a `$`) must not be normalised away.
+    if any(mark in target for mark in (UNRESOLVED_MARK, SHELL_DOLLAR, "$", "*", "?")):
         return None
     moved = posixpath.normpath(posixpath.join(directory or ".", target))
     return "" if moved == "." else moved
@@ -392,9 +395,11 @@ def _step_directory(step: StepRun) -> str | None:
         return None
     if any(mark in given for mark in (UNRESOLVED_MARK, SHELL_DOLLAR, "$")):
         return None
-    directory = posixpath.normpath(given)
-    if posixpath.isabs(directory) or directory.split("/")[0] == "..":
+    # A `..` after a name may step back out of a symbolic link to somewhere else,
+    # so the path is only followed when it never climbs.
+    if posixpath.isabs(given) or ".." in given.split("/"):
         return None
+    directory = posixpath.normpath(given)
     return "" if directory == "." else directory
 
 
