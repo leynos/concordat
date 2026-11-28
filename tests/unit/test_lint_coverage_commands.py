@@ -176,6 +176,13 @@ class TestPlacement:
         nested = _run("cargo clippy --manifest-path Cargo.toml", directory="sub")
         assert nested["manifest"] == "sub/Cargo.toml"
 
+    def test_a_manifest_path_that_climbs_from_a_directory_is_unplaced(self) -> None:
+        """`..` may step out of a link, so only the root's own `..` is followed."""
+        climbing = _run("cargo clippy --manifest-path ../Cargo.toml", directory="link")
+        assert (climbing["is_placed"], climbing["manifest"]) == (False, None)
+        at_root = _run("cargo clippy --manifest-path a/../b/Cargo.toml", directory="")
+        assert at_root["manifest"] == "b/Cargo.toml"
+
     def test_a_directory_moved_to_names_its_manifest(self) -> None:
         """After `cd rust_extension`, the command targets that crate."""
         assert _run("cargo clippy", directory="rust_extension")["manifest"] == (
