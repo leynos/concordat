@@ -763,6 +763,11 @@ ORDERING_CASES = [
         id="no-run-is-in-a-comment",
     ),
     pytest.param(
+        "test: warmup cargo\n\ttrue\n\ncargo:\n\t$@ test\n\n" + WARM,
+        UNREADABLE,
+        id="an-automatic-variable-names-the-command",
+    ),
+    pytest.param(
         "test:: warmup\ntest::\n\tcargo nextest run\n\n" + WARM,
         UNREADABLE,
         id="a-double-colon-rule",

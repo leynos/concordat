@@ -33,12 +33,13 @@ _TEST_COMMAND: typ.Final = re.compile(
     r"\b(?:cargo(?:-\w+)?\s+(?:\S+\s+)*?(?:nextest|test|bench|llvm-cov|tarpaulin)"
     r"|nextest|pytest)\b"
 )
-# A variable (other than `$(MAKE)`) anywhere on the line may expand to a test
-# command: `env $(RUNNER)`, `$(CARGO) test`.
 # Characters that make a command ambiguous to a plain word reading: quoting,
 # expansion, redirection, comments, escapes, grouping.
 _AMBIGUOUS_MARKS: typ.Final = "'\"$`<>#\\(){}"
-_VARIABLE: typ.Final = re.compile(r"\$[({](?!MAKE[)}])|\$[A-Za-z_]")
+# Any `$` other than `$(MAKE)` on the line may expand to a test command: a
+# variable (`env $(RUNNER)`, `$(CARGO) test`), an automatic variable (`$@ test`)
+# or a shell variable.
+_VARIABLE: typ.Final = re.compile(r"\$(?![({]MAKE[)}])")
 _MAKE_CALL: typ.Final = re.compile(
     r"(?:\$\(MAKE\)|\$\{MAKE\}|\bmake)(?P<args>[^;&|()]*)"
 )
