@@ -75,8 +75,7 @@ def line_goals(text: str) -> list[str]:
         The goals, in order. A piece after `||`, one inside quotes and a line
         with a shell branch contribute none.
     """
-    runs = _TEST_COMMAND.search(text)
-    head = text[: runs.start()] if runs else text
+    head = text[: _first_start(text)]
     if _CONTROL_FLOW.search(head):
         return []
     pieces = [
@@ -109,6 +108,16 @@ def dependencies(rule: MakeRule) -> list[str]:
         for found in _ANY_MAKE_CALL.finditer(recipe["text"])
     ]
     return plain_prerequisites(rule) + calls
+
+
+def _first_start(text: str) -> int:
+    """Return where a line first runs a test command or an unreadable goal."""
+    starts = [
+        found.start()
+        for found in (_TEST_COMMAND.search(text), _OPAQUE_MAKE_CALL.search(text))
+        if found is not None
+    ]
+    return min(starts, default=len(text))
 
 
 def _may_run_tests(text: str) -> bool:
@@ -150,6 +159,6 @@ def early_calls(recipes: list[MakeRecipe], index: Index) -> list[str]:
             found.append(goal)
             if starts_tests(goal, index, set()):
                 return found
-        if _TEST_COMMAND.search(recipe["text"]):
+        if _may_run_tests(recipe["text"]):
             break
     return found
