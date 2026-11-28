@@ -104,7 +104,6 @@ _AVAILABLE_OUTPUT: typ.Final = "steps.codescene-token.outputs.available == 'true
 _GUARD: typ.Final = (
     "${{ github.ref == 'refs/heads/main' && " + _AVAILABLE_OUTPUT + " }}"
 )
-_CREDENTIAL_ONLY_GUARD: typ.Final = "${{ " + _AVAILABLE_OUTPUT + " }}"
 
 
 @pytest.fixture
@@ -154,13 +153,14 @@ def given_pr_lane_invokes_codescene(coverage_checkout: pathlib.Path) -> None:
     )
 
 
-@given("a checkout whose publisher upload step has no ref guard")
-def given_publisher_without_ref_guard(coverage_checkout: pathlib.Path) -> None:
-    """Write a checkout whose publisher is guarded on the credential alone."""
+@given("a checkout whose publisher cancels superseded runs")
+def given_publisher_that_cancels(coverage_checkout: pathlib.Path) -> None:
+    """Write a checkout whose publisher cancels in progress instead of queueing."""
+    main = _MAIN_WORKFLOW.format(guard=_GUARD, check=_CHECK_COMMAND)
     _write_workflows(
         coverage_checkout,
         pull_request=_PR_WORKFLOW,
-        main=_MAIN_WORKFLOW.format(guard=_CREDENTIAL_ONLY_GUARD, check=_CHECK_COMMAND),
+        main=main.replace("cancel-in-progress: false", "cancel-in-progress: true"),
     )
 
 

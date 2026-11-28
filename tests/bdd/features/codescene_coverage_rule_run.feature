@@ -22,11 +22,11 @@ Feature: Main-owned CodeScene coverage rule run
     Then the audit exit status is 1
     And the audit output reports "pull-request workflow invokes CodeScene" for "ci.yml"
 
-  Scenario: an unguarded publisher is reported
-    Given a checkout whose publisher upload step has no ref guard
+  Scenario: a publisher that cancels in progress is reported
+    Given a checkout whose publisher cancels superseded runs
     When I audit the checkout for CodeScene coverage
     Then the audit exit status is 1
-    And the audit output reports "not guarded on github.ref" for "coverage-main.yml"
+    And the audit output reports "cancels in progress" for "coverage-main.yml"
 
   Scenario: a workflow directory outside the checkout is refused
     Given a checkout whose workflow directory links outside it

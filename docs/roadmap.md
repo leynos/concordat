@@ -457,9 +457,11 @@ actuators that remediate them. Each check ships as a lint rule package under
   PR-scoped baselines each raise findings; compliant fixtures keep the PR
   ratchet and main-only upload; mutations emit the canonical coverage-main
   workflow and job patches.
-- [x] Ship the main-owned CodeScene coverage publication rule (CV-005):
-  pull-request workflows generate coverage with the main-derived local ratchet,
-  set `publish-artefact: 'false'`, and never invoke CodeScene or receive
+- [x] Ship the main-owned CodeScene coverage publication rule (CV-005; rule
+  0.4.0 later dropped the upload-guard, environment and digest-variable clauses
+  described below, per the user rulings of 6 and 28 November): pull-request
+  workflows generate coverage with the main-derived local ratchet, set
+  `publish-artefact: 'false'`, and never invoke CodeScene or receive
   `CS_ACCESS_TOKEN`; exactly one main-only push workflow writes the ratchet
   baseline and uploads with `mode: upload` from a step guarded on `github.ref`
   and the credential with no disjunction, under a concurrency block that queues
