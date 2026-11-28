@@ -655,6 +655,12 @@ NC013 = {("NC-013", "tests/cli.rs")}
             id="unordered-sibling-prerequisites",
         ),
         pytest.param(
+            "test: warmup run\n\ttrue\n\n"
+            'run:\n\t@echo "make warmup"\n\tcargo nextest run\n\n' + WARM,
+            NC013,
+            id="a-quoted-mention-is-not-an-ordering-edge",
+        ),
+        pytest.param(
             "test: warmup run\n\ttrue\n\nrun: warmup\n\tcargo nextest run\n\n" + WARM,
             NONE,
             id="a-sibling-that-depends-on-the-warm-up",
