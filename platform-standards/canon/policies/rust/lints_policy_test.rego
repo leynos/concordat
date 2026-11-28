@@ -483,6 +483,15 @@ test_a_boundary_crate_may_hold_unsafe_code_at_deny if {
   count(result) == 0
 }
 
+test_a_root_package_without_a_workspace_may_hold_unsafe_code_at_deny if {
+  other := object.union(canonical_lints, {"rust": object.union(canonical_lints.rust, {"unsafe_code": "deny"})})
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": {"package": {"name": "demo"}, "lints": other},
+    "clippy": clippy_cfg,
+  }
+  count(result) == 0
+}
+
 test_unsafe_code_below_deny_is_rejected if {
   result := data.canon.rust.lints.deny with input as with_rust({"unsafe_code": "warn"})
   result[_] == "rust lint unsafe_code must equal \"forbid\""
