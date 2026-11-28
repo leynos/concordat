@@ -2105,37 +2105,38 @@ coverage generated after a merge on `main`.
   November), but it does judge where the token is named. A credential-check
   step, if the publisher has one, is one of the two places that may name the
   token: it has no `if:` and no `env`, and checks `secrets.CS_ACCESS_TOKEN` and
-  writes `available` to `$GITHUB_OUTPUT`. The other is the upload's action
-  input. The rule does not require either. A workflow that uploads names the
-  token nowhere else, so no `env` block, other `run` body, other action input
-  or condition holds it; static-analysis tools kept flagging the older `env`
-  binding, which the composite upload action also handed to every nested step.
-  The token is a secret of the `codescene` environment, whose branch policy
-  admits `main` alone: a branch copy of the publisher dispatched by any pusher
-  cannot read it. The Concordat Auditor checks the environment itself as
-  CV-006, since repository settings are outside any checkout. It reads, through
-  the API, whether `codescene` exists, whether its deployment branch policy is
-  a custom policy admitting the branch `main` alone, and the names (never the
-  values) of the environment's and the repository's secrets. Each remaining
-  step of a move is a finding of its own: a missing environment, a
-  protected-branches or wider policy, the token still a repository secret
-  ("secret not yet moved"), or the token absent from the environment. A read
-  the token may not make is reported as indeterminate rather than passed. A
-  `workflow_dispatch` of a publisher that declares the environment from any
-  branch but `main` is refused by GitHub for the whole job, matrix legs that do
-  not upload included, rather than skipped at the upload step. That is
-  intended: a branch proof of a coverage change runs through the pull-request
-  lane's coverage run instead. Arbitrary shell provenance and cross-job outputs
-  remain outside this local policy's proof. Workflow discovery is explicitly
-  fallible: an absent `.github/workflows` is a repository with no workflows,
-  while an unreadable or unlistable one is an operational error rather than an
-  empty list that would clear the rule. Adopting this rule removes a quality
-  gate from the pull-request lane, so an adoption is reviewed in full rather
-  than merged mechanically on green. Actions caches saved on a pull-request
-  branch are invisible to other branches, so a PR-only ratchet cannot provide
-  the authoritative baseline. The secret-store sensor lists secret names via
-  the GitHub API for both stores and cross-references every `if: env.X != ''`
-  guard in the repository's workflows.
+  writes `available` to `$GITHUB_OUTPUT`. The other is the `access-token` input
+  of a CodeScene action step in upload, `check` or `install` mode, when its
+  value is exactly the secret. The rule does not require either. A workflow
+  that uploads names the token nowhere else, so no `env` block, other `run`
+  body, other action input or condition holds it; static-analysis tools kept
+  flagging the older `env` binding, which the composite upload action also
+  handed to every nested step. The token is a secret of the `codescene`
+  environment, whose branch policy admits `main` alone: a branch copy of the
+  publisher dispatched by any pusher cannot read it. The Concordat Auditor
+  checks the environment itself as CV-006, since repository settings are
+  outside any checkout. It reads, through the API, whether `codescene` exists,
+  whether its deployment branch policy is a custom policy admitting the branch
+  `main` alone, and the names (never the values) of the environment's and the
+  repository's secrets. Each remaining step of a move is a finding of its own:
+  a missing environment, a protected-branches or wider policy, the token still
+  a repository secret ("secret not yet moved"), or the token absent from the
+  environment. A read the token may not make is reported as indeterminate
+  rather than passed. A `workflow_dispatch` of a publisher that declares the
+  environment from any branch but `main` is refused by GitHub for the whole
+  job, matrix legs that do not upload included, rather than skipped at the
+  upload step. That is intended: a branch proof of a coverage change runs
+  through the pull-request lane's coverage run instead. Arbitrary shell
+  provenance and cross-job outputs remain outside this local policy's proof.
+  Workflow discovery is explicitly fallible: an absent `.github/workflows` is a
+  repository with no workflows, while an unreadable or unlistable one is an
+  operational error rather than an empty list that would clear the rule.
+  Adopting this rule removes a quality gate from the pull-request lane, so an
+  adoption is reviewed in full rather than merged mechanically on green.
+  Actions caches saved on a pull-request branch are invisible to other
+  branches, so a PR-only ratchet cannot provide the authoritative baseline. The
+  secret-store sensor lists secret names via the GitHub API for both stores and
+  cross-references every `if: env.X != ''` guard in the repository's workflows.
 - **Actuators:** canonical `coverage-main.yml` file-copy and coverage-job
   patches retain the local PR ratchet and the main-only CodeScene upload. A
   `concordat`-driven secret provisioning command sets an operator-supplied

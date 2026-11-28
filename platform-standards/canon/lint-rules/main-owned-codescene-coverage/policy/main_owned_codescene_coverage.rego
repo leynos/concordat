@@ -547,7 +547,8 @@ passes_token_secret(step) if {
 }
 
 # Clause 5: an uploader names the token only in two kinds of place, the check
-# step's command and the upload action's `access-token` input. A `run` body
+# step's command and the `access-token` input of a CodeScene action step
+# whose value is exactly the secret (any mode). A `run` body
 # interpolating it puts the secret in a shell process that checked-out code
 # can read, an `env` binding at any level reaches every step beneath it, and
 # another action's input hands it across a boundary nobody approved. Every
