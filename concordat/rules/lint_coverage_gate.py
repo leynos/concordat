@@ -243,6 +243,23 @@ def _read_kept(
     return None if moved != directory else moved
 
 
+def _cd(reader: _Reader, directory: str | None, words: list[str]) -> str | None:
+    """Return the directory after a `cd`, or None when it cannot be followed.
+
+    `cd ..` from a symbolic link leaves the link target's parent, not the
+    link's own, so that is not followed either.
+
+    Returns
+    -------
+    str | None
+        The directory the next command runs in.
+    """
+    moved = _next_directory(directory, words)
+    if moved is None or not directory:
+        return moved
+    return None if reader.is_climbing_a_link(directory, words) else moved
+
+
 def _read_command(
     reader: _Reader, words: list[str], source: str, directory: str | None
 ) -> str | None:
@@ -254,15 +271,7 @@ def _read_command(
         The directory the next command runs in.
     """
     if words and words[0].lstrip("@-+") == "cd":
-        moved = _next_directory(directory, words)
-        # `cd ..` from a symbolic link leaves its parent, not the link's own.
-        if (
-            moved is not None
-            and directory
-            and reader.is_climbing_a_link(directory, words)
-        ):
-            return None
-        return moved
+        return _cd(reader, directory, words)
     reader.runs.extend(_command_runs(reader, words, source, directory))
     return directory
 
