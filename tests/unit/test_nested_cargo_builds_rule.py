@@ -167,6 +167,18 @@ fn queries_through_an_alias() {
 }
 """
 
+OTHER_RUNNER_TEST = """\
+#[test]
+fn imports_an_alias() {
+    use cargo_metadata::MetadataCommand as Runner;
+}
+
+#[test]
+fn uses_an_unrelated_runner() {
+    let _ = Runner::new();
+}
+"""
+
 PROBE_TEST = """\
 #[test]
 fn reports_a_version() {
@@ -667,6 +679,31 @@ ORDERING_CASES = [
         id="a-sibling-calling-several-goals",
     ),
     pytest.param(
+        "test: warmup run\n\ttrue\n\nrun:\n\tenv $(RUNNER)\n\n" + WARM,
+        UNREADABLE,
+        id="a-wrapped-variable-command",
+    ),
+    pytest.param(
+        "ifeq (1,0)\ntest: warmup\nendif\ntest:\n\tcargo nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="a-conditional-prerequisite",
+    ),
+    pytest.param(
+        "test: warmup run\n\ttrue\n\nr%:\n\tcargo nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="a-recipe-from-a-pattern-rule",
+    ),
+    pytest.param(
+        "test: warmup\n\ttrue\n\nwarmup:\n\tcargo nextest run\n\tcargo build\n",
+        UNREADABLE,
+        id="a-warm-up-that-runs-the-tests",
+    ),
+    pytest.param(
+        "test: warmup\n\tcargo nextest run\n\nwarmup:\n\tcargo test --no-run\n",
+        NONE,
+        id="a-compile-only-warm-up",
+    ),
+    pytest.param(
         "test:: warmup\ntest::\n\tcargo nextest run\n\n" + WARM,
         UNREADABLE,
         id="a-double-colon-rule",
@@ -700,3 +737,11 @@ def test_a_metadata_query_through_an_import_alias_is_a_builder(
     """`use ... MetadataCommand as Metadata;` then `Metadata::new()` is a query."""
     root = checkout(tmp_path, {"tests/graph.rs": ALIASED_METADATA_TEST})
     assert profile(root) == {("NC-011", "tests/graph.rs")}
+
+
+def test_an_alias_is_scoped_to_the_function_that_imports_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A local `as Runner` import does not make `Runner` elsewhere a query."""
+    root = checkout(tmp_path, {"tests/graph.rs": OTHER_RUNNER_TEST})
+    assert profile(root) == set()

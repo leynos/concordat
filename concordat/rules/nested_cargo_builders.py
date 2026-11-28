@@ -183,6 +183,23 @@ def _is_import(masked: str, offset: int) -> bool:
     return bool(uses) and ";" not in masked[uses[-1] : offset]
 
 
+def _aliases(source: RustSource) -> dict[str, set[tuple[int, int] | None]]:
+    """Return the names `MetadataCommand` goes by, with where each is in scope.
+
+    Returns
+    -------
+    dict[str, set[tuple[int, int] | None]]
+        The type's own name, in scope everywhere (None), and each `as` alias,
+        in scope in the function that imports it, or everywhere when it is
+        imported outside any function.
+    """
+    found: dict[str, set[tuple[int, int] | None]] = {"MetadataCommand": {None}}
+    for alias in _METADATA_ALIAS.finditer(source.masked):
+        span = function_span(source, alias.start())
+        found.setdefault(alias.group("name"), set()).add(span)
+    return found
+
+
 def _metadata_builders(source: RustSource) -> list[BuilderFact]:
     """Return the `MetadataCommand` uses inside functions of a test source.
 
@@ -198,11 +215,14 @@ def _metadata_builders(source: RustSource) -> list[BuilderFact]:
     if not whole_file_scope(source.relative):
         return []
     found: list[BuilderFact] = []
-    names = ["MetadataCommand", *_METADATA_ALIAS.findall(source.masked)]
-    uses = re.compile(r"\b(?:" + "|".join(map(re.escape, names)) + r")\b")
+    aliases = _aliases(source)
+    uses = re.compile(r"\b(?:" + "|".join(map(re.escape, aliases)) + r")\b")
     for match in uses.finditer(source.masked):
         span = function_span(source, match.start())
+        scopes = aliases[match.group()]
         if span is None or _is_import(source.masked, match.start()):
+            continue
+        if None not in scopes and span not in scopes:
             continue
         found.append({
             "path": source.relative.as_posix(),

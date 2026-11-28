@@ -26,9 +26,16 @@ if typ.TYPE_CHECKING:
 
 type Index = dict[str, list[MakeRule]]
 
-_TEST_COMMAND: typ.Final = re.compile(r"\b(?:cargo|nextest|pytest)\b")
-# A command word that is a variable other than `$(MAKE)` may expand to anything.
-_VARIABLE_COMMAND: typ.Final = re.compile(r"^\s*[@+-]*\s*\$[({](?!MAKE[)}])")
+# A command that runs tests: `cargo test`, `cargo nextest ...`, `nextest`, `pytest`.
+# A compile-only line (`--no-run`, `archive`) prepares and does not start them.
+_TEST_COMMAND: typ.Final = re.compile(
+    r"\b(?:cargo(?:-\w+)?\s+(?:\S+\s+)*?(?:nextest|test|bench|llvm-cov|tarpaulin)"
+    r"|nextest|pytest)\b"
+)
+_COMPILE_ONLY: typ.Final = re.compile(r"--no-run\b|\barchive\b")
+# A variable (other than `$(MAKE)`) anywhere on the line may expand to a test
+# command: `env $(RUNNER)`, `$(CARGO) test`.
+_VARIABLE: typ.Final = re.compile(r"\$[({](?!MAKE[)}])|\$[A-Za-z_]")
 _MAKE_CALL: typ.Final = re.compile(
     r"(?:\$\(MAKE\)|\$\{MAKE\}|\bmake)(?P<args>[^;&|()]*)"
 )
@@ -62,9 +69,10 @@ def may_run_tests(text: str) -> bool:
         True for a test command, a variable command word, a line the reader
         cannot model, or a recursive `make` it cannot name.
     """
+    is_test = _TEST_COMMAND.search(text) and not _COMPILE_ONLY.search(text)
     return bool(
-        _TEST_COMMAND.search(text)
-        or _VARIABLE_COMMAND.search(text)
+        is_test
+        or _VARIABLE.search(text)
         or _is_unreadable(text)
         or _has_opaque_call(text)
     )

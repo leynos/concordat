@@ -76,7 +76,12 @@ def _early(goal: str, index: Index, depth: int = _DEPTH) -> set[str]:
     starters = [name for name in plain if starts_tests(name, index, set())]
     found: set[str] = set()
     for name in plain:
-        if all(name == s or name in _early(s, index, depth - 1) for s in starters):
+        is_ordered = all(
+            name == s or name in _early(s, index, depth - 1) for s in starters
+        )
+        # A prerequisite that may itself run the tests is not a warm-up: it has
+        # not finished when they start.
+        if is_ordered and not starts_tests(name, index, set()):
             found.add(name)
             found |= _early(name, index, depth - 1)
     return found
@@ -94,13 +99,35 @@ def _closure(index: Index) -> set[str]:
     return seen
 
 
+def _phony(index: Index) -> set[str]:
+    """Return the goals declared `.PHONY`."""
+    return {name for rule in index.get(".PHONY", []) for name in rule["prerequisites"]}
+
+
+def _has_implicit_recipe(goal: str, index: Index) -> bool:
+    """Report whether a goal with no recipe may get one from a pattern rule."""
+    has_recipe = any(rule["recipes"] for rule in index.get(goal, []))
+    has_pattern = any("%" in target for target in index)
+    return has_pattern and not has_recipe and goal not in _phony(index)
+
+
 def _models(goal: str, index: Index) -> bool:
-    """Report whether the reader models every rule of *goal*."""
+    """Report whether the reader models every rule of *goal*.
+
+    Returns
+    -------
+    bool
+        False for a rule written with a variable prerequisite, a double colon, a
+        condition, a second recipe, or one whose recipe may come from a pattern
+        rule.
+    """
     rules = index.get(goal, [])
     with_recipe = [rule for rule in rules if rule["recipes"]]
     has_hidden = any("$" in name for rule in rules for name in rule["prerequisites"])
     has_double = any(rule["double_colon"] for rule in rules)
-    return not (has_hidden or has_double or len(with_recipe) > 1)
+    has_condition = any(rule["conditions"] for rule in rules)
+    is_plain = not (has_hidden or has_double or has_condition)
+    return is_plain and len(with_recipe) <= 1 and not _has_implicit_recipe(goal, index)
 
 
 def read_make_goals(checkout: pathlib.Path) -> MakeGoals:
