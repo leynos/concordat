@@ -31,6 +31,7 @@ if typ.TYPE_CHECKING:
     from .nested_cargo_spawns import RustEvidence, SpawnFact
 
 _METADATA: typ.Final = re.compile(r"\bMetadataCommand\b")
+_USE: typ.Final = re.compile(r"\s*(?:pub(?:\([^)]*\))?\s+)?use\b")
 _SUITES: typ.Final = ("trybuild", "macrotest")
 
 
@@ -174,6 +175,12 @@ def _suite_builder(source: RustSource, line: int, form: str) -> BuilderFact:
     }
 
 
+def _is_import(masked: str, offset: int) -> bool:
+    """Report whether the token at *offset* sits in a `use` declaration."""
+    start = max(masked.rfind(mark, 0, offset) for mark in ";{}") + 1
+    return _USE.match(masked, start) is not None
+
+
 def _metadata_builders(source: RustSource) -> list[BuilderFact]:
     """Return the `MetadataCommand` uses inside functions of a test source.
 
@@ -191,7 +198,7 @@ def _metadata_builders(source: RustSource) -> list[BuilderFact]:
     found: list[BuilderFact] = []
     for match in _METADATA.finditer(source.masked):
         span = function_span(source, match.start())
-        if span is None:
+        if span is None or _is_import(source.masked, match.start()):
             continue
         found.append({
             "path": source.relative.as_posix(),

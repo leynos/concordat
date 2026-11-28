@@ -70,6 +70,14 @@ test_nc012_cannot_be_exempted if {
 	count({f | some f in findings_with(data.fixtures.scratch_harness, listed); f.rule_id == "NC-012"}) == 1
 }
 
+test_a_non_string_harness_reference_is_an_error if {
+	builder := object.union(data.fixtures.scratch_harness.builders[0], {"harness_references": [42]})
+	fixture := object.union(data.fixtures.scratch_harness, {"builders": [builder]})
+	some f in findings(fixture)
+	f.rule_id == "EN-001"
+	f.severity == "error"
+}
+
 test_a_harness_name_alone_is_not_nc012 if {
 	count({f | some f in findings(data.fixtures.harness_only); f.rule_id == "NC-012"}) == 0
 }

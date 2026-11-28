@@ -241,7 +241,7 @@ artifacts:
       Sensor requiring a test's real compile to be declared with the subject it
       tests and a warm-up that resolves, and rejecting a build of the test
       infrastructure itself.
-    sha256: 3e3541068a56a890f1bd45e0216240f911a1579f9e85281519f69ae03faa1a7b
+    sha256: c97773c178cddc4950e1ae121fc0da2c7abce25600e0f0aec0678a87a7cf7815
   - id: lint-rule-nested-cargo-test-builds-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/nested-cargo-test-builds/rule.yaml

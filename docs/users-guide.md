@@ -1019,8 +1019,10 @@ covered_by = "nextest-setup"
   temporary directory, builds it and uses a name in `harness_paths`. No
   exemption reaches it; give the harness a synthetic input.
 - **NC-013**: a declared warm-up that does not resolve to a Makefile goal that
-  `test` depends on or calls, a nextest setup script that selects the binary,
-  or an existing function.
+  `test` depends on, or calls before the tests start (a call after a test
+  command, after `||`, in a subshell, in a shell branch or after a goal that
+  starts the tests is too late), a nextest setup script that selects every
+  binary built from the file, or an existing function.
 
 A spawn the reader cannot see (another crate's helper, `sh -c`) is
 indeterminate, never guessed. The rule ships at `warning` severity;

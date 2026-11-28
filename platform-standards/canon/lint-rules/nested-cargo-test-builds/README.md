@@ -106,10 +106,15 @@ exclusion and `#[cfg(test)]` handling are theirs.
   configured harness names it mentions.
 - **What it cannot decide:** whether a build is warm (a run-time fact), and
   whether it is really the thing under test (a semantic one, which is why the
-  repository declares the subject). A spawn in another crate's helper, one a
-  macro generates, and one made through `sh -c` are indeterminate, never
-  guessed. A harness test whose spawn sits in a helper while the harness calls
-  sit in the test escapes NC-012's second form, though not NC-011.
+  repository declares the subject). A test that only calls a helper in another
+  crate produces no fact in its own file. If the helper returns a `Command` and
+  its own file has no call site, the reader reports an unreadable builder at
+  the helper's definition when that is in test scope (indeterminate); if the
+  helper runs cargo itself, the reader sees the spawn and reports it as an
+  undeclared builder (NC-011). A spawn a macro generates, and one made through
+  `sh -c`, are indeterminate, never guessed. A harness test whose spawn sits in
+  a helper while the harness calls sit in the test escapes NC-012's second
+  form, though not NC-011.
 - **Python and shell tests** are out of scope, as for NC-004: pytest bounds
   them.
 

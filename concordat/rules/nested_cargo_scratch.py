@@ -12,18 +12,23 @@ tied together by the names the function binds:
 - that destination derives from a temporary directory, through up to three
   `let` bindings;
 - a build location (`current_dir(..)`, a manifest path) that derives from the
-  same temporary directory.
+  *same* temporary directory. Each directory is its own root: a manifest
+  written under one and a build run under another is two crates.
 
 Comments and strings are masked first, so a name in either is not a use.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import typing as typ
 
 from .nested_cargo_text import split_top_level
 from .rust_source import scan_balanced
+
+type Span = tuple[int, int]
+type Origins = frozenset[str]
 
 _MANIFEST_NAME: typ.Final = re.compile(r'"Cargo\.toml"')
 _WRITE_CALL: typ.Final = re.compile(r"\b(?:write|write_all|create|create_new)\s*\(")
@@ -36,12 +41,29 @@ _WORD: typ.Final = re.compile(r"[A-Za-z_]\w*")
 _DERIVATION_DEPTH: typ.Final = 3
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Function:
+    """Hold one function's text, its statements and what its `let`s derive from."""
+
+    text: str
+    masked: str
+    spans: list[Span]
+    provenance: dict[str, Origins]
+
+    def origins(self, words: set[str]) -> Origins:
+        """Return the temporary directories any of *words* derives from."""
+        found: Origins = frozenset()
+        for word in words:
+            found |= self.provenance.get(word, frozenset())
+        return found
+
+
 def _words(masked: str) -> set[str]:
     """Return the identifiers in *masked*."""
     return set(_WORD.findall(masked))
 
 
-def _holds_manifest(text: str, masked: str, span: tuple[int, int]) -> bool:
+def _holds_manifest(text: str, masked: str, span: Span) -> bool:
     """Report whether a span holds a `"Cargo.toml"` literal that is code."""
     return any(
         masked[found.start()] == '"'
@@ -49,49 +71,54 @@ def _holds_manifest(text: str, masked: str, span: tuple[int, int]) -> bool:
     )
 
 
-def _bindings(masked: str, spans: list[tuple[int, int]]) -> dict[str, set[str]]:
+def _bindings(masked: str, spans: list[Span]) -> dict[str, set[str]]:
     """Return, for each `let` name, the identifiers its statement uses."""
-    found: dict[str, set[str]] = {}
+    uses: dict[str, set[str]] = {}
     for start, end in spans:
         bound = _LET_NAME.match(masked, start)
         if bound is not None:
-            found[bound.group("name")] = _words(masked[start:end]) - {
-                bound.group("name")
-            }
-    return found
+            name = bound.group("name")
+            uses[name] = _words(masked[start:end]) - {name}
+    return uses
 
 
-def _temporary_names(
-    masked: str, spans: list[tuple[int, int]], bindings: dict[str, set[str]]
-) -> set[str]:
-    """Return the names derived from a temporary directory.
+def _provenance(masked: str, spans: list[Span]) -> dict[str, Origins]:
+    """Return, for each `let` name, the temporary directories it derives from.
+
+    A name bound to a statement that creates a temporary directory is a root of
+    its own. A name bound to a statement that uses a derived name inherits that
+    name's roots, up to three bindings deep.
 
     Returns
     -------
-    set[str]
-        The names bound to a statement that holds a temporary directory, then
-        those bound to a statement using one of them, up to three levels deep.
+    dict[str, Origins]
+        The roots of each derived name; names with none are absent.
     """
-    names = {
-        bound.group("name")
-        for start, end in spans
-        if (bound := _LET_NAME.match(masked, start)) is not None
-        and _TEMPORARY.search(masked, start, end)
-    }
+    uses = _bindings(masked, spans)
+    found: dict[str, Origins] = {}
+    for start, end in spans:
+        bound = _LET_NAME.match(masked, start)
+        if bound is not None and _TEMPORARY.search(masked, start, end):
+            found[bound.group("name")] = frozenset({bound.group("name")})
     for _ in range(_DERIVATION_DEPTH):
-        names |= {name for name, used in bindings.items() if used & names}
+        for name, used in uses.items():
+            inherited: Origins = frozenset()
+            for word in used:
+                inherited |= found.get(word, frozenset())
+            if inherited:
+                found[name] = found.get(name, frozenset()) | inherited
+    return found
+
+
+def _manifest_names(text: str, masked: str, spans: list[Span]) -> set[str]:
+    """Return the names bound to a manifest path by a statement that reads nothing."""
+    names: set[str] = set()
+    for span in spans:
+        bound = _LET_NAME.match(masked, span[0])
+        is_path = _holds_manifest(text, masked, span)
+        if bound and is_path and not _READ_CALL.search(masked, span[0], span[1]):
+            names.add(bound.group("name"))
     return names
-
-
-def _manifest_names(text: str, masked: str, spans: list[tuple[int, int]]) -> set[str]:
-    """Return the names bound to a manifest path by a statement that writes nothing."""
-    return {
-        bound.group("name")
-        for start, end in spans
-        if _holds_manifest(text, masked, (start, end))
-        and not _READ_CALL.search(masked, start, end)
-        and (bound := _LET_NAME.match(masked, start)) is not None
-    }
 
 
 def _first_argument(text: str, masked: str, call: re.Match[str]) -> tuple[str, str]:
@@ -110,27 +137,34 @@ def _first_argument(text: str, masked: str, call: re.Match[str]) -> tuple[str, s
     return (original[0], plain[0]) if original and plain else ("", "")
 
 
-def _destinations(
-    text: str, masked: str, spans: list[tuple[int, int]]
-) -> list[set[str]]:
-    """Return the identifiers of each write call's destination that is a manifest.
+def _destination_origins(function: _Function) -> list[Origins]:
+    """Return the roots of each write whose destination is a manifest path.
 
     Returns
     -------
-    list[set[str]]
+    list[Origins]
         One set per write whose first argument is a manifest path literal, or a
-        name bound to one.
+        name bound to one, and that derives from a temporary directory.
     """
-    manifests = _manifest_names(text, masked, spans)
-    found: list[set[str]] = []
-    for start, end in spans:
-        for call in _WRITE_CALL.finditer(masked, start, end):
-            original, plain = _first_argument(text, masked, call)
+    manifests = _manifest_names(function.text, function.masked, function.spans)
+    found: list[Origins] = []
+    for start, end in function.spans:
+        for call in _WRITE_CALL.finditer(function.masked, start, end):
+            original, plain = _first_argument(function.text, function.masked, call)
             words = _words(plain)
             is_literal = _MANIFEST_NAME.search(original) and '"' in plain
             if is_literal or words & manifests:
-                found.append(words)
+                found.append(function.origins(words))
     return found
+
+
+def _build_origins(function: _Function) -> list[Origins]:
+    """Return the roots of each statement that points a build somewhere."""
+    return [
+        function.origins(_words(function.masked[start:end]))
+        for start, end in function.spans
+        if _BUILD_LOCATION.search(function.text, start, end)
+    ]
 
 
 def is_scratch_crate(text: str, masked: str) -> bool:
@@ -147,22 +181,13 @@ def is_scratch_crate(text: str, masked: str) -> bool:
     -------
     bool
         True when a manifest is written to a path derived from a temporary
-        directory and a build location derives from the same directory.
+        directory and a build location derives from that same directory.
     """
     spans = [(found.start(), found.end()) for found in _STATEMENT.finditer(masked)]
-    bindings = _bindings(masked, spans)
-    temporary = _temporary_names(masked, spans, bindings)
-    if not temporary:
-        return False
-    # A name's own words include it, so a destination that is itself a derived
-    # name counts as derived.
-    is_written = any(
-        destination & temporary
-        or any(bindings.get(w, set()) & temporary for w in destination)
-        for destination in _destinations(text, masked, spans)
-    )
-    return is_written and any(
-        _BUILD_LOCATION.search(text, start, end)
-        and _words(masked[start:end]) & temporary
-        for start, end in spans
+    function = _Function(text, masked, spans, _provenance(masked, spans))
+    builds = _build_origins(function)
+    return any(
+        destination & build
+        for destination in _destination_origins(function)
+        for build in builds
     )

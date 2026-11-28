@@ -23,8 +23,7 @@ import re
 import typing as typ
 
 from .nested_cargo_gates import read_gates
-from .nested_cargo_makefile_lines import rules_by_target
-from .nested_cargo_makefile_preparation import includes_a_file, read_makefile
+from .nested_cargo_make_goals import MakeGoals, read_make_goals
 from .nested_cargo_preparation import (
     Preparation,
     crate_directories,
@@ -33,7 +32,6 @@ from .nested_cargo_preparation import (
     owning_crate,
 )
 from .nested_cargo_reach import UNSEEN
-from .nested_cargo_scripts import TEST_TARGET
 from .nested_cargo_setup_scripts import covers, read_setup_rules
 from .nested_cargo_source import RustSource, read_sources
 from .nested_cargo_spawns import fixture_directories
@@ -42,7 +40,6 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
-    from .makefile_facts import MakeRecipe, MakeRule
 
 COVERAGE_RESOLVED: typ.Final = "resolved"
 COVERAGE_UNRESOLVED: typ.Final = "unresolved"
@@ -52,37 +49,10 @@ SETUP_FORM: typ.Final = "nextest-setup"
 MAKE_PREFIX: typ.Final = "make:"
 TEST_PREFIX: typ.Final = "test:"
 
-# A `make` call is a command word that always runs: first on the line (after the
-# `@`, `-` and `+` recipe prefixes) or after `&&`, `;` or `(`, never after `||`
-# (which runs only when the command before it failed) and never inside a quoted
-# string.
-_MAKE_CALL: typ.Final = re.compile(
-    r"(?:^[@+-]*|&&|;|\()\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[\w.-]+)"
-)
-_TEST_COMMAND: typ.Final = re.compile(r"\b(?:cargo|nextest|pytest)\b")
 _FUNCTION: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)")
 _TEST_BINARY: typ.Final = re.compile(
     r"(?:^|/)tests/(?P<name>[^/.]+)(?:\.rs|/main\.rs)$"
 )
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class MakeGoals:
-    """Hold the goals that run before the tests, and whether more may hide.
-
-    Attributes
-    ----------
-    goals:
-        Every goal `test` depends on, or calls before it runs a test command.
-    is_opaque:
-        True when a variable prerequisite or an included file may name more.
-    is_absent:
-        True when the checkout has no Makefile at all.
-    """
-
-    goals: frozenset[str]
-    is_opaque: bool
-    is_absent: bool
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -93,92 +63,6 @@ class Warmups:
     functions: frozenset[str]
     reached_by: cabc.Mapping[str, list[str]]
     preparation: Preparation
-
-
-def _calls_before_tests(recipes: cabc.Iterable[MakeRecipe]) -> list[str]:
-    """Return the goals a recipe calls through `make` before its first test line.
-
-    Returns
-    -------
-    list[str]
-        The goals, in order; a line that runs a test command ends the scan after
-        the part of it that comes first.
-    """
-    found: list[str] = []
-    for recipe in recipes:
-        text = recipe["text"]
-        runs = _TEST_COMMAND.search(text)
-        limit = runs.start() if runs else len(text)
-        found.extend(
-            call.group("goal")
-            for call in _MAKE_CALL.finditer(text[:limit])
-            if not _is_quoted(text, call.start())
-        )
-        if runs:
-            break
-    return found
-
-
-def _is_quoted(text: str, offset: int) -> bool:
-    """Report whether *offset* lies inside a quoted string of a recipe line."""
-    before = text[:offset]
-    return before.count('"') % 2 == 1 or before.count("'") % 2 == 1
-
-
-def _next_goals(rule: MakeRule) -> tuple[list[str], bool]:
-    """Return the goals one rule leads to, and whether a prerequisite hid.
-
-    Returns
-    -------
-    tuple[list[str], bool]
-        The plain prerequisites and the goals the recipe calls first, then
-        whether a prerequisite names a variable the reader cannot resolve.
-    """
-    plain = [name for name in rule["prerequisites"] if "$" not in name]
-    hides = len(plain) != len(rule["prerequisites"])
-    return [*plain, *_calls_before_tests(rule["recipes"])], hides
-
-
-def _reachable_goals(index: dict[str, list[MakeRule]]) -> tuple[set[str], bool]:
-    """Walk from `test` through prerequisites and early `make` calls.
-
-    Returns
-    -------
-    tuple[set[str], bool]
-        Every goal reached, and whether a prerequisite hid behind a variable.
-    """
-    goals: set[str] = set()
-    hides = False
-    pending, walked = [TEST_TARGET], set[str]()
-    while pending:
-        target = pending.pop()
-        if target in walked:
-            continue
-        walked.add(target)
-        for rule in index.get(target, []):
-            names, hid = _next_goals(rule)
-            hides = hides or hid
-            goals.update(names)
-            pending.extend(names)
-    return goals - {TEST_TARGET}, hides
-
-
-def _make_goals(checkout: pathlib.Path) -> MakeGoals:
-    """Return the goals that run before or inside the Makefile's `test` target.
-
-    Returns
-    -------
-    MakeGoals
-        The goals, whether the Makefile may hide more, and whether it is absent.
-    """
-    read = read_makefile(checkout)
-    if read is None:
-        absent = not (checkout / "Makefile").exists()
-        return MakeGoals(frozenset(), is_opaque=True, is_absent=absent)
-    report, text = read
-    goals, hides = _reachable_goals(rules_by_target(report))
-    is_opaque = hides or includes_a_file(report, text)
-    return MakeGoals(frozenset(goals), is_opaque, is_absent=False)
 
 
 def _function_names(sources: cabc.Iterable[RustSource]) -> frozenset[str]:
@@ -214,7 +98,7 @@ def read_warmups(
         declared_tests=declared_tests(checkout, manifests),
     )
     return Warmups(
-        _make_goals(checkout),
+        read_make_goals(checkout),
         _function_names(read_sources(checkout, fixtures, [])),
         reached_by,
         preparation,

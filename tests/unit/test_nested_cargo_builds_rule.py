@@ -133,6 +133,24 @@ fn logs_a_name_and_builds_another_crate() {
 
 SUPPORT_USER_ONE = "mod support;\n"
 
+LOCAL_IMPORT_TEST = """\
+#[test]
+fn only_imports() {
+    use cargo_metadata::MetadataCommand;
+}
+"""
+
+TWO_DIRECTORIES_TEST = """\
+#[test]
+fn writes_one_crate_and_builds_another() {
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    std::fs::write(first.path().join("Cargo.toml"), "[package]").unwrap();
+    std::process::Command::new("cargo").current_dir(second.path()).arg("build").status().unwrap();
+    let _ = nested_cargo::count_compiling(b"");
+}
+"""
+
 PROBE_TEST = """\
 #[test]
 fn reports_a_version() {
@@ -599,4 +617,83 @@ def test_a_shared_support_file_needs_every_owning_binary_covered(
         ".config/nextest.toml",
         SETUP_SCRIPT.replace("all()", "binary(=cli) | binary(=other)"),
     )
+    assert profile(root) == set()
+
+
+def test_a_function_local_metadata_import_is_not_a_builder(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `use` of `MetadataCommand` inside a function owns no query."""
+    root = checkout(tmp_path, {"tests/graph.rs": LOCAL_IMPORT_TEST})
+    assert profile(root) == set()
+
+
+def test_a_compiler_named_by_path_is_inventoried(tmp_path: pathlib.Path) -> None:
+    """`/opt/rust/bin/rustc` is still `rustc`."""
+    text = RUSTC_TEST.replace('"rustc"', '"/opt/rust/bin/rustc"')
+    root = checkout(tmp_path, {"tests/snippet.rs": text})
+    assert profile(root) == {("NC-011", "tests/snippet.rs")}
+
+
+def test_a_manifest_and_a_build_in_different_directories_is_not_a_scratch_crate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The written manifest and the build must share one temporary root."""
+    root = checkout(tmp_path, {"tests/two.rs": TWO_DIRECTORIES_TEST})
+    assert profile(root) == {("NC-011", "tests/two.rs")}
+
+
+def test_a_make_call_behind_a_failing_and_does_not_warm(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`false && make prepare; cargo test` skips the goal."""
+    skipped = (
+        "test:\n\tfalse && $(MAKE) prepare-nested; cargo nextest run\n\n"
+        "prepare-nested:\n\ttrue\n"
+    )
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": skipped})
+    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
+    assert profile(root) == {("NC-013", "tests/cli.rs")}
+
+
+def test_a_make_call_in_a_conditional_subshell_does_not_warm(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`true || (make prepare)` skips the goal."""
+    skipped = (
+        "test:\n\ttrue || ($(MAKE) prepare-nested)\n\tcargo nextest run\n\n"
+        "prepare-nested:\n\ttrue\n"
+    )
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": skipped})
+    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
+    assert profile(root) == {("NC-013", "tests/cli.rs")}
+
+
+def test_a_goal_called_after_a_goal_that_starts_the_tests_does_not_warm(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Ordering holds across recursive `make`: `run` tests before `warmup`."""
+    late = (
+        "test:\n\t$(MAKE) run\n\t$(MAKE) warmup\n\n"
+        "run:\n\tcargo nextest run\n\n"
+        "warmup:\n\ttrue\n"
+    )
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": late})
+    declare(root, entry("tests/cli.rs", "make:warmup"))
+    assert profile(root) == {("NC-013", "tests/cli.rs")}
+    early = late.replace(
+        "$(MAKE) run\n\t$(MAKE) warmup", "$(MAKE) warmup\n\t$(MAKE) run"
+    )
+    put(root, "Makefile", early)
+    assert profile(root) == set()
+
+
+def test_a_make_chain_of_calls_before_the_tests_warms(tmp_path: pathlib.Path) -> None:
+    """`make a && make b && cargo test` runs both goals first."""
+    chain = (
+        "test:\n\t$(MAKE) one && $(MAKE) prepare-nested && cargo nextest run\n\n"
+        "one:\n\ttrue\n\nprepare-nested:\n\ttrue\n"
+    )
+    root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": chain})
+    declare(root, entry("tests/cli.rs", "make:prepare-nested"))
     assert profile(root) == set()

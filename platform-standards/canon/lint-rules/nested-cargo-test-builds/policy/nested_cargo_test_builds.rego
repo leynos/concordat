@@ -193,6 +193,7 @@ deny contains finding("NC-012", severity, "noncompliant", declaration.path, 0, m
 deny contains finding("NC-012", severity, "noncompliant", builder.path, builder.line, msg) if {
 	envelope_ok
 	some builder in input.builders
+	_well_formed_builder(builder)
 	builder.scratch_crate
 	count(builder.harness_references) > 0
 	msg := sprintf(
@@ -250,6 +251,9 @@ _well_formed_builder(builder) if {
 	is_boolean(object.get(builder, "readable", null))
 	is_boolean(object.get(builder, "scratch_crate", null))
 	is_array(object.get(builder, "harness_references", null))
+	every reference in builder.harness_references {
+		is_string(reference)
+	}
 }
 
 _well_formed_declaration(declaration) if {

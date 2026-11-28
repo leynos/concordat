@@ -320,12 +320,18 @@ def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
         contributes none.
     """
     found: list[tuple[CargoCommand, str]] = []
-    seen: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
+    seen: set[tuple[str, tuple[tuple[str, str], ...], str]] = set()
     for execution in command.executions or [command]:
         state = command_state(execution)
         # Two online runs that build in different places are two facts: the
         # cold-build rule judges where each one builds.
-        key = (state or "", target_signature(execution.calls))
+        # A run that compiles is not the same fact as one that does not, so a
+        # later `build` added to a command that ran offline is kept.
+        key = (
+            state or "",
+            target_signature(execution.calls),
+            compiles_state(execution.calls),
+        )
         if state is None or key in seen:
             continue
         seen.add(key)

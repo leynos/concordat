@@ -163,6 +163,11 @@ _SHELL_PROGRAMS: typ.Final = frozenset({
 })
 
 
+def _program_name(path: str) -> str:
+    """Return a program's file name without its directories or `.exe` suffix."""
+    return path.replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
+
+
 def _may_run_compiler(words: list[str | None]) -> bool:
     """Report whether shell arguments are unreadable or name a compiler."""
     return any(w is None or _COMPILER_WORD.search(w) for w in words)
@@ -183,7 +188,8 @@ def program_compiles(program: str, calls: cabc.Iterable[tuple[str, str]]) -> str
         any other program, which the reader leaves alone.
     """
     literals = string_literals(program)
-    name = literals[0] if literals is not None and len(literals) == 1 else None
+    named = literals[0] if literals is not None and len(literals) == 1 else None
+    name = _program_name(named) if named is not None else None
     if name in _COMPILER_PROGRAMS:
         return COMPILES_YES
     if name not in _SHELL_PROGRAMS:
