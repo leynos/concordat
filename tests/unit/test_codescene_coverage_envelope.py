@@ -7,6 +7,7 @@ import os
 import pathlib
 import typing as typ
 
+import pygit2
 import pytest
 
 from concordat.errors import OperationalRuleError
@@ -231,6 +232,39 @@ class TestBuildCodesceneCoverageEnvelope:
         assert envelope["schema_version"] == ENVELOPE_SCHEMA_VERSION, envelope
         assert envelope["kind"] == ENVELOPE_KIND, envelope
         assert envelope["repository"] == {"path": str(tmp_path), "name": None}, envelope
+
+    def test_names_the_repository_from_its_origin_remote(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A named exemption matches on `owner/name`, so the slug must survive."""
+        pygit2.init_repository(str(tmp_path))
+        repository = pygit2.Repository(str(tmp_path / ".git"))
+        repository.remotes.create("origin", "git@github.com:leynos/shared-actions.git")
+
+        envelope = build_codescene_coverage_envelope(tmp_path)
+
+        assert envelope["repository"] == {
+            "path": str(tmp_path),
+            "name": "leynos/shared-actions",
+        }, envelope
+
+    def test_an_origin_that_changes_during_the_read_is_an_operational_error(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The slug and the workflows must describe one checkout, not two."""
+        _write_workflow(tmp_path, "ci.yml", "on: pull_request\njobs: {}\n")
+        slugs = iter(["leynos/before", "leynos/after"])
+        monkeypatch.setattr(
+            codescene_coverage_envelope,
+            "origin_slug",
+            lambda _checkout: next(slugs),
+        )
+
+        with pytest.raises(OperationalRuleError) as excinfo:
+            build_codescene_coverage_envelope(tmp_path)
+
+        assert excinfo.value.operation == OPERATION_READ_WORKFLOW
+        assert "origin remote changed" in str(excinfo.value), str(excinfo.value)
 
     def test_decodes_each_workflow_to_its_exact_document(
         self, tmp_path: pathlib.Path

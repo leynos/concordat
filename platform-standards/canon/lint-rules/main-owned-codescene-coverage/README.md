@@ -19,10 +19,9 @@ Pull-request lanes keep coverage local:
   lane that omits it publishes the report; the rule reads the effective value.
 - Pull-request workflows do not invoke a CodeScene action or a direct
   `cs-coverage check`/`upload` command, and do not receive `CS_ACCESS_TOKEN`:
-  the rule reads the token in `env` at workflow, job or step level and as an
-  action input. This clause does not read `run` bodies: a reference there is
-  flagged only by the token-placement clause below, and only when the same
-  workflow has an explicit upload.
+  the rule reads the token in `env` at workflow, job or step level, as an
+  action input, and in a `run` body. The token-placement clause below applies
+  as well when the same workflow has an explicit upload.
 
 One main-owned publisher writes the baseline and uploads:
 
@@ -48,10 +47,11 @@ An uploader names the token only in two kinds of place:
 
 - A workflow that uploads to CodeScene may name `CS_ACCESS_TOKEN` only in the
   check step's command and in the `access-token` input of a CodeScene action
-  step (in upload, `check` or `install` mode, when the value is exactly the
-  secret; an upload step may itself be the workflow's explicit upload). Every
-  key and scalar of the document is read, case-folded, and each other reference
-  is reported by its document path. That covers `env` at workflow, job or step
+  step (any mode is accepted, as the policy does not read the mode, when the
+  value is exactly the secret; an upload step may itself be the workflow's
+  explicit upload). Secret names are read without regard to case. Every key and
+  scalar of the document is read, case-folded, and each other reference is
+  reported by its document path. That covers `env` at workflow, job or step
   level, any other `run` body, another action's input, and a condition. A `run`
   body interpolating the secret puts it in a shell process that checked-out
   code can read. An `env` binding reaches every step beneath it, and another
@@ -95,20 +95,40 @@ reports what it could not see rather than a verdict.
 - Malformed workflow YAML and unsupported job shapes are `indeterminate` when
   they could carry pull-request coverage, a main publisher, or decoded
   CodeScene or coverage facts.
-- A job that delegates to a reusable workflow is reported by name. The
-  indeterminacy is scoped to that job: a reusable job hides its own steps, not
-  the document, so the workflow's other jobs are still evaluated. Treating the
-  whole file as unreadable would make the rule silent about a pull-request lane
-  it can see perfectly well, which is what happens in a repository whose matrix
-  delegates one platform leg. A scheduled support workflow that calls a shared
-  automation workflow cannot affect this contract and is left alone.
+- A job that calls a workflow of the same repository
+  (`uses: ./.github/workflows/<file>`, no `@ref`) is read as that workflow's
+  jobs, under the caller's triggers (a `workflow_call` document has none of its
+  own), to three levels. Findings name the caller, which is the document that
+  runs. A call that cannot be resolved stays reported by name: another
+  repository's workflow, a file the checkout does not hold, a loop, or a chain
+  deeper than three levels. The indeterminacy is scoped to that job, so the
+  workflow's other jobs are still evaluated. A scheduled support workflow that
+  calls a shared automation workflow cannot affect this contract and is left
+  alone.
 - A coverage job's `runs-on` is classified from its literal labels; a label
   list is a conjunction and is read as one runner's description. A label
-  written as an expression is classified only when every literal it could
-  select classifies, and all of them agree, which is the case for the common
-  fork fallback between two Linux labels. A mixed expression, or one naming a
-  label this rule does not recognize, stays `indeterminate` rather than being
+  written as an expression is classified from the literals in value position,
+  those that directly follow `&&`, `||` or the opening `${{`; a literal beside
+  a comparison, such as `'dependabot[bot]'`, is an operand and not a runner. It
+  classifies only when every such literal classifies and all of them agree,
+  which is the case for the common fork fallback between two Linux labels. A
+  mixed expression, one naming a label this rule does not recognize, or a
+  `matrix` reference with no literal, stays `indeterminate` rather than being
   guessed.
+
+### Named exemptions
+
+`exemptions` in the rule's parameters list workflows that test the CodeScene
+actions themselves, each with its `repository` (`owner/name`, read from the
+`origin` remote), the exact `path`, a `rationale` and a `review_trigger`. Both
+text fields must be non-blank. An exemption suppresses only "pull-request
+workflow invokes CodeScene" and "CodeScene publication is not restricted to a
+main-only workflow"; token placement, the installer digest and every other
+clause stay audited, and an exempt workflow must not receive the real
+`CS_ACCESS_TOKEN` on pull requests. Two workflows of `leynos/shared-actions`
+are exempt today: the offline action tests on pull requests, and the parser
+proof, which a hand dispatch runs from `main` only.
+
 - A repository that generates no coverage anywhere is not a subject of this
   rule: it has nothing for a publisher to publish.
 
