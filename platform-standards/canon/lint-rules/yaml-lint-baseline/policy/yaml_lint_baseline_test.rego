@@ -480,6 +480,23 @@ test_delegated_makeflags if {
   }
 }
 
+# `.IGNORE` hides every recipe failure, whether global or per target.
+test_ignore_global if {
+  findings := policy.deny with input as data.fixtures.ignore_global
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
+test_ignore_targets if {
+  findings := policy.deny with input as data.fixtures.ignore_targets
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven"],
+  }
+}
+
 # A recipe prefix does not hide the assignment from the check.
 test_delegated_prefixed_makeflags if {
   findings := policy.deny with input as data.fixtures.delegated_prefixed_makeflags

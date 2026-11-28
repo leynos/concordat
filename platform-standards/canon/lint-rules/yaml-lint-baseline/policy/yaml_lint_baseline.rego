@@ -282,6 +282,24 @@ conditional_path(root) if {
 	count(rule.conditions) > 0
 }
 
+# `.IGNORE` without prerequisites makes Make ignore every recipe failure, and
+# with prerequisites it does so for those targets. `recipe.ignore_errors` only
+# reflects a recipe's own `-` prefix, so the special target is read here: a
+# reachable target the special target covers, or a global one, leaves the path
+# unproven.
+ignored_errors_path(root) if {
+	some rule in input.makefile.rules
+	".IGNORE" in rule.targets
+	count(rule.prerequisites) == 0
+}
+
+ignored_errors_path(root) if {
+	some rule in input.makefile.rules
+	".IGNORE" in rule.targets
+	some target in rule.prerequisites
+	target in reachable_from(root)
+}
+
 dynamic_make_delegation(root) if {
 	some recipe in path_recipes(root)
 	regex.match(`(\$\(MAKE\)|\$\{MAKE\})[[:space:]]+(\$\(|-C)`, recipe.text)
@@ -330,6 +348,7 @@ closure_provable(root) if {
 	not parse_recovered
 	not root_definitions_ambiguous(root)
 	not conditional_path(root)
+	not ignored_errors_path(root)
 	not dynamic_make_delegation(root)
 	not unproven_make_delegation(root)
 }
@@ -585,6 +604,8 @@ closure_indeterminate_reason(root) := "Makefile includes other files; the recipe
 	root_definitions_ambiguous(root)
 } else := sprintf("the %q target reaches a conditional Make rule; its recipes cannot be proven", [root]) if {
 	conditional_path(root)
+} else := sprintf("the %q target reaches a recipe whose failure `.IGNORE` hides; its recipes cannot be proven", [root]) if {
+	ignored_errors_path(root)
 } else := sprintf("the %q target reaches dynamic recursive Make; its recipes cannot be proven", [root]) if {
 	dynamic_make_delegation(root)
 } else := sprintf("the %q target reaches an unproven recursive Make invocation; its recipes cannot be proven", [root]) if {
