@@ -201,37 +201,33 @@ make_report_flags := `(?:(?:--no-print-directory|--silent|--quiet|-s)[[:space:]]
 # not a target, so an option-shaped token is not an edge.
 make_target := `[A-Za-z0-9_.][A-Za-z0-9_.-]*`
 
+# No assignment may precede `$(MAKE)`: an environment assignment reaches the
+# sub-make as a Make variable (`YAMLLINT=echo $(MAKE) yamllint` turns the real
+# recipe into a print) or as a flag (`MAKEFLAGS=-n`), and the policy does not
+# model either, so such a recipe stays unproven. Recipe prefixes (`-`, `@`, `+`)
+# are read before the command; a `-` also hides the sub-make's failure from
+# Make, so the edge is then not binding.
 static_make_recipe_pattern := sprintf(
-	`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s%s([[:space:]]*&&[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s%s)*[[:space:]]*$`,
-	[
-		env_assignment_prefix, make_report_flags, make_target,
-		env_assignment_prefix, make_report_flags, make_target,
-	],
+	`^[[:space:]]*[-@+]*[[:space:]]*\$\(MAKE\)[[:space:]]+%s%s([[:space:]]*&&[[:space:]]*\$\(MAKE\)[[:space:]]+%s%s)*[[:space:]]*$`,
+	[make_report_flags, make_target, make_report_flags, make_target],
 )
 
-# Variables that change what a sub-make does: `MAKEFLAGS=-n $(MAKE) checks`
-# skips the checks while the recipe still reads as a delegation.
-make_altering_assignment := `(^|[[:space:]&;])(MAKEFLAGS|MFLAGS|MAKEOVERRIDES|GNUMAKEFLAGS|MAKEFILES|MAKELEVEL)=`
-
-# A leading `-` (ignore errors) hides the sub-make's failure from Make, so the
-# edge is not binding.
 static_make_recipe_is_binding(recipe) if {
 	recipe.ignore_errors == false
 	regex.match(static_make_recipe_pattern, recipe.text)
-	not regex.match(make_altering_assignment, recipe.text)
 }
 
 static_make_segment_target(segment) := target if {
 	matches := regex.find_all_string_submatch_n(
 		sprintf(
-			`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+%s(%s)[[:space:]]*$`,
-			[env_assignment_prefix, make_report_flags, make_target],
+			`^[[:space:]]*[-@+]*[[:space:]]*\$\(MAKE\)[[:space:]]+%s(%s)[[:space:]]*$`,
+			[make_report_flags, make_target],
 		),
 		segment,
 		1,
 	)
 	count(matches) == 1
-	target := matches[0][3]
+	target := matches[0][1]
 }
 
 static_make_targets(recipe) := {target |

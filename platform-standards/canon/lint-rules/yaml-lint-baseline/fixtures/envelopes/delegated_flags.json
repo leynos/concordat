@@ -20,8 +20,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "60f7aee56d36f550930d049b811b034f35b76250e6759381fb1a79a20d17b6c2",
-      "byte_length": 261
+      "sha256": "ed4da40e6d199cbd1fa4da8b37af7561edb15aca1331f00d129e1b92c34f6d58",
+      "byte_length": 279
     },
     "parse": {
       "status": "complete",
@@ -61,13 +61,13 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MAKE) --no-print-directory yamllint && $(MAKE) -s actionlint",
-            "silent": false,
+            "text": "@$(MAKE) --no-print-directory --silent yamllint && $(MAKE) -s --quiet actionlint",
+            "silent": true,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
               "start_byte": 86,
-              "end_byte": 150,
+              "end_byte": 168,
               "start_line": 6,
               "start_column": 1,
               "end_line": 7,
@@ -77,7 +77,7 @@
         ],
         "location": {
           "start_byte": 80,
-          "end_byte": 151,
+          "end_byte": 169,
           "start_line": 5,
           "start_column": 1,
           "end_line": 8,
@@ -100,8 +100,8 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 161,
-              "end_byte": 233,
+              "start_byte": 179,
+              "end_byte": 251,
               "start_line": 9,
               "start_column": 1,
               "end_line": 10,
@@ -110,8 +110,8 @@
           }
         ],
         "location": {
-          "start_byte": 151,
-          "end_byte": 234,
+          "start_byte": 169,
+          "end_byte": 252,
           "start_line": 8,
           "start_column": 1,
           "end_line": 11,
@@ -134,8 +134,8 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 246,
-              "end_byte": 261,
+              "start_byte": 264,
+              "end_byte": 279,
               "start_line": 12,
               "start_column": 1,
               "end_line": 13,
@@ -144,8 +144,8 @@
           }
         ],
         "location": {
-          "start_byte": 234,
-          "end_byte": 261,
+          "start_byte": 252,
+          "end_byte": 279,
           "start_line": 11,
           "start_column": 1,
           "end_line": 13,

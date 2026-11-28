@@ -162,6 +162,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "delegated_ignored": Scenario(makefile="delegated-ignored"),
     "delegated_makeflags": Scenario(makefile="delegated-makeflags"),
     "delegated_option_target": Scenario(makefile="delegated-option-target"),
+    "delegated_prefixed_makeflags": Scenario(makefile="delegated-prefixed-makeflags"),
+    "delegated_variable_override": Scenario(makefile="delegated-variable-override"),
     "yaml_only_no_makefile": dataclasses.replace(YAML_ONLY, makefile=None),
     # -- YL-003: the yamllint configuration --------------------------------
     "base_missing": Scenario(base=None),

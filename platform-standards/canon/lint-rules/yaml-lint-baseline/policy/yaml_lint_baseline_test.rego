@@ -480,6 +480,24 @@ test_delegated_makeflags if {
   }
 }
 
+# A recipe prefix does not hide the assignment from the check.
+test_delegated_prefixed_makeflags if {
+  findings := policy.deny with input as data.fixtures.delegated_prefixed_makeflags
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
+# Any assignment that reaches the sub-make can change its recipes, so it is unproven.
+test_delegated_variable_override if {
+  findings := policy.deny with input as data.fixtures.delegated_variable_override
+  profile(findings) == {
+    ["YL-001", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+    ["YL-002", "indeterminate", "Makefile", 0, "the \"lint\" target reaches an unproven recursive Make invocation; its recipes cannot be proven"],
+  }
+}
+
 # `-n` after a report-only flag is an option, not a target name.
 test_delegated_option_target if {
   findings := policy.deny with input as data.fixtures.delegated_option_target
