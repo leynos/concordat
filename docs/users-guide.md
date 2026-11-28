@@ -456,17 +456,19 @@ concordat artefact rule run main-owned-codescene-coverage --repo /path/to/checko
 It requires that:
 
 - pull-request coverage uses the main-derived local ratchet, sets
-  `publish-artefact: 'false'`, and neither invokes CodeScene nor receives
-  `CS_ACCESS_TOKEN`;
+  `publish-artefact: 'false'`, and neither invokes CodeScene nor binds
+  `CS_ACCESS_TOKEN` in an `env` block or passes it as an action input (a
+  reference in a `run` body is not yet flagged in a pull-request workflow);
 - exactly one workflow triggered by a push to `main` (optionally alongside
   `workflow_dispatch`) writes that baseline and uploads, under a `concurrency`
   block that queues rather than cancels. The uploader's `mode` defaults to
   `upload`, so a step that omits the input satisfies this; `check` and
   `install` do not;
 - a workflow that uploads to CodeScene names `CS_ACCESS_TOKEN` only in a
-  credential-check step's command and in the upload's `access-token` input:
-  never in an `env` block at any level, another `run` body, another action's
-  input or a condition;
+  credential-check step's command and in the `access-token` input of a
+  CodeScene action step, which may be an upload, `check` or `install` step when
+  the workflow has an explicit upload elsewhere: never in an `env` block at any
+  level, another `run` body, another action's input or a condition;
 - no workflow passes `installer-checksum` or refreshes the CodeScene installer
   digest;
 - every platform that ratchets coverage on pull requests also ratchets on the

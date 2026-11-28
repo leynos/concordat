@@ -18,7 +18,10 @@ Pull-request lanes keep coverage local:
   `publish-artefact: 'false'`. The action defaults that input to `"true"`, so a
   lane that omits it publishes the report; the rule reads the effective value.
 - Pull-request workflows do not invoke a CodeScene action or a direct
-  `cs-coverage check`/`upload` command, and do not receive `CS_ACCESS_TOKEN`.
+  `cs-coverage check`/`upload` command, and do not receive `CS_ACCESS_TOKEN`:
+  the rule reads the token in `env` at workflow, job or step level and as an
+  action input. A reference in a `run` body of a pull-request workflow is not
+  yet flagged.
 
 One main-owned publisher writes the baseline and uploads:
 
@@ -43,9 +46,11 @@ One main-owned publisher writes the baseline and uploads:
 An uploader names the token only in two kinds of place:
 
 - A workflow that uploads to CodeScene may name `CS_ACCESS_TOKEN` only in the
-  check step's command and in the upload action's `access-token` input. Every
-  key and scalar of the document is read, case-folded, and each other reference
-  is reported by its document path. That covers `env` at workflow, job or step
+  check step's command and in the `access-token` input of a CodeScene action
+  step (in upload, `check` or `install` mode, when the value is exactly the
+  secret and the workflow has an explicit upload elsewhere). Every key and
+  scalar of the document is read, case-folded, and each other reference is
+  reported by its document path. That covers `env` at workflow, job or step
   level, any other `run` body, another action's input, and a condition. A `run`
   body interpolating the secret puts it in a shell process that checked-out
   code can read. An `env` binding reaches every step beneath it, and another
