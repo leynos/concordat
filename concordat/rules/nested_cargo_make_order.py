@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 import typing as typ
 
-from .nested_cargo_shell_lists import leading_make_goals
+from .nested_cargo_shell_lists import is_readable, leading_make_goals
 
 if typ.TYPE_CHECKING:
     from .makefile_facts import MakeRecipe, MakeRule
@@ -57,7 +57,11 @@ def dependencies(rule: MakeRule) -> list[str]:
 
 def _may_run_tests(text: str) -> bool:
     """Report whether one recipe line runs a test command or an unreadable goal."""
-    return bool(_TEST_COMMAND.search(text) or _OPAQUE_MAKE_CALL.search(text))
+    return bool(
+        _TEST_COMMAND.search(text)
+        or _OPAQUE_MAKE_CALL.search(text)
+        or not is_readable(text)
+    )
 
 
 def starts_tests(goal: str, index: Index, seen: set[str]) -> bool:

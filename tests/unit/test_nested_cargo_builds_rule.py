@@ -717,6 +717,16 @@ UNREADABLE = {("EN-001", "tests/cli.rs")}
             id="a-quoted-operator-is-an-argument",
         ),
         pytest.param(
+            "test:\n\tcar\\go nextest run\n\t$(MAKE) warmup\n\n" + WARM,
+            NC013,
+            id="an-unreadable-line-may-start-the-tests",
+        ),
+        pytest.param(
+            "test: warmup run\n\ttrue\n\nrun:\n\tcar\\go nextest run\n\n" + WARM,
+            NC013,
+            id="a-sibling-with-an-unreadable-line",
+        ),
+        pytest.param(
             "test: warmup\ntest: run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
             NC013,
             id="separate-rules-for-one-target",

@@ -122,6 +122,21 @@ def _leading_goals(commands: list[list[str]]) -> list[str]:
     return goals
 
 
+def is_readable(text: str) -> bool:
+    """Report whether a recipe line can be tokenised as a shell would.
+
+    A line that cannot (an unbalanced quote, a backslash escape) may spell a
+    command the reader cannot recognise, so it must be treated as one that
+    could start the tests.
+
+    Returns
+    -------
+    bool
+        True when the line tokenises.
+    """
+    return _tokens(text) is not None
+
+
 def _is_unreadable(tokens: list[str]) -> bool:
     """Report whether a line holds a subshell or a shell branch."""
     return "(" in tokens or bool(_CONTROL_WORDS & set(tokens))
