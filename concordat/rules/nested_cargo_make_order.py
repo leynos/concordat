@@ -25,6 +25,7 @@ _MAKE_CALL: typ.Final = re.compile(
     r"\s*[@+-]*\s*(?:\$\(MAKE\)|make)\s+(?P<goal>[\w.-]+)"
 )
 _ANY_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?P<goal>[\w.-]+)")
+_BACKGROUND: typ.Final = re.compile(r"(?<!&)&(?!&)")
 _TEST_COMMAND: typ.Final = re.compile(r"\b(?:cargo|nextest|pytest)\b")
 _CONTROL_FLOW: typ.Final = re.compile(r"\b(?:if|then|else|elif|case|while|for|until)\b")
 
@@ -49,7 +50,8 @@ def _chain_goals(piece: str) -> list[str]:
     goals: list[str] = []
     for part in piece.split("&&"):
         call = _MAKE_CALL.match(part)
-        if call is None:
+        # A backgrounded call (a lone `&`) does not finish before what follows.
+        if call is None or _BACKGROUND.search(part):
             break
         goals.append(call.group("goal"))
     return goals
