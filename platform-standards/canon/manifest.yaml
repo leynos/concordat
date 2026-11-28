@@ -392,7 +392,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/pr-run-cancellation/rule.yaml
     description: >-
       Rule package manifest for the pull-request run cancellation audit.
-    sha256: bfe9e131485d2a6cf11da2c2dd25226f8eaa7ab923510e8bc38b1b4b4fbf1f82
+    sha256: 35b08ac71017d3151617e6008e64b8b2166da08ba25f543e88cb046a47f95f35
   - id: lint-rule-dependabot-update-shape
     type: opa-policy
     path: >-

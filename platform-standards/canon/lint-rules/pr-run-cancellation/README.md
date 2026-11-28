@@ -348,6 +348,13 @@ An exemption suppresses RC-001 and RC-002 only. Indeterminate evidence stays
 reported, since an exemption is an agreement about a known noncompliance, not
 about evidence the reader could not establish.
 
+Two workflows are exempt today, both because they queue on purpose:
+`leynos/combobulate` `.github/workflows/profile-measurements.yml` (per-label
+measurement runs that must finish) and `leynos/cuprum`
+`.github/workflows/ci.yml` (a per-ref group that keeps runs on `main` queued so
+the benchmark baseline publishes). Each entry in `rule.yaml` carries its
+rationale and review trigger.
+
 ## Severity
 
 The package ships at `warning`, so the estate can be surveyed before it blocks.
