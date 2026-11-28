@@ -106,20 +106,22 @@ def read_warmups(
 
 
 def _make_coverage(goal: str, make: MakeGoals) -> str:
-    """Say whether *goal* runs before the tests.
+    """Say whether *goal* certainly finishes before the tests start.
 
     Returns
     -------
     str
-        `resolved`, `unresolved` or `unreadable`.
+        `resolved` when `test` finishes it first by prerequisite order,
+        `unresolved` when `test` never reaches it, and `unreadable` when it is
+        reached some way the reader cannot prove (a recipe call, an unordered
+        sibling) or the Makefile holds a construct it does not model.
     """
     if goal in make.goals and not make.is_opaque:
         return COVERAGE_RESOLVED
-    return (
-        COVERAGE_UNRESOLVED
-        if make.is_absent or not make.is_opaque
-        else COVERAGE_UNREADABLE
-    )
+    if make.is_absent:
+        return COVERAGE_UNRESOLVED
+    is_unproven = make.is_opaque or goal in make.mentioned
+    return COVERAGE_UNREADABLE if is_unproven else COVERAGE_UNRESOLVED
 
 
 def _binary_names(root: str, preparation: Preparation) -> list[str | None]:

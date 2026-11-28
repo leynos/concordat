@@ -159,6 +159,14 @@ fn only_imports() {
 }
 """
 
+ALIASED_METADATA_TEST = """\
+#[test]
+fn queries_through_an_alias() {
+    use cargo_metadata::MetadataCommand as Metadata;
+    Metadata::new().exec().unwrap();
+}
+"""
+
 PROBE_TEST = """\
 #[test]
 fn reports_a_version() {
@@ -589,219 +597,106 @@ WARM = "warmup:\n\ttrue\n"
 NONE = set[tuple[str, str]]()
 NC013 = {("NC-013", "tests/cli.rs")}
 UNREADABLE = {("EN-001", "tests/cli.rs")}
+TEST_RUN = "\ttrue\n\nrun:\n\tcargo nextest run\n\n"
+
+ORDERING_CASES = [
+    pytest.param("test:\n\tcargo nextest run\n\n" + WARM, NC013, id="never-reached"),
+    pytest.param(
+        "test: warmup\n\tcargo nextest run\n\n" + WARM, NONE, id="prerequisite"
+    ),
+    pytest.param(
+        "test: one\n\ttrue\n\none: warmup\n\ttrue\n\n" + WARM,
+        NONE,
+        id="nested-prerequisite",
+    ),
+    pytest.param(
+        "test:\n\t$(MAKE) warmup\n\tcargo nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="a-recipe-call-is-unproven",
+    ),
+    pytest.param(
+        "test:\n\tcargo nextest run\n\t$(MAKE) warmup\n\n" + WARM,
+        UNREADABLE,
+        id="a-call-after-the-tests-is-unproven",
+    ),
+    pytest.param(
+        "test: warmup run\n" + TEST_RUN + WARM, UNREADABLE, id="unordered-siblings"
+    ),
+    pytest.param(
+        "test: warmup run\n\ttrue\n\nrun: warmup\n\tcargo nextest run\n\n" + WARM,
+        NONE,
+        id="a-sibling-that-depends-on-the-warm-up",
+    ),
+    pytest.param(
+        "test: warmup run\n\ttrue\n\nrun: warmup run-tests\n\ttrue\n\n"
+        "run-tests:\n\tcargo nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="unordered-siblings-one-level-down",
+    ),
+    pytest.param(
+        "test: warmup run\n\ttrue\n\nrun: warmup run-tests\n\ttrue\n\n"
+        "run-tests: warmup\n\tcargo nextest run\n\n" + WARM,
+        NONE,
+        id="ordered-siblings-one-level-down",
+    ),
+    pytest.param(
+        "test: warmup\ntest: run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="separate-rules-for-one-target",
+    ),
+    pytest.param(
+        "RUN := run\ntest: warmup $(RUN)\n\ttrue\n\nrun:\n\tcargo nextest run\n\n"
+        + WARM,
+        UNREADABLE,
+        id="a-variable-prerequisite",
+    ),
+    pytest.param(
+        "test: warmup run\n\ttrue\n\nrun:\n\t$(CARGO) nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="a-sibling-with-a-variable-command",
+    ),
+    pytest.param(
+        "test: warmup run\n\ttrue\n\nrun:\n\tcar\\go nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="a-sibling-with-an-unreadable-line",
+    ),
+    pytest.param(
+        "test: warmup run\n\ttrue\n\nrun:\n\t$(MAKE) noop verify\n\n"
+        "noop:\n\ttrue\n\nverify:\n\tcargo nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="a-sibling-calling-several-goals",
+    ),
+    pytest.param(
+        "test:: warmup\ntest::\n\tcargo nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="a-double-colon-rule",
+    ),
+    pytest.param(
+        "test: warmup\n\tcargo nextest run\ntest:\n\tcargo nextest run -r\n\n" + WARM,
+        UNREADABLE,
+        id="a-target-with-two-recipes",
+    ),
+    pytest.param(
+        ".ONESHELL:\ntest: warmup\n\tcargo nextest run\n\n" + WARM,
+        UNREADABLE,
+        id="oneshell",
+    ),
+]
 
 
-@pytest.mark.parametrize(
-    ("makefile", "expected"),
-    [
-        pytest.param(
-            "test:\n\tcargo nextest run\n\nwarmup:\n\ttrue\n", NC013, id="never-called"
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) warmup\n\tcargo nextest run\n\n" + WARM,
-            NONE,
-            id="before-the-tests",
-        ),
-        pytest.param(
-            "test:\n\tcargo nextest run\n\t$(MAKE) warmup\n\n" + WARM,
-            NC013,
-            id="after-the-tests",
-        ),
-        pytest.param(
-            'test:\n\t@echo "make warmup"\n\tcargo nextest run\n\n' + WARM,
-            NC013,
-            id="quoted-echo",
-        ),
-        pytest.param(
-            "test:\n\ttrue || $(MAKE) warmup\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="after-or",
-        ),
-        pytest.param(
-            "test:\n\tfalse && $(MAKE) warmup; cargo nextest run\n\n" + WARM,
-            NC013,
-            id="behind-failing-and",
-        ),
-        pytest.param(
-            "test:\n\ttrue || ($(MAKE) warmup)\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="subshell",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) one && $(MAKE) warmup && cargo nextest run\n\n"
-            "one:\n\ttrue\n\n" + WARM,
-            NONE,
-            id="chain",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) run\n\t$(MAKE) warmup\n\nrun:\n\tcargo nextest run\n\n"
-            + WARM,
-            NC013,
-            id="after-a-goal-that-tests",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) warmup\n\t$(MAKE) run\n\nrun:\n\tcargo nextest run\n\n"
-            + WARM,
-            NONE,
-            id="before-a-goal-that-tests",
-        ),
-        pytest.param(
-            "test: run\n\t$(MAKE) warmup\n\nrun:\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="after-a-prerequisite-that-tests",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="unordered-sibling-prerequisites",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) warmup & cargo nextest run\n\n" + WARM,
-            NC013,
-            id="a-backgrounded-call",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) warmup && $(MAKE) other & cargo nextest run\n\n"
-            "other:\n\ttrue\n\n" + WARM,
-            NC013,
-            id="a-backgrounded-list",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) -C sub warmup\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="a-call-into-another-directory",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) FLAG=1 warmup\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="a-call-with-a-variable-assignment",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\t$(MAKE) -f Makefile run-tests\n\n"
-            "run-tests:\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="a-sibling-recurses-with-an-option",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\t$(MAKE) FLAG=1 run-tests\n\n"
-            "run-tests:\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="a-sibling-recurses-with-an-assignment",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\t$(MAKE) $(GOAL)\n\n"
-            "run-tests:\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="a-sibling-recurses-into-a-variable-goal",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) -f Makefile run-tests\n\t$(MAKE) warmup\n\n"
-            "run-tests:\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="called-after-an-unreadable-recursion",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) warmup && $(MAKE) -f Makefile run-tests & "
-            "cargo nextest run\n\n" + WARM,
-            NC013,
-            id="backgrounded-past-an-unreadable-call",
-        ),
-        pytest.param(
-            "test:\n\t$(MAKE) warmup && printf 'x;y' & cargo nextest run\n\n" + WARM,
-            NC013,
-            id="a-quoted-semicolon-in-a-backgrounded-list",
-        ),
-        pytest.param(
-            "test:\n\tprintf ';' $(MAKE) warmup; cargo nextest run\n\n" + WARM,
-            NC013,
-            id="a-quoted-operator-is-an-argument",
-        ),
-        pytest.param(
-            "test:\n\tcar\\go nextest run\n\t$(MAKE) warmup\n\n" + WARM,
-            NC013,
-            id="an-unreadable-line-may-start-the-tests",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\tcar\\go nextest run\n\n" + WARM,
-            NC013,
-            id="a-sibling-with-an-unreadable-line",
-        ),
-        pytest.param(
-            "test: warmup\ntest: run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="separate-rules-for-one-target",
-        ),
-        pytest.param(
-            "test: warmup\ntest: run\n\ttrue\n\nrun: warmup\n\tcargo nextest run\n\n"
-            + WARM,
-            NONE,
-            id="separate-rules-with-an-ordering-edge",
-        ),
-        pytest.param(
-            "RUN := run-tests\ntest: warmup run\n\ttrue\n\nrun: $(RUN)\n\ttrue\n\n"
-            "run-tests:\n\tcargo nextest run\n\n" + WARM,
-            UNREADABLE,
-            id="a-nested-variable-prerequisite-hides-a-sibling",
-        ),
-        pytest.param(
-            "RUN := run\ntest: warmup $(RUN)\n\ttrue\n\nrun:\n\tcargo nextest run\n\n"
-            + WARM,
-            UNREADABLE,
-            id="a-variable-prerequisite-may-hide-a-sibling",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun: warmup run-tests\n\ttrue\n\n"
-            "run-tests:\n\tcargo nextest run\n\n" + WARM,
-            NC013,
-            id="unordered-siblings-one-level-down",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun: warmup run-tests\n\ttrue\n\n"
-            "run-tests: warmup\n\tcargo nextest run\n\n" + WARM,
-            NONE,
-            id="ordered-siblings-one-level-down",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\ttrue || $(MAKE) warmup\n\t"
-            "cargo nextest run\n\n" + WARM,
-            NC013,
-            id="sibling-called-after-or",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\tfalse && $(MAKE) warmup; "
-            "cargo nextest run\n\n" + WARM,
-            NC013,
-            id="sibling-called-behind-failing-and",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\tcargo nextest run\n\t"
-            "$(MAKE) warmup\n\n" + WARM,
-            NC013,
-            id="sibling-called-after-its-tests",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun:\n\t$(MAKE) warmup\n\t"
-            "cargo nextest run\n\n" + WARM,
-            NONE,
-            id="sibling-calls-the-warm-up-first",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\n"
-            'run:\n\t@echo "make warmup"\n\tcargo nextest run\n\n' + WARM,
-            NC013,
-            id="a-quoted-mention-is-not-an-ordering-edge",
-        ),
-        pytest.param(
-            "test: warmup run\n\ttrue\n\nrun: warmup\n\tcargo nextest run\n\n" + WARM,
-            NONE,
-            id="a-sibling-that-depends-on-the-warm-up",
-        ),
-    ],
-)
-def test_a_make_warm_up_counts_only_when_it_runs_before_the_tests(
+@pytest.mark.parametrize(("makefile", "expected"), ORDERING_CASES)
+def test_a_make_warm_up_counts_only_when_make_proves_it_runs_first(
     tmp_path: pathlib.Path, makefile: str, expected: set[tuple[str, str]]
 ) -> None:
-    """The Makefile's order decides whether `make:warmup` pays for the build."""
+    """Only prerequisite order proves `make:warmup` pays for the build."""
     root = checkout(tmp_path, {"tests/cli.rs": PLUGIN_TEST, "Makefile": makefile})
     declare(root, entry("tests/cli.rs", "make:warmup"))
     assert profile(root) == expected
+
+
+def test_a_metadata_query_through_an_import_alias_is_a_builder(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`use ... MetadataCommand as Metadata;` then `Metadata::new()` is a query."""
+    root = checkout(tmp_path, {"tests/graph.rs": ALIASED_METADATA_TEST})
+    assert profile(root) == {("NC-011", "tests/graph.rs")}

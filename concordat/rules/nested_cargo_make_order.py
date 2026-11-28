@@ -1,14 +1,19 @@
-"""Decide which `make` calls in a recipe run before the tests start.
+"""Decide which Makefile goals may start the tests.
 
-A call to `make <goal>` warms the tests only if it always runs, and runs before
-anything starts them:
+The `make:<goal>` warm-up form needs to know that a goal finishes before the
+tests start. Proving that from shell text is a tarpit (operators, quoting,
+backgrounding, `.ONESHELL`, redefined recipes), so the reader proves only what
+Make itself guarantees, prerequisite order, and reads everything else as "may
+start the tests":
 
-- it must be first on its line, or joined to the calls before it by `&&`, as the
-  shell reads the line (see `nested_cargo_shell_lists`); a piece after `||`, in
-  a quoted string, in the background, inside a subshell or in a branch may be
-  skipped;
-- a line that runs a test command, and any goal that itself starts the tests,
-  ends the early calls.
+- a recipe line that runs a test command, runs a command named by a variable,
+  holds a backslash or an unbalanced quote, or calls `make` with an option, an
+  assignment or a variable goal may start the tests;
+- a goal starts the tests if its recipe, a prerequisite, or any goal its recipe
+  mentions through `make` may.
+
+Over-approximating here is the safe direction: it can only make a warm-up fail
+to prove, which is reported as indeterminate, never as a pass.
 """
 
 from __future__ import annotations
@@ -16,19 +21,53 @@ from __future__ import annotations
 import re
 import typing as typ
 
-from .nested_cargo_shell_lists import is_readable, leading_make_goals
-
 if typ.TYPE_CHECKING:
-    from .makefile_facts import MakeRecipe, MakeRule
+    from .makefile_facts import MakeRule
 
 type Index = dict[str, list[MakeRule]]
 
-
-# A recursive call with an option, an assignment or a variable goal runs a goal
-# this reader cannot name, so it may start the tests.
-_OPAQUE_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?:-|\S+=|\$)")
-_ANY_MAKE_CALL: typ.Final = re.compile(r"(?:\$\(MAKE\)|\bmake)\s+(?P<goal>[\w.-]+)")
 _TEST_COMMAND: typ.Final = re.compile(r"\b(?:cargo|nextest|pytest)\b")
+# A command word that is a variable other than `$(MAKE)` may expand to anything.
+_VARIABLE_COMMAND: typ.Final = re.compile(r"^\s*[@+-]*\s*\$[({](?!MAKE[)}])")
+_MAKE_CALL: typ.Final = re.compile(
+    r"(?:\$\(MAKE\)|\$\{MAKE\}|\bmake)(?P<args>[^;&|()]*)"
+)
+_PLAIN_GOAL: typ.Final = re.compile(r"[A-Za-z_.][\w.-]*")
+
+
+def _make_arguments(text: str) -> list[list[str]]:
+    """Return the words after each `make` call on a recipe line."""
+    return [found.group("args").split() for found in _MAKE_CALL.finditer(text)]
+
+
+def _is_unreadable(text: str) -> bool:
+    """Report whether a line has an escape or quote the reader does not model."""
+    return "\\" in text or text.count('"') % 2 == 1 or text.count("'") % 2 == 1
+
+
+def _has_opaque_call(text: str) -> bool:
+    """Report whether a `make` call names no plain goals, or adds more than goals."""
+    return any(
+        not words or any(_PLAIN_GOAL.fullmatch(word) is None for word in words)
+        for words in _make_arguments(text)
+    )
+
+
+def may_run_tests(text: str) -> bool:
+    """Report whether one recipe line may run the tests, or something unreadable.
+
+    Returns
+    -------
+    bool
+        True for a test command, a variable command word, a line the reader
+        cannot model, or a recursive `make` it cannot name.
+    """
+    return bool(
+        _TEST_COMMAND.search(text)
+        or _VARIABLE_COMMAND.search(text)
+        or _is_unreadable(text)
+        or _has_opaque_call(text)
+    )
 
 
 def plain_prerequisites(rule: MakeRule) -> list[str]:
@@ -45,23 +84,16 @@ def dependencies(rule: MakeRule) -> list[str]:
     Returns
     -------
     list[str]
-        The prerequisites, then every goal a recipe text mentions through `make`.
+        The prerequisites, then every plain goal each `make` call mentions.
     """
-    calls = [
-        found.group("goal")
+    called = [
+        word
         for recipe in rule["recipes"]
-        for found in _ANY_MAKE_CALL.finditer(recipe["text"])
+        for words in _make_arguments(recipe["text"])
+        for word in words
+        if _PLAIN_GOAL.fullmatch(word)
     ]
-    return plain_prerequisites(rule) + calls
-
-
-def _may_run_tests(text: str) -> bool:
-    """Report whether one recipe line runs a test command or an unreadable goal."""
-    return bool(
-        _TEST_COMMAND.search(text)
-        or _OPAQUE_MAKE_CALL.search(text)
-        or not is_readable(text)
-    )
+    return plain_prerequisites(rule) + called
 
 
 def starts_tests(goal: str, index: Index, seen: set[str]) -> bool:
@@ -71,33 +103,13 @@ def starts_tests(goal: str, index: Index, seen: set[str]) -> bool:
     -------
     bool
         True when a recipe of the goal, of a goal it depends on or of one it
-        calls through `make` runs a test command.
+        calls through `make` may run the tests.
     """
     if goal in seen:
         return False
     seen.add(goal)
     return any(
-        any(_may_run_tests(recipe["text"]) for recipe in rule["recipes"])
+        any(may_run_tests(recipe["text"]) for recipe in rule["recipes"])
         or any(starts_tests(name, index, seen) for name in dependencies(rule))
         for rule in index.get(goal, [])
     )
-
-
-def early_calls(recipes: list[MakeRecipe], index: Index) -> list[str]:
-    """Return the goals a goal's recipe calls before tests can have started.
-
-    Returns
-    -------
-    list[str]
-        The goals, in order. The list ends at the first line that runs a test
-        command, and at the first called goal that starts tests itself.
-    """
-    found: list[str] = []
-    for recipe in recipes:
-        for goal in leading_make_goals(recipe["text"]):
-            found.append(goal)
-            if starts_tests(goal, index, set()):
-                return found
-        if _may_run_tests(recipe["text"]):
-            break
-    return found

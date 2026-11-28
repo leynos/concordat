@@ -3230,9 +3230,15 @@ The decisions the design rests on:
   its way past a rule; a list cannot. The prohibited subjects (harness,
   evidence writer, timeout machinery, preparation stamp, compile counter) are
   the user's ruling, so NC-012 has no exemption.
-- **The declared warm-up must resolve.** `covered_by` is one of three forms the
-  reader can check without running anything. A Makefile it cannot parse, or an
-  unknown form, is indeterminate.
+- **The declared warm-up must resolve, on what Make guarantees.** `covered_by`
+  is one of three forms the reader can check without running anything. For
+  `make:<goal>` the reader proves only prerequisite order, with Make's `-j`
+  rule that siblings are unordered. Whether a `make <goal>` in a recipe runs,
+  and runs first, depends on the shell (operators, quoting, backgrounding,
+  `.ONESHELL`), and a text reader that tried to model it was wrong in ways
+  found one at a time in review, so such a call is indeterminate. So is a
+  Makefile it cannot parse, an unknown form, and any construct it does not
+  model.
 - **NC-012's undeclared form needs both halves.** A function that writes a
   scratch manifest into a temporary directory and mentions a configured harness
   name is a test of the harness. Either half alone is not evidence, so the rule

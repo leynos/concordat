@@ -30,7 +30,9 @@ if typ.TYPE_CHECKING:
 
     from .nested_cargo_spawns import RustEvidence, SpawnFact
 
-_METADATA: typ.Final = re.compile(r"\bMetadataCommand\b")
+_METADATA_ALIAS: typ.Final = re.compile(
+    r"\bMetadataCommand\s+as\s+(?P<name>[A-Za-z_]\w*)"
+)
 _USE: typ.Final = re.compile(r"\buse\b")
 _SUITES: typ.Final = ("trybuild", "macrotest")
 
@@ -196,7 +198,9 @@ def _metadata_builders(source: RustSource) -> list[BuilderFact]:
     if not whole_file_scope(source.relative):
         return []
     found: list[BuilderFact] = []
-    for match in _METADATA.finditer(source.masked):
+    names = ["MetadataCommand", *_METADATA_ALIAS.findall(source.masked)]
+    uses = re.compile(r"\b(?:" + "|".join(map(re.escape, names)) + r")\b")
+    for match in uses.finditer(source.masked):
         span = function_span(source, match.start())
         if span is None or _is_import(source.masked, match.start()):
             continue

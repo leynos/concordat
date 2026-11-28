@@ -54,10 +54,11 @@ rationale argue its way past the rule:
   `preparation-stamp`, `compile-counter`.
 
 `covered_by` names the warm-up that pays for the build, in one of three forms:
-`make:<goal>` (a goal the Makefile's `test` target depends on, transitively, or
-calls through `make`), `nextest-setup` (a nextest setup script whose rule
-selects the builder's binary), or `test:<name>` (a function the checkout
-defines).
+`make:<goal>` (a goal the Makefile's `test` target depends on, transitively,
+and that Make orders first: Make does not order sibling prerequisites, so a
+sibling that may start the tests has to depend on the goal too),
+`nextest-setup` (a nextest setup script whose rule selects the builder's
+binary), or `test:<name>` (a function the checkout defines).
 
 ## Checks
 
@@ -72,8 +73,13 @@ defines).
   must be visible: a scratch crate alone, or a harness name alone, is not
   evidence. The fix is to give the harness a synthetic input.
 - **NC-013** (same severity): a declaration's `covered_by` does not resolve to a
-  Makefile goal that runs before `test`, a nextest setup script that selects
-  the binary, or an existing function.
+  Makefile goal that `test` depends on and Make orders first, a nextest setup
+  script that selects every binary built from the file, or an existing
+  function. A warm-up the reader cannot prove is indeterminate (EN-001): a goal
+  `test` only calls through `make` in a recipe (whether it runs, and runs
+  first, depends on the shell), an unordered sibling, or a Makefile with an
+  include, `.ONESHELL`, a double-colon rule, a target with two recipes or a
+  variable prerequisite.
 - **EN-001** (same severity, indeterminate): a spawn starts a program or
   subcommand the reader cannot see; a declaration names a subject outside both
   lists, or a warm-up the reader cannot check (an unknown form, or a Makefile

@@ -1018,11 +1018,15 @@ covered_by = "nextest-setup"
   `compile-counter`), or a function that writes a scratch manifest into a
   temporary directory, builds it and uses a name in `harness_paths`. No
   exemption reaches it; give the harness a synthetic input.
-- **NC-013**: a declared warm-up that does not resolve to a Makefile goal that
-  `test` depends on, or calls before the tests start (a call after a test
-  command, after `||`, in a subshell, in a shell branch or after a goal that
-  starts the tests is too late), a nextest setup script that selects every
-  binary built from the file, or an existing function.
+- **NC-013**: a declared warm-up that does not resolve: `make:<goal>` must be a
+  goal `test` depends on, directly or through other prerequisites, and Make
+  must order it first (it does not order sibling prerequisites, so a sibling
+  that may start the tests has to depend on the goal too); `nextest-setup` must
+  select every binary built from the file; `test:<name>` must be an existing
+  function. A warm-up the reader cannot prove is indeterminate, not a pass: a
+  goal that `test` only calls through `make` in a recipe, an unordered sibling,
+  or a Makefile with an include, `.ONESHELL`, a double-colon rule, a target
+  with two recipes or a variable prerequisite.
 
 A spawn the reader cannot see (`sh -c`, a spawn a macro generates, a helper
 that returns a `Command` whose call site is in another file) is indeterminate,
