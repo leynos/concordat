@@ -16,7 +16,7 @@ import re
 import typing as typ
 
 if typ.TYPE_CHECKING:
-    from .makefile_facts import MakeRule
+    from .makefile_facts import MakeRecipe, MakeRule
 
 type Index = dict[str, list[MakeRule]]
 
@@ -120,8 +120,8 @@ def starts_tests(goal: str, index: Index, seen: set[str]) -> bool:
     )
 
 
-def early_calls(rule: MakeRule, index: Index) -> list[str]:
-    """Return the goals a rule's recipe calls before tests can have started.
+def early_calls(recipes: list[MakeRecipe], index: Index) -> list[str]:
+    """Return the goals a goal's recipe calls before tests can have started.
 
     Returns
     -------
@@ -130,7 +130,7 @@ def early_calls(rule: MakeRule, index: Index) -> list[str]:
         command, and at the first called goal that starts tests itself.
     """
     found: list[str] = []
-    for recipe in rule["recipes"]:
+    for recipe in recipes:
         for goal in line_goals(recipe["text"]):
             found.append(goal)
             if starts_tests(goal, index, set()):
@@ -140,27 +140,43 @@ def early_calls(rule: MakeRule, index: Index) -> list[str]:
     return found
 
 
-def next_goals(rule: MakeRule, index: Index, depth: int = _DEPTH) -> list[str]:
-    """Return the goals one rule certainly finishes before its tests can start.
+def has_hidden_prerequisite(goal: str, index: Index) -> bool:
+    """Report whether any rule of *goal* names a prerequisite by a variable."""
+    return any(
+        "$" in name for rule in index.get(goal, []) for name in rule["prerequisites"]
+    )
 
-    Make does not order sibling prerequisites (`make -j` runs them together), so
-    a prerequisite is early only if every sibling that starts the tests itself
-    finishes it first, at any depth. The recipe runs after all prerequisites, so
-    its calls count only when no prerequisite starts the tests.
+
+def next_goals(goal: str, index: Index, depth: int = _DEPTH) -> list[str]:
+    """Return the goals *goal* certainly finishes before its tests can start.
+
+    Every single-colon rule of the goal contributes: Make joins their
+    prerequisites. Make does not order sibling prerequisites (`make -j` runs
+    them together), so a prerequisite is early only if every sibling that starts
+    the tests itself finishes it first, at any depth. The recipe runs after all
+    prerequisites, so its calls count only when none of them starts the tests. A
+    prerequisite written with a variable may hide a sibling that starts the
+    tests, so nothing is proven for such a goal.
 
     Returns
     -------
     list[str]
         The early prerequisites, then the early `make` calls of the recipe.
     """
-    plain = _plain_prerequisites(rule)
+    rules = index.get(goal, [])
+    if has_hidden_prerequisite(goal, index):
+        return []
+    plain = list(
+        dict.fromkeys(name for rule in rules for name in rule["prerequisites"])
+    )
     starters = [name for name in plain if starts_tests(name, index, set())]
     counted = [
         name
         for name in plain
         if all(name == s or name in early_set(s, index, depth - 1) for s in starters)
     ]
-    return counted if starters else [*counted, *early_calls(rule, index)]
+    recipes = [recipe for rule in rules for recipe in rule["recipes"]]
+    return counted if starters else [*counted, *early_calls(recipes, index)]
 
 
 def early_set(goal: str, index: Index, depth: int = _DEPTH) -> set[str]:
@@ -175,8 +191,7 @@ def early_set(goal: str, index: Index, depth: int = _DEPTH) -> set[str]:
     found: set[str] = set()
     if depth <= 0:
         return found
-    for rule in index.get(goal, []):
-        for name in next_goals(rule, index, depth):
-            found.add(name)
-            found |= early_set(name, index, depth - 1)
+    for name in next_goals(goal, index, depth):
+        found.add(name)
+        found |= early_set(name, index, depth - 1)
     return found

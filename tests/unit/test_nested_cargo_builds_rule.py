@@ -588,6 +588,7 @@ def test_a_grouped_metadata_import_is_not_a_builder(tmp_path: pathlib.Path) -> N
 WARM = "warmup:\n\ttrue\n"
 NONE = set[tuple[str, str]]()
 NC013 = {("NC-013", "tests/cli.rs")}
+UNREADABLE = {("EN-001", "tests/cli.rs")}
 
 
 @pytest.mark.parametrize(
@@ -653,6 +654,23 @@ NC013 = {("NC-013", "tests/cli.rs")}
             "test: warmup run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
             NC013,
             id="unordered-sibling-prerequisites",
+        ),
+        pytest.param(
+            "test: warmup\ntest: run\n\ttrue\n\nrun:\n\tcargo nextest run\n\n" + WARM,
+            NC013,
+            id="separate-rules-for-one-target",
+        ),
+        pytest.param(
+            "test: warmup\ntest: run\n\ttrue\n\nrun: warmup\n\tcargo nextest run\n\n"
+            + WARM,
+            NONE,
+            id="separate-rules-with-an-ordering-edge",
+        ),
+        pytest.param(
+            "RUN := run\ntest: warmup $(RUN)\n\ttrue\n\nrun:\n\tcargo nextest run\n\n"
+            + WARM,
+            UNREADABLE,
+            id="a-variable-prerequisite-may-hide-a-sibling",
         ),
         pytest.param(
             "test: warmup run\n\ttrue\n\nrun: warmup run-tests\n\ttrue\n\n"

@@ -18,15 +18,13 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
-from .nested_cargo_make_order import Index, next_goals
+from .nested_cargo_make_order import Index, has_hidden_prerequisite, next_goals
 from .nested_cargo_makefile_lines import rules_by_target
 from .nested_cargo_makefile_preparation import includes_a_file, read_makefile
 from .nested_cargo_scripts import TEST_TARGET
 
 if typ.TYPE_CHECKING:
     import pathlib
-
-    from .makefile_facts import MakeRule
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -48,19 +46,6 @@ class MakeGoals:
     is_absent: bool
 
 
-def _next_goals(rule: MakeRule, index: Index) -> tuple[list[str], bool]:
-    """Return the goals one rule certainly finishes early, and whether one hid.
-
-    Returns
-    -------
-    tuple[list[str], bool]
-        The early goals, then whether a prerequisite names a variable the reader
-        cannot resolve.
-    """
-    hides = any("$" in name for name in rule["prerequisites"])
-    return next_goals(rule, index), hides
-
-
 def _reachable_goals(index: Index) -> tuple[set[str], bool]:
     """Walk from `test` through prerequisites and early `make` calls.
 
@@ -77,11 +62,10 @@ def _reachable_goals(index: Index) -> tuple[set[str], bool]:
         if target in walked:
             continue
         walked.add(target)
-        for rule in index.get(target, []):
-            names, hid = _next_goals(rule, index)
-            hides = hides or hid
-            goals.update(names)
-            pending.extend(names)
+        names = next_goals(target, index)
+        hides = hides or has_hidden_prerequisite(target, index)
+        goals.update(names)
+        pending.extend(names)
     return goals - {TEST_TARGET}, hides
 
 
