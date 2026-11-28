@@ -129,8 +129,31 @@ test_unrelated_reusable_workflow_is_ignored if {
   count(findings) == 0
 }
 
-test_all_pr_coverage_steps_require_ratcheting if {
+# The shared action keeps one baseline per job, so a job with two coverage
+# steps needs only one of them to ratchet.
+test_a_job_ratchets_on_one_of_its_coverage_steps if {
   findings := policy.deny with input as data.fixtures.multiple_pr_coverage_steps
+  count(findings) == 0
+}
+
+# Each job needs its own ratchet: a second job generating coverage without one
+# is still reported.
+test_a_second_job_without_a_ratchet_is_noncompliant if {
+  findings := policy.deny with input as data.fixtures.pr_second_job_without_ratchet
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/ci.yml", "pull-request workflow lacks ratcheting coverage generation"],
+  }
+}
+
+# `with-ratchet: ${{ matrix.ratchet }}` ratchets on the legs whose entry sets
+# the key true; one such leg is a ratcheting job.
+test_a_matrix_switched_ratchet_with_a_true_leg_ratchets if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_ratchet_with_a_true_leg
+  count(findings) == 0
+}
+
+test_a_matrix_switched_ratchet_with_no_true_leg_does_not if {
+  findings := policy.deny with input as data.fixtures.pr_matrix_ratchet_with_no_true_leg
   profile(findings) == {
     ["noncompliant", ".github/workflows/ci.yml", "pull-request workflow lacks ratcheting coverage generation"],
   }

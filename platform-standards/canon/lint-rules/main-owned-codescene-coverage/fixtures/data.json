@@ -4681,6 +4681,274 @@
           "error": null
         }
       ]
+    },
+    "pr_second_job_without_ratchet": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {
+              "pull_request": null
+            },
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "publish-artefact": "false"
+                    }
+                  }
+                ],
+                "runs-on": "ubuntu-latest"
+              },
+              "other": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": false,
+                      "publish-artefact": "false"
+                    }
+                  }
+                ],
+                "runs-on": "ubuntu-latest"
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {
+              "push": {
+                "branches": [
+                  "main"
+                ]
+              }
+            },
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true
+                    }
+                  },
+                  {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
+                    "uses": "upload-codescene-coverage",
+                    "with": {
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
+                    },
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
+                  }
+                ],
+                "runs-on": "ubuntu-latest",
+                "environment": "codescene"
+              }
+            },
+            "concurrency": {
+              "group": "coverage-main-${{ github.ref }}",
+              "cancel-in-progress": false
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "pr_matrix_ratchet_with_a_true_leg": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {
+              "pull_request": null
+            },
+            "jobs": {
+              "coverage": {
+                "strategy": {
+                  "matrix": {
+                    "include": [
+                      {
+                        "platform": "linux",
+                        "ratchet": true
+                      },
+                      {
+                        "platform": "other",
+                        "ratchet": false
+                      }
+                    ]
+                  }
+                },
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": "${{ matrix.ratchet }}",
+                      "publish-artefact": "false"
+                    }
+                  }
+                ],
+                "runs-on": "ubuntu-latest"
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {
+              "push": {
+                "branches": [
+                  "main"
+                ]
+              }
+            },
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true
+                    }
+                  },
+                  {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
+                    "uses": "upload-codescene-coverage",
+                    "with": {
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
+                    },
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
+                  }
+                ],
+                "runs-on": "ubuntu-latest",
+                "environment": "codescene"
+              }
+            },
+            "concurrency": {
+              "group": "coverage-main-${{ github.ref }}",
+              "cancel-in-progress": false
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "pr_matrix_ratchet_with_no_true_leg": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {
+              "pull_request": null
+            },
+            "jobs": {
+              "coverage": {
+                "strategy": {
+                  "matrix": {
+                    "include": [
+                      {
+                        "platform": "linux",
+                        "ratchet": false
+                      },
+                      {
+                        "platform": "other",
+                        "ratchet": false
+                      }
+                    ]
+                  }
+                },
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": "${{ matrix.ratchet }}",
+                      "publish-artefact": "false"
+                    }
+                  }
+                ],
+                "runs-on": "ubuntu-latest"
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {
+              "push": {
+                "branches": [
+                  "main"
+                ]
+              }
+            },
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true
+                    }
+                  },
+                  {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
+                    "uses": "upload-codescene-coverage",
+                    "with": {
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
+                    },
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
+                  }
+                ],
+                "runs-on": "ubuntu-latest",
+                "environment": "codescene"
+              }
+            },
+            "concurrency": {
+              "group": "coverage-main-${{ github.ref }}",
+              "cancel-in-progress": false
+            }
+          },
+          "error": null
+        }
+      ]
     }
   }
 }

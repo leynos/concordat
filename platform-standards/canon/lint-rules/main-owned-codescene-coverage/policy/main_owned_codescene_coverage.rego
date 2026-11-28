@@ -470,10 +470,23 @@ ratcheting_coverage_step(step) if {
   object.get(inputs, "with-ratchet", null) == "true"
 }
 
-has_unratcheted_coverage(workflow) if {
-  some step in workflow_steps(workflow)
+# The shared action keeps one baseline per job, so a job with several coverage
+# steps ratchets on one of them. A pull-request job that generates coverage
+# without any ratcheting step lacks the ratchet; its sibling steps need none.
+job_has_coverage_step(job) if {
+  is_object(job)
+  steps := object.get(job, "steps", null)
+  is_array(steps)
+  some step in steps
+  is_object(step)
   is_coverage_step(step)
-  not ratcheting_coverage_step(step)
+}
+
+has_unratcheted_coverage(workflow) if {
+  jobs := workflow_jobs(workflow)
+  some name in object.keys(jobs)
+  job_has_coverage_step(jobs[name])
+  not job_has_ratcheting_coverage(jobs[name])
 }
 
 has_codescene_step(workflow) if {
@@ -873,6 +886,32 @@ job_has_ratcheting_coverage(job) if {
   is_object(step)
   is_coverage_step(step)
   ratcheting_coverage_step(step)
+}
+
+# A ratchet switched by the job's matrix (`with-ratchet: ${{ matrix.ratchet }}`)
+# ratchets on every leg whose entry sets that key true. The job ratchets when
+# at least one leg does.
+matrix_ratchet_key(step) := key if {
+  inputs := object.get(step, "with", {})
+  value := object.get(inputs, "with-ratchet", null)
+  is_string(value)
+  parts := regex.find_all_string_submatch_n(`^\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$`, value, 1)
+  key := parts[0][1]
+}
+
+job_has_ratcheting_coverage(job) if {
+  is_object(job)
+  steps := object.get(job, "steps", null)
+  is_array(steps)
+  some step in steps
+  is_object(step)
+  is_coverage_step(step)
+  key := matrix_ratchet_key(step)
+  legs := object.get(object.get(object.get(job, "strategy", {}), "matrix", {}), "include", [])
+  is_array(legs)
+  some leg in legs
+  is_object(leg)
+  object.get(leg, key, null) in {true, "true"}
 }
 
 ratcheting_coverage_jobs(workflow) := {name |
